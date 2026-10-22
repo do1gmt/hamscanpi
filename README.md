@@ -58,7 +58,7 @@ PMSDR receiver (IW3AUT) for shortwave.
 ## Installation
 
 ```bash
-git clone https://github.com/<your-account>/hamscanpi.git
+git clone https://github.com/do1gmt/hamscanpi.git
 cd hamscanpi
 ./install.sh            # optional: ./install.sh 8081 for another port
 ```
@@ -111,7 +111,7 @@ Only where the law of your country allows it, you can enable them in `config/sca
 "allow_restricted_bands": true
 ```
 
-They then appear under *weitere*, marked with ⚠. In **Germany** listening to the airband is not
+They then appear under *more* (German UI: *weitere*), marked with ⚠. In **Germany** listening to the airband is not
 allowed (§ 5 TDDDG, formerly TTDSG) – leave the setting at `false` there. You are responsible for
 the bands you enable.
 

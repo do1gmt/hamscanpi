@@ -43,7 +43,7 @@ PRE_ROLL_S = 15             # Aufnahme beginnt vor dem Aufgang
 MIN_PART_S = 120            # kürzere Reste eines Überflugs lohnen nicht
 MAX_CHANNELS = 3            # Kanäle je Aufnahme – mehr schafft ein Raspberry Pi nicht sicher in Echtzeit
 
-USER_AGENT = "HamScanPi/1.0 (+https://github.com/; amateur radio satellite tracker)"
+USER_AGENT = "HamScanPi/1.0 (+https://github.com/do1gmt/hamscanpi; amateur radio satellite tracker)"
 
 # Objekte (NORAD -> Name). Nur Satelliten mit Downlink im Bereich des RTL-SDR.
 OBJECTS = {
