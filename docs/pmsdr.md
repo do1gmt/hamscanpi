@@ -4,6 +4,40 @@ The PMSDR is a shortwave receiver by IW3AUT. It delivers I/Q audio through a USB
 tuned through its USB control board. HamScanPi does not talk to the control board directly – it
 sends tuning commands to a **control program** through a FIFO.
 
+## Control program
+
+The author's station uses the Linux command-line program **`pmsdr`** (version 0.26, built from the
+source archive `pmsdr-0.26.tar.gz`, installed as `/usr/local/bin/pmsdr`). Started with `-u`, it
+reads tuning commands from a FIFO:
+
+```
+/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
+```
+
+Build it from source as described in the archive's README and install the binary to
+`/usr/local/bin/pmsdr`. If `install.sh` finds that binary, it offers to set up the service and the
+hotplug rule below for you.
+
+### Service
+
+`/etc/systemd/system/pmsdr-control.service`:
+
+```ini
+[Unit]
+Description=PMSDR Control FIFO
+After=network.target
+
+[Service]
+Type=simple
+User=<your user>
+ExecStart=/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## What HamScanPi expects
 
 | Setting in `config/scanner.json` | Meaning | Default |
@@ -30,11 +64,17 @@ SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04d8", ATTR{idPro
 
 and in `/etc/systemd/system/pmsdr-control.service.d/hotplug.conf`:
 
-```
+```ini
 [Unit]
 BindsTo=sys-subsystem-usb-pmsdr.device
 After=sys-subsystem-usb-pmsdr.device
+
+[Service]
+RestartSec=5
 ```
+
+Then `sudo systemctl daemon-reload && sudo udevadm control --reload-rules`. With hotplug the service
+is not enabled at boot – udev starts it when the PMSDR is plugged in.
 
 ## Status
 

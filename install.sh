@@ -55,6 +55,41 @@ else
     fi
 fi
 
+bold "PMSDR (optional)"
+if [ -x /usr/local/bin/pmsdr ] && ! systemctl cat pmsdr-control.service >/dev/null 2>&1; then
+    read -r -p "  /usr/local/bin/pmsdr found. Set up the pmsdr-control service with hotplug? [y/N] " a
+    if [[ "$a" =~ ^[yYjJ]$ ]]; then
+        sudo tee /etc/systemd/system/pmsdr-control.service >/dev/null <<UNIT
+[Unit]
+Description=PMSDR Control FIFO
+After=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+ExecStart=/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        sudo mkdir -p /etc/systemd/system/pmsdr-control.service.d
+        printf '[Unit]\nBindsTo=sys-subsystem-usb-pmsdr.device\nAfter=sys-subsystem-usb-pmsdr.device\n\n[Service]\nRestartSec=5\n' \
+            | sudo tee /etc/systemd/system/pmsdr-control.service.d/hotplug.conf >/dev/null
+        echo 'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04d8", ATTR{idProduct}=="000c", MODE="0666", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/sys/subsystem/usb/pmsdr", ENV{SYSTEMD_WANTS}+="pmsdr-control.service"' \
+            | sudo tee /etc/udev/rules.d/90-hamscanpi-pmsdr.rules >/dev/null
+        sudo systemctl daemon-reload
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=04d8 --action=add 2>/dev/null || true
+        ok "pmsdr-control set up – starts when the PMSDR is plugged in"
+    fi
+elif systemctl cat pmsdr-control.service >/dev/null 2>&1; then
+    ok "pmsdr-control service already present"
+else
+    ok "no PMSDR control program found (/usr/local/bin/pmsdr) – shortwave needs it, see docs/pmsdr.md"
+fi
+
 bold "5/5 Services"
 sudo tee /etc/systemd/system/hamscanpi-web.service >/dev/null <<UNIT
 [Unit]
@@ -104,5 +139,5 @@ Next steps
   1. Open the dashboard, Settings → Station: enter your Maidenhead locator (needed for satellites).
   2. Scan → choose the receiver and the bands, press "Jetzt scannen".
   3. Satellites: switch on the band "Satelliten" – passes are recorded automatically.
-  PMSDR (shortwave) needs its control program – see docs/pmsdr.md.
+  PMSDR (shortwave): build the pmsdr control program first – see docs/pmsdr.md.
 EOF
