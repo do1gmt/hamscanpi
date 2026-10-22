@@ -316,3 +316,8 @@ small.score { color: var(--muted); }
 
 .chip.chip-restricted { border-color: var(--amber); }
 .chip.chip-restricted.on { background: var(--amber); border-color: var(--amber); color: #2b1d00; }
+
+.brand { display: inline-flex; align-items: center; gap: .45rem; }
+.brand-icon { width: 28px; height: 28px; flex: 0 0 auto; }
+.brand .brand-name { color: var(--text); font-weight: 700; }
+.brand .brand-name em { font-style: normal; color: var(--teal); }

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17293f"/><stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)"/>
+  <!-- Satellit oben rechts -->
+  <g transform="rotate(-35 50 11.5)">
+    <rect x="47.5" y="9" width="5" height="5" rx="1" fill="#f5b942"/>
+    <rect x="42" y="10.3" width="4.5" height="2.4" rx=".6" fill="#f5b942" opacity=".85"/>
+    <rect x="53.5" y="10.3" width="4.5" height="2.4" rx=".6" fill="#f5b942" opacity=".85"/>
+  </g>
+  <!-- Wellen von der Antennenspitze -->
+  <path d="M27.5 27.5 a8 8 0 0 1 0 11.3" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round"/>
+  <path d="M33 22 a15.5 15.5 0 0 1 0 22.3" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+  <path d="M38.5 16.5 a23 23 0 0 1 0 33.3" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" opacity=".55"/>
+  <!-- Antenne -->
+  <circle cx="21" cy="33" r="4.5" fill="#e7edf4"/>
+  <path d="M21 37.5 L13 56 M21 37.5 L29 56 M15.8 49.5 L26.2 49.5" stroke="#e7edf4" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

@@ -10,6 +10,8 @@ import io
 import json
 import time
 import mimetypes
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("image/svg+xml", ".svg")
 import sqlite3
 import subprocess
 import sys

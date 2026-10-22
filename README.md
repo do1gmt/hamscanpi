@@ -1,3 +1,5 @@
+<img src="web/icon.svg" width="96" alt="HamScanPi icon" align="right">
+
 # HamScanPi
 
 **An unattended band scanner and satellite recorder for radio amateurs, running on a Raspberry Pi.**
