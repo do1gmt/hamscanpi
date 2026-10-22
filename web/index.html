@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>HamScanPi</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2314b8a6'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230b1220'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">HamScan<span>Pi</span></div>
+    <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Verbinde …</span></div>
+    <div class="clock"><span class="clock-utc" id="clock">--:--:--</span><span class="clock-sep">UTC</span><span class="clock-local" id="clockLocal">--:--:--</span><span class="clock-sep" id="clockZone">Lokal</span></div>
+  </div>
+</header>
+<nav class="tabs-main" aria-label="Bereiche">
+  <button type="button" data-view="scan" class="on">Scan</button>
+  <button type="button" data-view="hits">Treffer</button>
+  <button type="button" data-view="live">Live</button>
+  <button type="button" data-view="logs">Protokoll</button>
+  <button type="button" data-view="settings">Einstellungen</button>
+</nav>
+
+<main class="views">
+
+<section class="view" data-view="hits" hidden>
+<section class="panel">
+    <div class="stats">
+      <div class="stat"><b id="statTotal">–</b><span>gespeicherte Treffer</span></div>
+      <div class="stat stat-new"><b id="statNew">–</b><span>neu im letzten Lauf</span></div>
+      <div class="stat"><b id="statLastHits">–</b><span>Treffer letzter Scan</span></div>
+      <div class="stat"><b id="statRejected">–</b><span>verworfen</span></div>
+    </div>
+  </section>
+<section class="panel panel-filters">
+    <div class="chips" id="filterBands"></div>
+    <div class="row">
+      <label class="field grow"><span>Betriebsart</span><select id="filterMode"><option value="all">Alle</option></select></label>
+      <label class="field"><span>Sortierung</span>
+        <select id="sort">
+          <option value="time">Neu → alt</option><option value="time_asc">Alt → neu</option>
+          <option value="freq">Frequenz</option><option value="snr">Stärkstes Signal</option><option value="audio">Bester Ton zuerst</option>
+        </select>
+      </label>
+      <label class="field grow"><span>Suche (MHz oder Notiz)</span><input id="search" type="search" placeholder="7.14 oder DL1…" autocomplete="off"></label>
+      <label class="check"><input type="checkbox" id="filterAudio"> nur mit Ton</label>
+      <label class="check"><input type="checkbox" id="filterProtected"> nur ★</label>
+    </div>
+    <div class="result-count" id="hitCount" aria-live="polite"></div>
+  </section>
+  <div id="hits" class="hits"></div>
+  <div class="empty" id="hitsEmpty" hidden>Keine Treffer für diese Auswahl.</div>
+</section>
+
+
+<section class="view" data-view="scan">
+  <section class="panel panel-mini">
+    <div class="stats stats-mini" id="scanStats">
+      <button type="button" class="stat" data-go="hits" title="Zu den Treffern"><b id="ssHits">–</b><span>Treffer 24 h</span></button>
+      <div class="stat"><b id="ssRuns">–</b><span id="ssRunsLbl">Scans 24 h</span></div>
+      <div class="stat"><b id="ssBusy">–</b><span>Scanzeit 24 h</span></div>
+      <button type="button" class="stat" data-go="sat" title="Zur Überflugliste"><b id="ssSat">–</b><span id="ssSatLbl">Überflüge aufgenommen</span></button>
+      <button type="button" class="stat" data-go="sstv" title="SSTV-Bilder anzeigen"><b id="ssSstv">–</b><span>SSTV-Bilder 24 h</span></button>
+      <button type="button" class="stat stat-next" data-go="sat" title="Zur Überflugliste"><b id="ssNext">–</b><span id="ssNextLbl">nächster Überflug</span></button>
+    </div>
+  </section>
+  <div class="two-col">
+    <div class="col">
+      <section class="panel" id="panel-scan">
+        <h2>Scan</h2>
+        <div class="scan-state">
+          <div class="scan-title" id="scanTitle">Bereit</div>
+          <div class="scan-msg" id="scanMsg"></div>
+          <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+          <div class="scan-meta">
+            <div><span class="k">Letzter Lauf</span><span class="v" id="lastRun">–</span></div>
+            <div><span class="k">Dauer</span><span class="v" id="lastDuration">–</span></div>
+            <div><span class="k">Nächster Scan</span><span class="v" id="nextRun">–</span></div>
+          </div>
+        </div>
+        <div class="device-switch" id="deviceSwitch" role="radiogroup" aria-label="Angeschlossenes Gerät"></div>
+        <p class="hint" id="deviceHint"></p>
+        <div class="row">
+          <label class="field"><span>Automatisch (Start zu Start)</span><select id="interval"></select></label>
+          <button class="btn btn-primary" id="scanNow">Jetzt scannen</button>
+          <button class="btn btn-danger" id="scanStop" hidden>Scan abbrechen</button>
+        </div>
+        <p class="hint" id="intervalHint"></p>
+        <div class="save-note" id="scanSaveNote" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-sat" hidden>
+        <h2>Satelliten-Überflüge</h2>
+        <p class="hint" id="satHint"></p>
+        <div class="table-wrap">
+          <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th>Zeit (Ortszeit)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
+            <tbody id="satPasses"></tbody></table>
+        </div>
+        <div class="row pager-row">
+          <label class="check"><input type="checkbox" id="satShowPast"> vergangene zeigen</label>
+          <label class="check"><input type="checkbox" id="satShowAll"> alle 24 h</label>
+        </div>
+        <p class="hint" id="satFoot"></p>
+      </section>
+      <section class="panel" id="panel-runs">
+        <h2>Scan-Verlauf</h2>
+        <div class="table-wrap">
+          <table class="table runs-table" id="runsTable">
+            <thead><tr><th>Start (UTC)</th><th>Bänder</th><th>Status</th><th title="Treffer / verworfen">Treffer</th><th title="Abstimmungen">Abst.</th><th>Dauer</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="row pager-row">
+          <label class="field"><span>Pro Seite</span><select id="runsPerPage"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+          <button type="button" class="btn btn-small" id="runsPrev">◀</button>
+          <span class="hint" id="runsPos"></span>
+          <button type="button" class="btn btn-small" id="runsNext">▶</button>
+        </div>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" id="panel-bands">
+        <h2>Bänder &amp; Betriebsarten</h2>
+        <p class="hint">Antippen zum Ein-/Ausschalten. Änderungen werden sofort gespeichert und beim nächsten Scan verwendet.</p>
+        <div class="chips" id="bandChips"></div>
+        <div class="segment-list" id="segmentList"></div>
+        <details class="more-bands" id="moreBands" hidden>
+          <summary>weitere</summary>
+          <div class="chips" id="moreBandChips"></div>
+          <div class="segment-list" id="moreSegmentList"></div>
+        </details>
+        <div class="save-note" id="bandSaveNote" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<section class="view" data-view="live" hidden>
+  <div class="two-col">
+    <div class="col">
+<section class="panel" id="panel-live">
+    <h2>Live hören</h2>
+    <div class="row">
+      <label class="field grow"><span>Frequenz (MHz)</span><input id="liveFreq" type="text" inputmode="decimal" value="145.500" autocomplete="off"></label>
+      <label class="field"><span>Demodulator</span>
+        <select id="liveMode"><option value="nfm">FM schmal</option><option value="wfm">FM breit</option><option value="am">AM</option><option value="usb">USB</option><option value="lsb">LSB</option></select>
+      </label>
+    </div>
+    <div class="row tune-row">
+      <button type="button" class="btn btn-small" data-livestep="-1">◀</button>
+      <select id="liveStep"><option value="100">100 Hz</option><option value="1000">1 kHz</option><option value="5000">5 kHz</option><option value="8333">8,33 kHz</option><option value="12500" selected>12,5 kHz</option><option value="25000">25 kHz</option><option value="100000">100 kHz</option></select>
+      <button type="button" class="btn btn-small" data-livestep="1">▶</button>
+      <label class="field"><span>Verstärkung</span>
+        <select id="liveGain"><option value="">wie Scan</option><option value="0">automatisch</option><option value="9">9 dB</option><option value="20">20 dB</option><option value="30">30 dB</option><option value="40">40 dB</option><option value="49.6">49,6 dB</option></select>
+      </label>
+      <label class="field"><span>Rauschsperre / Suchlauf-Schwelle</span><input id="liveSquelch" type="range" min="0" max="40" value="0"></label>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="liveStart">Hören</button>
+      <button class="btn" id="liveStop" hidden>Stopp</button>
+      <button class="btn" id="liveSeekDown" title="Suchlauf abwärts ab der eingestellten Frequenz">◀◀ Suchlauf</button>
+      <button class="btn" id="liveSeekUp" title="Suchlauf aufwärts ab der eingestellten Frequenz">Suchlauf ▶▶</button>
+    </div>
+    <div class="smeter"><div class="smeter-bar" id="liveLevel"></div></div>
+    <div class="hint" id="liveText">aus</div>
+    <label class="check"><input type="checkbox" id="liveFallback"> einfacher Player (falls kein Ton kommt)</label>
+    <audio id="liveAudio" controls hidden></audio>
+  </section>
+    </div>
+    <div class="col">
+  <section class="panel">
+    <h2>Zuletzt gehört</h2>
+    <ul class="plain" id="liveHistory"><li>noch nichts</li></ul>
+    <p class="hint">Suchlauf: sucht ab der eingestellten Frequenz im gewählten Raster und Demodulator (für UKW-Radio „FM breit“, Raster wird dann 100 kHz), bleibt auf einem Signal stehen, solange es belegt ist, und sucht danach weiter. Anhalten: ◀/▶ oder Hören drücken. Der Regler ist im Suchlauf die Schwelle (0 = 10 dB).</p>
+    <p class="hint">Tipp: Auf jeder Trefferkarte bringt dich „▶ Jetzt live hören“ direkt hierher.</p>
+  </section>
+    </div>
+  </div>
+</section>
+
+<section class="view" data-view="logs" hidden>
+  <section class="panel" id="panel-logs">
+    <h2>Protokoll</h2>
+    <div class="log-summary" id="logSummary"></div>
+    <div class="row">
+      <label class="field"><span>Stufe ab</span><select id="logLevel"><option value="DEBUG">Debug</option><option value="INFO" selected>Info</option><option value="WARN">Warnung</option><option value="ERROR">Fehler</option></select></label>
+      <label class="field"><span>Komponente</span><select id="logComponent"><option value="">alle</option><option>scanner</option><option>cycle</option><option>scheduler</option><option>webapp</option><option>satellite</option><option>live</option><option>notify</option></select></label>
+      <label class="field grow"><span>Suche</span><input id="logQuery" type="search" placeholder="Text"></label>
+      <label class="field"><span>Pro Seite</span><select id="logPerPage"><option>50</option><option selected>100</option><option>250</option><option>500</option></select></label>
+      <label class="check"><input type="checkbox" id="logGroup" checked> Wiederholungen zusammenfassen</label>
+      <button class="btn btn-small" id="logReload">Laden</button>
+    </div>
+    <ul class="loglist" id="logList"></ul>
+    <div class="row pager-row">
+      <button type="button" class="btn btn-small" id="logPrev">◀ neuere</button>
+      <span class="hint" id="logPos"></span>
+      <button type="button" class="btn btn-small" id="logNext">ältere ▶</button>
+    </div>
+    <details><summary>Scan-Ausgabe (roh, letzte Zeilen)</summary><pre class="log" id="scanLog"></pre></details>
+  </section>
+</section>
+
+<section class="view" data-view="settings" hidden>
+  <div class="two-col">
+    <div class="col">
+      <section class="panel" id="panel-station">
+        <h2>Station</h2>
+        <label class="field"><span>Mein Locator (für Entfernung und Richtung bei FT8/FT4)</span>
+          <input id="myLocator" type="text" placeholder="z. B. JO31AB" maxlength="8" autocapitalize="characters" autocomplete="off">
+        </label>
+        <div class="save-note" id="stationNote" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-raster">
+        <h2>Frequenzraster</h2>
+        <p class="hint">Abstand der Empfangsfenster beim Absuchen ganzer Bänder. Feiner = die Fenster überlappen mehr, an den Fensterrändern und in der Mitte (Gleichanteil) entgehen weniger Signale – der Scan dauert dafür länger. Einzelkanäle (PMR, Freenet, Relais) sind davon nicht betroffen.</p>
+        <div class="filter-grid">
+          <label class="field"><span>PMSDR (Kurzwelle)</span><select id="rasterPmsdr"></select></label>
+          <label class="field"><span>RTL-SDR (VHF/UHF)</span><select id="rasterRtlsdr"></select></label>
+        </div>
+        <div class="save-note" id="rasterNote" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-satprio">
+        <h2>Satelliten-Prioritäten</h2>
+        <p class="hint">Überschneiden sich zwei Überflüge, gewinnt die höhere Punktzahl: Priorität × 10, dazu bis 15 Punkte für die Höhe des Überflugs und bis 15 Punkte für die Wartezeit seit der letzten Aufnahme (1 Punkt je 4 Stunden). Abgezogen werden bis 15 Punkte, wenn ein Satellit in den letzten 14 Tagen mehrmals ohne jedes Signal aufgenommen wurde – ein einziger Treffer hebt das wieder auf. Passen die Frequenzen in ein Empfangsfenster, werden beide gemeinsam aufgenommen. 0 = nie aufnehmen, „immer zuerst“ schlägt alles.</p>
+        <div class="table-wrap"><table class="table satprio-table"><thead><tr><th>Kanal</th><th>Priorität</th><th>Zuletzt (14 Tage)</th></tr></thead><tbody id="satPrio"></tbody></table></div>
+        <div class="save-note" id="satPrioNote" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-cleanup">
+        <h2>Aufräumen</h2>
+        <div class="row">
+          <label class="field"><span>Älter als</span>
+            <select id="cleanupDays">
+              <option value="1">1 Tag</option><option value="3">3 Tage</option>
+              <option value="7" selected>7 Tage</option><option value="14">14 Tage</option><option value="30">30 Tage</option>
+            </select>
+          </label>
+          <button class="btn" id="cleanupPreview">Prüfen</button>
+          <button class="btn btn-danger" id="cleanupOld">Alte löschen</button>
+        </div>
+        <div class="save-note" id="cleanupNote" aria-live="polite"></div>
+        <button class="btn btn-danger btn-wide" id="cleanupAll">Alle ungeschützten Treffer löschen</button>
+        <p class="hint">Geschützte Treffer (★) werden nie automatisch gelöscht.</p>
+        <details><summary>Löschprotokoll</summary><ul class="plain" id="deletionLog"></ul></details>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" id="panel-notify">
+        <h2>Benachrichtigungen (Mail)</h2>
+        <form class="form" id="notifyForm">
+          <label class="check"><input type="checkbox" name="enabled"> Mailversand aktiv</label>
+          <div class="filter-grid">
+            <label class="field"><span>SMTP-Server</span><input name="smtp_host" type="text" placeholder="smtp.example.de"></label>
+            <label class="field"><span>Port</span><input name="smtp_port" type="number" value="587"></label>
+            <label class="field"><span>Verschlüsselung</span><select name="tls"><option value="starttls">STARTTLS (587)</option><option value="ssl">SSL (465)</option><option value="none">keine</option></select></label>
+            <label class="field"><span>Benutzer</span><input name="smtp_user" type="text" autocomplete="off"></label>
+            <label class="field"><span>Passwort</span><input name="smtp_pass" type="password" autocomplete="new-password"></label>
+            <label class="field"><span>Absender</span><input name="mail_from" type="text" placeholder="pi@example.de"></label>
+            <label class="field"><span>Empfänger</span><input name="mail_to" type="text" placeholder="ich@example.de"></label>
+          </div>
+          <div class="notify-rule">
+          <label class="check"><input type="checkbox" name="on_error"> Mail bei Fehlern</label>
+          <label class="inline-num">höchstens eine je <input name="throttle_min" type="number" min="1" value="30" inputmode="numeric"> min</label>
+        </div>
+          <div class="notify-rule">
+          <label class="check"><input type="checkbox" name="on_scan_done"> Mail nach jedem Scan</label>
+          <label class="inline-num">ab <input name="min_new_hits" type="number" min="0" value="1" inputmode="numeric"> Treffern, fehlgeschlagene Scans immer</label>
+        </div>
+          <div class="actions"><button type="submit" class="btn btn-primary">Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button></div>
+          <div class="save-note" id="notifyNote"></div>
+          <p class="hint">Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.</p>
+        </form>
+      </section>
+    </div>
+  </div>
+</section>
+
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

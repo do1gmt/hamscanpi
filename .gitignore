@@ -1,0 +1,17 @@
+# Laufzeitdaten – nie ins Repository
+data/
+log/
+recordings/
+reports/
+backup/
+config/web_settings.json
+config/scanner.json
+config/*.bak*
+config/*.disabled*
+# Reste
+__pycache__/
+*.pyc
+bin/*.bak*
+bin/*.pre_*
+.sat_*.raw
+*.u8

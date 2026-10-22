@@ -1,0 +1,1980 @@
+{
+  "sample_rate": 48000,
+  "capture_seconds": 0.8,
+  "settle_seconds": 0.25,
+  "alsa_name": "Aureon",
+  "alsa_device": 0,
+  "fifo": "/tmp/PMSDRcommands",
+  "fft_size": 8192,
+  "edge_guard_hz": 2500,
+  "dc_guard_hz": 300,
+  "threshold_db": 12.0,
+  "min_peak_spacing_hz": 250,
+  "max_peaks_per_tune": 12,
+  "iq_conjugate": true,
+  "ranges": [
+    {
+      "name": "160m",
+      "start_hz": 1810000,
+      "stop_hz": 2000000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              1810000,
+              1838000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              1838000,
+              1843000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 1.840",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            1840000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 1.8366",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            1836600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache LSB",
+          "mode": "voice",
+          "sideband": "LSB",
+          "ranges": [
+            [
+              1843000,
+              2000000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "80m",
+      "start_hz": 3500000,
+      "stop_hz": 3800000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              3500000,
+              3570000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              3570000,
+              3600000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 3.573",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            3573000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 3.575",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            3575000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 3.5686",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            3568600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache LSB",
+          "mode": "voice",
+          "sideband": "LSB",
+          "ranges": [
+            [
+              3600000,
+              3800000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sstv",
+          "label": "SSTV 3.730",
+          "mode": "sstv",
+          "sideband": "LSB",
+          "frequencies_hz": [
+            3730000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "60m",
+      "start_hz": 5351500,
+      "stop_hz": 5366500,
+      "step_hz": 10000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW / schmal",
+          "mode": "cw",
+          "ranges": [
+            [
+              5351500,
+              5354000
+            ],
+            [
+              5366000,
+              5366500
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 5.357",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            5357000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              5354000,
+              5366000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "40m",
+      "start_hz": 7000000,
+      "stop_hz": 7200000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              7000000,
+              7040000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              7040000,
+              7053000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 7.074",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            7074000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 7.048",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            7047500
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 7.0386",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            7038600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache LSB",
+          "mode": "voice",
+          "sideband": "LSB",
+          "ranges": [
+            [
+              7053000,
+              7200000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sstv",
+          "label": "SSTV 7.165",
+          "mode": "sstv",
+          "sideband": "LSB",
+          "frequencies_hz": [
+            7165000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "30m",
+      "start_hz": 10100000,
+      "stop_hz": 10150000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              10100000,
+              10130000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              10130000,
+              10150000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 10.136",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            10136000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 10.140",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            10140000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 10.1387",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            10138700
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "20m",
+      "start_hz": 14000000,
+      "stop_hz": 14350000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              14000000,
+              14070000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              14070000,
+              14099000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 14.074",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            14074000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 14.080",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            14080000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 14.0956",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            14095600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken",
+          "mode": "beacon",
+          "ranges": [
+            [
+              14099000,
+              14101000
+            ]
+          ],
+          "frequencies_hz": [
+            14100000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital_wide",
+          "label": "Digital (breit)",
+          "mode": "digital",
+          "ranges": [
+            [
+              14101000,
+              14112000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              14112000,
+              14350000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sstv",
+          "label": "SSTV 14.230",
+          "mode": "sstv",
+          "sideband": "USB",
+          "frequencies_hz": [
+            14230000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "17m",
+      "start_hz": 18068000,
+      "stop_hz": 18168000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              18068000,
+              18095000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              18095000,
+              18109000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 18.100",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            18100000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 18.104",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            18104000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 18.1046",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            18104600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken",
+          "mode": "beacon",
+          "ranges": [
+            [
+              18109000,
+              18111000
+            ]
+          ],
+          "frequencies_hz": [
+            18110000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              18111000,
+              18168000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "15m",
+      "start_hz": 21000000,
+      "stop_hz": 21450000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              21000000,
+              21070000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              21070000,
+              21149000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 21.074",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            21074000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 21.140",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            21140000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 21.0946",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            21094600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken",
+          "mode": "beacon",
+          "ranges": [
+            [
+              21149000,
+              21151000
+            ]
+          ],
+          "frequencies_hz": [
+            21150000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              21151000,
+              21450000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sstv",
+          "label": "SSTV 21.340",
+          "mode": "sstv",
+          "sideband": "USB",
+          "frequencies_hz": [
+            21340000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "12m",
+      "start_hz": 24890000,
+      "stop_hz": 24990000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              24890000,
+              24915000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              24915000,
+              24929000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 24.915",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            24915000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 24.919",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            24919000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 24.9246",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            24924600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken",
+          "mode": "beacon",
+          "ranges": [
+            [
+              24929000,
+              24931000
+            ]
+          ],
+          "frequencies_hz": [
+            24930000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              24931000,
+              24990000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "11m",
+      "start_hz": 26565000,
+      "stop_hz": 27405000,
+      "step_hz": 10000,
+      "segments": [
+        {
+          "id": "cb_fm",
+          "label": "CB Kanal 41–80 (FM)",
+          "mode": "fm",
+          "frequencies_hz": [
+            26565000,
+            26575000,
+            26585000,
+            26595000,
+            26605000,
+            26615000,
+            26625000,
+            26635000,
+            26645000,
+            26655000,
+            26665000,
+            26675000,
+            26685000,
+            26695000,
+            26705000,
+            26715000,
+            26725000,
+            26735000,
+            26745000,
+            26755000,
+            26765000,
+            26775000,
+            26785000,
+            26795000,
+            26805000,
+            26815000,
+            26825000,
+            26835000,
+            26845000,
+            26855000,
+            26865000,
+            26875000,
+            26885000,
+            26895000,
+            26905000,
+            26915000,
+            26925000,
+            26935000,
+            26945000,
+            26955000
+          ],
+          "legal": "jedermann"
+        },
+        {
+          "id": "cb",
+          "label": "CB Kanal 1–40 (AM/FM/SSB)",
+          "mode": "fm",
+          "frequencies_hz": [
+            26965000,
+            26975000,
+            26985000,
+            27005000,
+            27015000,
+            27025000,
+            27035000,
+            27055000,
+            27065000,
+            27075000,
+            27085000,
+            27105000,
+            27115000,
+            27125000,
+            27135000,
+            27155000,
+            27165000,
+            27175000,
+            27185000,
+            27205000,
+            27215000,
+            27225000,
+            27255000,
+            27235000,
+            27245000,
+            27265000,
+            27275000,
+            27285000,
+            27295000,
+            27305000,
+            27315000,
+            27325000,
+            27335000,
+            27345000,
+            27355000,
+            27365000,
+            27375000,
+            27385000,
+            27395000,
+            27405000
+          ],
+          "legal": "jedermann"
+        },
+        {
+          "id": "cb_data",
+          "label": "CB Datenkanäle (6/7/24/25/52/53/76/77)",
+          "mode": "data",
+          "frequencies_hz": [
+            27025000,
+            27035000,
+            27235000,
+            27245000,
+            26675000,
+            26685000,
+            26915000,
+            26925000
+          ],
+          "legal": "jedermann"
+        }
+      ],
+      "legal": "jedermann"
+    },
+    {
+      "name": "10m",
+      "start_hz": 28000000,
+      "stop_hz": 29700000,
+      "step_hz": 20000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              28000000,
+              28070000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital",
+          "label": "Digital (schmal)",
+          "mode": "digital",
+          "ranges": [
+            [
+              28070000,
+              28190000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 28.074",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            28074000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft4",
+          "label": "FT4 28.180",
+          "mode": "ft4",
+          "sideband": "USB",
+          "frequencies_hz": [
+            28180000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "wspr",
+          "label": "WSPR 28.1246",
+          "mode": "wspr",
+          "sideband": "USB",
+          "frequencies_hz": [
+            28124600
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken",
+          "mode": "beacon",
+          "ranges": [
+            [
+              28190000,
+              28300000
+            ]
+          ],
+          "frequencies_hz": [
+            28200000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "voice",
+          "label": "Sprache USB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              28300000,
+              29100000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sstv",
+          "label": "SSTV 28.680",
+          "mode": "sstv",
+          "sideband": "USB",
+          "frequencies_hz": [
+            28680000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "fm",
+          "label": "FM Simplex (29.100–29.200, Anruf 29.600)",
+          "mode": "fm",
+          "ranges": [
+            [
+              29100000,
+              29200000
+            ],
+            [
+              29510000,
+              29700000
+            ]
+          ],
+          "frequencies_hz": [
+            29600000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "digital_wide",
+          "label": "Digital (breit) 29.200–29.300",
+          "mode": "digital",
+          "ranges": [
+            [
+              29200000,
+              29300000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sat",
+          "label": "Satelliten-Downlink 29.300–29.510",
+          "mode": "sat",
+          "sideband": "USB",
+          "ranges": [
+            [
+              29300000,
+              29510000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "6m",
+      "device": "rtlsdr",
+      "start_hz": 50000000,
+      "stop_hz": 52000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "beacon",
+          "label": "Baken 50.000–50.080",
+          "mode": "beacon",
+          "ranges": [
+            [
+              50000000,
+              50080000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "cw",
+          "label": "CW",
+          "mode": "cw",
+          "ranges": [
+            [
+              50080000,
+              50100000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ssb",
+          "label": "SSB",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              50100000,
+              50400000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 50.313",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            50313000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "fm",
+          "label": "FM Simplex (Anruf 51.510)",
+          "mode": "fm",
+          "ranges": [
+            [
+              50500000,
+              52000000
+            ]
+          ],
+          "frequencies_hz": [
+            51510000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "4m",
+      "device": "rtlsdr",
+      "start_hz": 70150000,
+      "stop_hz": 70200000,
+      "step_hz": 200000,
+      "segments": [
+        {
+          "id": "ssb",
+          "label": "SSB/CW/FM 70.150–70.200",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              70150000,
+              70200000
+            ]
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "Wettersat",
+      "device": "rtlsdr",
+      "start_hz": 137000000,
+      "stop_hz": 138000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "apt",
+          "label": "NOAA/Meteor APT 137.100 / 137.620 / 137.9125 / 137.900",
+          "mode": "sat",
+          "frequencies_hz": [
+            137100000,
+            137620000,
+            137912500,
+            137900000
+          ],
+          "note": "Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme",
+          "legal": "public"
+        }
+      ],
+      "legal": "public"
+    },
+    {
+      "name": "2m",
+      "device": "rtlsdr",
+      "start_hz": 144000000,
+      "stop_hz": 146000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW 144.025–144.150",
+          "mode": "cw",
+          "ranges": [
+            [
+              144025000,
+              144150000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ssb",
+          "label": "SSB 144.150–144.400",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              144150000,
+              144400000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 144.174",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            144174000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken 144.400–144.490",
+          "mode": "beacon",
+          "ranges": [
+            [
+              144400000,
+              144490000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "fm",
+          "label": "FM Simplex (Anruf 145.500)",
+          "mode": "fm",
+          "ranges": [
+            [
+              144500000,
+              144790000
+            ],
+            [
+              145200000,
+              145587500
+            ]
+          ],
+          "frequencies_hz": [
+            145500000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "aprs",
+          "label": "APRS 144.800",
+          "mode": "aprs",
+          "frequencies_hz": [
+            144800000
+          ],
+          "note": "AX.25 AFSK 1200 Bd – Dekodierung mit multimon-ng",
+          "legal": "amateur"
+        },
+        {
+          "id": "dv",
+          "label": "Digital Voice / Daten 144.8125–144.9875",
+          "mode": "dv",
+          "ranges": [
+            [
+              144812500,
+              144987500
+            ]
+          ],
+          "note": "DMR/C4FM/D-STAR: Spektrum + Rohton",
+          "legal": "amateur"
+        },
+        {
+          "id": "relais",
+          "label": "Relais-Ausgaben 145.600–145.800 (Eingabe −600 kHz)",
+          "mode": "relais",
+          "ranges": [
+            [
+              145600000,
+              145800000
+            ]
+          ],
+          "offset_hz": -600000,
+          "legal": "amateur"
+        },
+        {
+          "id": "sat",
+          "label": "Satelliten/ISS 145.800–146.000 (ISS Sprache 145.800, APRS 145.825)",
+          "mode": "sat",
+          "ranges": [
+            [
+              145800000,
+              146000000
+            ]
+          ],
+          "frequencies_hz": [
+            145800000,
+            145825000
+          ],
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "Freenet",
+      "device": "rtlsdr",
+      "start_hz": 149000000,
+      "stop_hz": 149120000,
+      "step_hz": 200000,
+      "segments": [
+        {
+          "id": "freenet",
+          "label": "Freenet Kanal 1–6",
+          "mode": "fm",
+          "frequencies_hz": [
+            149025000,
+            149037500,
+            149050000,
+            149087500,
+            149100000,
+            149112500
+          ],
+          "legal": "jedermann"
+        }
+      ],
+      "legal": "jedermann"
+    },
+    {
+      "name": "Rundfunk",
+      "device": "rtlsdr",
+      "start_hz": 87500000,
+      "stop_hz": 108000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "wfm",
+          "label": "UKW-Rundfunk (breites FM, RDS)",
+          "mode": "wfm",
+          "ranges": [
+            [
+              87500000,
+              108000000
+            ]
+          ],
+          "legal": "public"
+        }
+      ],
+      "legal": "public"
+    },
+    {
+      "name": "70cm",
+      "device": "rtlsdr",
+      "start_hz": 430000000,
+      "stop_hz": 440000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "cw",
+          "label": "CW/SSB schmal 432.000–432.150",
+          "mode": "cw",
+          "ranges": [
+            [
+              432000000,
+              432150000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ssb",
+          "label": "SSB 432.150–432.400",
+          "mode": "voice",
+          "sideband": "USB",
+          "ranges": [
+            [
+              432150000,
+              432400000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ft8",
+          "label": "FT8 432.174",
+          "mode": "ft8",
+          "sideband": "USB",
+          "frequencies_hz": [
+            432174000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "beacon",
+          "label": "Baken 432.400–432.490",
+          "mode": "beacon",
+          "ranges": [
+            [
+              432400000,
+              432490000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "fm",
+          "label": "FM Simplex (Anruf 433.500)",
+          "mode": "fm",
+          "ranges": [
+            [
+              433400000,
+              433575000
+            ]
+          ],
+          "frequencies_hz": [
+            433500000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ism",
+          "label": "ISM 433 (Funksteckdosen, Wetterstationen, 433.920)",
+          "mode": "data",
+          "ranges": [
+            [
+              433050000,
+              434790000
+            ]
+          ],
+          "frequencies_hz": [
+            433920000
+          ],
+          "legal": "telemetrie"
+        },
+        {
+          "id": "lpd",
+          "label": "LPD433 Kanal 1–69",
+          "mode": "fm",
+          "frequencies_hz": [
+            433075000,
+            433100000,
+            433125000,
+            433150000,
+            433175000,
+            433200000,
+            433225000,
+            433250000,
+            433275000,
+            433300000,
+            433325000,
+            433350000,
+            433375000,
+            433400000,
+            433425000,
+            433450000,
+            433475000,
+            433500000,
+            433525000,
+            433550000,
+            433575000,
+            433600000,
+            433625000,
+            433650000,
+            433675000,
+            433700000,
+            433725000,
+            433750000,
+            433775000,
+            433800000,
+            433825000,
+            433850000,
+            433875000,
+            433900000,
+            433925000,
+            433950000,
+            433975000,
+            434000000,
+            434025000,
+            434050000,
+            434075000,
+            434100000,
+            434125000,
+            434150000,
+            434175000,
+            434200000,
+            434225000,
+            434250000,
+            434275000,
+            434300000,
+            434325000,
+            434350000,
+            434375000,
+            434400000,
+            434425000,
+            434450000,
+            434475000,
+            434500000,
+            434525000,
+            434550000,
+            434575000,
+            434600000,
+            434625000,
+            434650000,
+            434675000,
+            434700000,
+            434725000,
+            434750000,
+            434775000
+          ],
+          "note": "Handfunkgeräte ohne Lizenz, 10 mW, 25-kHz-Raster",
+          "legal": "jedermann"
+        },
+        {
+          "id": "sat",
+          "label": "Satelliten 435–438",
+          "mode": "sat",
+          "sideband": "USB",
+          "ranges": [
+            [
+              435000000,
+              438000000
+            ]
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "relais",
+          "label": "Relais-Ausgaben 438.650–439.425 (Eingabe −7.6 MHz; FM, DMR, C4FM)",
+          "mode": "relais",
+          "ranges": [
+            [
+              438650000,
+              439425000
+            ]
+          ],
+          "offset_hz": -7600000,
+          "legal": "amateur"
+        },
+        {
+          "id": "pocsag",
+          "label": "DAPNET Pager 439.9875",
+          "mode": "pocsag",
+          "frequencies_hz": [
+            439987500
+          ],
+          "note": "POCSAG 1200 – Dekodierung mit multimon-ng",
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "PMR446",
+      "device": "rtlsdr",
+      "start_hz": 446000000,
+      "stop_hz": 446200000,
+      "step_hz": 250000,
+      "segments": [
+        {
+          "id": "pmr",
+          "label": "PMR446 Kanal 1–16",
+          "mode": "fm",
+          "frequencies_hz": [
+            446006250,
+            446018750,
+            446031250,
+            446043750,
+            446056250,
+            446068750,
+            446081250,
+            446093750,
+            446106250,
+            446118750,
+            446131250,
+            446143750,
+            446156250,
+            446168750,
+            446181250,
+            446193750
+          ],
+          "legal": "jedermann"
+        }
+      ],
+      "legal": "jedermann"
+    },
+    {
+      "name": "ISM868",
+      "device": "rtlsdr",
+      "start_hz": 868000000,
+      "stop_hz": 868700000,
+      "step_hz": 800000,
+      "segments": [
+        {
+          "id": "ism868",
+          "label": "ISM 868 (LoRa, Wetterstationen, Rauchmelder)",
+          "mode": "data",
+          "ranges": [
+            [
+              868000000,
+              868700000
+            ]
+          ],
+          "legal": "telemetrie"
+        }
+      ],
+      "legal": "telemetrie"
+    },
+    {
+      "name": "23cm",
+      "device": "rtlsdr",
+      "start_hz": 1297000000,
+      "stop_hz": 1298400000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "relais",
+          "label": "Relais-Ausgaben 1297.0–1298.4 (Eingabe −28 MHz)",
+          "mode": "relais",
+          "ranges": [
+            [
+              1297000000,
+              1298400000
+            ]
+          ],
+          "offset_hz": -28000000,
+          "legal": "amateur"
+        }
+      ],
+      "legal": "amateur"
+    },
+    {
+      "name": "LPD",
+      "device": "rtlsdr",
+      "start_hz": 433075000,
+      "stop_hz": 434775000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "lpd",
+          "label": "LPD Kanal 1–69 (433.075–434.775)",
+          "mode": "fm",
+          "legal": "jedermann",
+          "frequencies_hz": [
+            433075000,
+            433100000,
+            433125000,
+            433150000,
+            433175000,
+            433200000,
+            433225000,
+            433250000,
+            433275000,
+            433300000,
+            433325000,
+            433350000,
+            433375000,
+            433400000,
+            433425000,
+            433450000,
+            433475000,
+            433500000,
+            433525000,
+            433550000,
+            433575000,
+            433600000,
+            433625000,
+            433650000,
+            433675000,
+            433700000,
+            433725000,
+            433750000,
+            433775000,
+            433800000,
+            433825000,
+            433850000,
+            433875000,
+            433900000,
+            433925000,
+            433950000,
+            433975000,
+            434000000,
+            434025000,
+            434050000,
+            434075000,
+            434100000,
+            434125000,
+            434150000,
+            434175000,
+            434200000,
+            434225000,
+            434250000,
+            434275000,
+            434300000,
+            434325000,
+            434350000,
+            434375000,
+            434400000,
+            434425000,
+            434450000,
+            434475000,
+            434500000,
+            434525000,
+            434550000,
+            434575000,
+            434600000,
+            434625000,
+            434650000,
+            434675000,
+            434700000,
+            434725000,
+            434750000,
+            434775000
+          ]
+        }
+      ],
+      "legal": "jedermann"
+    },
+    {
+      "name": "Flugfunk",
+      "device": "rtlsdr",
+      "start_hz": 118000000,
+      "stop_hz": 137000000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "air",
+          "label": "VHF-Flugfunk 118–137 (AM)",
+          "mode": "am",
+          "ranges": [
+            [
+              118000000,
+              136990000
+            ]
+          ],
+          "legal": "restricted",
+          "note": "Kanalraster 8,33/25 kHz"
+        },
+        {
+          "id": "guard",
+          "label": "Notfrequenz 121.500",
+          "mode": "am",
+          "frequencies_hz": [
+            121500000
+          ],
+          "legal": "restricted"
+        }
+      ],
+      "legal": "restricted"
+    },
+    {
+      "name": "Satelliten",
+      "device": "rtlsdr",
+      "satellite": true,
+      "legal": "amateur",
+      "start_hz": 145800000,
+      "stop_hz": 437825000,
+      "step_hz": 900000,
+      "segments": [
+        {
+          "id": "iss_sstv70",
+          "label": "ISS 437.550 FM (SSTV-Aktionen)",
+          "mode": "sat",
+          "frequencies_hz": [
+            437550000
+          ],
+          "legal": "amateur",
+          "note": "ARISS-SSTV seit 2026 meist hier, Robot 36"
+        },
+        {
+          "id": "iss",
+          "label": "ISS 145.800 FM (Sprache, SSTV)",
+          "mode": "sat",
+          "frequencies_hz": [
+            145800000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "iss_aprs",
+          "label": "ISS 145.825 APRS-Digipeater",
+          "mode": "sat",
+          "frequencies_hz": [
+            145825000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "iss_rpt",
+          "label": "ISS-Relais 437.800 FM",
+          "mode": "sat",
+          "frequencies_hz": [
+            437800000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ao7",
+          "label": "AO-7 Mode B 145.925–145.975 USB",
+          "mode": "sat",
+          "frequencies_hz": [
+            145950000
+          ],
+          "legal": "amateur",
+          "note": "nur bei Sonne aktiv"
+        },
+        {
+          "id": "to108",
+          "label": "CAS-6/TO-108 145.915–145.935 USB, Bake 145.910",
+          "mode": "sat",
+          "frequencies_hz": [
+            145925000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "ao73",
+          "label": "AO-73 145.950–145.970 USB, BPSK 145.935",
+          "mode": "sat",
+          "frequencies_hz": [
+            145958000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "fo29",
+          "label": "FO-29 435.800–435.900 USB (Mitte)",
+          "mode": "sat",
+          "frequencies_hz": [
+            435850000
+          ],
+          "legal": "amateur",
+          "note": "Transponder nach Fahrplan"
+        },
+        {
+          "id": "rs44",
+          "label": "RS-44 435.610–435.670 USB",
+          "mode": "sat",
+          "frequencies_hz": [
+            435640000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "mo122",
+          "label": "MO-122 435.810–435.840 USB, BPSK 435.800",
+          "mode": "sat",
+          "frequencies_hz": [
+            435825000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "so50",
+          "label": "SO-50 436.795 FM",
+          "mode": "sat",
+          "frequencies_hz": [
+            436795000
+          ],
+          "legal": "amateur",
+          "note": "nur aktiv, wenn jemand den 10-min-Zeitschalter auslöst"
+        },
+        {
+          "id": "po101",
+          "label": "PO-101 145.900 FM",
+          "mode": "sat",
+          "frequencies_hz": [
+            145900000
+          ],
+          "legal": "amateur",
+          "note": "nach Fahrplan aktiv, schwächelt"
+        },
+        {
+          "id": "ao91",
+          "label": "AO-91 145.960 FM",
+          "mode": "sat",
+          "frequencies_hz": [
+            145960000
+          ],
+          "legal": "amateur",
+          "note": "Akku schwach – nur bei Sonne"
+        },
+        {
+          "id": "ao123",
+          "label": "AO-123 435.400 FM",
+          "mode": "sat",
+          "frequencies_hz": [
+            435400000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "cas3h",
+          "label": "CAS-3H 437.200 FM/Bake",
+          "mode": "sat",
+          "frequencies_hz": [
+            437200000
+          ],
+          "legal": "amateur",
+          "note": "FM-Relais ohne festen Fahrplan, sonst Telemetrie"
+        },
+        {
+          "id": "umka1",
+          "label": "SSTV · UmKA-1 437.625",
+          "mode": "sat",
+          "frequencies_hz": [
+            437625000
+          ],
+          "legal": "amateur",
+          "note": "Robot 36, häufigster SSTV-Cubesat"
+        },
+        {
+          "id": "vizard",
+          "label": "SSTV · VIZARD-meteo 437.825",
+          "mode": "sat",
+          "frequencies_hz": [
+            437825000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "utmn2",
+          "label": "SSTV · UTMN-2 436.125",
+          "mode": "sat",
+          "frequencies_hz": [
+            436125000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "lobachevsky",
+          "label": "SSTV · Lobachevsky 436.320",
+          "mode": "sat",
+          "frequencies_hz": [
+            436320000
+          ],
+          "legal": "amateur",
+          "note": "auch SSDV (wird nicht dekodiert)"
+        },
+        {
+          "id": "qmrkwt2",
+          "label": "SSTV · QMR-KWT-2 436.950",
+          "mode": "sat",
+          "frequencies_hz": [
+            436950000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sakhacube",
+          "label": "SSTV · SakhaCube 437.350",
+          "mode": "sat",
+          "frequencies_hz": [
+            437350000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "hc1px",
+          "label": "SSTV · HC1PX 437.050",
+          "mode": "sat",
+          "frequencies_hz": [
+            437050000
+          ],
+          "legal": "amateur"
+        },
+        {
+          "id": "sonate2",
+          "label": "SSTV · SONATE-2 145.880",
+          "mode": "sat",
+          "frequencies_hz": [
+            145880000
+          ],
+          "legal": "amateur",
+          "note": "Martin 1, nach Fahrplan der Uni Würzburg; Bahn sinkt"
+        }
+      ]
+    }
+  ],
+  "birdie_tolerance_hz": 120,
+  "birdie_min_fraction": 0.2,
+  "confirm_snr_db": 12.0,
+  "confirm_tolerance_hz": 200,
+  "confirm_capture_seconds": 0.8,
+  "record_confirmed": true,
+  "record_seconds": 10.0,
+  "birdie_min_hits": 4,
+  "frequency_correction_ppm": 0.0,
+  "ft8_detection": true,
+  "ft8_long_record_seconds": 16.0,
+  "ft8_slot_alignment": true,
+  "bandplan_note": "KW nach IARU R1 (PMSDR); VHF/UHF nach IARU R1 + DE-Zuteilungen (RTL-SDR). Segment-IDs steuern Dekoder/Demodulator (mode/sideband/offset).",
+  "rtlsdr": {
+    "device_index": 0,
+    "gain": 20,
+    "ppm": 0,
+    "bias_t": false,
+    "binary": "rtl_sdr"
+  },
+  "legal_note": "amateur = Amateurfunk; public = für die Allgemeinheit bestimmt (Rundfunk, Wettersatelliten); jedermann = Jedermannfunk (PMR446/LPD/Freenet/CB); telemetrie = Gerätedaten (ISM); restricted = Mithören in vielen Ländern verboten (in Deutschland § 5 TDDDG, früher TTDSG). Diese Bänder sind ausgeblendet und werden nicht gescannt, solange allow_restricted_bands nicht auf true steht – das nur tun, wo es das Recht des eigenen Landes erlaubt.",
+  "sstv_record_seconds": 120,
+  "sstv_probe_seconds": 4,
+  "sstv_threshold_db": 6.0,
+  "device_labels": {
+    "pmsdr": "PMSDR",
+    "rtlsdr": "RTL-SDR"
+  },
+  "antennas": {
+    "pmsdr": "",
+    "rtlsdr": ""
+  },
+  "allow_restricted_bands": false
+}

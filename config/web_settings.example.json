@@ -1,0 +1,11 @@
+{
+  "scan_interval_minutes": 10,
+  "active_device": "rtlsdr",
+  "selected_bands": ["2m", "70cm"],
+  "selected_segments": {},
+  "my_locator": "",
+  "scan_raster": {"pmsdr": "normal", "rtlsdr": "normal"},
+  "sat_prio": {},
+  "notify": {"enabled": false, "smtp_host": "", "smtp_port": 587, "tls": "starttls", "smtp_user": "", "smtp_pass": "",
+             "mail_from": "", "mail_to": "", "on_error": false, "on_scan_done": false, "min_new_hits": 1, "throttle_min": 30}
+}
