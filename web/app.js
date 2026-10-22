@@ -14,7 +14,8 @@
 
   // ---------- Zeit (immer UTC, lesbar) ----------
   const pad = n => String(n).padStart(2, '0');
-  const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const EN = (window.I18N && I18N.lang === 'en');
+  const WD = EN ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
   function parseT(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
   function fmtTime(s, withDate = true) {
     const d = parseT(s); if (!d) return '–';
@@ -22,18 +23,18 @@
     if (!withDate) return t + ' UTC';
     const today = new Date();
     const sameDay = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
-    return (sameDay ? 'heute ' : `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}. `) + t + ' UTC';
+    return (sameDay ? (EN ? 'today ' : 'heute ') : (EN ? `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)} ` : `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}. `)) + t + ' UTC';
   }
   function fmtRel(s) {
     const d = parseT(s); if (!d) return '';
     const diff = Math.round((d - Date.now()) / 1000);
     const a = Math.abs(diff);
-    const txt = a < 60 ? `${a} s` : a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${(a / 3600).toFixed(1)} h` : `${Math.round(a / 86400)} Tage`;
-    return diff < 0 ? `vor ${txt}` : `in ${txt}`;
+    const txt = a < 60 ? `${a} s` : a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${(a / 3600).toFixed(1)} h` : `${Math.round(a / 86400)} ${EN ? 'days' : 'Tage'}`;
+    return diff < 0 ? (EN ? `${txt} ago` : `vor ${txt}`) : `in ${txt}`;
   }
   function fmtDur(sec) { if (sec == null) return '–'; sec = Math.round(sec); return sec < 90 ? `${sec} s` : `${Math.floor(sec / 60)} min ${pad(sec % 60)} s`; }
   function fmtMHz(hz) { return (hz / 1e6).toFixed(4); }
-  (() => { try { $('clockZone').textContent = new Intl.DateTimeFormat('de', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Lokal'; } catch (e) { } })();
+  (() => { try { $('clockZone').textContent = new Intl.DateTimeFormat(EN ? 'en-GB' : 'de', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Lokal'; } catch (e) { } })();
   setInterval(() => { const d = new Date(); $('clock').textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; $('clockLocal').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }, 1000);
 
   let toastTimer;
@@ -393,7 +394,7 @@
     const f = h.files || {};
     let html = '';
     if (f.sstv) html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">`;
-    if (f.iq) html += `<img src="/api/spectrum?peak_id=${h.id}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.remove()">`;
+    if (f.iq) html += `<img src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.remove()">`;
     else if (f.spectrum) html += `<img src="${f.spectrum}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy">`;
     if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
     if (h.segment_note) html += `<p class="hint">${esc(h.segment_note)}</p>`;
@@ -704,8 +705,8 @@
         const data = r.data || {};
         const main = ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'].filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
         const all = Object.entries(data).map(([k, v]) => `<tr><td>${esc(KEY_TEXT[k] || k)}</td><td class="mono">${esc(fmtVal(k, v))}</td></tr>`).join('');
-        const when = fmtTime(r.ts, true).replace(' UTC', '').replace('heute ', '');
-        const span = n > 1 ? `<span class="rep">${n}× seit ${fmtTime(first, true).replace(' UTC', '').replace('heute ', '')}</span>` : '';
+        const when = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
+        const span = n > 1 ? `<span class="rep">${n}× seit ${fmtTime(first, true).replace(' UTC', '').replace(/^(heute|today) /, '')}</span>` : '';
         return `<li class="${r.level}"><span>${when}</span><span class="lv">${r.level}</span><span>${esc(r.component)}</span><div class="lmain"><details><summary><b>${esc(EVENT_TEXT[r.event] || r.event)}</b> ${span} <span class="d">${main}</span></summary>
           <table class="table log-detail"><tr><td>Ereignis</td><td class="mono">${esc(r.event)}</td></tr>${all}<tr><td>Zeit (UTC)</td><td class="mono">${esc(r.ts)}</td></tr></table></details></div></li>`;
       }).join('') || '<li>keine Einträge</li>';
@@ -770,8 +771,8 @@
       if (!parts.length) parts.push(future.length ? 'Aufnahme startet 15 s vor dem Aufgang. Überschneiden sich Überflüge, entscheidet die Punktzahl (Priorität, Höhe, Wartezeit, Aktivität – einstellbar unter Einstellungen). Passen die Frequenzen in ein Empfangsfenster, werden die Satelliten gemeinsam aufgenommen.' : 'In den nächsten 24 h kein Überflug über 10° Höhe.');
       hint.textContent = parts.join(' ');
     }
-    const t = x => new Date(x * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    const day = x => new Date(x * 1000).toLocaleDateString('de-DE', { weekday: 'short' });
+    const t = x => new Date(x * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+    const day = x => new Date(x * 1000).toLocaleDateString(I18N.locale, { weekday: 'short' });
     const showPast = $('satShowPast').checked, showAll = $('satShowAll').checked;
     let list = (d.passes || []).filter(p => showPast || p.los > now);
     if (!showAll) list = list.slice(0, showPast ? 16 : 10);
@@ -855,6 +856,10 @@
     if (go === 'sstv') { filter.mode = 'sstv'; localStorage.setItem('f.mode', 'sstv'); $('filterMode').value = 'sstv'; }
     showView('hits'); loadHits();
   }));
+
+  // ---------- Sprache ----------
+  $('uiLang').value = I18N.lang;
+  $('uiLang').addEventListener('change', e => I18N.set(e.target.value));
 
   // ---------- Start ----------
   (async () => {

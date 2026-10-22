@@ -1,0 +1,305 @@
+/* HamScanPi – Sprache der Oberfläche (Deutsch / English).
+ *
+ * Das Dashboard ist auf Deutsch geschrieben. Für Englisch wird jeder sichtbare Text beim Einfügen
+ * übersetzt: ganze Texte über das Wörterbuch D, Textteile mit eingesetzten Werten (Zeiten, Zahlen,
+ * Namen) über die Muster P. Ein MutationObserver übersetzt auch alles, was app.js später einfügt.
+ * Elemente mit der Klasse .mono oder .no-i18n (Dekodierungen, Rohdaten) bleiben unverändert.
+ *
+ * Die Wahl gilt je Browser (localStorage „lang“); ohne Wahl entscheidet die Browsersprache.
+ * Fehlt eine Übersetzung, bleibt der deutsche Text stehen – Ergänzungen gern als Pull Request.
+ */
+(function () {
+  'use strict';
+  const stored = localStorage.getItem('lang');
+  const LANG = stored === 'en' || stored === 'de' ? stored : ((navigator.language || 'de').toLowerCase().startsWith('de') ? 'de' : 'en');
+  document.documentElement.lang = LANG;
+
+  const D = {
+    // Kopf, Bereiche
+    'Verbinde …': 'Connecting …', 'Lokal': 'local', 'Bereiche': 'Sections', 'Treffer': 'Hits', 'Protokoll': 'Log',
+    'Einstellungen': 'Settings', 'Live': 'Live', 'Scan': 'Scan',
+    // Treffer
+    'gespeicherte Treffer': 'stored hits', 'neu im letzten Lauf': 'new in last run', 'Treffer letzter Scan': 'hits last scan',
+    'verworfen': 'rejected', 'Betriebsart': 'Mode', 'Alle': 'All', 'Sortierung': 'Sort', 'Neu → alt': 'New → old',
+    'Alt → neu': 'Old → new', 'Frequenz': 'Frequency', 'Stärkstes Signal': 'Strongest signal', 'Bester Ton zuerst': 'Best audio first',
+    'Suche (MHz oder Notiz)': 'Search (MHz or note)', '7.14 oder DL1…': '7.14 or DL1…', 'nur mit Ton': 'audio only', 'nur ★': '★ only',
+    'Keine Treffer für diese Auswahl.': 'No hits for this selection.', '🔊 Ton': '🔊 audio', 'nur Träger': 'carrier only', 'neu': 'new',
+    '★ geschützt': '★ protected', 'Löschen': 'Delete', '▶ Jetzt live hören': '▶ Listen live now', 'Schützen': 'Protect',
+    'Schutz aufheben': 'Unprotect', 'Treffer wird behalten': 'Hit will be kept', 'Gelöscht': 'Deleted', 'Notiz gespeichert': 'Note saved',
+    'Notiz': 'Note', 'Notiz / Rufzeichen': 'Note / callsign', '★ Behalten': '★ Keep', '☆ Schutz aufheben': '☆ Unprotect', 'Bedeutung': 'Meaning', 'Nachricht': 'Message', 'Nachrichten': 'messages', 'Empfang': 'Reception',
+    'Ausgabe': 'Output', 'ohne DNR': 'no DNR', 'DNR mittel': 'DNR medium', 'DNR stark': 'DNR strong', 'leer': 'empty',
+    'Unbekannt': 'Unknown', 'Sprache': 'Voice', 'Bake': 'Beacon', 'Satellit': 'Satellite', 'Daten': 'Data', 'Dauerträger': 'Carrier',
+    'Störung/Breitband': 'Noise/wideband', 'UKW-Rundfunk': 'FM broadcast', 'Relais': 'Repeater', 'Pager': 'Pager', 'Digitalfunk': 'Digital voice',
+    '↓ Audio so speichern, wie es gerade klingt': '↓ Save audio as it sounds now', '↓ LSB': '↓ LSB', '↓ USB': '↓ USB',
+    'Rohdaten, Stereo I/Q – für SDR-Software, nicht zum Anhören': 'Raw data, stereo I/Q – for SDR software, not for listening',
+    'Digitalmodi werden wie am Funkgerät in USB abgehört. Liegt der Ton außerhalb von 300–3000 Hz, die Abstimmung verschieben.':
+      'Digital modes are monitored in USB, as on a radio. If the tone is outside 300–3000 Hz, shift the tuning.',
+    'Klingt die Stimme zu hoch/tief („Donald Duck“), die Abstimmung verschieben – grob mit ±500/±100, fein mit ±10 Hz. Bei doppeltem Signal das Seitenband wechseln.':
+      'If the voice sounds too high or low ("Donald Duck"), shift the tuning – coarse with ±500/±100, fine with ±10 Hz. If you hear the signal twice, switch the sideband.',
+    'AM (Flugfunk, CB). Rauscht es nur, ±5 kHz probieren – der Treffer sitzt nicht immer auf der Kanalmitte.':
+      'AM (airband, CB). If you only hear noise, try ±5 kHz – the hit is not always on the channel centre.',
+    'Schmales FM (Relais, Simplex, PMR, Pager, Digitalfunk als Rohton). Bei Digitalfunk hörst du nur das Rauschen des Signals – das ist normal.':
+      'Narrow FM (repeaters, simplex, PMR, pager, digital voice as raw audio). With digital voice you only hear the noise of the signal – that is normal.',
+    // Scan
+    'Zu den Treffern': 'Go to hits', 'Treffer 24 h': 'Hits 24 h', 'Scans 24 h': 'Scans 24 h', 'Scanzeit 24 h': 'Scan time 24 h',
+    'Zur Überflugliste': 'Go to pass list', 'Überflüge aufgenommen': 'Passes recorded', 'Überflüge 24 h': 'Passes 24 h',
+    'SSTV-Bilder anzeigen': 'Show SSTV images', 'SSTV-Bilder 24 h': 'SSTV images 24 h', 'nächster Überflug': 'next pass',
+    'kein Überflug geplant': 'no pass planned', 'läuft': 'running', 'Bereit': 'Ready', 'Letzter Lauf': 'Last run', 'Dauer': 'Duration',
+    'Nächster Scan': 'Next scan', 'Angeschlossenes Gerät': 'Connected receiver', 'Automatisch (Start zu Start)': 'Automatic (start to start)',
+    'Jetzt scannen': 'Scan now', 'Scan abbrechen': 'Stop scan', 'Scan läuft …': 'Scan running …', 'aus': 'off', 'jede Stunde': 'every hour',
+    'nicht angeschlossen': 'not connected', 'Gesamtes Band': 'Whole band', 'weitere': 'more', 'Scan angefordert': 'Scan requested',
+    'Scan startet': 'Scan starting', 'Bänder werden abgesucht': 'Scanning bands', 'Aufnahmen werden ausgewertet': 'Analysing recordings',
+    'FM/VHF-Aufnahmen': 'FM/VHF recordings', 'Signale werden dekodiert': 'Decoding signals', 'FT8 wird dekodiert': 'Decoding FT8',
+    'Abschluss': 'Finishing', 'Scan läuft': 'Scan running', 'Scan abgeschlossen': 'Scan finished', 'Fehler beim Scan': 'Scan error',
+    'Server nicht erreichbar': 'Server not reachable', 'läuft gerade': 'running now', 'fällig – startet gleich': 'due – starting soon',
+    'Scan fertig': 'Scan finished', 'Scan wird vorbereitet': 'Preparing scan', 'Treffer werden ausgewertet': 'Analysing hits',
+    'FM-Aufnahmen werden erzeugt': 'Creating FM recordings', 'VHF/UHF-Aufnahmen werden ausgewertet': 'Analysing VHF/UHF recordings',
+    'Bekannte Signale werden dekodiert': 'Decoding known signals', 'FT8-Nachrichten werden dekodiert': 'Decoding FT8 messages',
+    'Ergebnisse werden bereitgestellt': 'Preparing results', 'Scan vom Benutzer abgebrochen': 'Scan cancelled by user',
+    'Scanlauf wurde unterbrochen': 'Scan run was interrupted', 'Live-Empfang': 'Live reception',
+    'Scan abgeschlossen – Treffer aktualisiert': 'Scan finished – hits updated', 'Laufenden Scan abbrechen?': 'Stop the running scan?',
+    'Scan wird abgebrochen …': 'Stopping scan …', 'Mindestens ein Band auswählen': 'Select at least one band', 'Scan läuft bereits': 'Scan already running',
+    '✓ Scan direkt gestartet (Scheduler-Dienst läuft nicht!)': '✓ Scan started directly (scheduler service not running!)',
+    '✓ Scan angefordert': '✓ Scan requested', '✓ gespeichert': '✓ saved', '✓ Locator gespeichert': '✓ Locator saved',
+    '✓ gespeichert – gilt ab dem nächsten Scan': '✓ saved – applies from the next scan',
+    '✓ gespeichert – der Plan wird neu berechnet': '✓ saved – the plan is being recalculated',
+    'Antippen zum Ein-/Ausschalten. Änderungen werden sofort gespeichert und beim nächsten Scan verwendet.':
+      'Tap to switch on/off. Changes are saved immediately and used from the next scan.',
+    'Bänder & Betriebsarten': 'Bands & modes', 'Gerätetelemetrie (ISM) – nur eigene Geräte auswerten': 'Device telemetry (ISM) – only evaluate your own devices',
+    'Eingeschränkt: Mithören in vielen Ländern verboten (z. B. Deutschland, § 5 TDDDG) – nur einschalten, wo es erlaubt ist.':
+      'Restricted: monitoring is forbidden in many countries (e.g. Germany, § 5 TDDDG) – only enable where it is allowed.',
+    'Kein Band für dieses Gerät gewählt – der Scanner hätte nichts zu tun.': 'No band selected for this receiver – the scanner would have nothing to do.',
+    'Satelliten-Überflüge': 'Satellite passes', 'Satellit · Kanäle': 'Satellite · channels', 'Zeit (Ortszeit)': 'Time (local)',
+    'Höhe': 'Elev.', 'Aufnahme': 'Recording', 'vergangene zeigen': 'show past', 'alle 24 h': 'all 24 h', 'gemeinsam': 'shared',
+    'übersprungen': 'skipped', 'voll': 'full', 'wenn Stick frei': 'if stick is free', 'keine Überflüge': 'no passes',
+    'aufgenommen': 'recorded', 'nimmt auf': 'recording', 'nicht aufgenommen': 'not recorded',
+    'In den nächsten 24 h kein Überflug über 10° Höhe.': 'No pass above 10° elevation in the next 24 h.',
+    'Aufnahme startet 15 s vor dem Aufgang. Überschneiden sich Überflüge, entscheidet die Punktzahl (Priorität, Höhe, Wartezeit, Aktivität – einstellbar unter Einstellungen). Passen die Frequenzen in ein Empfangsfenster, werden die Satelliten gemeinsam aufgenommen.':
+      'Recording starts 15 s before AOS. If passes overlap, the score decides (priority, elevation, waiting time, activity – adjustable under Settings). If the frequencies fit into one receive window, the satellites are recorded together.',
+    'Unter „Bänder & Betriebsarten“ das Band „Satelliten“ einschalten – dann nimmt der RTL-SDR jeden Überflug automatisch auf (Doppler-Korrektur, SSTV und APRS werden dekodiert). Die mit „SSTV ·“ markierten Bildsatelliten senden nur gelegentlich; sie werden nur aufgenommen, wenn der Stick frei ist.':
+      'Switch on the band "Satelliten" under "Bands & modes" – the RTL-SDR then records every pass automatically (Doppler correction, SSTV and APRS are decoded). The image satellites marked "SSTV ·" transmit only occasionally; they are only recorded when the stick is free.',
+    'Scan-Verlauf': 'Scan history', 'Start (UTC)': 'Start (UTC)', 'Bänder': 'Bands', 'Status': 'Status', 'Treffer / verworfen': 'Hits / rejected',
+    'Abstimmungen': 'Tunings', 'Abst.': 'Tun.', 'Pro Seite': 'Per page', 'noch kein Lauf': 'no run yet', 'ok': 'ok', 'Fehler': 'Error',
+    'abgebrochen': 'aborted', 'vom Benutzer oder für einen Überflug abgebrochen': 'cancelled by the user or for a satellite pass',
+    // Live
+    'Live hören': 'Listen live', 'Frequenz (MHz)': 'Frequency (MHz)', 'Demodulator': 'Demodulator', 'FM schmal': 'FM narrow', 'FM breit': 'FM wide',
+    'Verstärkung': 'Gain', 'wie Scan': 'as scan', 'automatisch': 'automatic', 'Rauschsperre / Suchlauf-Schwelle': 'Squelch / seek threshold',
+    'Hören': 'Listen', 'Stopp': 'Stop', 'Suchlauf abwärts ab der eingestellten Frequenz': 'Seek down from the set frequency',
+    '◀◀ Suchlauf': '◀◀ Seek', 'Suchlauf aufwärts ab der eingestellten Frequenz': 'Seek up from the set frequency', 'Suchlauf ▶▶': 'Seek ▶▶',
+    'einfacher Player (falls kein Ton kommt)': 'simple player (if there is no audio)', 'Zuletzt gehört': 'Recently heard', 'noch nichts': 'nothing yet',
+    'Suchlauf: sucht ab der eingestellten Frequenz im gewählten Raster und Demodulator (für UKW-Radio „FM breit“, Raster wird dann 100 kHz), bleibt auf einem Signal stehen, solange es belegt ist, und sucht danach weiter. Anhalten: ◀/▶ oder Hören drücken. Der Regler ist im Suchlauf die Schwelle (0 = 10 dB).':
+      'Seek: searches from the set frequency in the chosen step and demodulator (for FM radio use "FM wide", the step is then 100 kHz), stays on a signal while it is active and then continues. Stop: press ◀/▶ or Listen. During seek the slider is the threshold (0 = 10 dB).',
+    'Tipp: Auf jeder Trefferkarte bringt dich „▶ Jetzt live hören“ direkt hierher.': 'Tip: on every hit card, "▶ Listen live now" brings you straight here.',
+    'Browser lässt kein Audio zu – „einfacher Player“ anhaken und nochmal Hören drücken': 'The browser blocks audio – tick "simple player" and press Listen again',
+    // Protokoll
+    'Stufe ab': 'Level from', 'Warnung': 'Warning', 'Komponente': 'Component', 'alle': 'all', 'Suche': 'Search', 'Text': 'Text',
+    'Wiederholungen zusammenfassen': 'Group repeats', 'Laden': 'Load', '◀ neuere': '◀ newer', 'ältere ▶': 'older ▶',
+    'Scan-Ausgabe (roh, letzte Zeilen)': 'Scan output (raw, last lines)', 'keine Einträge': 'no entries', 'Ereignis': 'Event',
+    'Scan gestartet': 'Scan started', 'Scan fehlgeschlagen': 'Scan failed', 'Scan abgebrochen': 'Scan cancelled', 'Scan unterbrochen': 'Scan interrupted',
+    'Scan wird gestartet': 'Starting scan', 'Scan verschoben': 'Scan postponed', 'Scan beendet': 'Scan stopped', 'Scan-Anforderung ignoriert': 'Scan request ignored',
+    'Band wird abgesucht': 'Scanning band', 'Band übersprungen': 'Band skipped', 'Empfänger geöffnet': 'Receiver opened',
+    'Empfänger lässt sich nicht öffnen': 'Cannot open receiver', 'RTL-SDR liefert keine Daten': 'RTL-SDR delivers no data', 'RTL-SDR läuft wieder': 'RTL-SDR running again',
+    'Überflug: Aufnahme startet': 'Pass: recording starts', 'Überflug übersprungen': 'Pass skipped', 'Satelliten: Problem': 'Satellites: problem',
+    'Satelliten: Fehler': 'Satellites: error', 'Satelliten: Hinweis': 'Satellites: note', 'Überflug: Aufnahme läuft': 'Pass: recording',
+    'Überflug fertig': 'Pass finished', 'Überflug fehlgeschlagen': 'Pass failed', 'Überflug: Auswertung fehlgeschlagen': 'Pass: analysis failed',
+    'Überflug: Aufnahme gestört': 'Pass: recording disturbed', 'Scheduler: Fehler in der Schleife': 'Scheduler: error in main loop',
+    'Kanalbeobachtung fehlgeschlagen': 'Channel watch failed', 'Sprachbeobachtung fehlgeschlagen': 'Voice watch failed',
+    'Live-Empfang gestartet': 'Live reception started', 'Live-Empfang beendet': 'Live reception stopped', 'Mail verschickt': 'Mail sent',
+    'Mail fehlgeschlagen': 'Mail failed', 'Scan-Zusammenfassung': 'Scan summary', 'Auswertung': 'Analysis', 'Dekodierung fertig': 'Decoding finished',
+    'Lauf': 'Run', 'Grund': 'Reason', 'Kanäle': 'Channels', 'max. Höhe°': 'max. elev.°', 'Gerät': 'Receiver', 'Problem': 'Problem',
+    'Intervall min': 'Interval min', 'Sekunden': 'Seconds', 'Mitte': 'Centre', 'bis': 'until', 'je Kanal': 'per channel', 'Plan': 'Plan',
+    'Dauer s': 'Duration s', 'Zeit (UTC)': 'Time (UTC)',
+    // Einstellungen
+    'Station': 'Station', 'Mein Locator (für Entfernung und Richtung bei FT8/FT4)': 'My locator (for distance and bearing with FT8/FT4)',
+    'z. B. JO31AB': 'e.g. JO31AB', 'Sprache / Language': 'Sprache / Language', 'Frequenzraster': 'Scan raster',
+    'Abstand der Empfangsfenster beim Absuchen ganzer Bänder. Feiner = die Fenster überlappen mehr, an den Fensterrändern und in der Mitte (Gleichanteil) entgehen weniger Signale – der Scan dauert dafür länger. Einzelkanäle (PMR, Freenet, Relais) sind davon nicht betroffen.':
+      'Spacing of the receive windows when scanning whole bands. Finer = the windows overlap more, fewer signals are missed at the window edges and in the centre (DC) – the scan takes longer. Single channels (PMR, Freenet, repeaters) are not affected.',
+    'PMSDR (Kurzwelle)': 'PMSDR (shortwave)', 'normal': 'normal', 'fein (¾ Schritt)': 'fine (¾ step)', 'sehr fein (½ Schritt)': 'very fine (½ step)',
+    'Satelliten-Prioritäten': 'Satellite priorities', 'Kanal': 'Channel', 'Priorität': 'Priority', 'Zuletzt (14 Tage)': 'Last (14 days)',
+    '0 – nie': '0 – never', 'immer zuerst': 'always first',
+    'Überschneiden sich zwei Überflüge, gewinnt die höhere Punktzahl: Priorität × 10, dazu bis 15 Punkte für die Höhe des Überflugs und bis 15 Punkte für die Wartezeit seit der letzten Aufnahme (1 Punkt je 4 Stunden). Abgezogen werden bis 15 Punkte, wenn ein Satellit in den letzten 14 Tagen mehrmals ohne jedes Signal aufgenommen wurde – ein einziger Treffer hebt das wieder auf. Passen die Frequenzen in ein Empfangsfenster, werden beide gemeinsam aufgenommen. 0 = nie aufnehmen, „immer zuerst“ schlägt alles.':
+      'If two passes overlap, the higher score wins: priority × 10, plus up to 15 points for the elevation of the pass and up to 15 points for the time since the last recording (1 point per 4 hours). Up to 15 points are deducted if a satellite was recorded several times in the last 14 days without any signal – a single hit cancels that. If the frequencies fit into one receive window, both are recorded together. 0 = never record, "always first" beats everything.',
+    'Aufräumen': 'Clean-up', 'Älter als': 'Older than', '1 Tag': '1 day', '3 Tage': '3 days', '7 Tage': '7 days', '14 Tage': '14 days', '30 Tage': '30 days',
+    'Prüfen': 'Check', 'Alte löschen': 'Delete old', 'Alle ungeschützten Treffer löschen': 'Delete all unprotected hits',
+    'Geschützte Treffer (★) werden nie automatisch gelöscht.': 'Protected hits (★) are never deleted automatically.', 'Löschprotokoll': 'Deletion log',
+    'Wirklich ALLE ungeschützten Treffer samt Aufnahmen löschen?': 'Really delete ALL unprotected hits including recordings?',
+    'Benachrichtigungen (Mail)': 'Notifications (mail)', 'Mailversand aktiv': 'Mail enabled', 'SMTP-Server': 'SMTP server', 'Verschlüsselung': 'Encryption',
+    'keine': 'none', 'Benutzer': 'User', 'Passwort': 'Password', 'Absender': 'From', 'Empfänger': 'To', 'pi@example.de': 'pi@example.org',
+    'ich@example.de': 'me@example.org', 'smtp.example.de': 'smtp.example.org', 'Mail bei Fehlern': 'Mail on errors', 'höchstens eine je': 'at most one per',
+    'Mail nach jedem Scan': 'Mail after every scan', 'ab': 'from', 'Treffern, fehlgeschlagene Scans immer': 'hits, failed scans always',
+    'Speichern': 'Save', 'Testmail senden': 'Send test mail', 'sende …': 'sending …', '✓ Testmail verschickt': '✓ Test mail sent',
+    'Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.':
+      'The password is stored in plain text in config/web_settings.json on the Pi – use a separate mail account or an app password.',
+    // Bänder und Segmente
+    'Satelliten': 'Satellites', 'Rundfunk': 'Broadcast', 'Wettersat': 'Weather sat', 'Flugfunk': 'Airband',
+    'UKW-Rundfunk (breites FM, RDS)': 'FM broadcast (wide FM, RDS)', 'Sprache USB': 'Voice USB', 'Sprache LSB': 'Voice LSB',
+    'Kanalraster 8,33/25 kHz': 'Channel raster 8.33/25 kHz', 'nur bei Sonne aktiv': 'only active in sunlight', 'Akku schwach – nur bei Sonne': 'weak battery – sunlight only',
+    'Transponder nach Fahrplan': 'transponder on schedule', 'nach Fahrplan aktiv, schwächelt': 'active on schedule, weakening',
+    'nur aktiv, wenn jemand den 10-min-Zeitschalter auslöst': 'only active when someone triggers the 10-min timer',
+    'FM-Relais ohne festen Fahrplan, sonst Telemetrie': 'FM repeater without fixed schedule, otherwise telemetry',
+    'Robot 36, häufigster SSTV-Cubesat': 'Robot 36, most frequent SSTV CubeSat', 'auch SSDV (wird nicht dekodiert)': 'also SSDV (not decoded)',
+    'Martin 1, nach Fahrplan der Uni Würzburg; Bahn sinkt': 'Martin 1, on the schedule of Würzburg University; orbit decaying',
+    'ARISS-SSTV seit 2026 meist hier, Robot 36': 'ARISS SSTV mostly here since 2026, Robot 36',
+    'Handfunkgeräte ohne Lizenz, 10 mW, 25-kHz-Raster': 'licence-free handhelds, 10 mW, 25 kHz raster',
+    'DMR/C4FM/D-STAR: Spektrum + Rohton': 'DMR/C4FM/D-STAR: spectrum + raw audio',
+    'Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme': 'only audible during a pass; an image needs ~10 min of recording',
+    'Sprache / Language:': 'Sprache / Language:',
+  };
+
+  // Textteile mit eingesetzten Werten (Reihenfolge zählt)
+  const P = [
+    [/^Scan abgebrochen: /, 'Scan aborted: '],
+    [/^Scan fehlgeschlagen: /, 'Scan failed: '],
+    [/^Fehler: /, 'Error: '],
+    [/^Einstellungen nicht ladbar: /, 'Cannot load settings: '],
+    [/^Geräte geändert: (.+)$/, (m, x) => 'Receivers changed: ' + x.replace(/ da\b/g, ' present').replace(/ weg\b/g, ' gone')],
+    [/✓ Gerät umgestellt – Antenne am (.+) anschließen/, '✓ Receiver switched – connect the antenna to $1'],
+    [/^(.+) nicht angeschlossen – automatisch (.+)\. /, '$1 not connected – using $2 automatically. '],
+    [/^Kein Empfänger angeschlossen – (.+) oder (.+) anstecken\./, 'No receiver connected – plug in $1 or $2.'],
+    [/^(.+) am (.+)\. Gescannt werden nur die VHF\/UHF-Bänder\./, '$1 on the $2. Only the VHF/UHF bands are scanned.'],
+    [/^(.+) am (.+)\. Gescannt werden nur die Kurzwellenbänder\./, '$1 on the $2. Only the shortwave bands are scanned.'],
+    [/^Gescannt werden nur die VHF\/UHF-Bänder\./, 'Only the VHF/UHF bands are scanned.'],
+    [/^Gescannt werden nur die Kurzwellenbänder\./, 'Only the shortwave bands are scanned.'],
+    [/steckt – Steuerung läuft nicht \((.+)\)/, 'plugged in – control program not running ($1)'],
+    [/Soundkarte \(Aureon\) fehlt/, 'sound card missing'], [/PMSDR-Platine fehlt/, 'PMSDR board missing'],
+    [/Kurzwelle 160 m – 10 m/, 'shortwave 160 m – 10 m'],
+    [/^alle (\d+) min$/, 'every $1 min'], [/^alle (\d+) Stunden$/, 'every $1 hours'], [/^alle (\d+) min – Scan dauert länger$/, 'every $1 min – scan takes longer'],
+    [/^alle (\d+) Stunden – Scan dauert länger$/, 'every $1 hours – scan takes longer'], [/^jede Stunde – Scan dauert länger$/, 'every hour – scan takes longer'],
+    [/Ein Scan mit dieser Auswahl dauert etwa (.+?) \((.*), Vor-\/Nachlauf ≈ (.+?)\)\./, (m, a, b, c) => `A scan with this selection takes about ${a} (${b}, setup ≈ ${c}).`],
+    [/ \(geschätzt\)/g, ' (estimated)'],
+    [/ ⚠ Länger als das Intervall – die Scans laufen dann mit 30 s Pause hintereinander, der Stick ist fast nie frei\./, ' ⚠ Longer than the interval – scans then run back to back with a 30 s pause, the stick is almost never free.'],
+    [/ Kürzestes sinnvolles Intervall: (\d+) min\./, ' Shortest sensible interval: $1 min.'],
+    [/ Kürzestes sinnvolles Intervall: jede Stunde\./, ' Shortest sensible interval: every hour.'],
+    [/^Scans 24 h · (\d+) Fehler$/, 'Scans 24 h · $1 errors'], [/^(\d+) Fehler$/, '$1 errors'],
+    [/^Überflüge 24 h · (\d+) Treffer$/, 'Passes 24 h · $1 hits'],
+    [/^Überflug (.+) · (\d+)°$/, 'Pass $1 · $2°'],
+    [/^in (\d+):(\d\d) h$/, 'in $1:$2 h'],
+    [/^(\d+)–(\d+) von (\d+)$/, '$1–$2 of $3'], [/^Einträge (\d+)–(\d+)$/, 'Entries $1–$2'],
+    [/^24 h · (\d+) Einträge$/, '24 h · $1 entries'], [/^(\d+)× seit (.+)$/, '$1× since $2'],
+    [/^(\d+) Treffer \(erste 400\)$/, '$1 hits (first 400)'], [/^(\d+) Treffer$/, '$1 hits'], [/ · (\d+) Treffer$/, ' · $1 hits'],
+    [/^(\d+) P · /, '$1 pts · '], [/^(\d+) P$/, '$1 pts'],
+    [/noch nie aufgenommen/g, 'never recorded'], [/(\d+) Tage nicht aufgenommen/g, 'not recorded for $1 days'],
+    [/(\d+) h nicht aufgenommen/g, 'not recorded for $1 h'], [/herabgestuft: (\d+) Aufnahmen ohne Signal/g, 'downgraded: $1 recordings without signal'],
+    [/aktiv: (\d+) Treffer in 14 Tagen/g, 'active: $1 hits in 14 days'],
+    [/^gemeinsame Aufnahme mit (.+)$/, 'shared recording with $1'], [/^gekürzt wegen (.+)$/, 'shortened because of $1'],
+    [/gemeinsame Aufnahme mit (.+) ist schon voll \((\d+) Kanäle\); /, 'the shared recording with $1 is already full ($2 channels); '],
+    [/gleichzeitig mit (.+?), Frequenz passt nicht ins gemeinsame Empfangsfenster; /, 'simultaneous with $1, frequency does not fit the shared receive window; '],
+    [/(.+) hat Vorrang \((\d+) gegen (\d+) Punkte\)/, '$1 has priority ($2 vs. $3 points)'], [/(.+) hat Vorrang$/, '$1 has priority'],
+    [/^nicht gleichzeitig: /, 'not simultaneously: '],
+    [/^Bahndaten vor weniger als 1 h geholt/, 'Orbital elements fetched less than 1 h ago'],
+    [/^Bahndaten vor (\d+) h geholt/, 'Orbital elements fetched $1 h ago'], [/ · letzter Abruf: /, ' · last fetch: '],
+    [/^⚠ keine Bahndaten für /, '⚠ no orbital elements for '], [/ \(nicht mehr im Katalog – verglüht\?\)/g, ' (no longer in the catalogue – decayed?)'],
+    [/⚠ Bahndaten (.+) (\d+) Tage alt – Zeiten ungenau/g, '⚠ orbital elements for $1 are $2 days old – times inaccurate'],
+    [/ nicht angeschlossen – Überflüge werden nur angezeigt\./, ' not connected – passes are only displayed.'],
+    [/^Locator fehlt oder ungültig – unter Einstellungen → Station eintragen$/, 'Locator missing or invalid – enter it under Settings → Station'],
+    [/^⚠ Locator fehlt oder ungültig – unter Einstellungen → Station eintragen$/, '⚠ Locator missing or invalid – enter it under Settings → Station'],
+    [/^Satellit (.+): Aufnahme (.+) MHz, Elevation (.+)$/, 'Satellite $1: recording $2 MHz, elevation $3'],
+    [/^Satellit (.+): Auswertung$/, 'Satellite $1: analysing'], [/^Satellit (.+): (\d+) Treffer$/, 'Satellite $1: $2 hits'],
+    [/^Standard \((\d+)\)$/, 'default ($1)'],
+    [/^(\d+)× aufgenommen, (\d+) Treffer$/, '$1× recorded, $2 hits'], [/ · (\d+)× aufgenommen, (\d+) Treffer$/, ' · $1× recorded, $2 hits'],
+    [/^(\d+) würden gelöscht, (\d+) geschützte bleiben$/, '$1 would be deleted, $2 protected remain'],
+    [/^Alle ungeschützten Treffer älter als (\d+) Tage löschen\?$/, 'Delete all unprotected hits older than $1 days?'],
+    [/^(\d+) gelöscht$/, '$1 deleted'], [/^Treffer (.+) MHz löschen\?$/, 'Delete hit $1 MHz?'],
+    [/^Noch nichts dekodiert/, 'Nothing decoded yet'], [/ – für WSPR gibt es keinen Dekoder auf dem Pi/, ' – there is no WSPR decoder on the Pi'],
+    [/ \(läuft nach dem Scan, oder das Signal war zu kurz\/zu schwach\)/, ' (runs after the scan, or the signal was too short/weak)'],
+    [/^Locator unter „Bänder &amp; Betriebsarten“ eintragen/, 'Enter your locator under Settings'],
+    [/Locator unter „Bänder & Betriebsarten“ eintragen, dann stehen hier Entfernung und Richtung\./, 'Enter your locator under Settings to see distance and bearing here.'],
+    [/^Scan-Ausgabe/, 'Scan output'],
+    [/^Segment (.+)$/, 'segment $1'], [/^kein Segment$/, 'no segment'],
+    [/^CQ (.*)von (.+?)( aus (.+))?$/, (m, tag, call, x, grid) => `CQ ${tag}from ${call}${grid ? ' in ' + grid : ''}`],
+    [/^(.+) gibt (.+) Rapport (.+?)( \(bestätigt\))?$/, (m, a, b, r, c) => `${a} gives ${b} report ${r}${c ? ' (confirmed)' : ''}`],
+    [/^Audio-Strom nicht verfügbar \(/, 'Audio stream not available ('],
+    [/^Treffer · /, 'Hits · '],
+    [/^Pegel (-?\d+) dB · Rauschen (-?\d+) dB/, 'Level $1 dB · noise $2 dB'],
+    [/^Lauf (\d+)$/, 'Run $1'],
+    [/\bGrund ([+-][\d.]+)/, 'base $1'], [/\bHöhe ([+-][\d.]+)/, 'elevation $1'], [/\bWartezeit ([+-][\d.]+)/, 'waiting $1'], [/\bRuhe ([+-][\d.]+)/, 'silence $1'],
+    [/^Satellit – /, 'Satellite – '], [/^([^–]+?) – (.+)$/, (m, a, b) => `${t(a)} – ${t(b)}`],
+    [/^Treffer: (\d+)$/, 'Hits: $1'],
+    // Zeitangaben (Teile)
+    [/\bheute\b/g, 'today'], [/\bgestern\b/g, 'yesterday'], [/\bvor (\d+) Tagen\b/g, '$1 days ago'],
+    [/\bvor ([\d.,]+ ?(?:s|min|h|Tage|Tag))\b/g, (m, x) => `${x.replace('Tage', 'days').replace('Tag', 'day')} ago`],
+    [/\bvor (\d+ h \d+ min)\b/g, '$1 ago'], [/^bis /, 'until '],
+    [/(\d+) Stunden?\b/g, (m, n) => n === '1' ? '1 hour' : `${n} hours`],
+    // Bandplan-Bezeichnungen (Teile)
+    [/\bRelais-Ausgaben\b/g, 'Repeater outputs'], [/\bEingabe\b/g, 'input'], [/\bDatenkanäle\b/g, 'data channels'],
+    [/\bKanal\b/g, 'channel'], [/\bSprache\b/g, 'voice'], [/\bBake\b/g, 'beacon'], [/\b\/ Daten\b/g, '/ data'],
+    [/ISS-Relais/g, 'ISS repeater'], [/SSTV-Aktionen/g, 'SSTV events'], [/APRS-Digipeater/g, 'APRS digipeater'], [/\(Mitte\)/g, '(centre)'],
+    [/^Spektrum um (.+) MHz$/, 'Spectrum around $1 MHz'], [/^SSTV-Bild$/, 'SSTV image'], [/^Satelliten\/ISS /, 'Satellites/ISS '],
+  ];
+
+  function t(s) {
+    if (LANG !== 'en' || !s || typeof s !== 'string') return s;
+    const k = s.trim();
+    if (!k || !/[A-Za-zÄÖÜäöüß]/.test(k)) return s;
+    let r = D[k];
+    if (r === undefined) {
+      r = k;
+      for (const [re, rep] of P) r = r.replace(re, rep);
+      if (r === k) return s;
+    }
+    return s.replace(k, r);
+  }
+
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE', 'PRE']);
+  function skipped(el) {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (SKIP.has(e.tagName) || e.classList.contains('mono') || e.classList.contains('no-i18n')) return true;
+    }
+    return false;
+  }
+  const ATTRS = ['title', 'placeholder', 'aria-label', 'alt'];
+  function translateNode(n) {
+    if (n.nodeType === 3) {
+      if (n.parentElement && skipped(n.parentElement)) return;
+      const v = t(n.data);
+      if (v !== n.data) n.data = v;
+      return;
+    }
+    if (n.nodeType !== 1 || skipped(n)) return;
+    for (const a of ATTRS) {
+      const v = n.getAttribute(a);
+      if (v) { const w = t(v); if (w !== v) n.setAttribute(a, w); }
+    }
+    const walker = document.createTreeWalker(n, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let x = walker.nextNode();
+    while (x) {
+      if (x.nodeType === 1) {
+        if (skipped(x)) { x = walker.nextSibling() || nextOutside(walker, n); continue; }
+        for (const a of ATTRS) { const v = x.getAttribute(a); if (v) { const w = t(v); if (w !== v) x.setAttribute(a, w); } }
+      } else {
+        const v = t(x.data); if (v !== x.data) x.data = v;
+      }
+      x = walker.nextNode();
+    }
+  }
+  function nextOutside(walker, root) {
+    let p = walker.currentNode;
+    while (p && p !== root) { const s = walker.nextSibling(); if (s) return s; p = walker.parentNode(); }
+    return null;
+  }
+
+  function start() {
+    if (LANG !== 'en') return;
+    document.title = 'HamScanPi';
+    translateNode(document.body);
+    new MutationObserver(muts => {
+      for (const m of muts) {
+        if (m.type === 'characterData') translateNode(m.target);
+        else if (m.type === 'attributes') {
+          const v = m.target.getAttribute(m.attributeName);
+          if (v && !skipped(m.target)) { const w = t(v); if (w !== v) m.target.setAttribute(m.attributeName, w); }
+        } else m.addedNodes.forEach(translateNode);
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    const c = window.confirm.bind(window), a = window.alert.bind(window);
+    window.confirm = m => c(t(m));
+    window.alert = m => a(t(m));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+
+  window.I18N = {
+    lang: LANG, t,
+    locale: LANG === 'en' ? 'en-GB' : 'de-DE',
+    set(l) { localStorage.setItem('lang', l === 'en' ? 'en' : 'de'); location.reload(); },
+  };
+})();

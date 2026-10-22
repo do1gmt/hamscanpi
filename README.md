@@ -12,8 +12,9 @@ the ISS and from CubeSats.
 It works with an RTL-SDR stick (VHF/UHF, satellites) and optionally with a
 PMSDR receiver (IW3AUT) for shortwave.
 
-> **Status:** works daily on the author's station (Raspberry Pi, RTL-SDR, PMSDR). The dashboard
-> is currently in **German** – an English translation is planned; contributions are welcome.
+> **Status:** works daily on the author's station (Raspberry Pi, RTL-SDR, PMSDR).
+> The dashboard speaks **English and German** – switch under *Settings → Station*. Missing
+> translations live in `web/i18n.js`; pull requests are welcome.
 
 ## What it does
 
@@ -64,7 +65,7 @@ cd hamscanpi
 
 The installer sets up the packages, the RTL-SDR driver blacklist, the local configuration and two
 systemd services (`hamscanpi-web`, `hamscanpi-scheduler`). Then open `http://<pi-address>:8080/`
-and enter your locator under *Einstellungen → Station*.
+and enter your locator under *Settings → Station*.
 
 Update later with `git pull` followed by `sudo systemctl restart hamscanpi-web hamscanpi-scheduler`.
 

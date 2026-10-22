@@ -136,8 +136,9 @@ fi
 cat <<EOF
 
 Next steps
-  1. Open the dashboard, Settings → Station: enter your Maidenhead locator (needed for satellites).
-  2. Scan → choose the receiver and the bands, press "Jetzt scannen".
-  3. Satellites: switch on the band "Satelliten" – passes are recorded automatically.
+  1. Open the dashboard, Settings → Station: enter your Maidenhead locator (needed for satellites)
+     and choose the language (English / Deutsch).
+  2. Scan → choose the receiver and the bands, press "Scan now".
+  3. Satellites: switch on the band "Satellites" – passes are recorded automatically.
   PMSDR (shortwave): build the pmsdr control program first – see docs/pmsdr.md.
 EOF

@@ -132,9 +132,9 @@ def make_spectrum(z, rate, rf_center, rf_hit, outfile):
     )
 
     ax.set_xlabel("MHz")
-    ax.set_ylabel("rel. Pegel [dB]")
+    ax.set_ylabel("dB (rel.)")
     ax.set_title(
-        f"Treffer {rf_hit/1e6:.6f} MHz"
+        f"{rf_hit/1e6:.6f} MHz"
     )
     ax.grid(True)
 

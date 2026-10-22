@@ -213,6 +213,9 @@
         <label class="field"><span>Mein Locator (für Entfernung und Richtung bei FT8/FT4)</span>
           <input id="myLocator" type="text" placeholder="z. B. JO31AB" maxlength="8" autocapitalize="characters" autocomplete="off">
         </label>
+        <label class="field"><span>Sprache / Language</span>
+          <select id="uiLang"><option value="de">Deutsch</option><option value="en">English</option></select>
+        </label>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
       </section>
       <section class="panel" id="panel-raster">
@@ -281,6 +284,7 @@
 
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

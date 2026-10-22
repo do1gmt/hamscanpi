@@ -912,7 +912,7 @@ def demod_on_demand(peak_id, side, offset_hz, mode="ssb", nr=0):
 
 # ------------------------------------------------------------------ Spektrumbild auf Anfrage
 
-def spectrum_png(peak_id):
+def spectrum_png(peak_id, lang="de"):
     """Spektrum um den Treffer aus der I/Q-Aufnahme, als PNG; wird in reports/ abgelegt."""
     db = db_connect()
     row = db.execute("""SELECT p.rf_hz, p.recording_path, p.carrier_delta_hz, p.mode, p.sideband,
@@ -921,7 +921,8 @@ def spectrum_png(peak_id):
     db.close()
     if not row or not row["recording_path"] or not Path(row["recording_path"]).exists():
         raise ValueError("Keine I/Q-Aufnahme vorhanden")
-    out = REPORTS / f"{Path(row['recording_path']).stem}_spectrum2.png"
+    en = lang == "en"
+    out = REPORTS / f"{Path(row['recording_path']).stem}_spectrum2{'_en' if en else ''}.png"
     if out.exists():
         return out
     import matplotlib
@@ -953,19 +954,24 @@ def spectrum_png(peak_id):
     ax.set_xlim(max(mhz.min(), lo), min(mhz.max(), hi))
     m = (mhz >= lo) & (mhz <= hi)
     ax.set_ylim(min(-10, pdb[m].min() - 3) if m.any() else -10, (pdb[m].max() + 5) if m.any() else 40)
-    ax.axvline(rf, color="#f5b942", linestyle="--", linewidth=1, label="Treffer")
+    ax.axvline(rf, color="#f5b942", linestyle="--", linewidth=1, label="hit" if en else "Treffer")
     sb = (row["sideband"] or "").upper()
     if row["mode"] in ("voice", "sstv") and sb in ("USB", "LSB"):
         d = (row["carrier_delta_hz"] or 0.0) / 1e6
         a, b = (rf + d - 0.003, rf + d) if sb == "LSB" else (rf + d, rf + d + 0.003)
-        ax.axvspan(a, b, color="#2dd4bf", alpha=.15, label=f"Sprachfenster {sb}")
+        ax.axvspan(a, b, color="#2dd4bf", alpha=.15, label=f"{'voice window' if en else 'Sprachfenster'} {sb}")
     ax.ticklabel_format(useOffset=False, style="plain", axis="x")
-    ax.set_xlabel("MHz", color="#9aaabc"); ax.set_ylabel("rel. Pegel [dB]", color="#9aaabc")
+    ax.set_xlabel("MHz", color="#9aaabc"); ax.set_ylabel("dB (rel.)", color="#9aaabc")
     ax.tick_params(colors="#9aaabc", labelsize=8)
     for sp in ax.spines.values():
         sp.set_color("#2c3a4d")
     ax.grid(True, color="#2c3a4d", linewidth=.5)
-    ax.set_title(f"{row['band']}  {rf:.6f} MHz  ({MODE_LABELS.get(row['mode'] or '', row['mode'] or '?')})", color="#e7edf4", fontsize=10)
+    ml = MODE_LABELS.get(row['mode'] or '', row['mode'] or '?')
+    if en:
+        ml = {"Sprache": "voice", "Bake": "beacon", "Satellit": "satellite", "Daten": "data", "Dauerträger": "carrier",
+              "Störung/Breitband": "noise", "UKW-Rundfunk": "FM broadcast", "Relais": "repeater", "Digitalfunk": "digital voice",
+              "Unbekannt": "unknown"}.get(ml, ml)
+    ax.set_title(f"{row['band']}  {rf:.6f} MHz  ({ml})", color="#e7edf4", fontsize=10)
     ax.legend(loc="upper right", fontsize=7, facecolor="#1f2b3b", edgecolor="#2c3a4d", labelcolor="#e7edf4")
     fig.tight_layout()
     REPORTS.mkdir(exist_ok=True)
@@ -1242,7 +1248,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 return
             if path == "/api/spectrum":
-                return self.send_file(spectrum_png(int(qs["peak_id"])))
+                return self.send_file(spectrum_png(int(qs["peak_id"]), "en" if qs.get("lang") == "en" else "de"))
             if path == "/api/logs":
                 lvl = qs.get("level") or None
                 lim, off = max(1, min(int(qs.get("limit", 100)), 2000)), max(0, int(qs.get("offset", 0)))
