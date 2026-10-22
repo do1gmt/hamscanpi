@@ -218,6 +218,25 @@
         </label>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
       </section>
+      <section class="panel" id="panel-auth">
+        <h2>Zugangsschutz</h2>
+        <p class="hint" id="authState">–</p>
+        <div class="filter-grid">
+          <label class="field" id="authCurWrap"><span>Aktuelles Passwort</span><input id="authCur" type="password" autocomplete="current-password"></label>
+          <label class="field"><span>Neues Passwort (mind. 8 Zeichen)</span><input id="authNew" type="password" autocomplete="new-password"></label>
+          <label class="field"><span>Neues Passwort wiederholen</span><input id="authNew2" type="password" autocomplete="new-password"></label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="authSave">Passwort setzen</button>
+          <button type="button" class="btn" id="authLogout">Abmelden</button>
+          <button type="button" class="btn btn-danger" id="authOff">Schutz ausschalten</button>
+        </div>
+        <label class="field"><span>Ohne Anmeldung aus diesen Netzen (z. B. 192.168.178.0/24)</span>
+          <input id="authTrusted" type="text" placeholder="192.168.178.0/24" autocomplete="off"></label>
+        <div class="actions"><button type="button" class="btn" id="authTrustedSave">Netze speichern</button></div>
+        <div class="save-note" id="authNote" aria-live="polite"></div>
+        <p class="hint">Ohne Passwort kann jeder, der das Dashboard erreicht, scannen, Treffer löschen und die Einstellungen ändern. Spätestens wenn der Pi aus dem Internet erreichbar ist, ein Passwort setzen. Passwort vergessen: auf dem Pi <span class="mono">python3 bin/auth.py set</span>.</p>
+      </section>
       <section class="panel" id="panel-raster">
         <h2>Frequenzraster</h2>
         <p class="hint">Abstand der Empfangsfenster beim Absuchen ganzer Bänder. Feiner = die Fenster überlappen mehr, an den Fensterrändern und in der Mitte (Gleichanteil) entgehen weniger Signale – der Scan dauert dafür länger. Einzelkanäle (PMR, Freenet, Relais) sind davon nicht betroffen.</p>

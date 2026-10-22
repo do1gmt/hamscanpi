@@ -7,6 +7,7 @@
   const api = async (path, opts) => {
     const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts || {}));
     const data = await r.json().catch(() => ({}));
+    if (r.status === 401 && data.login) { location.href = '/login'; throw new Error('Anmeldung nötig'); }
     if (!r.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + r.status));
     return data;
   };
@@ -673,7 +674,7 @@
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
     channel_watch_failed: 'Kanalbeobachtung fehlgeschlagen', voice_watch_failed: 'Sprachbeobachtung fehlgeschlagen',
-    live_start: 'Live-Empfang gestartet', run_summary: 'Scan-Zusammenfassung', phase_start: 'Auswertung', decode_done: 'Dekodierung fertig', live_stop: 'Live-Empfang beendet', notify_sent: 'Mail verschickt', notify_failed: 'Mail fehlgeschlagen',
+    live_start: 'Live-Empfang gestartet', login: 'Anmeldung', login_failed: 'Anmeldung fehlgeschlagen', login_blocked: 'Anmeldung gesperrt', password_set: 'Passwort gesetzt', auth_disabled: 'Zugangsschutz ausgeschaltet', run_summary: 'Scan-Zusammenfassung', phase_start: 'Auswertung', decode_done: 'Dekodierung fertig', live_stop: 'Live-Empfang beendet', notify_sent: 'Mail verschickt', notify_failed: 'Mail fehlgeschlagen',
   };
   const KEY_TEXT = { run_id: 'Lauf', peaks: 'Treffer', rejected: 'verworfen', duration_s: 'Dauer s', band: 'Band', sat: 'Satellit', error: 'Fehler',
     reason: 'Grund', hits: 'Treffer', channels: 'Kanäle', max_el: 'max. Höhe°', freq_hz: 'Frequenz', rf_hz: 'Frequenz', device: 'Gerät',
@@ -856,6 +857,40 @@
     if (go === 'sstv') { filter.mode = 'sstv'; localStorage.setItem('f.mode', 'sstv'); $('filterMode').value = 'sstv'; }
     showView('hits'); loadHits();
   }));
+
+  // ---------- Zugangsschutz ----------
+  async function loadAuth() {
+    let a; try { a = await api('/api/auth'); } catch (e) { return; }
+    let txt = a.enabled ? 'Zugangsschutz aktiv' : 'Kein Passwort gesetzt – das Dashboard ist für jeden im Netz offen.';
+    if (a.enabled && a.trusted_here) txt += ' · dieses Gerät ist in einem freigegebenen Netz';
+    else if (a.enabled && a.logged_in) txt += ' · angemeldet';
+    $('authState').textContent = txt;
+    $('authState').classList.toggle('warn-text', !a.enabled);
+    $('authCurWrap').hidden = !a.enabled;
+    $('authOff').hidden = !a.enabled;
+    $('authLogout').hidden = !(a.enabled && a.logged_in);
+    $('authSave').textContent = a.enabled ? 'Passwort ändern' : 'Passwort setzen';
+    $('authTrusted').value = (a.trusted_networks || []).join(', ');
+  }
+  $('authSave').addEventListener('click', async () => {
+    if ($('authNew').value !== $('authNew2').value) { note($('authNote'), 'Die neuen Passwörter stimmen nicht überein', true); return; }
+    try {
+      await post('/api/auth/password', { current: $('authCur').value, new: $('authNew').value });
+      ['authCur', 'authNew', 'authNew2'].forEach(id => $(id).value = '');
+      note($('authNote'), '✓ Passwort gespeichert – andere Geräte müssen sich neu anmelden'); loadAuth();
+    } catch (e) { note($('authNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('authOff').addEventListener('click', async () => {
+    if (!confirm('Zugangsschutz wirklich ausschalten?')) return;
+    try { await post('/api/auth/off', { current: $('authCur').value }); $('authCur').value = ''; note($('authNote'), '✓ Zugangsschutz ausgeschaltet'); loadAuth(); }
+    catch (e) { note($('authNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('authLogout').addEventListener('click', async () => { try { await post('/api/logout'); } catch (e) { } location.href = '/login'; });
+  $('authTrustedSave').addEventListener('click', async () => {
+    try { await post('/api/auth/trusted', { networks: $('authTrusted').value }); note($('authNote'), '✓ Netze gespeichert'); loadAuth(); }
+    catch (e) { note($('authNote'), 'Fehler: ' + e.message, true); }
+  });
+  loadAuth();
 
   // ---------- Sprache ----------
   $('uiLang').value = I18N.lang;

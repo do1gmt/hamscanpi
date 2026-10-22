@@ -76,7 +76,22 @@ Update later with `git pull` followed by `sudo systemctl restart hamscanpi-web h
 | `config/scanner.default.json` | default band plan and receiver settings (copied to `config/scanner.json` on first start) |
 | `config/scanner.json` | your local copy – PPM correction, gain, antenna names (`antennas`), sound card, `allow_restricted_bands` |
 | `config/web_settings.json` | dashboard settings, locator, mail account (**contains your SMTP password, never commit it**) |
+| `config/auth.json` | dashboard password (hashed) and trusted networks – never committed |
 | `data/`, `recordings/`, `reports/`, `log/` | database, I/Q recordings, images and decodes, logs |
+
+## Access protection
+
+By default the dashboard is open to everyone who can reach it. Set a password under
+*Settings → Access protection* (or during `./install.sh`). Then every device has to log in once
+(session cookie, 30 days); after 5 wrong passwords an address is blocked for 5 minutes. You can
+list networks that need no login, e.g. your home network `192.168.178.0/24`. The Pi itself
+(localhost) never needs to log in.
+
+Forgot the password? On the Pi: `python3 bin/auth.py set` (or `python3 bin/auth.py off`).
+
+> If you make the dashboard reachable from the internet, put it behind HTTPS (e.g. a reverse proxy
+> or a VPN such as WireGuard/Tailscale). The built-in server speaks plain HTTP. Behind a reverse
+> proxy every request comes from the proxy's address, so do not list that address as trusted.
 
 ## Legal
 

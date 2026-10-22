@@ -144,6 +144,23 @@
     'DMR/C4FM/D-STAR: Spektrum + Rohton': 'DMR/C4FM/D-STAR: spectrum + raw audio',
     'Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme': 'only audible during a pass; an image needs ~10 min of recording',
     'Sprache / Language:': 'Sprache / Language:',
+    // Zugangsschutz
+    'Zugangsschutz': 'Access protection', 'Aktuelles Passwort': 'Current password', 'Neues Passwort (mind. 8 Zeichen)': 'New password (min. 8 characters)',
+    'Neues Passwort wiederholen': 'Repeat new password', 'Passwort setzen': 'Set password', 'Passwort ändern': 'Change password', 'Abmelden': 'Log out',
+    'Schutz ausschalten': 'Switch off protection', 'Ohne Anmeldung aus diesen Netzen (z. B. 192.168.178.0/24)': 'No login needed from these networks (e.g. 192.168.178.0/24)',
+    'Netze speichern': 'Save networks', '✓ Netze gespeichert': '✓ Networks saved', 'Zugangsschutz aktiv': 'Access protection on',
+    'Kein Passwort gesetzt – das Dashboard ist für jeden im Netz offen.': 'No password set – the dashboard is open to everyone on the network.',
+    'Die neuen Passwörter stimmen nicht überein': 'The new passwords do not match',
+    '✓ Passwort gespeichert – andere Geräte müssen sich neu anmelden': '✓ Password saved – other devices have to log in again',
+    'Zugangsschutz wirklich ausschalten?': 'Really switch off access protection?', '✓ Zugangsschutz ausgeschaltet': '✓ Access protection switched off',
+    'Ohne Passwort kann jeder, der das Dashboard erreicht, scannen, Treffer löschen und die Einstellungen ändern. Spätestens wenn der Pi aus dem Internet erreichbar ist, ein Passwort setzen. Passwort vergessen: auf dem Pi':
+      'Without a password anyone who can reach the dashboard can scan, delete hits and change the settings. Set a password at the latest when the Pi is reachable from the internet. Forgot the password: on the Pi run',
+    'Passwort': 'Password', 'Anmelden': 'Log in', 'Passwort vergessen? Auf dem Pi:': 'Forgot the password? On the Pi:',
+    'Passwort falsch': 'Wrong password', 'Aktuelles Passwort falsch': 'Current password is wrong', 'Anmeldung nötig': 'Login required',
+    'Zu viele Fehlversuche – bitte 5 Minuten warten': 'Too many failed attempts – please wait 5 minutes',
+    'Passwort zu kurz (mindestens 8 Zeichen)': 'Password too short (at least 8 characters)',
+    'Anmeldung': 'Login', 'Abgemeldet': 'Logged out', 'Anmeldung fehlgeschlagen': 'Login failed', 'Anmeldung gesperrt': 'Login blocked',
+    'Passwort gesetzt': 'Password set', 'Zugangsschutz ausgeschaltet': 'Access protection switched off',
   };
 
   // Textteile mit eingesetzten Werten (Reihenfolge zählt)
@@ -210,6 +227,8 @@
     [/^(.+) gibt (.+) Rapport (.+?)( \(bestätigt\))?$/, (m, a, b, r, c) => `${a} gives ${b} report ${r}${c ? ' (confirmed)' : ''}`],
     [/^Audio-Strom nicht verfügbar \(/, 'Audio stream not available ('],
     [/^Treffer · /, 'Hits · '],
+    [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
+    [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
     [/^Pegel (-?\d+) dB · Rauschen (-?\d+) dB/, 'Level $1 dB · noise $2 dB'],
     [/^Lauf (\d+)$/, 'Run $1'],
     [/\bGrund ([+-][\d.]+)/, 'base $1'], [/\bHöhe ([+-][\d.]+)/, 'elevation $1'], [/\bWartezeit ([+-][\d.]+)/, 'waiting $1'], [/\bRuhe ([+-][\d.]+)/, 'silence $1'],

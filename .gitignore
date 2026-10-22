@@ -15,3 +15,5 @@ bin/*.bak*
 bin/*.pre_*
 .sat_*.raw
 *.u8
+config/auth.json
+config/auth.tmp

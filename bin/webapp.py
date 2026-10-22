@@ -31,6 +31,7 @@ import live as LIVE
 import applog as APPLOG
 import devices as DEV
 import notify as NOTIFY
+import auth as AUTH
 
 BASE = Path(__file__).resolve().parent.parent
 REPORTS = BASE / "reports"
@@ -1147,9 +1148,37 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
 
     # ---- Antworten
+    # ---------------- Zugangsschutz (bin/auth.py)
+    PUBLIC = ("/login", "/api/login")
+
+    def client_ip(self):
+        return self.client_address[0]
+
+    def gate(self, path):
+        """True = weiter. Sonst ist die Antwort schon geschickt (Umleitung bzw. 401)."""
+        if path in self.PUBLIC or path.startswith("/static/"):
+            return True
+        if AUTH.allowed(self.client_ip(), self.headers.get("Cookie")):
+            return True
+        if path in ("/", "/index.html"):
+            self.send_response(302)
+            self.send_header("Location", "/login")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_json({"ok": False, "error": "Anmeldung nötig", "login": True}, 401)
+        return False
+
+    def set_session_cookie(self):
+        val, age = AUTH.new_session()
+        self._cookie = f"{AUTH.COOKIE}={val}; Max-Age={age}; Path=/; HttpOnly; SameSite=Strict"
+
     def send_json(self, data, code=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
+        if getattr(self, "_cookie", None):
+            self.send_header("Set-Cookie", self._cookie)
+            self._cookie = None
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
@@ -1186,6 +1215,14 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         try:
+            if not self.gate(path):
+                return
+            if path == "/login":
+                return self.send_file(WEB / "login.html", cache=False)
+            if path == "/api/auth":
+                st = AUTH.status()
+                return self.send_json(dict(st, trusted_here=AUTH.trusted(self.client_ip()),
+                                           logged_in=AUTH.valid_session(self.headers.get("Cookie")), ip=self.client_ip()))
             if path in ("/", "/index.html"):
                 return self.send_file(WEB / "index.html", cache=False)
             if path.startswith("/static/"):
@@ -1306,7 +1343,39 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         try:
+            if not self.gate(path):
+                return
             data = self.read_body()
+            ip = self.client_ip()
+            if path == "/api/login":
+                if AUTH.login_blocked(ip):
+                    APPLOG.log("WARN", "webapp", "login_blocked", ip=ip)
+                    return self.send_json({"ok": False, "error": "Zu viele Fehlversuche – bitte 5 Minuten warten"}, 429)
+                if not AUTH.enabled() or AUTH.login_attempt(ip, str(data.get("password", ""))):
+                    self.set_session_cookie()
+                    APPLOG.log("INFO", "webapp", "login", ip=ip)
+                    return self.send_json({"ok": True})
+                APPLOG.log("WARN", "webapp", "login_failed", ip=ip)
+                return self.send_json({"ok": False, "error": "Passwort falsch"}, 401)
+            if path == "/api/logout":
+                self._cookie = f"{AUTH.COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict"
+                return self.send_json({"ok": True})
+            if path == "/api/auth/password":
+                if AUTH.enabled() and not AUTH.check_password(str(data.get("current", ""))):
+                    return self.send_json({"ok": False, "error": "Aktuelles Passwort falsch"}, 403)
+                AUTH.set_password(str(data.get("new", "")))
+                self.set_session_cookie()                  # diese Sitzung bleibt angemeldet
+                APPLOG.log("INFO", "webapp", "password_set", ip=ip)
+                return self.send_json({"ok": True, "auth": AUTH.status()})
+            if path == "/api/auth/off":
+                if AUTH.enabled() and not AUTH.check_password(str(data.get("current", ""))):
+                    return self.send_json({"ok": False, "error": "Aktuelles Passwort falsch"}, 403)
+                AUTH.disable()
+                APPLOG.log("WARN", "webapp", "auth_disabled", ip=ip)
+                return self.send_json({"ok": True, "auth": AUTH.status()})
+            if path == "/api/auth/trusted":
+                AUTH.set_trusted(AUTH.parse_networks(data.get("networks", "")))
+                return self.send_json({"ok": True, "auth": AUTH.status()})
             if path == "/api/settings":
                 return self.send_json({"ok": True, "settings": save_settings(data)})
             if path == "/api/scan-now":

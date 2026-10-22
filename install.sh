@@ -55,6 +55,18 @@ else
     fi
 fi
 
+bold "Dashboard password"
+if python3 "$DIR/bin/auth.py" status | grep -q "aktiv"; then
+    ok "password already set"
+else
+    read -r -p "  Protect the dashboard with a password? Recommended if the Pi is reachable from outside your home network. [Y/n] " a
+    if [[ ! "$a" =~ ^[nN]$ ]]; then
+        python3 "$DIR/bin/auth.py" set && ok "password set – change it later under Settings → Access protection"
+    else
+        warn "no password – everyone on your network can use the dashboard"
+    fi
+fi
+
 bold "PMSDR (optional)"
 if [ -x /usr/local/bin/pmsdr ] && ! systemctl cat pmsdr-control.service >/dev/null 2>&1; then
     read -r -p "  /usr/local/bin/pmsdr found. Set up the pmsdr-control service with hotplug? [y/N] " a

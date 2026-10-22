@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f1620">
+<title>HamScanPi – Anmeldung</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<style>
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .login { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: .8rem; }
+  .login-head { display: flex; align-items: center; gap: .6rem; font-size: 1.3rem; }
+  .login-head img { width: 44px; height: 44px; }
+  .login .btn { width: 100%; }
+  .login .err { color: var(--red); min-height: 1.2em; font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <form class="panel login" id="loginForm">
+    <div class="login-head"><img src="/static/icon.svg" alt=""><span class="brand"><span class="brand-name">HamScan<em>Pi</em></span></span></div>
+    <label class="field"><span>Passwort</span>
+      <input id="pw" type="password" autocomplete="current-password" autofocus required>
+    </label>
+    <button class="btn btn-primary" type="submit">Anmelden</button>
+    <div class="err" id="err" aria-live="polite"></div>
+    <p class="hint">Passwort vergessen? Auf dem Pi: <span class="mono">python3 bin/auth.py set</span></p>
+  </form>
+</div>
+<script src="/static/i18n.js"></script>
+<script>
+  document.getElementById('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = document.getElementById('err');
+    err.textContent = '';
+    try {
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ password: document.getElementById('pw').value }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) { location.href = '/'; return; }
+      err.textContent = I18N.t(d.error || ('HTTP ' + r.status));
+    } catch (x) { err.textContent = I18N.t('Server nicht erreichbar'); }
+  });
+</script>
+</body>
+</html>
