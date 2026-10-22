@@ -14,6 +14,26 @@ reads tuning commands from a FIFO:
 /usr/local/bin/pmsdr -u /tmp/PMSDRcommands
 ```
 
+**Download:** the PMSDR software is published by IW3AUT on
+<https://iw3aut.altervista.org/downloads.htm> – look for the Linux command-line program; this setup uses
+version 0.26 (`pmsdr-0.26.tar.gz`).
+
+> **Certificate warning:** at the time of writing the site's HTTPS certificate is not valid, so
+> browsers show a security warning. The page itself is the official source; you can continue
+> past the warning (in most browsers: *Advanced → Continue*). Because the connection is then not
+> verified, check the downloaded archive before building it – compare its SHA-256 checksum
+> (`sha256sum pmsdr-0.26.tar.gz`) with the one below, and do not run anything from it as root
+> except the final `make install` step.
+
+SHA-256 of the archive used on the author's station:
+
+```
+7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947  pmsdr-0.26.tar.gz
+```
+
+Check it with `echo "7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947  pmsdr-0.26.tar.gz" | sha256sum -c`
+– it must print `pmsdr-0.26.tar.gz: OK`.
+
 Build it from source as described in the archive's README and install the binary to
 `/usr/local/bin/pmsdr`. If `install.sh` finds that binary, it offers to set up the service and the
 hotplug rule below for you.
