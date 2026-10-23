@@ -60,16 +60,31 @@ MODES = {m["vis"]: m for m in [
 ]}
 
 
-def tone_frequency(audio, rate):
-    """Momentanfrequenz in Hz je Abtastwert."""
+def tone_frequency(audio, rate, chunk_s=30.0, pad_s=1.0):
+    """Momentanfrequenz in Hz je Abtastwert (float32).
+
+    Blockweise (30 s mit 1 s Überlappung): ein ISS-Überflug hat 10–11 min Ton; in einem Stück
+    brauchten Filter und Hilbert-Transformation rund 1,4 GB Speicher – auf dem Pi wurde der
+    Auswerteprozess dabei vom System beendet, ohne dass etwas im Protokoll stand."""
     sos = butter(4, [1000, 2600], btype="bandpass", fs=rate, output="sos")
-    a = sosfiltfilt(sos, audio)
-    ph = np.unwrap(np.angle(hilbert(a)))
-    f = np.diff(ph) * rate / (2 * np.pi)
-    f = np.concatenate([f, f[-1:]])
-    # kurze Glättung (~0,25 ms) gegen Rauschspitzen
-    k = max(1, int(rate * 0.00025))
-    return np.convolve(f, np.ones(k) / k, mode="same")
+    n = len(audio)
+    out = np.empty(n, dtype=np.float32)
+    C, P = int(chunk_s * rate), int(pad_s * rate)
+    k = max(1, int(rate * 0.00025))                    # kurze Glättung (~0,25 ms) gegen Rauschspitzen
+    for s0 in range(0, max(n, 1), C):
+        a0, a1 = max(0, s0 - P), min(n, s0 + C + P)
+        if a1 - a0 < 32:
+            out[s0:min(n, s0 + C)] = 0.0
+            continue
+        seg = np.asarray(audio[a0:a1], dtype=np.float64)
+        padlen = min(3 * (2 * len(sos) + 1), len(seg) - 1)
+        a = sosfiltfilt(sos, seg, padlen=padlen)
+        ph = np.unwrap(np.angle(hilbert(a)))
+        f = np.diff(ph) * rate / (2 * np.pi)
+        f = np.concatenate([f, f[-1:]])
+        f = np.convolve(f, np.ones(k) / k, mode="same")
+        out[s0:min(n, s0 + C)] = f[s0 - a0:s0 - a0 + min(C, n - s0)]
+    return out
 
 
 def _mean(f, a, b):
@@ -77,16 +92,33 @@ def _mean(f, a, b):
     return float(np.median(f[a:b])) if b > a else 0.0
 
 
-def find_vis(f, rate, start=0):
-    """Sucht den nächsten VIS-Kopf ab Abtastwert start. Rückgabe (vis, bild_beginn) oder None."""
+def find_vis(f, rate, start=0, chunk_s=60.0):
+    """Sucht den nächsten VIS-Kopf ab Abtastwert start. Rückgabe (vis, bild_beginn) oder None.
+    Blockweise (60 s), damit der Speicherbedarf nicht mit der Aufnahmelänge wächst."""
+    n = len(f)
+    C = int(chunk_s * rate)
+    pre, post = int(0.2 * rate), int(0.4 * rate)
+    c0 = int(start)
+    while c0 < n - int(0.32 * rate):
+        a = max(0, c0 - pre)
+        b = min(n, c0 + C + post)
+        r = _find_vis_block(f[a:b], rate, c0 - a, min(C, n - c0))
+        if r:
+            return r[0], r[1] + a
+        c0 += C
+    return None
+
+
+def _find_vis_block(f, rate, start, length):
+    """find_vis innerhalb eines Blocks: Kandidaten nur ab start, höchstens length Abtastwerte weit."""
     ms = rate / 1000.0
     k = max(1, int(5 * ms))
-    sm = np.convolve(f, np.ones(k) / k, mode="same")
+    sm = np.convolve(f, (np.ones(k) / k).astype(np.float32), mode="same")
     is1200 = np.abs(sm - 1200) < 70
     is1900 = np.abs(sm - 1900) < 70
     # Startbit: ≥ 20 ms 1200 Hz direkt nach ≥ 150 ms 1900 Hz
     i = start
-    n = len(f)
+    n = min(len(f), start + length + int(320 * ms))
     step = int(2 * ms)
     while i < n - int(320 * ms):
         if is1200[i] and np.mean(is1900[max(0, i - int(150 * ms)):i - int(2 * ms)]) > 0.85 \
@@ -124,18 +156,22 @@ def decode_image(f, rate, mode, t0):
 
     # Sync-Impulse suchen: Mitte eines 1200-Hz-Abschnitts nahe der erwarteten Lage
     k = max(1, int(sync_len * 0.6))
-    ind = np.convolve((np.abs(f - F_SYNC) < 150).astype(float), np.ones(k) / k, mode="same")
+    # nur den Zeitraum dieses Bildes betrachten (früher die ganze Aufnahme: bei 11 min ~450 MB)
+    lo = max(0, int(t0 - T))
+    hi = min(len(f), int(t0 + (nlines + 2) * T))
+    ind = np.convolve((np.abs(f[lo:hi] - F_SYNC) < 150).astype(np.float32),
+                      (np.ones(k) / k).astype(np.float32), mode="same")
     found = []
     win = int(min(T * 0.05, 15 * ms))
     drift = lambda L: 0.0                                  # laufende Schätzung der Abweichung
     for L in range(nlines):
         exp = t0 + L * T + sync_off * ms + sync_len / 2 + drift(L)
         a, b = int(exp - win), int(exp + win)
-        if b >= len(ind):
+        if b >= hi:
             break
-        if a < 0:
+        if a < lo:
             continue
-        seg = ind[a:b]
+        seg = ind[a - lo:b - lo]
         mx = seg.max()
         if mx > 0.6:
             top = np.flatnonzero(seg >= mx - 0.02)              # Mitte des Plateaus, nicht sein Anfang
@@ -165,12 +201,13 @@ def decode_image(f, rate, mode, t0):
     W = mode["width"]
     chans = {}
 
-    fc = np.clip(np.asarray(f, dtype=np.float64), 1000, 2600)   # Ausreißer begrenzen; float64: die Summe wird groß
+    # nur der Zeitraum des Bildes (lo..hi), float64 – die kumulierte Summe wird groß
+    fc = np.clip(np.asarray(f[lo:hi], dtype=np.float64), 1000, 2600)
     cs = np.concatenate([[0.0], np.cumsum(fc)])
 
     def sample(start, dur):
         # Mittelwert je Pixel über kumulierte Summe (schnell); 10 % Rand je Seite auslassen
-        edges = start + np.linspace(0, dur, W + 1)
+        edges = (start - lo) + np.linspace(0, dur, W + 1)
         w = edges[1:] - edges[:-1]
         a = np.clip(np.round(edges[:-1] + 0.1 * w).astype(int), 0, len(fc))
         b = np.clip(np.round(edges[1:] - 0.1 * w).astype(int), 0, len(fc))
@@ -255,7 +292,7 @@ def decode_headless(f, rate, min_lines=40):
     Synchronimpulse bestimmen, ab dem ersten Impuls dekodieren. Rückgabe dict oder None."""
     ms = rate / 1000.0
     k = max(1, int(4 * ms))
-    ind = np.convolve((np.abs(f - F_SYNC) < 120).astype(np.float32), np.ones(k) / k, mode="same") > 0.7
+    ind = np.convolve((np.abs(f - F_SYNC) < 120).astype(np.float32), (np.ones(k) / k).astype(np.float32), mode="same") > 0.7
     edges = np.flatnonzero(np.diff(ind.astype(np.int8)) == 1)
     if len(edges) < min_lines:
         return None

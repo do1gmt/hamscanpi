@@ -168,6 +168,10 @@ class Source:
             self.p.wait(timeout=3)
         except Exception:
             self.p.kill()
+        try:
+            self.f.close()                                    # Rohr zu rtl_sdr schließen, bevor detach() die
+        except Exception:                                     # Dateinummern schließt (sonst „Bad file descriptor“)
+            pass
 
 
 class Channel:
@@ -376,6 +380,10 @@ def detach():
         os._exit(0)
     os.setsid()
     os.closerange(3, 4096)                                    # auch die geerbte Sperrdatei schließen
+    try:
+        os.nice(10)                                           # Auswertung stört den nächsten Überflug nicht
+    except OSError:
+        pass
 
 
 def main():
@@ -458,6 +466,8 @@ def main():
     if not a.test:
         detach()                                              # ab hier ist der Stick frei
     hits_total, per_ch, per_obj = 0, {}, {o: 0 for o in objs}
+    for k in keys:                                            # bricht die Auswertung ab, sieht man es im Dashboard
+        SAT.write_result(k, state="evaluating", seconds=round(secs))
     try:
         for ch in channels:
             hits = ch.evaluate(t0)

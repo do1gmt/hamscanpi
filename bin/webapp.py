@@ -1022,7 +1022,7 @@ def live_status():
 _sat_cache = {"t": 0.0, "key": None, "data": None}
 _sat_lock = threading.Lock()
 
-SAT_STATE_TEXT = {"running": "nimmt auf", "done": "aufgenommen", "error": "Fehler", "skipped": "übersprungen"}
+SAT_STATE_TEXT = {"running": "nimmt auf", "evaluating": "wird ausgewertet", "done": "aufgenommen", "error": "Fehler", "skipped": "übersprungen"}
 
 
 def sat_passes():
@@ -1032,7 +1032,9 @@ def sat_passes():
     st = load_settings()
     seg = (st.get("selected_segments") or {}).get("Satelliten") or ["all"]
     ids = [x["id"] for x in SAT.SATELLITES] if "all" in seg else [x for x in seg if x in SAT.BY_ID]
-    on = "Satelliten" in (st.get("selected_bands") or [])
+    chip = "Satelliten" in (st.get("selected_bands") or [])
+    # Satelliten nur mit dem RTL-SDR (gewähltes Gerät = angeschlossene Antenne)
+    on = chip and st.get("active_device") == "rtlsdr"
     prio = st.get("sat_prio") or {}
     key = (tuple(ids), st.get("my_locator", ""), on, json.dumps(prio, sort_keys=True))
     with _sat_lock:
@@ -1040,10 +1042,12 @@ def sat_passes():
             res = _sat_cache["data"]
         else:
             try:
-                res = SAT.upcoming(ids, st.get("my_locator", ""), hours=24, past_s=12 * 3600, prio=prio)
+                res = (SAT.upcoming(ids, st.get("my_locator", ""), hours=24, past_s=12 * 3600, prio=prio) if on
+                       else {"passes": [], "recordings": []})
             except Exception as e:
                 res = {"passes": [], "problem": f"{type(e).__name__}: {e}"}
             res["enabled"] = on
+            res["paused_device"] = chip and not on
             res["satellites"] = [{"id": x["id"], "name": x["name"], "label": x["label"], "center_hz": x["center_hz"],
                                   "prio": x["prio"], "norad": x["norad"], "group": x.get("group", "")}
                                  for x in SAT.SATELLITES]
@@ -1063,7 +1067,11 @@ def sat_passes():
     for p in res.get("passes", []):
         q = dict(p)
         r = results.get(p["key"])
-        if r:
+        if r and r.get("state") in ("running", "evaluating") and now > p["los"] + 1800:
+            # Aufnahme bzw. Auswertung nie fertig geworden (Prozess beendet, z. B. Speicher voll)
+            q["result"] = dict(r, state="error", text=SAT_STATE_TEXT["error"],
+                               error="Auswertung nicht beendet" if r.get("state") == "evaluating" else "Aufnahme nicht beendet")
+        elif r:
             q["result"] = dict(r, text=SAT_STATE_TEXT.get(r.get("state"), r.get("state")))
         elif p["los"] < now:
             q["result"] = {"state": "missed", "text": "nicht aufgenommen" if p.get("rec_start") else "übersprungen"}

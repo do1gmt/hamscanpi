@@ -669,7 +669,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -759,7 +759,7 @@
   }
   function renderSatPasses() {
     const d = satData; if (!d) return; const root = $('satPasses');
-    $('panel-sat').hidden = !d.enabled && !(settings && settings.active_device === 'rtlsdr');
+    $('panel-sat').hidden = !(settings && settings.active_device === 'rtlsdr');   // nur mit Antenne am Stick
     const hint = $('satHint');
     const now = Date.now() / 1000;
     const future = (d.passes || []).filter(p => p.los > now);

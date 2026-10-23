@@ -30,6 +30,9 @@ PMSDR receiver (IW3AUT) for shortwave.
 - Live listening with seek function, signal-to-noise display and overload warning.
 
 **Satellites (RTL-SDR)**
+- Switched on and off with the band chip *Satellites*; passes are only recorded while the RTL-SDR is the
+  selected receiver – the selected receiver stands for the antenna that is connected (one antenna
+  at a time, e.g. via an antenna switch). With the chip off, satellites never interrupt a scan.
 - Orbital elements from CelesTrak (fallback: AMSAT), pass prediction with SGP4 from your locator.
 - Recording starts 15 s before AOS; the Doppler shift is corrected every 0.1 s per channel.
 - ISS: SSTV on 437.550 and 145.800 MHz, the 437.800 FM repeater, the 145.825 APRS digipeater.

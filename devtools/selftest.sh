@@ -62,5 +62,22 @@ else
 fi
 echo "== 5 SSTV Kurzwelle"
 python3 devtools/test_hf_sstv.py USB 60 | grep -E "Bild|kein"
+echo "== 6 langer Überflug (11 min Ton, 5 Bilder): Speicherbedarf der SSTV-Auswertung"
+python3 - <<'PY'
+import sys, tracemalloc, numpy as np
+sys.path.insert(0, "bin")
+import sstv_decode as SD
+from pysstv.color import Robot36
+from PIL import Image
+im = Image.new("RGB", (320, 240), (40, 90, 160))
+pic = np.array(list(Robot36(im, 24000, 16).gen_samples()), np.float32) / 32767
+a = (np.random.default_rng(1).standard_normal(24000 * 660) * 0.05).astype(np.float32)
+for s0 in (10, 166, 322, 478, 619.3):
+    i = int(s0 * 24000); a[i:i + len(pic)] += pic[:max(0, min(len(pic), len(a) - i))]
+tracemalloc.start()
+r = SD.decode_all(a, 24000, headless=True)
+peak = tracemalloc.get_traced_memory()[1] // 2**20
+print(f"   {len(r)} Bilder, Spitze {peak} MB:", "ok" if len(r) == 5 and peak < 400 else "FEHLER")
+PY
 rm -f /tmp/hsp_*.u8
 echo "Selbsttest fertig."

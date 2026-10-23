@@ -118,6 +118,19 @@ def selected_satellites():
     _sat["prio"] = st.get("sat_prio") or {}
     if "Satelliten" not in (st.get("selected_bands") or []):
         return [], st.get("my_locator", "")
+    # Das gewählte Gerät steht für die angeschlossene Antenne: Satelliten nur, wenn es der
+    # RTL-SDR ist (auch wenn der Stick steckt, hängt bei gewählter PMSDR die KW-Antenne dran)
+    try:
+        from devices import detect_hardware, resolve_device
+        choice = "rtlsdr" if st.get("active_device") == "rtlsdr" else "pmsdr"
+        if resolve_device(choice, detect_hardware()) != "rtlsdr":
+            if _sat.get("device_note") != "pmsdr":
+                applog("INFO", "scheduler", "satellite_paused", reason="PMSDR gewählt – Antenne am Stick nicht angeschlossen")
+            _sat["device_note"] = "pmsdr"
+            return [], st.get("my_locator", "")
+    except Exception:
+        pass
+    _sat["device_note"] = "rtlsdr"
     seg = (st.get("selected_segments") or {}).get("Satelliten") or ["all"]
     import satellites as SAT
     ids = [s["id"] for s in SAT.SATELLITES] if "all" in seg else [x for x in seg if x in SAT.BY_ID]
@@ -142,7 +155,7 @@ def sat_pass_active():
 def next_passes():
     """Plan alle 10 min neu rechnen – sofort, wenn sich Auswahl oder Locator ändern."""
     ids, loc = selected_satellites()
-    key = (tuple(ids), loc, json.dumps(_sat.get("prio") or {}, sort_keys=True))
+    key = (tuple(ids), loc, json.dumps(_sat.get("prio") or {}, sort_keys=True), _sat.get("device_note"))
     if time.time() - _sat["checked"] < 600 and key == _sat["key"]:
         return _sat["passes"]
     _sat["checked"], _sat["key"] = time.time(), key

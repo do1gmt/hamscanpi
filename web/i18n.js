@@ -72,7 +72,7 @@
     'Satelliten-Überflüge': 'Satellite passes', 'Satellit · Kanäle': 'Satellite · channels', 'Zeit (Ortszeit)': 'Time (local)',
     'Höhe': 'Elev.', 'Aufnahme': 'Recording', 'vergangene zeigen': 'show past', 'alle 24 h': 'all 24 h', 'gemeinsam': 'shared',
     'übersprungen': 'skipped', 'voll': 'full', 'wenn Stick frei': 'if stick is free', 'keine Überflüge': 'no passes',
-    'aufgenommen': 'recorded', 'nimmt auf': 'recording', 'nicht aufgenommen': 'not recorded',
+    'aufgenommen': 'recorded', 'nimmt auf': 'recording', 'wird ausgewertet': 'analysing', 'Auswertung nicht beendet': 'analysis did not finish', 'Aufnahme nicht beendet': 'recording did not finish', 'nicht aufgenommen': 'not recorded',
     'In den nächsten 24 h kein Überflug über 10° Höhe.': 'No pass above 10° elevation in the next 24 h.',
     'Aufnahme startet 15 s vor dem Aufgang. Überschneiden sich Überflüge, entscheidet die Punktzahl (Priorität, Höhe, Wartezeit, Aktivität – einstellbar unter Einstellungen). Passen die Frequenzen in ein Empfangsfenster, werden die Satelliten gemeinsam aufgenommen.':
       'Recording starts 15 s before AOS. If passes overlap, the score decides (priority, elevation, waiting time, activity – adjustable under Settings). If the frequencies fit into one receive window, the satellites are recorded together.',
@@ -100,7 +100,7 @@
     'Band wird abgesucht': 'Scanning band', 'Band übersprungen': 'Band skipped', 'Empfänger geöffnet': 'Receiver opened',
     'Empfänger lässt sich nicht öffnen': 'Cannot open receiver', 'RTL-SDR liefert keine Daten': 'RTL-SDR delivers no data', 'RTL-SDR läuft wieder': 'RTL-SDR running again',
     'Überflug: Aufnahme startet': 'Pass: recording starts', 'Überflug übersprungen': 'Pass skipped', 'Satelliten: Problem': 'Satellites: problem',
-    'Satelliten: Fehler': 'Satellites: error', 'Satelliten: Hinweis': 'Satellites: note', 'Überflug: Aufnahme läuft': 'Pass: recording',
+    'Satelliten: Fehler': 'Satellites: error', 'Satelliten pausiert (PMSDR gewählt)': 'Satellites paused (PMSDR selected)', 'Satelliten: Hinweis': 'Satellites: note', 'Überflug: Aufnahme läuft': 'Pass: recording',
     'Überflug fertig': 'Pass finished', 'Überflug fehlgeschlagen': 'Pass failed', 'Überflug: Auswertung fehlgeschlagen': 'Pass: analysis failed',
     'Überflug: Aufnahme gestört': 'Pass: recording disturbed', 'Scheduler: Fehler in der Schleife': 'Scheduler: error in main loop',
     'Kanalbeobachtung fehlgeschlagen': 'Channel watch failed', 'Sprachbeobachtung fehlgeschlagen': 'Voice watch failed',
