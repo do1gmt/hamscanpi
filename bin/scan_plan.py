@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import numpy as np
 import json
 from pathlib import Path
 
@@ -60,6 +61,43 @@ def interval_centers(
         result.append(start)
 
     return result
+
+
+# ---------------------------------------------------------------- RTL-SDR: Fenster so legen,
+# dass kein Kanal im Gleichanteil (Fenstermitte) oder jenseits des nutzbaren Fensters liegt.
+#
+# Bisher begann jedes Fenster am Bereichsanfang und lief in 900-kHz-Schritten weiter. Folgen:
+#   * die Fenstermitte (Gleichanteil des RTL, ±8 kHz unbrauchbar) lag genau auf einem Kanal –
+#     z. B. 438,650 MHz, 145,500 MHz (Anruf) oder 433,920 MHz,
+#   * Bereiche, die schmaler als ein Schritt sind, wurden nur bis Anfang + 435 kHz abgehört –
+#     bei den 70-cm-Relais 438,650–439,425 fehlte alles ab 439,085 MHz.
+RTL_USABLE_HZ = 435000.0        # nutzbare Halbbreite (1,024 MS/s, Ränder des Filters ausgenommen)
+RTL_DC_HZ = 6000.0              # so weit muss ein Kanal mindestens von der Mitte weg sein
+RASTER_HZ = 12500.0             # Kanalraster 2 m/70 cm; Mitten liegen genau zwischen zwei Kanälen
+DIGITAL_MODES = {"ft8", "ft4", "wspr", "sstv"}   # eigene Wachen mit eigener Abstimmung
+
+
+def _half_raster(f, origin=0.0):
+    """Auf die Mitte zwischen zwei Kanälen legen (Raster ab origin, z. B. PMR446 ab 446,00625):
+    der nächste Kanal ist dann 6,25 kHz entfernt."""
+    return origin + (np.floor((f - origin) / RASTER_HZ) + 0.5) * RASTER_HZ
+
+
+def rtl_centers(ranges, points, step):
+    """Fenstermitten für den RTL-SDR: jeder Bereich vollständig im nutzbaren Teil eines Fensters,
+    keine Fenstermitte auf einem Kanal, jede Einzelfrequenz mindestens RTL_DC_HZ neben der Mitte."""
+    reach = min(RTL_USABLE_HZ, max(float(step) / 2.0, 50000.0)) - 3000.0
+    centers = []
+    for a, b in sorted((float(min(a, b)), float(max(a, b))) for a, b in ranges):
+        span = b - a
+        n = max(1, int(np.ceil((span + 2 * RASTER_HZ) / (2 * reach))))
+        for k in range(n):
+            centers.append(_half_raster(a + (k + 0.5) * span / n, a))
+    for f in sorted(points):
+        if any(RTL_DC_HZ <= abs(f - c) <= reach for c in centers):
+            continue
+        centers.append(_half_raster(f + 100000.0, f))      # eigenes Fenster, Kanal ~100 kHz neben der Mitte
+    return sorted({int(round(c)) for c in centers})
 
 
 def make_plan(
@@ -237,6 +275,24 @@ def make_plan(
                         []
                     )
                 )
+
+        if str(band.get("device", "pmsdr")) == "rtlsdr":
+            all_specs = {str(x["id"]): x for x in band.get("segments", [])}
+            if "all" in requested:
+                rng, pts, keep = [(band["start_hz"], band["stop_hz"])], [], []
+                use = list(all_specs)
+            else:
+                rng, pts, keep = [], [], []
+                use = [str(x) for x in requested]
+            for sid in use:
+                spec = all_specs.get(sid)
+                if not spec:
+                    continue
+                if "all" not in requested:
+                    rng += [tuple(x) for x in spec.get("ranges", [])]
+                fl = [int(x) for x in spec.get("frequencies_hz", [])]
+                (keep if spec.get("mode") in DIGITAL_MODES else pts).extend(fl)
+            centers = set(rtl_centers(rng, pts, step)) | set(keep)
 
         if not centers:
             continue

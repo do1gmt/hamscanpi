@@ -131,6 +131,13 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
         if b0 < 0 or b1 > NFFT:
             continue
         band_lin = P[:, b0:b1]
+        # Gleichanteil des RTL (Fenstermitte) nicht mitmessen: Bins innerhalb ±2 kHz auslassen
+        dc_lo, dc_hi = int(NFFT / 2 - 2000 / bin_hz), int(NFFT / 2 + 2000 / bin_hz) + 1
+        keep = [j for j in range(b0, b1) if not (dc_lo <= j < dc_hi)]
+        if len(keep) < (b1 - b0) // 2:
+            continue                                     # Kanal liegt auf der Mitte – anderes Fenster
+        if len(keep) < (b1 - b0):
+            band_lin = P[:, keep]
         ch_db = 10 * np.log10(band_lin.mean(axis=1) + 1e-20) - noise_db
         # Rahmen glätten (≈ 50 ms), sonst flackert die Aktivitätsmaske
         k = max(1, int(0.05 / frame_s))
