@@ -321,3 +321,35 @@ small.score { color: var(--muted); }
 .brand-icon { width: 28px; height: 28px; flex: 0 0 auto; }
 .brand .brand-name { color: var(--text); font-weight: 700; }
 .brand .brand-name em { font-style: normal; color: var(--teal); }
+
+/* Kopfzeile über dem Protokoll – gleiche Spalten wie die Einträge */
+.loghead { display: grid; grid-template-columns: 4.4rem 3.36rem 4.4rem 1fr;   /* = 5.5em 4.2em 5.5em der Einträge (0,8rem) */ gap: .4rem; margin-top: .5rem; padding: 0 0 .25rem;
+           border-bottom: 1px solid var(--line); font-size: .68rem; color: var(--muted); font-weight: 600; column-gap: .32rem; }
+.loghead span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loghead + .loglist { margin-top: 0; }
+@media (max-width: 599px) {   /* Handy: Spalte „Quelle“ weglassen, damit das Ereignis Platz hat */
+  .loghead, .loglist li { grid-template-columns: 4.4rem 3.36rem 1fr; }
+  .loghead span:nth-child(3), .loglist li > span:nth-child(3) { display: none; }
+}
+
+.tz-m { display: none; color: var(--muted); font-size: .8em; }
+@media (max-width: 599px) {   /* Überflugliste auf dem Handy: jede Zeile als kleine Karte, nichts muss seitlich scrollen */
+  .sat-table thead { display: none; }
+  .sat-table, .sat-table tbody { display: block; }
+  .sat-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: .15rem .7rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+  .sat-table td { border: 0; padding: 0; white-space: normal; }
+  .sat-table td:nth-child(1) { grid-column: 1; grid-row: 1 / span 2; }
+  .sat-table td:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .sat-table td:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .sat-table td:nth-child(4) { grid-column: 1 / -1; grid-row: 3; }
+  .tz-m { display: inline; }
+}
+@media (max-width: 599px) {   /* Scan-Verlauf auf dem Handy: Spalte „Abst.“ weglassen, kleiner setzen */
+  .runs-table { font-size: .78rem; }
+  .runs-table th, .runs-table td { padding: .3rem .25rem; }
+  .runs-table th:nth-child(5), .runs-table td:nth-child(5) { display: none; }
+  .runs-table td { white-space: normal; }
+  .runs-table td:nth-child(2) { overflow-wrap: normal; word-break: normal; }
+  .runs-table th { white-space: nowrap; }
+}
+.tz-diff { color: var(--amber); font-size: .8em; }   /* andere Zeitzone als jetzt (Nacht der Umstellung) */

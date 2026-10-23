@@ -98,7 +98,7 @@
         <h2>Satelliten-Überflüge</h2>
         <p class="hint" id="satHint"></p>
         <div class="table-wrap">
-          <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th>Zeit (Ortszeit)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
+          <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th id="satTimeHead">Zeit (Ortszeit)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
             <tbody id="satPasses"></tbody></table>
         </div>
         <div class="row pager-row">
@@ -195,6 +195,7 @@
       <label class="check"><input type="checkbox" id="logGroup" checked> Wiederholungen zusammenfassen</label>
       <button class="btn btn-small" id="logReload">Laden</button>
     </div>
+    <div class="loghead" aria-hidden="true"><span>Zeit (UTC)</span><span>Stufe</span><span>Quelle</span><span>Ereignis</span></div>
     <ul class="loglist" id="logList"></ul>
     <div class="row pager-row">
       <button type="button" class="btn btn-small" id="logPrev">◀ neuere</button>

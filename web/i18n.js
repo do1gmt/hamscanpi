@@ -69,7 +69,7 @@
     'Eingeschränkt: Mithören in vielen Ländern verboten (z. B. Deutschland, § 5 TDDDG) – nur einschalten, wo es erlaubt ist.':
       'Restricted: monitoring is forbidden in many countries (e.g. Germany, § 5 TDDDG) – only enable where it is allowed.',
     'Kein Band für dieses Gerät gewählt – der Scanner hätte nichts zu tun.': 'No band selected for this receiver – the scanner would have nothing to do.',
-    'Satelliten-Überflüge': 'Satellite passes', 'Satellit · Kanäle': 'Satellite · channels', 'Zeit (Ortszeit)': 'Time (local)',
+    'Satelliten-Überflüge': 'Satellite passes', 'Satellit · Kanäle': 'Satellite · channels', 'Zeit (Ortszeit)': 'Time (local)', 'Zeit (UTC)': 'Time (UTC)', 'Stufe': 'Level', 'Quelle': 'Source',
     'Höhe': 'Elev.', 'Aufnahme': 'Recording', 'vergangene zeigen': 'show past', 'alle 24 h': 'all 24 h', 'gemeinsam': 'shared',
     'übersprungen': 'skipped', 'voll': 'full', 'wenn Stick frei': 'if stick is free', 'keine Überflüge': 'no passes',
     'aufgenommen': 'recorded', 'nimmt auf': 'recording', 'wird ausgewertet': 'analysing', 'Auswertung nicht beendet': 'analysis did not finish', 'Aufnahme nicht beendet': 'recording did not finish', 'nicht aufgenommen': 'not recorded',
@@ -232,7 +232,7 @@
     [/ · Treffer: (\d+)/, ' · Hits: $1'], [/^Satellit: /, 'Satellite: '],
     [/^abgehört \(MHz\): /, 'monitored (MHz): '], [/ · abgehört \(MHz\): /, ' · monitored (MHz): '], [/^Frequenzen \(MHz\): /, 'Frequencies (MHz): '], [/ · Frequenzen \(MHz\): /, ' · Frequencies (MHz): '],
     [/^Pegel (-?\d+) dB · Rauschen (-?\d+) dB/, 'Level $1 dB · noise $2 dB'],
-    [/^Lauf (\d+)$/, 'Run $1'],
+    [/^Lauf (\d+)$/, 'Run $1'], [/^Zeit \((.+)\)$/, 'Time ($1)'],
     [/\bGrund ([+-][\d.]+)/, 'base $1'], [/\bHöhe ([+-][\d.]+)/, 'elevation $1'], [/\bWartezeit ([+-][\d.]+)/, 'waiting $1'], [/\bRuhe ([+-][\d.]+)/, 'silence $1'],
     [/^Satellit – /, 'Satellite – '], [/^([^–]+?) – (.+)$/, (m, a, b) => `${t(a)} – ${t(b)}`],
     [/^Treffer: (\d+)$/, 'Hits: $1'],

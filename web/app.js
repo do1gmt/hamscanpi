@@ -35,7 +35,22 @@
   }
   function fmtDur(sec) { if (sec == null) return '–'; sec = Math.round(sec); return sec < 90 ? `${sec} s` : `${Math.floor(sec / 60)} min ${pad(sec % 60)} s`; }
   function fmtMHz(hz) { return (hz / 1e6).toFixed(4); }
-  (() => { try { $('clockZone').textContent = new Intl.DateTimeFormat(EN ? 'en-GB' : 'de', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Lokal'; } catch (e) { } })();
+  // Kürzel der Ortszeit (MESZ, MEZ, CEST …) – überall dort, wo Ortszeit statt UTC steht
+  // Das Kürzel gilt für den jeweiligen Zeitpunkt: in der Nacht der Zeitumstellung stehen MESZ und MEZ nebeneinander
+  function zoneAt(d) {
+    try { return new Intl.DateTimeFormat(EN ? 'en-GB' : 'de', { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || (EN ? 'local' : 'Ortszeit'); }
+    catch (e) { return EN ? 'local' : 'Ortszeit'; }
+  }
+  let ZONE = zoneAt(new Date());
+  function refreshZone() {                       // jede Minute: Seite kann über die Umstellung hinweg offen sein
+    const z = zoneAt(new Date());
+    if (z !== ZONE || !$('clockZone').dataset.set) {
+      ZONE = z; $('clockZone').textContent = z; $('clockZone').dataset.set = '1';
+      $('satTimeHead').textContent = `Zeit (${z})`;
+      try { if (satData) renderSatPasses(); } catch (e) { }   // beim ersten Aufruf gibt es satData noch nicht
+    }
+  }
+  refreshZone(); setInterval(refreshZone, 60000);
   setInterval(() => { const d = new Date(); $('clock').textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; $('clockLocal').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }, 1000);
 
   let toastTimer;
@@ -789,7 +804,7 @@
         const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted' }[r.state] || '';
         plan = `<span class="${cls}">${esc(r.text)}${r.state === 'done' ? ` · ${r.hits || 0} Treffer` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
-      else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)}</span><br><small class="muted">${esc(p.reason)}</small>`;
+      else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';
       const when = past ? `vor ${fmtSpan(now - p.los)}` : live ? 'läuft gerade' : 'in ' + fmtSpan(p.aos - now);
       if (p.score != null) {
@@ -798,7 +813,7 @@
       }
       return `<tr class="${live ? 'sat-now' : ''}${past ? ' sat-past' : ''}">
         <td><b>${esc(p.name)}</b><br><small>${ch} MHz</small>${dropped}</td>
-        <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<br><small class="muted">${when}</small></td>
+        <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
         <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°</small></td><td>${plan}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">keine Überflüge</td></tr>';
     const foot = [];
