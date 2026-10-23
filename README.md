@@ -2,6 +2,8 @@
 
 # HamScanPi
 
+*Hams can Pi.*
+
 **An unattended band scanner and satellite recorder for radio amateurs, running on a Raspberry Pi.**
 
 HamScanPi scans the amateur bands on its own, records what it hears, decodes what it can and shows
