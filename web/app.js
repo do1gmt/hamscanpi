@@ -669,7 +669,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -678,7 +678,7 @@
   };
   const KEY_TEXT = { run_id: 'Lauf', peaks: 'Treffer', rejected: 'verworfen', duration_s: 'Dauer s', band: 'Band', sat: 'Satellit', error: 'Fehler',
     reason: 'Grund', hits: 'Treffer', channels: 'Kanäle', max_el: 'max. Höhe°', freq_hz: 'Frequenz', rf_hz: 'Frequenz', device: 'Gerät',
-    problem: 'Problem', interval_min: 'Intervall min', seconds: 'Sekunden', tune_hz: 'Mitte', until: 'bis', per_channel: 'je Kanal', plan: 'Plan' };
+    problem: 'Problem', interval_min: 'Intervall min', coverage: 'abgehört (MHz)', windows: 'Fenstermitten (MHz)', segments: 'Segmente', channels_n: 'Kanäle', digital: 'Digital (MHz)', freq_mhz: 'Frequenzen (MHz)', seconds_band: 'Dauer s', seconds: 'Sekunden', tune_hz: 'Mitte', until: 'bis', per_channel: 'je Kanal', plan: 'Plan' };
   function fmtVal(k, v) {
     if (v == null) return '';
     if ((k.endsWith('_hz') || k === 'rf_hz') && typeof v === 'number') return (v / 1e6).toFixed(4) + ' MHz';
@@ -704,7 +704,8 @@
       }
       $('logList').innerHTML = rows.map(({ r, n, first }) => {
         const data = r.data || {};
-        const main = ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'].filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
+        const mainKeys = r.event === 'band_scanned' ? ['band', 'coverage', 'hits'] : r.event === 'pass_start' ? ['sat', 'freq_mhz'] : ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'];
+        const main = mainKeys.filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
         const all = Object.entries(data).map(([k, v]) => `<tr><td>${esc(KEY_TEXT[k] || k)}</td><td class="mono">${esc(fmtVal(k, v))}</td></tr>`).join('');
         const when = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
         const span = n > 1 ? `<span class="rep">${n}× seit ${fmtTime(first, true).replace(' UTC', '').replace(/^(heute|today) /, '')}</span>` : '';

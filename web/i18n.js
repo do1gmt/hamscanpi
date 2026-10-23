@@ -108,7 +108,7 @@
     'Mail fehlgeschlagen': 'Mail failed', 'Scan-Zusammenfassung': 'Scan summary', 'Auswertung': 'Analysis', 'Dekodierung fertig': 'Decoding finished',
     'Lauf': 'Run', 'Grund': 'Reason', 'Kanäle': 'Channels', 'max. Höhe°': 'max. elev.°', 'Gerät': 'Receiver', 'Problem': 'Problem',
     'Intervall min': 'Interval min', 'Sekunden': 'Seconds', 'Mitte': 'Centre', 'bis': 'until', 'je Kanal': 'per channel', 'Plan': 'Plan',
-    'Dauer s': 'Duration s', 'Zeit (UTC)': 'Time (UTC)',
+    'Dauer s': 'Duration s', 'Band abgehört': 'Band monitored', 'abgehört (MHz)': 'monitored (MHz)', 'Fenstermitten (MHz)': 'window centres (MHz)', 'Segmente': 'Segments', 'Digital (MHz)': 'Digital (MHz)', 'Frequenzen (MHz)': 'Frequencies (MHz)', 'Zeit (UTC)': 'Time (UTC)',
     // Einstellungen
     'Station': 'Station', 'Mein Locator (für Entfernung und Richtung bei FT8/FT4)': 'My locator (for distance and bearing with FT8/FT4)',
     'z. B. JO31AB': 'e.g. JO31AB', 'Sprache / Language': 'Sprache / Language', 'Frequenzraster': 'Scan raster',
@@ -229,6 +229,8 @@
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
+    [/ · Treffer: (\d+)/, ' · Hits: $1'], [/^Satellit: /, 'Satellite: '],
+    [/^abgehört \(MHz\): /, 'monitored (MHz): '], [/ · abgehört \(MHz\): /, ' · monitored (MHz): '], [/^Frequenzen \(MHz\): /, 'Frequencies (MHz): '], [/ · Frequenzen \(MHz\): /, ' · Frequencies (MHz): '],
     [/^Pegel (-?\d+) dB · Rauschen (-?\d+) dB/, 'Level $1 dB · noise $2 dB'],
     [/^Lauf (\d+)$/, 'Run $1'],
     [/\bGrund ([+-][\d.]+)/, 'base $1'], [/\bHöhe ([+-][\d.]+)/, 'elevation $1'], [/\bWartezeit ([+-][\d.]+)/, 'waiting $1'], [/\bRuhe ([+-][\d.]+)/, 'silence $1'],

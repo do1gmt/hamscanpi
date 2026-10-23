@@ -423,6 +423,7 @@ def main():
     tune = SAT.tuning_for(ids)
     labels = ", ".join(SAT.mhz(c["center_hz"]) for c in chans)
     applog("INFO", "satellite", "pass_start", sat=name, channels=ids, tune_hz=tune,
+           freq_mhz=[f"{c['center_hz']/1e6:.3f}" for c in chans],
            until=datetime.fromtimestamp(until, timezone.utc).isoformat(timespec="seconds"))
     print(f"{name} ({labels} MHz): Aufnahme bis {time.strftime('%H:%M:%S', time.gmtime(until))} UTC")
     for k in keys:

@@ -1346,6 +1346,39 @@ def open_database():
     return db
 
 
+def listened_summary(band, cfg, centers, selected, plan_entry):
+    """Für das Protokoll: abgehörte Bereiche (zusammengefasst), Fenster, geprüfte Kanäle, Digitalfrequenzen."""
+    rate = float(cfg.get("sample_rate", 48000))
+    if cfg.get("device") == "rtlsdr":
+        half = min(float(band.get("step_hz", 900000)) / 2.0, rate / 2 * 0.85)
+    else:
+        half = rate / 2 - float(cfg.get("edge_guard_hz", 2500))
+    spans = sorted((c - half, c + half) for c in centers)
+    merged = []
+    for a, b in spans:
+        if merged and a <= merged[-1][1] + 1000:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    lo, hi = float(band["start_hz"]), float(band["stop_hz"])
+    cover = [f"{max(a, lo)/1e6:.3f}–{min(b, hi)/1e6:.3f}" for a, b in merged if min(b, hi) > max(a, lo)]
+    sel = set(selected or ["all"])
+    digital = sorted({f for sg in band.get("segments", [])
+                      if sg.get("mode") in ("ft8", "ft4", "sstv", "wspr") and ("all" in sel or str(sg.get("id")) in sel)
+                      for f in sg.get("frequencies_hz", [])})
+    out = {"segments": plan_entry.get("labels") or [],
+           "coverage": cover,
+           "windows": [f"{c/1e6:.5f}" for c in centers]}
+    if cfg.get("device") == "rtlsdr":
+        chans = set()
+        for c in centers:
+            chans.update(rf for rf, _ in CW.channel_list(band, selected, c - half, c + half))
+        out["channels"] = len(chans)
+    if digital:
+        out["digital"] = [f"{f/1e6:.3f}" for f in digital]
+    return out
+
+
 def save_scan(db, band, center, result, peaks):
     cur = db.execute("""
         INSERT INTO scan
@@ -1508,6 +1541,7 @@ def main():
             scanned_bands += 1
             dev_obj = get_device(cfg["device"], cfg)
             applog("DEBUG", "scanner", "band_start", band=name, device=cfg["device"], tunes=len(plan_by_band[name]))
+            _band_t0, _band_p0, _band_r0 = time.time(), total_peaks, total_rejected
 
             centers = list(
                 plan_by_band[
@@ -2031,6 +2065,15 @@ def main():
                         f"{center/1e6:9.3f} MHz  "
                         f"verworfen  {rejected:2d}"
                     )
+
+            # Protokoll: welche Frequenzen in diesem Band tatsächlich abgehört wurden
+            try:
+                applog("INFO", "scanner", "band_scanned", band=name, device=cfg["device"],
+                       hits=total_peaks - _band_p0, rejected=total_rejected - _band_r0,
+                       seconds=round(time.time() - _band_t0),
+                       **listened_summary(band, cfg, centers, selected_segments, plan_by_band[name]))
+            except Exception as e:
+                applog("DEBUG", "scanner", "band_summary_failed", band=name, error=str(e))
 
         if missing and not scanned_bands:
             raise RuntimeError("Kein passendes Gerät angeschlossen – übersprungen: " + ", ".join(missing))
