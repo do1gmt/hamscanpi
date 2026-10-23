@@ -24,7 +24,9 @@
     if (!withDate) return t + ' UTC';
     const today = new Date();
     const sameDay = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
-    return (sameDay ? (EN ? 'today ' : 'heute ') : (EN ? `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)} ` : `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}. `)) + t + ' UTC';
+    // Englisch: „Sat 24 Oct“ statt „24/10“ – in den USA stünde 05/10 sonst für den 10. Mai
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return (sameDay ? (EN ? 'today ' : 'heute ') : (EN ? `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ` : `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}. `)) + t + ' UTC';
   }
   function fmtRel(s) {
     const d = parseT(s); if (!d) return '';
@@ -38,7 +40,9 @@
   // Kürzel der Ortszeit (MESZ, MEZ, CEST …) – überall dort, wo Ortszeit statt UTC steht
   // Das Kürzel gilt für den jeweiligen Zeitpunkt: in der Nacht der Zeitumstellung stehen MESZ und MEZ nebeneinander
   function zoneAt(d) {
-    try { return new Intl.DateTimeFormat(EN ? 'en-GB' : 'de', { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || (EN ? 'local' : 'Ortszeit'); }
+    // Kürzel in der Sprache des Browsers: so heißt es in New York „EDT“, in Tokio „JST“, in Sydney „AEDT“
+    // (mit fester Sprache gäbe es dort nur „GMT-4“ usw.); in Deutschland bleibt es „MESZ“/„MEZ“
+    try { return new Intl.DateTimeFormat(navigator.language || (EN ? 'en-GB' : 'de'), { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || (EN ? 'local' : 'Ortszeit'); }
     catch (e) { return EN ? 'local' : 'Ortszeit'; }
   }
   let ZONE = zoneAt(new Date());
