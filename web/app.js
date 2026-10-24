@@ -447,7 +447,7 @@
       html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">
         <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a></div>`;
     }
-    if (f.iq) html += `<img src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.remove()">`;
+    if (f.iq) html += `<div class="spec-box"><img class="spec-img" src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.parentElement.remove()" title="Antippen: dorthin abstimmen · Mausrad: feinstimmen"><div class="wf-pass spec-pass" hidden></div><div class="wf-mark spec-mark" hidden></div></div>`;
     else if (f.spectrum) html += `<img src="${f.spectrum}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy">`;
     if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
     if (h.segment_note) html += `<p class="hint">${esc(h.segment_note)}</p>`;
@@ -505,13 +505,43 @@
       const audio = ssb.querySelector('audio');
       const sel = ssb.querySelector('.dmod');
       sel.value = ssb.dataset.dmod === 'ssb' ? 'ssb-' + ssb.dataset.side : ssb.dataset.dmod;
-      const apply = () => { const side = ssb.dataset.side, off = Number(ssb.dataset.off), dm = ssb.dataset.dmod; ssb.querySelector('.side').textContent = dm === 'ssb' ? side : dm.toUpperCase(); ssb.querySelector('.val').textContent = (off > 0 ? '+' : '') + off + ' Hz'; ssb.querySelector('.dmod-hint').textContent = body.__hints[dm]; const wasPlaying = !audio.paused; const nr = ssb.querySelector('.nr').value; const url = `/api/demod?peak_id=${h.id}&mode=${dm}&side=${side}&offset_hz=${off}&nr=${nr}`; audio.src = url; ssb.querySelector('.audio-dl').href = url + '&download=1'; if (wasPlaying) audio.play().catch(() => { }); };
+      // Abstimmstrich über dem Spektrum (wie im Live-Wasserfall): zeigt, was gerade zu hören ist
+      const box = body.querySelector('.spec-box');
+      let meta = null;
+      const passOf = () => { const dm = ssb.dataset.dmod; return dm === 'ssb' ? (ssb.dataset.side === 'USB' ? [200, 2800] : [-2800, -200]) : dm === 'am' ? [-4500, 4500] : dm === 'wfm' ? [-100000, 100000] : [-6250, 6250]; };
+      const drawMark = () => {
+        if (!box || !meta) return;
+        const fr = h.rf_hz + Number(ssb.dataset.off), span = meta.f_hi_hz - meta.f_lo_hz;
+        const X = v => (meta.left + (v - meta.f_lo_hz) / span * (meta.right - meta.left)) * 100;
+        const mk = box.querySelector('.spec-mark'), ps = box.querySelector('.spec-pass'), [a, b] = passOf();
+        const inside = fr >= meta.f_lo_hz && fr <= meta.f_hi_hz;
+        mk.hidden = ps.hidden = !inside;
+        if (!inside) return;
+        for (const el of [mk, ps]) { el.style.top = meta.top * 100 + '%'; el.style.bottom = meta.bottom < 1 ? (100 - meta.bottom * 100) + '%' : '0'; }
+        mk.style.left = X(fr) + '%'; mk.dataset.f = (fr / 1e6).toFixed(5);
+        const pa = Math.max(meta.left * 100, X(fr + a)), pb = Math.min(meta.right * 100, X(fr + b));
+        ps.style.left = pa + '%'; ps.style.width = Math.max(0.3, pb - pa) + '%';
+      };
+      if (box) {
+        api(`/api/spectrum-meta?peak_id=${h.id}&lang=${I18N.lang}`).then(m => { meta = m; drawMark(); }).catch(() => { });
+        const img = box.querySelector('.spec-img');
+        const freqAt = e => { const r = img.getBoundingClientRect(), x = (e.clientX - r.left) / r.width; return meta.f_lo_hz + (x - meta.left) / (meta.right - meta.left) * (meta.f_hi_hz - meta.f_lo_hz); };
+        const setOff = v => { ssb.dataset.off = Math.max(-100000, Math.min(100000, Math.round(v / 10) * 10)); ssb.querySelector('.val').textContent = (Number(ssb.dataset.off) > 0 ? '+' : '') + ssb.dataset.off + ' Hz'; drawMark(); clearTimeout(ssb.__t); ssb.__t = setTimeout(apply, 350); };
+        img.addEventListener('click', e => {             // auf ein Signal tippen: Sprache mittig ins Feld
+          if (!meta) return;
+          let f0 = freqAt(e); const dm = ssb.dataset.dmod;
+          if (dm === 'ssb') f0 += ssb.dataset.side === 'LSB' ? 1400 : -1400;
+          setOff(f0 - h.rf_hz);
+        });
+        img.addEventListener('wheel', e => { if (!meta) return; e.preventDefault(); setOff(Number(ssb.dataset.off) + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 100 : 10)); }, { passive: false });
+      }
+      const apply = () => { drawMark(); const side = ssb.dataset.side, off = Number(ssb.dataset.off), dm = ssb.dataset.dmod; ssb.querySelector('.side').textContent = dm === 'ssb' ? side : dm.toUpperCase(); ssb.querySelector('.val').textContent = (off > 0 ? '+' : '') + off + ' Hz'; ssb.querySelector('.dmod-hint').textContent = body.__hints[dm]; const wasPlaying = !audio.paused; const nr = ssb.querySelector('.nr').value; const url = `/api/demod?peak_id=${h.id}&mode=${dm}&side=${side}&offset_hz=${off}&nr=${nr}`; audio.src = url; ssb.querySelector('.audio-dl').href = url + '&download=1'; if (wasPlaying) audio.play().catch(() => { }); };
       const nrSel = ssb.querySelector('.nr');
       nrSel.value = localStorage.getItem('dnr') || '0';          // zuletzt gewählte DNR-Stufe
       nrSel.addEventListener('change', () => { localStorage.setItem('dnr', nrSel.value); apply(); });
       apply();
       sel.addEventListener('change', () => { const v = sel.value; if (v.startsWith('ssb-')) { ssb.dataset.dmod = 'ssb'; ssb.dataset.side = v.slice(4); } else ssb.dataset.dmod = v; apply(); });
-      ssb.querySelectorAll('[data-tune]').forEach(b => b.addEventListener('click', () => { const v = Number(b.dataset.tune); ssb.dataset.off = v === 0 ? 0 : Math.max(-100000, Math.min(100000, Number(ssb.dataset.off) + v)); ssb.querySelector('.val').textContent = (Number(ssb.dataset.off) > 0 ? '+' : '') + ssb.dataset.off + ' Hz'; clearTimeout(ssb.__t); ssb.__t = setTimeout(apply, 350); }));
+      ssb.querySelectorAll('[data-tune]').forEach(b => b.addEventListener('click', () => { const v = Number(b.dataset.tune); ssb.dataset.off = v === 0 ? 0 : Math.max(-100000, Math.min(100000, Number(ssb.dataset.off) + v)); ssb.querySelector('.val').textContent = (Number(ssb.dataset.off) > 0 ? '+' : '') + ssb.dataset.off + ' Hz'; drawMark(); clearTimeout(ssb.__t); ssb.__t = setTimeout(apply, 350); }));
     }
     body.querySelector('[data-act=live]').addEventListener('click', () => window.__liveFromHit(h));
     body.querySelector('[data-act=protect]').addEventListener('click', async () => { try { await post('/api/protect-hit', { peak_id: h.id, protected: !h.protected }); toast(h.protected ? 'Schutz aufgehoben' : 'Treffer wird behalten'); loadHits(); loadStats(); } catch (e) { toast('Fehler: ' + e.message); } });

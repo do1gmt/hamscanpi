@@ -128,6 +128,10 @@ class LiveSession:
         return 1500 <= abs(off) <= self.pmsdr.rate / 2 - 4000
 
     def tune(self, freq_hz=None, mode=None, squelch_db=None, gain=None):
+        # Verstärkung gibt es nur am Stick; unverändert mitgeschickt ist sie kein Grund für einen Neustart
+        # (das Dashboard schickt sie bei jedem Abstimmen mit – dadurch startete die PMSDR jedes Mal neu)
+        if self.device != "rtlsdr" or gain == getattr(self, "gain", None):
+            gain = None
         # PMSDR: innerhalb des 48-kHz-Fensters nur die Ablage im Rechner ändern – sofort, ohne die
         # Soundkarte neu zu öffnen (vorher dauerte jeder Klick mehrere Sekunden)
         if (self.device != "rtlsdr" and self.running and gain is None and not self.scan
@@ -142,6 +146,8 @@ class LiveSession:
         if gain is not None:
             self.gain = gain
         if freq_hz is not None:
+            # Richtung merken: das neue PMSDR-Fenster liegt dann in Abstimmrichtung vor der Frequenz
+            self._pm_dir = 1 if int(freq_hz) >= self.freq_hz else -1
             self.freq_hz = int(freq_hz)
         if mode is not None:
             self.mode = mode
@@ -436,6 +442,11 @@ class LiveSession:
         # UKW („FM breit“): nur im Rundfunkband 87,5–108 MHz suchen und dort im Kreis
         lo, hi = (87_500_000, 108_000_000) if self.mode == "wfm" else (self.RTL_MIN, self.RTL_MAX)
         if not lo <= f <= hi:
+            if self.mode != "wfm":               # nicht still auf 24 MHz springen (Kurzwelle gehört an die PMSDR)
+                self.status_text = (f"Fehler: {self.freq_hz/1e6:.3f} MHz liegt außerhalb des Sticks "
+                                    f"({lo/1e6:.0f} MHz – {hi/1e6:.0f} MHz)")
+                self.running = False
+                return
             f = lo if d > 0 else hi
         idle_t = None
         while self.running and not self.restart_wanted.is_set():
@@ -610,7 +621,9 @@ class LiveSession:
         dev = self.pmsdr
         rate = dev.rate
         seek = self.scan if (self.scan and self.scan.get("kind") == "seek") else None
-        center = self.freq_hz + 10000          # DC-Spike meiden
+        # DC-Spike meiden; das Fenster liegt in Abstimmrichtung vor der Frequenz, damit man die
+        # nächsten Signale schon sieht und ohne Neustart hinkommt
+        center = self.freq_hz + 10000 * getattr(self, "_pm_dir", 1)
         if seek:                               # Suchlauf: Fenster so legen, dass es in Suchrichtung weitergeht
             center = self.freq_hz + seek["dir"] * int(rate / 2 - 6000)
         dev.tune(center)
@@ -618,10 +631,18 @@ class LiveSession:
         ppm = float(self.cfg.get("frequency_correction_ppm", 0.0))
         conj = bool(self.cfg.get("iq_conjugate", False))
         self._pmsdr_init_dsp(rate)
-        cmd = ["arecord", "-q", "-D", f"plughw:{dev.card},{dev.dev}", "-f", "S16_LE", "-r", str(rate), "-c", "2", "-t", "raw"]
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        cmd = ["arecord", "-D", f"plughw:{dev.card},{dev.dev}", "-f", "S16_LE", "-r", str(rate), "-c", "2", "-t", "raw"]
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.overruns = 0
+
+        def watch_err(pr):                      # arecord meldet verlorene Daten als „overrun“
+            for line in iter(pr.stderr.readline, b""):
+                if b"overrun" in line.lower():
+                    self.overruns += 1
+        threading.Thread(target=watch_err, args=(self.proc,), daemon=True).start()
         chunk_frames = rate // 10
         shown = None
+        t_busy, t_last = 0.0, time.time()
         sk = {"state": "search", "acc": None, "n": 0, "quiet": 0.0, "skip": 3, "from": self.freq_hz} if seek else None
         while self.running and not self.restart_wanted.is_set():
             raw = self.proc.stdout.read(chunk_frames * 4)
@@ -641,6 +662,7 @@ class LiveSession:
                 shown = (self.freq_hz, self.mode)
                 if not sk:                       # beim Suchlauf meldet der Suchlauf selbst
                     self.status_text = f"Empfang {self.freq_hz/1e6:.4f} MHz ({self.mode})"
+            t_work = time.time()
             pcm = self._pmsdr_process(z, offset)
             try:                                         # Wasserfall: ganzes 48-kHz-Fenster der PMSDR
                 self._wf_tuned = center
@@ -652,6 +674,17 @@ class LiveSession:
                 if self._pm_seek_step(sk, z, rate, seek, dev, ppm):
                     pcm = b"\x00\x00" * (len(pcm) // 2)         # beim Weitersuchen stumm
             self._publish(pcm)
+            # Rechenzeit je 100-ms-Block beobachten: über ~80 % kommt der Pi nicht mehr hinterher
+            t_busy = 0.9 * t_busy + 0.1 * (time.time() - t_work)
+            self.load_pct = round(100 * t_busy / 0.1)
+            if not sk and time.time() - t_last > 2:
+                t_last = time.time()
+                warn = []
+                if self.load_pct > 80:
+                    warn.append(f"Rechner ausgelastet ({self.load_pct} %)")
+                if self.overruns:
+                    warn.append(f"{self.overruns}× Daten verloren")
+                self.status_text = f"Empfang {self.freq_hz/1e6:.4f} MHz ({self.mode})" + (" · " + ", ".join(warn) if warn else "")
         self._kill()
 
     # Suchlauf mit der PMSDR: im 48-kHz-Fenster nach dem nächsten belegten Kanal in Suchrichtung suchen,

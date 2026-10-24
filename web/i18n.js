@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Antippen: dorthin abstimmen · Mausrad: feinstimmen': 'Tap: tune there · mouse wheel: fine tuning',
     'Wasserfall – auf ein Signal tippen zum Abstimmen, Mausrad zum Feinstimmen': 'Waterfall – tap a signal to tune, mouse wheel for fine tuning',
     'SSB: Sprache unter 10 MHz meist <b>LSB</b>, darüber <b>USB</b> – FT8 und andere Digitalbetriebsarten immer USB. Klingt es wie „Gequake“, ist meist das Seitenband falsch.': 'SSB: voice below 10 MHz is mostly <b>LSB</b>, above <b>USB</b> – FT8 and other digital modes always USB. If it sounds like "quacking", the sideband is usually wrong.',
     '↗ Original': '↗ original', 'Schließen': 'Close',
@@ -370,6 +371,7 @@
     [/^(\d+) Treffer als Störlinie ausgeblendet – unter Treffer mit „Störlinien“ einblenden\.$/, '$1 hits hidden as interference – show them under Hits with "Interference lines".'], [/^Satelliten-Wasserfall \((.+)\)$/, 'satellite waterfall ($1)'],
     [/(FT8|FT4): (\d+) Nachr\., (\d+) Stationen(, (\d+)× CQ)?/g, (m, t, n, st, _c, c) => `${t}: ${n} msgs, ${st} stations${c ? `, ${c}× CQ` : ''}`],
     [/ · Trägerkorrektur ([+-−]?\d+) Hz/g, ' · carrier correction $1 Hz'], [/ · kein Segment/g, ' · no segment'],
+    [/Rechner ausgelastet \((\d+) %\)/g, 'computer busy ($1 %)'], [/(\d+)× Daten verloren/g, '$1× data lost'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

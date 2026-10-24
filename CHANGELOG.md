@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.1 – 2026-10-24
+
+- Fix: live shortwave stuttered on every tuning step. The dashboard sends the gain setting with every
+  retune; that counted as a change and reopened the PMSDR each time (1–2 s gap, noise burst). Gain is
+  ignored for the PMSDR and when unchanged – tuning within the window is now instant as intended.
+- Live picks the receiver by frequency: below 30 MHz the PMSDR, from 24 MHz the stick (if connected),
+  otherwise the one selected under Scan. A seek started at 7 MHz could run on the stick, which cannot go
+  below 24 MHz, and jumped to 24 MHz on its own; outside the stick's range there is now a clear message.
+- Live (PMSDR): when tuning leaves the window, the new window lies ahead in tuning direction, so the next
+  signals are already visible.
+- Live (PMSDR): the status shows when the Pi cannot keep up ("computer busy …") or when the sound card
+  lost data ("… data lost").
+- **Hit cards: tuning line on the spectrum** like in the live waterfall – yellow line with frequency and
+  shaded field (what you hear), moves with the tuning buttons; tap on a signal to tune there (SSB: the
+  middle of the voice), mouse wheel for fine tuning (10 Hz, with Shift 100 Hz).
+
 ## 1.7.0 – 2026-10-24
 
 - **Live on shortwave (PMSDR) much faster:** tuning within the 48-kHz window only changes the offset

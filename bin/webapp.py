@@ -1235,7 +1235,7 @@ def spectrum_png(peak_id, lang="de"):
         raise ValueError("Keine I/Q-Aufnahme vorhanden")
     en = lang == "en"
     out = REPORTS / f"{Path(row['recording_path']).stem}_spectrum3{'_en' if en else ''}.png"
-    if out.exists():
+    if out.exists() and out.with_suffix(".json").exists():
         return out
     import matplotlib
     matplotlib.use("Agg")
@@ -1288,8 +1288,20 @@ def spectrum_png(peak_id, lang="de"):
     fig.tight_layout()
     REPORTS.mkdir(exist_ok=True)
     fig.savefig(out, facecolor=fig.get_facecolor())
+    # Lage der Achsen im Bild (Anteile) und Frequenzbereich – damit das Dashboard den Abstimmstrich
+    # an die richtige Stelle über das Bild legen kann
+    pos = ax.get_position()
+    x0, x1 = ax.get_xlim()
+    out.with_suffix(".json").write_text(json.dumps({
+        "left": pos.x0, "right": pos.x1, "top": 1 - pos.y1, "bottom": 1 - pos.y0,
+        "f_lo_hz": x0 * 1e6, "f_hi_hz": x1 * 1e6, "rf_hz": float(row["rf_hz"])}))
     plt.close(fig)
     return out
+
+
+def spectrum_meta(peak_id, lang="de"):
+    out = spectrum_png(peak_id, lang)
+    return json.loads(out.with_suffix(".json").read_text())
 
 
 # ------------------------------------------------------------------ Live-Empfang
@@ -1441,11 +1453,21 @@ def live_start(data):
         if _live and _live.running:
             _live.stop()
         settings = load_settings()
-        device = data.get("device") or settings["active_device"]
+        freq = int(float(data.get("freq_hz", 145500000)))
+        device = data.get("device")
+        if not device:
+            # Gerät nach der Frequenz: Kurzwelle an die PMSDR, alles ab 24 MHz an den Stick – sonst das
+            # unter Scan gewählte (der Suchlauf landete sonst bei 7 MHz auf dem Stick und sprang auf 24 MHz)
+            hw = DEV.detect_hardware()
+            if freq < 30_000_000 and hw["pmsdr"]["present"]:
+                device = "pmsdr"
+            elif freq >= 24_000_000 and hw["rtlsdr"]["present"]:
+                device = "rtlsdr"
+            else:
+                device = settings["active_device"]
         mode = str(data.get("mode", "nfm"))
         if mode not in ("nfm", "wfm", "am", "usb", "lsb"):
             mode = "nfm"
-        freq = int(float(data.get("freq_hz", 145500000)))
         if not data.get("seek"):
             check_not_restricted(freq)
         scan = None
@@ -1643,6 +1665,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not row or not row[0]:
                     return self.send_json({"ok": False, "error": "Keine Aufnahme"}, 404)
                 return self.send_file(row[0], download_name=Path(row[0]).name)
+            if path == "/api/spectrum-meta":
+                return self.send_json(spectrum_meta(int(qs["peak_id"]), "en" if qs.get("lang") == "en" else "de"))
             if path == "/api/demod":
                 side = "USB" if qs.get("side", "USB").upper() == "USB" else "LSB"
                 off = max(-100000.0, min(100000.0, float(qs.get("offset_hz", 0) or 0)))
