@@ -413,6 +413,10 @@ class LiveSession:
         arrow = "▲" if d > 0 else "▼"
         # wie am Funkgerät: auf das Raster einrasten, dann den nächsten Kanal in Suchrichtung nehmen
         f = round(self.freq_hz / step) * step + d * step
+        # UKW („FM breit“): nur im Rundfunkband 87,5–108 MHz suchen und dort im Kreis
+        lo, hi = (87_500_000, 108_000_000) if self.mode == "wfm" else (self.RTL_MIN, self.RTL_MAX)
+        if not lo <= f <= hi:
+            f = lo if d > 0 else hi
         idle_t = None
         while self.running and not self.restart_wanted.is_set():
             if not self.subscribers:
@@ -423,10 +427,10 @@ class LiveSession:
                     return
             else:
                 idle_t = None
-            if f > self.RTL_MAX:
-                f = self.RTL_MIN
-            if f < self.RTL_MIN:
-                f = self.RTL_MAX
+            if f > hi:
+                f = lo
+            if f < lo:
+                f = hi
             blocked = sc.get("blocked") or []
             jumped = False
             for a, b in blocked:                          # gesperrtes Band: darüber hinwegspringen
@@ -437,13 +441,13 @@ class LiveSession:
             if jumped:
                 continue
             n = max(1, int(span // step))
-            chans = [int(round(f + d * k * step)) for k in range(n) if self.RTL_MIN <= f + d * k * step <= self.RTL_MAX]
+            chans = [int(round(f + d * k * step)) for k in range(n) if lo <= f + d * k * step <= hi]
             chans = [c for c in chans if not any(a - 5000 <= c <= b + 5000 for a, b in blocked)]
             if not chans and blocked:
                 f = f + d * n * step
                 continue
             if not chans:
-                f = self.RTL_MIN if d > 0 else self.RTL_MAX
+                f = lo if d > 0 else hi
                 continue
             # Mitte leicht neben das Kanalraster, damit kein Kanal auf dem Gleichanteil (DC) liegt
             center = (chans[0] + chans[-1]) / 2 + 2500

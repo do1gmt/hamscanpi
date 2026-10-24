@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.3 – 2026-10-24
+
+- README: screenshot of live TMC traffic messages.
+- TMC: quantities, lengths and speed limits are formatted with the tables of the ECL ("delays up to
+  20 minutes", "12 km", "30 km/h"); a quantity belongs to the event it follows (main or extra event);
+  unfilled placeholders like "(from Q lanes)" and editorial notes in braces are removed; extra events
+  repeating the main event are dropped; singular/plural in English.
+- Live seek with "FM wide" stays within the FM band 87.5–108 MHz and wraps around there.
+- Satellite pass list: "show past" shows the 10 most recent past passes instead of the oldest ones;
+  result texts translated.
+
 ## 1.4.2 – 2026-10-24
 
 - Fix: live seek no longer runs on after finding a station. A gain step of the automatic gain

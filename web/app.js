@@ -967,7 +967,9 @@
     const day = x => new Date(x * 1000).toLocaleDateString(I18N.locale, { weekday: 'short' });
     const showPast = $('satShowPast').checked, showAll = $('satShowAll').checked;
     let list = (d.passes || []).filter(p => showPast || p.los > now);
-    if (!showAll) list = list.slice(0, showPast ? 16 : 10);
+    // „vergangene zeigen“: die jüngsten 10 vergangenen und die nächsten Überflüge (nicht die ältesten)
+    if (!showAll) list = showPast ? [...list.filter(p => p.los <= now).slice(-10), ...list.filter(p => p.los > now).slice(0, 6)]
+                                  : list.slice(0, 10);
     const MHz = id => { const s = (d.satellites || []).find(x => x.id === id); return s && s.center_hz ? (s.center_hz / 1e6).toFixed(3) : id; };
     root.innerHTML = list.map(p => {
       const live = p.aos <= now && p.los > now, past = p.los <= now;
@@ -982,7 +984,7 @@
         const smax = sig.length ? Math.max(...sig.map(x => x.max_db)) : null, s6 = sig.reduce((a, x) => a + (x.above6_s || 0), 0);
         const sigTxt = smax == null ? '' : smax < 6 ? `<br><small class="bad">kein Signal (höchstens ${smax.toFixed(0)} dB über Rauschen)</small>`
           : `<br><small class="muted">Signal bis ${smax.toFixed(0)} dB, ${s6} s über 6 dB</small>`;
-        plan = `<span class="${cls}">${esc(r.text)}${r.state === 'done' ? ` · ${r.hits || 0} Treffer` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}`;
+        plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';

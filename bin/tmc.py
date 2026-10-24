@@ -37,30 +37,56 @@ def events():
     return _load("events_de.json.gz")
 
 
-def event_text(code, quantity=None, length_km=None, speed=None, lang="de"):
+def _qtext(ev, q, lang):
+    """Mengenangabe nach Typ der Ereignisliste (z. B. „bis zu 20 Minuten“, „30 km/h“, „unter 50 m“)."""
+    if not q:
+        return None
+    e = events() or {}
+    qt, v = (ev or {}).get("qt"), q.get("v")
+    t = None
+    if qt is not None and 0 <= qt <= 5 and q.get("bits", 5) == 5:
+        t = (e.get("quantifiers", {}).get(str(qt)) or {}).get(str(v))
+    t = t or str(v)
+    if lang == "en":
+        t = (t.replace("unter ", "below ").replace("bis zu ", "up to ").replace(" Stunden", " h")
+             .replace(" Minuten", " min"))
+    return t
+
+
+def _clean(t):
+    import re
+    t = re.sub(r"\{[^}]*\}", "", t)                       # redaktionelle Hinweise der Liste
+    t = re.sub(r"\s*\([^)]*\bQ\b[^)]*\)", "", t)          # nicht belegte Mengen-Platzhalter
+    t = t.replace("(Q)", "").replace("(L)", "")
+    return " ".join(t.split()).strip(" ,.")
+
+
+def event_text(code, q=None, lang="de", length=None):
+    """Ereignistext mit eingesetzter Menge (q = {"v", "bits"}) und Länge (Text, z. B. „12 km“)."""
     ev = (events() or {}).get("events", {}).get(str(code))
     if not ev:
         return f"Ereignis {code}" if lang == "de" else f"event {code}"
+    qt = _qtext(ev, q, lang)
     if lang == "en" and ev.get("en"):
-        t = ev["en"].replace("(Q sets of) ", "").replace("(Q) ", f"{quantity} " if quantity else "")
-        t = t.replace("(Q)", str(quantity) if quantity else "").replace("(s)", "s" if (quantity or 0) > 1 else "")
-        if length_km:
-            t += f" for {length_km} km"
-        if speed:
-            t += f", max. {speed} km/h"
-        return " ".join(t.split()).strip(" ,")
+        t = ev["en"]
+        if qt:
+            import re
+            t = re.sub(r"\(([^)]*)\bQ\b([^)]*)\)", lambda m: (m.group(1) + qt + m.group(2)).strip(), t)
+        t = t.replace("(s)", "" if qt == "1" else "s")
+        t = _clean(t)
+        if length:
+            t += f" for {length}"
+        return t
     t = ev["de"]
-    if quantity is not None:
-        t = (ev["q1"] if quantity == 1 and ev.get("q1") else ev.get("qn") or t)
-        t = t.replace("(Q)", str(quantity))
-    t = t.replace("(Q) ", "").replace("(Q)", "")
+    if qt:
+        t = (ev["q1"] if qt == "1" and ev.get("q1") else ev.get("qn") or t).replace("(Q)", qt)
     had_l = "(L)" in t
-    t = t.replace("(L) ", f"{length_km} km " if length_km else "").replace("(L)", f"{length_km} km" if length_km else "")
-    if length_km and not had_l:
-        t += f" auf {length_km} km"
-    if speed:
-        t += f", höchstens {speed} km/h"
-    return " ".join(t.split()).strip(" ,")
+    if length:
+        t = t.replace("(L)", length)
+    t = _clean(t)
+    if length and not had_l:
+        t += f" auf {length}"
+    return t
 
 
 def _point_name(p):
@@ -76,10 +102,22 @@ def describe(msg, ltn=1):
     """Klartext einer Meldung. msg: event, location, direction (0 = positiv), extent, duration, diversion, extra."""
     ev = msg.get("event")
     extra = msg.get("extra") or {}
+    E = events() or {}
+    length = (E.get("length") or {}).get(str(extra.get("length_code"))) or None
+    speed = (E.get("speed") or {}).get(str(extra.get("speed_code"))) or None
     out = {"event_code": ev, "location": msg.get("location")}
-    out["event"] = event_text(ev, extra.get("quantity"), extra.get("length_km"), extra.get("speed"))
-    more = [event_text(e) for e in extra.get("events", [])]
-    sup = (events() or {}).get("supplementary", {})
+    out["event"] = event_text(ev, extra.get("q"), "de", length)
+    seen = {ev}
+    more_ev = []
+    for x in extra.get("events", []):
+        if x["code"] in seen and not x.get("q"):
+            continue                                        # Wiederholung des Hauptereignisses
+        seen.add(x["code"])
+        more_ev.append(x)
+    more = [event_text(x["code"], x.get("q"), "de") for x in more_ev]
+    if speed:
+        more.append(f"Höchstgeschwindigkeit {speed}")
+    sup = E.get("supplementary", {})
     more += [sup.get(str(s), f"Zusatz {s}") for s in extra.get("supplementary", [])]
     data = lcl() if (ltn in (None, 1) and lcl() and lcl().get("ltn") == 1) else None
     loc = str(msg.get("location"))
@@ -122,8 +160,8 @@ def describe(msg, ltn=1):
         txt += " · Umleitung empfohlen"
     out["text"] = txt
     # englische Fassung (Orte bleiben deutsch)
-    en_ev = event_text(ev, extra.get("quantity"), extra.get("length_km"), extra.get("speed"), "en")
-    en_more = [event_text(e, lang="en") for e in extra.get("events", [])]
+    en_ev = event_text(ev, extra.get("q"), "en", length)
+    en_more = [event_text(x["code"], x.get("q"), "en") for x in more_ev] + ([f"speed limit {speed}"] if speed else [])
     en_place = (place or "").replace("zwischen ", "between ").replace(" und ", " and ").replace("Ort ", "location ") \
         .replace(" (keine Ortstabelle für dieses Land)", " (no location table for this country)")
     en = (head + ": " if head else "") + (en_place + ": " if en_place else "") + en_ev

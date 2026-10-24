@@ -313,8 +313,9 @@ TMC_LABEL_BITS = {0: 3, 1: 3, 2: 5, 3: 5, 4: 5, 5: 8, 6: 8, 7: 8, 8: 8, 9: 11, 1
 
 
 def _tmc_free(bits):
-    """Zusatzangaben einer Mehrgruppenmeldung (Bitfolge als Text) → dict."""
-    out, i = {}, 0
+    """Zusatzangaben einer Mehrgruppenmeldung (Bitfolge als Text) → dict.
+    Mengenangaben (Label 4/5) gehören zum jeweils zuletzt genannten Ereignis (Haupt- oder Zusatzereignis)."""
+    out, i = {"events": []}, 0
     while i + 4 <= len(bits):
         lab = int(bits[i:i + 4], 2)
         i += 4
@@ -325,20 +326,24 @@ def _tmc_free(bits):
             break
         v = int(bits[i:i + n], 2) if n else 0
         i += n
+        if lab == 0 and not v and "1" not in bits[i:]:
+            break                                           # Auffüllung mit Nullen
         if lab == 0 and v:
             out["duration"] = v
-        elif lab == 2 and v:
-            out["length_km"] = v if v <= 10 else 10 + (v - 10) * 5
+        elif lab == 2:
+            out["length_code"] = v or 32
         elif lab == 3 and v:
-            out["speed"] = v * 5
+            out["speed_code"] = v
         elif lab in (4, 5):
-            out["quantity"] = v
+            q = {"v": v if (lab == 5 or v) else 32, "bits": n}
+            if out["events"]:
+                out["events"][-1]["q"] = q
+            else:
+                out["q"] = q
         elif lab == 6:
             out.setdefault("supplementary", []).append(v)
         elif lab == 9 and v:
-            out.setdefault("events", []).append(v)
-        elif lab == 0 and not v and "1" not in bits[i:]:
-            break                                           # Auffüllung mit Nullen
+            out["events"].append({"code": v})
     return out
 
 

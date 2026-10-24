@@ -218,7 +218,8 @@
       'Reports as soon as the scanner hears something specific – in the log, with 🔔 on the hit card and, if mail is set up, by mail (at most one per rule within the quiet time).',
     'SSTV-Bild von der ISS': 'SSTV image from the ISS', 'SSTV-Bild (alle)': 'SSTV image (any)', 'APRS über die ISS': 'APRS via the ISS',
     'Satellit gehört (alle Treffer im Band Satelliten)': 'Satellite heard (any hit in the band Satellites)',
-    'Beobachtet': 'Watched', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
+    'Beobachtet': 'Watched', 'Auswertung nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'analysis did not finish (process stopped, possibly memory)',
+    'Aufnahme nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'recording did not finish (process stopped, possibly memory)', 'Speicherkarte fast voll': 'SD card almost full', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
     // System, Aufräumen, Download
     'System': 'System', 'Automatisch löschen (ungeschützte Treffer)': 'Delete automatically (unprotected hits)',
     'CPU-Temperatur': 'CPU temperature', 'gedrosselt': 'throttled', 'war gedrosselt': 'was throttled', 'nein': 'no', 'ja': 'yes',
@@ -340,6 +341,7 @@
     [/^Ortstabelle (\d+) \(Deutschland\)/, 'location table $1 (Germany)'], [/^Ortstabelle (\d+)/, 'location table $1'], [/ · (\d+) Meldung(en)?$/, ' · $1 message(s)'],
     [/^Verkehr: /, 'Traffic: '], [/^Verkehr: (.+)$/, 'Traffic: $1'], [/^TMC: verschlüsselt \(nicht lesbar\)$/, 'TMC: encrypted (not readable)'],
     [/ · Verstärkung automatisch ([\d.]+) dB/, ' · gain automatic $1 dB'],
+    [/^vom Benutzer abgebrochen nach (\d+) s$/, 'stopped by the user after $1 s'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

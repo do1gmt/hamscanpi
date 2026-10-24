@@ -76,20 +76,38 @@ def main(src):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
     import openpyxl
-    wb = openpyxl.load_workbook(next(src.rglob("ECL*.xlsx")), read_only=True)
+    wb = openpyxl.load_workbook(next(src.rglob("ECL*.xlsx")), read_only=True, data_only=True)
     ev, sup = {}, {}
-    for sheet, col_txt, col_q1, col_qn, col_code, col_en in (("ForecastEvent List", 2, 3, 4, 5, 1), ("Event List", 3, 4, 5, 6, 1)):
+    for sheet, col_txt, col_q1, col_qn, col_code, col_en, col_qt in (("ForecastEvent List", 2, 3, 4, 5, 1, 7),
+                                                                     ("Event List", 3, 4, 5, 6, 1, 8)):
         for row in wb[sheet].iter_rows(values_only=True):
             code = row[col_code] if len(row) > col_code else None
             if isinstance(code, (int, float)) and row[col_txt]:
+                qt = row[col_qt] if len(row) > col_qt else None
                 ev[int(code)] = {"de": str(row[col_txt]).strip(), "q1": (row[col_q1] or "").strip() if isinstance(row[col_q1], str) else "",
                                  "qn": (row[col_qn] or "").strip() if isinstance(row[col_qn], str) else "",
-                                 "en": (row[col_en] or "").strip() if isinstance(row[col_en], str) else ""}
+                                 "en": (row[col_en] or "").strip() if isinstance(row[col_en], str) else "",
+                                 "qt": int(qt) if isinstance(qt, (int, float)) else None}
+    # Mengenangaben (Label 4, Typ 0–5), Länge (Label 2) und Tempolimit (Label 3) je Code 1–32
+    qcodes, length, speed = {str(t): {} for t in range(6)}, {}, {}
+    for row in wb["Quantifier Codes"].iter_rows(values_only=True):
+        c = row[0]
+        if isinstance(c, str) and "32" in c:
+            c = 32
+        if not isinstance(c, (int, float)):
+            continue
+        c = int(c)
+        length[c] = str(row[1]) if row[1] not in (None, "-") else ""
+        speed[c] = str(row[2]).replace(" km", " km/h") if row[2] not in (None, "-") else ""
+        for t in range(6):
+            v = row[3 + t]
+            qcodes[str(t)][c] = "" if v in (None, "-") else str(v)
     for row in wb["Supplementary Information List"].iter_rows(values_only=True):
         if len(row) > 3 and isinstance(row[3], (int, float)) and row[2]:
             sup[int(row[3])] = str(row[2]).strip()
     with gzip.open(OUT / "events_de.json.gz", "wt", encoding="utf-8") as f:
-        json.dump({"source": "BASt Event Code List ECL 4.01 (CC BY 4.0)", "events": ev, "supplementary": sup},
+        json.dump({"source": "BASt Event Code List ECL 4.01 (CC BY 4.0)", "events": ev, "supplementary": sup,
+                   "quantifiers": qcodes, "length": length, "speed": speed},
                   f, ensure_ascii=False, separators=(",", ":"))
     print(f"Punkte {len(pts)}, Straßen {len(roads)}, Abschnitte {len(segs)}, Gebiete {len(areas)}, "
           f"Ereignisse {len(ev)}, Zusatztexte {len(sup)}")
