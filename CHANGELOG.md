@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.3 – 2026-10-24
+
+- Scan history: an aborted run without an end time no longer gets the hits of later runs counted
+  (it now ends where the next run starts).
+- English UI: FT8 summary ("18 msgs, 32 stations, 2× CQ") and carrier correction translated.
+- **FT8/FT4 SNR fixed:** the decoder (ft8_lib) only prints a sync score in its SNR column, which
+  showed up as +9 … +18 dB for every station – in the hit list, the station list and in the reports
+  to PSK Reporter. The SNR is now measured from the recording like WSJT-X does (signal over noise in
+  2500 Hz, typically −24 … +10 dB; checked against synthetic FT8 signals of known strength to ±1 dB).
+
 ## 1.6.2 – 2026-10-24
 
 - Fix: PMSDR "sound card 'Aureon' not found" on systems with a German locale – `arecord -l` prints

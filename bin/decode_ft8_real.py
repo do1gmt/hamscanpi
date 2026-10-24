@@ -594,6 +594,9 @@ def main(dry=False):
             messages = parse_messages(
                 output
             )
+            if messages:                                  # echte SNR (2500 Hz) statt Sync-Bewertung des Dekoders
+                import ft8_snr
+                ft8_snr.fix_messages(tmp_path, messages, protocol.upper())
 
 
             if messages:

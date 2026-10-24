@@ -75,6 +75,9 @@ def decode(audio, protocol, decoder):
             if m and len(m.group(4).strip()) >= 3:
                 out.append({"snr": float(m.group(1)), "dt": float(m.group(2)),
                             "audio_hz": int(m.group(3)), "text": m.group(4).strip()})
+        if out:                                           # echte SNR (2500 Hz) statt Sync-Bewertung des Dekoders
+            import ft8_snr
+            ft8_snr.fix_messages(tmp, out, protocol.upper())
         return out
     finally:
         tmp.unlink(missing_ok=True)

@@ -616,12 +616,22 @@ def list_hits(params):
     return out
 
 
+def _run_end(db, r):
+    """Ende eines Laufs; abgebrochene Läufe ohne Ende reichen nur bis zum Start des nächsten Laufs
+    (sonst bekam ein abgebrochener Lauf alle späteren Treffer zugeschlagen)."""
+    if r["finished_at"]:
+        return r["finished_at"]
+    nxt = db.execute("SELECT started_at FROM run WHERE id > ? AND started_at IS NOT NULL ORDER BY id LIMIT 1",
+                     (r["id"],)).fetchone()
+    return nxt[0] if nxt else "9999"
+
+
 def _run_scans(db, r):
     """Abstimmungen eines Laufs (Zeilen der Tabelle scan im Zeitfenster des Laufs)."""
     if not r["started_at"]:
         return []
-    return db.execute("""SELECT time, band FROM scan WHERE time >= ? AND time <= ? AND band != 'Satelliten'
-                         ORDER BY time""", (r["started_at"], r["finished_at"] or "9999")).fetchall()
+    return db.execute("""SELECT time, band FROM scan WHERE time >= ? AND time < ? AND band != 'Satelliten'
+                         ORDER BY time""", (r["started_at"], _run_end(db, r))).fetchall()
 
 
 def list_runs(limit=25, offset=0):
@@ -640,8 +650,8 @@ def list_runs(limit=25, offset=0):
         d["device"] = (devmap.get(bands[0]) if bands else None)
         if r["started_at"]:
             hb = db.execute("""SELECT s.band, COUNT(*) n FROM peak p JOIN scan s ON s.id = p.scan_id
-                               WHERE s.time >= ? AND s.time <= ? AND s.band != 'Satelliten' GROUP BY s.band""",
-                            (r["started_at"], r["finished_at"] or "9999")).fetchall()
+                               WHERE s.time >= ? AND s.time < ? AND s.band != 'Satelliten' GROUP BY s.band""",
+                            (r["started_at"], _run_end(db, r))).fetchall()
             d["hits_per_band"] = {x["band"]: x["n"] for x in hb}
         out.append(d)
     db.close()

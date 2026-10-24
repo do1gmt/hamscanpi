@@ -366,6 +366,8 @@
     [/ · SNR (-?\d+) dB/g, ' · SNR $1 dB'],
     [/^Suchlauf (.): Signal auf (.+) MHz \(SNR (-?\d+) dB\)$/, 'Seek $1: signal on $2 MHz (SNR $3 dB)'], [/^Suchlauf (.) (.+) MHz …$/, 'Seek $1 $2 MHz …'],
     [/^(\d+) Treffer als Störlinie ausgeblendet – unter Treffer mit „Störlinien“ einblenden\.$/, '$1 hits hidden as interference – show them under Hits with "Interference lines".'], [/^Satelliten-Wasserfall \((.+)\)$/, 'satellite waterfall ($1)'],
+    [/(FT8|FT4): (\d+) Nachr\., (\d+) Stationen(, (\d+)× CQ)?/g, (m, t, n, st, _c, c) => `${t}: ${n} msgs, ${st} stations${c ? `, ${c}× CQ` : ''}`],
+    [/ · Trägerkorrektur ([+-−]?\d+) Hz/g, ' · carrier correction $1 Hz'], [/ · kein Segment/g, ' · no segment'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
