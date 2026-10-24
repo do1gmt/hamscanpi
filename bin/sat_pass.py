@@ -48,6 +48,13 @@ STATUS = BASE / "data" / "runtime_status.json"
 IN_RATE, OUT_RATE = 960000, 48000
 BLOCK = IN_RATE // 10                                     # 0,1 s
 START_ISO = None
+REC_PID = BASE / "data" / "sat_rec.pid"        # PID der laufenden Aufnahme (zum Abbrechen aus dem Dashboard)
+_stop = {"flag": False}
+
+
+def _on_term(signum, frame):
+    """Abbruch (Dashboard): Aufnahme beenden, Stick freigeben, bisher Aufgenommenes auswerten."""
+    _stop["flag"] = True
 
 
 def status(state, msg, progress, only_if_mine=False):
@@ -435,10 +442,19 @@ def main():
     channels = [Channel(c, tune, trackers[c["norad"]], tag) for c in chans]
     src = Source(tune, cfg, a.test)
     nblk, err = 0, None
+    signal.signal(signal.SIGTERM, _on_term)
+    try:
+        REC_PID.write_text(str(os.getpid()))
+    except OSError:
+        pass
     try:
         while True:
             t = t0 + nblk * 0.1
             if t > until:
+                break
+            if _stop["flag"]:
+                err = f"vom Benutzer abgebrochen nach {nblk / 10:.0f} s"
+                applog("WARN", "satellite", "pass_cancelled", sat=name, seconds=round(nblk / 10))
                 break
             raw = src.read()
             if raw is None:
@@ -460,6 +476,8 @@ def main():
         src.close()
         for ch in channels:
             ch.close_recording()
+        REC_PID.unlink(missing_ok=True)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
     secs = nblk / 10
     if err:
         applog("WARN", "satellite", "pass_recording_problem", sat=name, error=err, seconds=round(secs))
@@ -478,7 +496,7 @@ def main():
             hits_total += n
         applog("INFO", "satellite", "pass_done", sat=name, hits=hits_total, per_channel=per_ch,
                seconds=round(secs), problem=err)
-        state = "done" if not err or secs > 60 else "error"
+        state = "cancelled" if _stop["flag"] else ("done" if not err or secs > 60 else "error")
         for k in keys:
             o = next((x for x in objs if k.startswith(f"{x}_")), objs[0])
             SAT.write_result(k, state=state, hits=per_obj.get(o, 0), per_channel=per_ch,

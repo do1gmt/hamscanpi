@@ -151,6 +151,10 @@
     'An PSK Reporter gemeldet': 'Reported to PSK Reporter', 'PSK Reporter: Fehler': 'PSK Reporter: error',
     'Für PSK Reporter zuerst Rufzeichen und Locator eintragen': 'For PSK Reporter enter callsign and locator first',
     // Karte, Aktivität
+    'Aufnahme abbrechen': 'Stop recording', 'Aufnahme wird abgebrochen …': 'Stopping recording …',
+    'Satellitenaufnahme abbrechen? Bisher Aufgenommenes wird noch ausgewertet.': 'Stop the satellite recording? What has been recorded so far is still analysed.',
+    'Der Überflug wird gerade ausgewertet – der Empfänger ist schon frei.': 'The pass is being analysed – the receiver is already free.',
+    'Überflug abgebrochen (Benutzer)': 'Pass stopped (user)',
     'Wasserfall – antippen zum Abstimmen': 'Waterfall – tap to tune',
     'Karte': 'Map', 'Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Nur Stationen mit Locator.': 'Map background: OpenStreetMap (needs internet in the browser). Only stations with a locator.',
     'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.': 'Map not available – the browser cannot reach cdnjs.cloudflare.com or OpenStreetMap.',
@@ -275,6 +279,7 @@
     [/^Locator fehlt oder ungültig – unter Einstellungen → Station eintragen$/, 'Locator missing or invalid – enter it under Settings → Station'],
     [/^⚠ Locator fehlt oder ungültig – unter Einstellungen → Station eintragen$/, '⚠ Locator missing or invalid – enter it under Settings → Station'],
     [/^Satellit (.+): Aufnahme (.+) MHz, Elevation (.+)$/, 'Satellite $1: recording $2 MHz, elevation $3'],
+    [/^vom Benutzer abgebrochen nach (\d+) s$/, 'stopped by the user after $1 s'],
     [/^Satellit (.+): Auswertung$/, 'Satellite $1: analysing'], [/^Satellit (.+): (\d+) Treffer$/, 'Satellite $1: $2 hits'],
     [/^Standard \((\d+)\)$/, 'default ($1)'],
     [/^(\d+)× aufgenommen, (\d+) Treffer$/, '$1× recorded, $2 hits'], [/ · (\d+)× aufgenommen, (\d+) Treffer$/, ' · $1× recorded, $2 hits'],

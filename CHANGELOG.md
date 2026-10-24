@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 – 2026-10-24
+
+- Satellite recordings can be stopped from the dashboard (button "Stop recording"): the stick is
+  released at once, what has been recorded so far is still analysed; the pass list shows "aborted".
+
 ## 1.2.0 – 2026-10-24
 
 - **Push to your phone** via ntfy or Telegram, in addition to or instead of mail – for errors, scans

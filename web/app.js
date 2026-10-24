@@ -67,6 +67,7 @@
   // ---------- Zustand ----------
   let bandplan = [];          // [{name, segments:[...]}]
   let modes = {};
+  let lastStatus = null;
   let settings = null;        // {scan_interval_minutes, selected_bands, selected_segments}
   let lastState = null;
   const filter = { band: localStorage.getItem('f.band') || 'all', mode: localStorage.getItem('f.mode') || 'all', sort: localStorage.getItem('f.sort') || 'time', q: '', protected: false, audio: localStorage.getItem('f.audio') === '1' };
@@ -286,7 +287,9 @@
     $('progressBar').style.width = (busy ? s.progress : (s.state === 'done' ? 100 : 0)) + '%';
     if (!(s.live_active && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
     const btn = $('scanNow'); btn.disabled = busy; btn.textContent = busy ? 'Scan läuft …' : 'Jetzt scannen';
+    lastStatus = s;
     $('scanStop').hidden = !(s.state === 'running');
+    $('scanStop').textContent = s.phase === 'satellite' ? 'Aufnahme abbrechen' : 'Scan abbrechen';
     const nextPast = s.next_scan_at && new Date(s.next_scan_at) < Date.now();
     $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade' : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
     if (s.state === 'error' && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
@@ -295,7 +298,11 @@
     lastState = s.state;
   }
   function setPill(text, cls) { const p = $('statusPill'); p.className = 'status-pill ' + (cls || ''); $('statusPillText').textContent = text; }
-  $('scanStop').addEventListener('click', async () => { if (!confirm('Laufenden Scan abbrechen?')) return; try { await post('/api/scan-stop'); toast('Scan wird abgebrochen …'); } catch (e) { toast('Fehler: ' + e.message); } });
+  $('scanStop').addEventListener('click', async () => {
+    const sat = lastStatus && lastStatus.phase === 'satellite';
+    if (!confirm(sat ? 'Satellitenaufnahme abbrechen? Bisher Aufgenommenes wird noch ausgewertet.' : 'Laufenden Scan abbrechen?')) return;
+    try { await post('/api/scan-stop'); toast(sat ? 'Aufnahme wird abgebrochen …' : 'Scan wird abgebrochen …'); } catch (e) { toast('Fehler: ' + e.message); }
+  });
   $('scanNow').addEventListener('click', async () => {
     if (!settings.selected_bands.length) { note($('scanSaveNote'), 'Mindestens ein Band auswählen', true); return; }
     clearTimeout(saveTimer);
@@ -743,7 +750,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', pskreporter_sent: 'An PSK Reporter gemeldet', pskreporter_failed: 'PSK Reporter: Fehler', watch_hit: 'Beobachtung ausgelöst', watch_failed: 'Beobachtungsliste: Fehler', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', pass_cancelled: 'Überflug abgebrochen (Benutzer)', satellite_stop_requested: 'Abbruch der Satellitenaufnahme angefordert', pskreporter_sent: 'An PSK Reporter gemeldet', pskreporter_failed: 'PSK Reporter: Fehler', watch_hit: 'Beobachtung ausgelöst', watch_failed: 'Beobachtungsliste: Fehler', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -874,7 +881,7 @@
       let plan = '';
       if (p.status === 'joined' && !p.result) plan = `<span class="ok">gemeinsam</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.result) {
-        const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted' }[r.state] || '';
+        const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted', cancelled: 'muted' }[r.state] || '';
         plan = `<span class="${cls}">${esc(r.text)}${r.state === 'done' ? ` · ${r.hits || 0} Treffer` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;

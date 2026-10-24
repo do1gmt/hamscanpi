@@ -8,6 +8,7 @@ Zeiten: durchgehend UTC (ISO-8601 mit +00:00).
 """
 import io
 import json
+import os
 import time
 import mimetypes
 mimetypes.add_type("application/manifest+json", ".webmanifest")
@@ -1239,7 +1240,7 @@ def live_status():
 _sat_cache = {"t": 0.0, "key": None, "data": None}
 _sat_lock = threading.Lock()
 
-SAT_STATE_TEXT = {"running": "nimmt auf", "evaluating": "wird ausgewertet", "done": "aufgenommen", "error": "Fehler", "skipped": "übersprungen"}
+SAT_STATE_TEXT = {"running": "nimmt auf", "evaluating": "wird ausgewertet", "cancelled": "abgebrochen", "done": "aufgenommen", "error": "Fehler", "skipped": "übersprungen"}
 
 
 def sat_passes():
@@ -1645,6 +1646,19 @@ class Handler(BaseHTTPRequestHandler):
                                      stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
                 return self.send_json({"ok": True, "fallback": True})
             if path == "/api/scan-stop":
+                # Satellitenaufnahme? Dann die abbrechen (sie wertet das bisher Aufgenommene noch aus)
+                import signal
+                rec = BASE / "data" / "sat_rec.pid"
+                try:
+                    rpid = int(rec.read_text().strip())
+                    os.kill(rpid, signal.SIGTERM)
+                    APPLOG.log("WARN", "webapp", "satellite_stop_requested", pid=rpid)
+                    return self.send_json({"ok": True, "what": "satellite"})
+                except (OSError, ValueError):
+                    rec.unlink(missing_ok=True)
+                st = read_json(BASE / "data" / "runtime_status.json", {})
+                if st.get("phase") == "satellite" and st.get("state") == "running":
+                    return self.send_json({"ok": False, "error": "Der Überflug wird gerade ausgewertet – der Empfänger ist schon frei."}, 409)
                 pidf = BASE / "data" / "scan.pid"
                 try:
                     pid = int(pidf.read_text().strip())
