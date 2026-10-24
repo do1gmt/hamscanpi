@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.6 – 2026-10-24
+
+- Fix: a satellite pass could be lost without a trace ("not recorded"): the recording was started
+  with `flock -n`, which fails if the lock is held for a moment (status check of the dashboard,
+  previous pass just releasing the stick). Now it waits up to 30 s, a start that ends at once is
+  retried while the pass window is open, and a pass that never got the stick is marked "skipped"
+  with the reason (previous pass still recording, scan running, stick busy).
+- README: new screenshots of the settings page (Telegram push, watchlist) and of satellite
+  priorities with the system status.
+- Hints: watchlist mentions push as well as mail; Telegram hint explains that the own bot does not
+  answer and points to "Find chat ID".
+
 ## 1.4.5 – 2026-10-24
 
 - No scan is started any more that would still be running when a satellite pass begins – now also

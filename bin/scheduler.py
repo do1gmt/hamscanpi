@@ -107,7 +107,8 @@ def run_scan():
 
 # ---------------------------------------------------------------- Satelliten
 SAT_PID = BASE / "data" / "sat_pass.pid"
-_sat = {"checked": 0.0, "key": None, "passes": [], "started": set(), "postponed": None, "problem": None, "procs": []}
+_sat = {"checked": 0.0, "key": None, "passes": [], "started": set(), "postponed": None, "problem": None, "procs": [],
+        "pending": {}, "blocked": {}}
 
 
 def selected_satellites():
@@ -265,13 +266,37 @@ def start_sat_pass(p):
     _sat["started"].add(p["key"])
     applog("INFO", "scheduler", "satellite_start", sat=p["name"], channels=p["channels"], max_el=p["max_el"],
            plan=p["status"])
-    cmd = ["/usr/bin/flock", "-n", str(LOCK), "python3", str(BASE / "bin" / "sat_pass.py"),
+    # -w statt -n: die Sperre ist manchmal nur einen Augenblick belegt (Statusabfrage des Dashboards,
+    # vorheriger Überflug gibt den Stick gerade frei) – dann warten statt den Überflug still zu verlieren
+    cmd = ["/usr/bin/flock", "-w", "30", str(LOCK), "python3", str(BASE / "bin" / "sat_pass.py"),
            "--sats", ",".join(p["channels"]), "--until", str(p["rec_end"]), "--keys", ",".join(p.get("keys", [p["key"]]))]
     with open(BASE / "log" / "satellite.log", "a", encoding="utf-8") as out:
         pr = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
     SAT_PID.write_text(str(pr.pid))
     _sat["procs"] = [x for x in _sat["procs"] if x.poll() is None] + [pr]   # beendete abholen
+    _sat["pending"][p["key"]] = (pr, time.time(), p)
     return True
+
+
+def check_started_passes():
+    """Ist ein gestarteter Überflug gleich wieder beendet, ohne aufzunehmen (Sperre nicht bekommen,
+    Stick belegt)? Dann erneut versuchen, solange das Fenster offen ist – sonst mit Grund vermerken."""
+    import satellites as SAT
+    for key, (pr, t, p) in list(_sat["pending"].items()):
+        rc = pr.poll()
+        res = (SAT.read_results() or {}).get(key) or {}
+        if res.get("state") in ("running", "evaluating", "done", "error", "cancelled"):
+            del _sat["pending"][key]                    # läuft bzw. lief – in Ordnung
+            continue
+        if rc is None:
+            continue
+        del _sat["pending"][key]
+        if time.time() < p["rec_end"] - 60:
+            _sat["started"].discard(key)                # noch Zeit: im nächsten Durchlauf neu starten
+            applog("WARN", "scheduler", "satellite_retry", sat=p["name"], rc=rc)
+        else:
+            for k in p.get("keys", [key]):
+                SAT.write_result(k, state="skipped", error="Stick war belegt – Aufnahme konnte nicht starten")
 
 
 for _d in ("data", "log", "recordings", "reports"):              # frische Installation
@@ -316,6 +341,17 @@ while True:
 
         # Satellitenüberflug (Vorrang vor dem Scan). Wer bei Überschneidungen wann aufnimmt,
         # steht schon im Plan (satellites.make_plan).
+        check_started_passes()
+        for key, (bp, why) in list(_sat["blocked"].items()):       # Fenster vorbei, nie gestartet
+            if key in _sat["started"]:
+                del _sat["blocked"][key]
+            elif time.time() >= bp["rec_end"] - 60:
+                del _sat["blocked"][key]
+                _sat["started"].add(key)
+                import satellites as SAT
+                applog("WARN", "scheduler", "satellite_skipped", sat=bp["name"], reason=why)
+                for k in bp.get("keys", [key]):
+                    SAT.write_result(k, state="skipped", error=why)
         now_t = time.time()
         soon = None
         import satellites as SAT
@@ -325,7 +361,12 @@ while True:
             if p["key"] in _sat["started"]:
                 continue
             if p["rec_start"] <= now_t < p["rec_end"] - 60:
-                start_sat_pass(p)
+                if not start_sat_pass(p):
+                    # Stick noch belegt: Grund merken, damit „nicht aufgenommen“ nicht unerklärt bleibt
+                    why = ("vorheriger Überflug nahm noch auf" if sat_pass_active()
+                           else "Scan lief (Bildsatelliten nur bei freiem Stick)" if p["prio"] <= SAT.OPPORTUNISTIC_PRIO
+                           else "Stick belegt")
+                    _sat["blocked"][p["key"]] = (p, why)
                 break
             if now_t < p["rec_start"]:
                 wait = p["rec_start"] - now_t

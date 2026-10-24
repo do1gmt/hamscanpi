@@ -200,8 +200,8 @@
     'per Mail/Push melden': 'notify by mail/push', '✓ Test-Push verschickt – kommt er an?': '✓ Test push sent – did it arrive?',
     'ntfy: App „ntfy“ aufs Handy, dort ein Thema abonnieren (am besten ein langer, zufälliger Name – wer ihn kennt, liest mit) und dieselbe Adresse hier eintragen.':
       'ntfy: install the ntfy app, subscribe to a topic (best a long random name – anyone who knows it can read along) and enter the same address here.',
-    'Telegram: bei @BotFather einen Bot anlegen (Token), dem Bot eine Nachricht schreiben, die Chat-ID z. B. über @userinfobot erfahren.':
-      'Telegram: create a bot with @BotFather (token), send the bot a message, get your chat ID e.g. from @userinfobot.',
+    'Telegram: bei @BotFather einen Bot anlegen (Token), dem eigenen Bot eine Nachricht schreiben (er antwortet nicht – das ist richtig), dann „Chat-ID ermitteln“.':
+      'Telegram: create a bot with @BotFather (token), send your own bot a message (it does not answer – that is fine), then "Find chat ID".',
     'Push ist nicht eingerichtet': 'Push is not set up',
     // Stationen, Beobachtungsliste
     'Stationen': 'Stations', 'Gehörte Stationen': 'Heard stations', 'Rufzeichen': 'Callsign', 'Zeitraum': 'Period', '1 Jahr': '1 year', 'alles': 'all',
@@ -217,11 +217,13 @@
     'Wert': 'Value', 'Bezeichnung': 'Label', 'z. B. Relais DB0XYZ': 'e.g. repeater DB0XYZ', 'Toleranz (kHz)': 'Tolerance (kHz)', 'Ruhezeit (min)': 'Quiet time (min)',
     'per Mail melden': 'notify by mail', 'Hinzufügen': 'Add', 'Noch keine Beobachtungen.': 'No watches yet.', '✓ Beobachtung hinzugefügt': '✓ Watch added',
     'Beobachtungsliste': 'Watchlist', 'Entfernung ab': 'Distance from',
-    'Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn Mail eingerichtet ist, per Mail (höchstens eine je Regel in der Ruhezeit).':
-      'Reports as soon as the scanner hears something specific – in the log, with 🔔 on the hit card and, if mail is set up, by mail (at most one per rule within the quiet time).',
+    'Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn eingerichtet, per Mail oder Push aufs Handy (höchstens eine je Regel in der Ruhezeit).':
+      'Reports as soon as the scanner hears something specific – in the log, with 🔔 on the hit card and, if set up, by mail or push to your phone (at most one per rule within the quiet time).',
     'SSTV-Bild von der ISS': 'SSTV image from the ISS', 'SSTV-Bild (alle)': 'SSTV image (any)', 'APRS über die ISS': 'APRS via the ISS',
     'Satellit gehört (alle Treffer im Band Satelliten)': 'Satellite heard (any hit in the band Satellites)',
-    'Beobachtet': 'Watched', 'Auswertung nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'analysis did not finish (process stopped, possibly memory)',
+    'Beobachtet': 'Watched', 'Überflug: Start wiederholt': 'Pass: start retried', 'Stick war belegt – Aufnahme konnte nicht starten': 'stick was busy – recording could not start',
+    'vorheriger Überflug nahm noch auf': 'previous pass was still recording', 'Scan lief (Bildsatelliten nur bei freiem Stick)': 'a scan was running (image satellites only when the stick is free)',
+    'Stick belegt': 'stick busy', 'Live-Empfang lief': 'live reception was running', 'Auswertung nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'analysis did not finish (process stopped, possibly memory)',
     'Aufnahme nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'recording did not finish (process stopped, possibly memory)', 'Speicherkarte fast voll': 'SD card almost full', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
     // System, Aufräumen, Download
     'System': 'System', 'Automatisch löschen (ungeschützte Treffer)': 'Delete automatically (unprotected hits)',

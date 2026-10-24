@@ -291,7 +291,7 @@
       </section>
       <section class="panel" id="panel-watch">
         <h2>Beobachtungsliste</h2>
-        <p class="hint">Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn Mail eingerichtet ist, per Mail (höchstens eine je Regel in der Ruhezeit).</p>
+        <p class="hint">Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn eingerichtet, per Mail oder Push aufs Handy (höchstens eine je Regel in der Ruhezeit).</p>
         <div id="watchList"></div>
         <div class="filter-grid watch-add">
           <label class="field"><span>Art</span><select id="wType">
@@ -394,7 +394,7 @@
             <label class="field push-tg"><span>Telegram-Chat-ID</span><span class="row-inline"><input name="tg_chat" id="tgChat" type="text" autocomplete="off"><button type="button" class="btn" id="tgFind">Chat-ID ermitteln</button></span></label>
           </div>
           <p class="hint push-ntfy">ntfy: App „ntfy“ aufs Handy, dort ein Thema abonnieren (am besten ein langer, zufälliger Name – wer ihn kennt, liest mit) und dieselbe Adresse hier eintragen.</p>
-          <p class="hint push-tg">Telegram: bei @BotFather einen Bot anlegen (Token), dem Bot eine Nachricht schreiben, die Chat-ID z. B. über @userinfobot erfahren.</p>
+          <p class="hint push-tg">Telegram: bei @BotFather einen Bot anlegen (Token), dem eigenen Bot eine Nachricht schreiben (er antwortet nicht – das ist richtig), dann „Chat-ID ermitteln“.</p>
           <h3 class="sub">Wann melden</h3>
           <div class="notify-rule">
           <label class="check"><input type="checkbox" name="on_error"> bei Fehlern</label>
