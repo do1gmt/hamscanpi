@@ -19,6 +19,9 @@ import json, sys
 p = sys.argv[1] + "/config/web_settings.json"; d = json.load(open(p)); d["my_locator"] = "JO62QM"; json.dump(d, open(p, "w"))
 PY
 cd "$T"
+FAIL=0
+ok()  { echo "   $1: ok"; }
+bad() { echo "   $1: FEHLER"; FAIL=$((FAIL + 1)); }
 python3 -c "import pysstv" 2>/dev/null || { echo "pysstv fehlt: pip install pysstv"; exit 1; }
 echo "== 1 Bahndaten und Plan"
 python3 devtools/make_tles.py data/tle.json
@@ -40,7 +43,7 @@ PY
 )"
 python3 devtools/sim_pass.py /tmp/hsp_iss.u8 $T0 75 437675000 437550000:sstv:0.3 437800000:tone:0.2 >/dev/null
 python3 bin/sat_pass.py --sats iss_sstv70,iss_rpt --test /tmp/hsp_iss.u8 --start $T0 --until $((T0+75)) | tail -2
-ls reports/*iss_sstv70*_sstv.png >/dev/null && echo "   SSTV-Bild: ok"
+ls reports/*iss_sstv70*_sstv.png >/dev/null 2>&1 && ok "SSTV-Bild" || bad "SSTV-Bild"
 echo "== 3 gemeinsame Aufnahme"
 read T1 CH TUNE <<<"$(python3 - <<'PY'
 import sys; sys.path.insert(0, "bin")
@@ -52,18 +55,19 @@ PY
 )"
 python3 devtools/sim_pass.py /tmp/hsp_train.u8 $T1 60 $TUNE 436320000:sstv:0.3:67284 436950000:tone:0.2:67291 >/dev/null
 python3 bin/sat_pass.py --sats $CH --test /tmp/hsp_train.u8 --start $T1 --until $((T1+60)) | tail -2
-ls reports/*lobachevsky*_sstv.png >/dev/null && echo "   SSTV-Bild (eigener Doppler): ok"
+ls reports/*lobachevsky*_sstv.png >/dev/null 2>&1 && ok "SSTV-Bild (eigener Doppler)" || bad "SSTV-Bild (eigener Doppler)"
 if command -v multimon-ng >/dev/null; then
   echo "== 4 APRS"
   python3 devtools/sim_pass.py /tmp/hsp_aprs.u8 $T0 30 145600000 145825000:aprs:0.3 >/dev/null
-  python3 bin/sat_pass.py --sats iss,iss_aprs --test /tmp/hsp_aprs.u8 --start $T0 --until $((T0+30)) | grep "APRS: 3 Pakete" >/dev/null && echo "   3 Pakete: ok"
+  python3 bin/sat_pass.py --sats iss,iss_aprs --test /tmp/hsp_aprs.u8 --start $T0 --until $((T0+30)) | grep "APRS: 3 Pakete" >/dev/null && ok "3 Pakete" || bad "APRS"
 else
   echo "== 4 APRS übersprungen (multimon-ng fehlt)"
 fi
 echo "== 5 SSTV Kurzwelle"
-python3 devtools/test_hf_sstv.py USB 60 | grep -E "Bild|kein"
+python3 devtools/test_hf_sstv.py USB 60 | tee /tmp/hsp_hf.txt | grep -E "Bild|kein"
+[ "$(grep -c "SSTV: Bild" /tmp/hsp_hf.txt)" = 2 ] && ok "2 Bilder" || bad "SSTV Kurzwelle"
 echo "== 6 langer Überflug (11 min Ton, 5 Bilder): Speicherbedarf der SSTV-Auswertung"
-python3 - <<'PY'
+python3 - <<'PY' || FAIL=$((FAIL + 1))
 import sys, tracemalloc, numpy as np
 sys.path.insert(0, "bin")
 import sstv_decode as SD
@@ -78,6 +82,7 @@ tracemalloc.start()
 r = SD.decode_all(a, 24000, headless=True)
 peak = tracemalloc.get_traced_memory()[1] // 2**20
 print(f"   {len(r)} Bilder, Spitze {peak} MB:", "ok" if len(r) == 5 and peak < 400 else "FEHLER")
+sys.exit(0 if len(r) == 5 and peak < 400 else 1)
 PY
-rm -f /tmp/hsp_*.u8
-echo "Selbsttest fertig."
+rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
+if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -219,6 +219,16 @@ def start_sat_pass(p):
         return True
     if sat_pass_active():
         return False
+    try:
+        import housekeeping as HK
+        if HK.disk_full():
+            _sat["started"].add(p["key"])
+            applog("WARN", "scheduler", "satellite_skipped", sat=p["name"], reason="Speicherkarte fast voll")
+            for k in p.get("keys", [p["key"]]):
+                SAT.write_result(k, state="skipped", error="Speicherkarte fast voll")
+            return True
+    except ImportError:
+        pass
     if scan_running():
         if p["prio"] <= SAT.OPPORTUNISTIC_PRIO:
             return False                # Bildsatelliten: nur bei freiem Stick, Scan nicht abbrechen
@@ -300,6 +310,18 @@ while True:
             due = False
         if due and sat_pass_active():
             due = False
+        # Speicherkarte fast voll (housekeeping im Webserver): keine neuen Scans
+        try:
+            import housekeeping as HK
+            if due and HK.disk_full():
+                if not _sat.get("disk_note"):
+                    applog("ERROR", "scheduler", "scan_skipped_disk_full")
+                _sat["disk_note"] = True
+                due = False
+            elif not HK.disk_full():
+                _sat["disk_note"] = False
+        except Exception:
+            pass
 
         live_lock = BASE / "data" / "live.lock"
         live = live_lock.exists() and (time.time() - live_lock.stat().st_mtime) < 120

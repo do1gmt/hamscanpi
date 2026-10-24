@@ -4,6 +4,8 @@
 
 *Hams can Pi.*
 
+[![selftest](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml/badge.svg)](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml)
+
 **An unattended band scanner and satellite recorder for radio amateurs, running on a Raspberry Pi.**
 
 HamScanPi scans the amateur bands on its own, records what it hears, decodes what it can and shows
@@ -72,7 +74,9 @@ The installer sets up the packages, the RTL-SDR driver blacklist, the local conf
 systemd services (`hamscanpi-web`, `hamscanpi-scheduler`). Then open `http://<pi-address>:8080/`
 and enter your locator under *Settings → Station*.
 
-Update later with `git pull` followed by `sudo systemctl restart hamscanpi-web hamscanpi-scheduler`.
+Update later with `bin/update.sh` – it pulls the new version, completes your local configuration and
+restarts the services. The dashboard shows a notice under *Settings → System* when a new version is out.
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ### Files
 

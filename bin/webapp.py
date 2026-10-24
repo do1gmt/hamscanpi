@@ -32,6 +32,7 @@ import applog as APPLOG
 import devices as DEV
 import notify as NOTIFY
 import auth as AUTH
+import housekeeping as HK
 
 BASE = Path(__file__).resolve().parent.parent
 REPORTS = BASE / "reports"
@@ -219,6 +220,7 @@ def load_settings():
                             if str((data.get("scan_raster") or {}).get(d, "normal")) in RASTERS else "normal")
                         for d in ("pmsdr", "rtlsdr")},
         "rasters": RASTERS,
+        "cleanup_auto_days": int(data.get("cleanup_auto_days") or 0),
         "allow_restricted": restricted_allowed(),
         "sat_prio": {k: v for k, v in (data.get("sat_prio") or {}).items() if v == "pin" or str(v).isdigit()},
         "active_device": DEV.resolve_device(choice, hw),
@@ -283,6 +285,11 @@ def save_settings(data):
             ids = [str(x) for x in ids if str(x) == "all" or str(x) in valid]
             cleaned[band] = ["all"] if (not ids or "all" in ids) else ids
         out["selected_segments"] = cleaned
+    if "cleanup_auto_days" in data:
+        d = int(data["cleanup_auto_days"] or 0)
+        if d not in (0, 7, 14, 30, 60, 90, 180):
+            raise ValueError("Aufräumen: 0, 7, 14, 30, 60, 90 oder 180 Tage")
+        out["cleanup_auto_days"] = d
     if "sat_prio" in data and isinstance(data["sat_prio"], dict):
         import satellites as SAT
         sp = dict(out.get("sat_prio") or {})
@@ -1254,6 +1261,8 @@ class Handler(BaseHTTPRequestHandler):
                                                 max(0, int(qs.get("offset", 0)))))
             if path == "/api/scan-estimate":
                 return self.send_json(scan_estimate() or {})
+            if path == "/api/system":
+                return self.send_json(HK.system_status())
             if path == "/api/scan-summary":
                 return self.send_json(scan_summary())
             if path == "/api/stats":
@@ -1466,6 +1475,17 @@ def main():
         import shutil
         shutil.copy(BASE / "config" / "scanner.default.json", _cfg)
     ensure_schema()
+
+    def housekeeping_loop():
+        time.sleep(60)
+        while True:
+            try:
+                HK.run(load_settings(), bulk_delete,
+                       lambda level, event, **d: APPLOG.log(level, "housekeeping", event, **d))
+            except Exception as e:
+                APPLOG.log("WARN", "housekeeping", "housekeeping_failed", error=f"{type(e).__name__}: {e}")
+            time.sleep(900)
+    threading.Thread(target=housekeeping_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()

@@ -1,0 +1,23 @@
+name: selftest
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q multimon-ng
+          pip install numpy scipy sgp4 pillow pysstv
+      - name: Python syntax
+        run: python -m py_compile bin/*.py devtools/*.py
+      - name: Self test (satellites, SSTV, APRS, memory)
+        run: |
+          bash devtools/selftest.sh | tee selftest.log
+          ! grep -q "FEHLER\|Traceback" selftest.log

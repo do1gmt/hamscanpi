@@ -253,6 +253,11 @@
         <div class="table-wrap"><table class="table satprio-table"><thead><tr><th>Kanal</th><th>Priorität</th><th>Zuletzt (14 Tage)</th></tr></thead><tbody id="satPrio"></tbody></table></div>
         <div class="save-note" id="satPrioNote" aria-live="polite"></div>
       </section>
+      <section class="panel" id="panel-system">
+        <h2>System</h2>
+        <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
+        <p class="hint" id="sysNote"></p>
+      </section>
       <section class="panel" id="panel-cleanup">
         <h2>Aufräumen</h2>
         <div class="row">
@@ -266,6 +271,13 @@
           <button class="btn btn-danger" id="cleanupOld">Alte löschen</button>
         </div>
         <div class="save-note" id="cleanupNote" aria-live="polite"></div>
+        <label class="field"><span>Automatisch löschen (ungeschützte Treffer)</span>
+          <select id="cleanupAuto">
+            <option value="0">aus</option><option value="7">älter als 7 Tage</option><option value="14">älter als 14 Tage</option>
+            <option value="30">älter als 30 Tage</option><option value="60">älter als 60 Tage</option><option value="90">älter als 90 Tage</option>
+            <option value="180">älter als 180 Tage</option>
+          </select>
+        </label>
         <button class="btn btn-danger btn-wide" id="cleanupAll">Alle ungeschützten Treffer löschen</button>
         <p class="hint">Geschützte Treffer (★) werden nie automatisch gelöscht.</p>
         <details><summary>Löschprotokoll</summary><ul class="plain" id="deletionLog"></ul></details>

@@ -89,6 +89,7 @@
       const sel = $(id); sel.innerHTML = Object.entries(settings.rasters || { normal: 'normal' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
       sel.value = (settings.scan_raster || {})[dev] || 'normal';
     }
+    $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     const o833 = $('liveStep').querySelector('option[value="8333"]');     // 8,33-kHz-Raster gibt es nur im Flugfunk
@@ -413,7 +414,13 @@
     const body = el.querySelector('.hit-body'); body.__data = h;
     const f = h.files || {};
     let html = '';
-    if (f.sstv) html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">`;
+    if (f.sstv) {
+      // Download mit sprechendem Namen: hamscanpi_<Band>_<MHz>_<UTC>.png
+      const stamp = (h.time || '').replace(/[-:]/g, '').slice(0, 15).replace('T', '_');
+      const fname = `hamscanpi_${h.band}_${fmtMHz(h.rf_hz)}MHz_${stamp}Z.png`.replace(/[^A-Za-z0-9_.-]/g, '_');
+      html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">
+        <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a></div>`;
+    }
     if (f.iq) html += `<img src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.remove()">`;
     else if (f.spectrum) html += `<img src="${f.spectrum}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy">`;
     if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
@@ -688,7 +695,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -877,6 +884,42 @@
     if (go === 'sstv') { filter.mode = 'sstv'; localStorage.setItem('f.mode', 'sstv'); $('filterMode').value = 'sstv'; }
     showView('hits'); loadHits();
   }));
+
+  // ---------- System ----------
+  async function loadSystem() {
+    let s; try { s = await api('/api/system'); } catch (e) { return; }
+    const tiles = [], warn = [];
+    const tile = (val, label, cls = '') => tiles.push(`<div class="stat ${cls}"><b>${val}</b><span>${label}</span></div>`);
+    const d = s.disk; const dcls = d.used_pct >= 95 ? 'bad' : d.used_pct >= 85 ? 'warn' : '';
+    tile(`${d.free_gb} GB`, `frei von ${d.total_gb} GB (${d.used_pct} % belegt)`, dcls);
+    if (dcls) warn.push(d.used_pct >= 95 ? 'Speicherkarte fast voll – keine neuen Scans und Überflüge, bis wieder Platz ist.' : 'Speicherkarte wird voll – alte Treffer aufräumen oder automatisch löschen lassen.');
+    tile(`${s.recordings.gb} GB`, `Aufnahmen (${s.recordings.files} Dateien)`);
+    if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – auf dem Pi: python3 bin/sat_recover.py'); }
+    if (s.memory) tile(`${s.memory.available_mb} MB`, `Arbeitsspeicher frei von ${s.memory.total_mb} MB`, s.memory.available_mb < 200 ? 'warn' : '');
+    if (s.cpu_temp_c != null) tile(`${s.cpu_temp_c} °C`, 'CPU-Temperatur', s.cpu_temp_c >= 80 ? 'bad' : s.cpu_temp_c >= 70 ? 'warn' : '');
+    if (s.throttled) {
+      const t = s.throttled; const now = t.now, ever = t.since_boot;
+      tile(now ? 'gedrosselt' : ever ? 'war gedrosselt' : 'nein', 'Drosselung / Unterspannung', now ? 'bad' : ever ? 'warn' : '');
+      if (t.undervoltage) warn.push('Unterspannung erkannt – Netzteil prüfen (der RTL-Stick zieht zusätzlich Strom).');
+    }
+    if (s.time_sync != null) { tile(s.time_sync ? 'ja' : 'nein', 'Uhr synchron (NTP)', s.time_sync ? '' : 'bad'); if (!s.time_sync) warn.push('Die Uhr des Pi ist nicht synchron – Satellitenzeiten und Doppler werden ungenau.'); }
+    if (s.load) tile(s.load[0].toFixed(2), 'Last (1 min)');
+    if (s.uptime_h != null) tile(s.uptime_h >= 48 ? `${Math.round(s.uptime_h / 24)} Tage` : `${s.uptime_h} h`, 'läuft seit');
+    const svc = s.services || {};
+    for (const [u, st] of Object.entries(svc)) { if (u === 'pmsdr-control' && st !== 'active' && st !== 'activating') continue; tile(st === 'active' ? 'läuft' : st, u, st === 'active' ? '' : 'warn'); }
+    const v = s.version || {};
+    tile(`${v.version}${v.commit ? ' <small class="muted">' + v.commit + '</small>' : ''}`, v.newer ? `Version – neu: ${v.latest}` : 'Version', v.newer ? 'warn' : '');
+    if (v.newer) warn.push(`Neue Version ${v.latest} verfügbar – auf dem Pi: bin/update.sh`);
+    $('sysGrid').innerHTML = tiles.join('');
+    $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
+    $('sysNote').classList.toggle('warn-text', warn.length > 0);
+  }
+  loadSystem(); setInterval(() => { if (document.visibilityState === 'visible' && !$('panel-system').closest('[hidden]')) loadSystem(); }, 60000);
+  $('cleanupAuto').addEventListener('change', async e => {
+    try { const d = await post('/api/settings', { cleanup_auto_days: Number(e.target.value) }); settings.cleanup_auto_days = d.settings.cleanup_auto_days;
+          note($('cleanupNote'), Number(e.target.value) ? '✓ gespeichert – wird alle 15 min geprüft, geschützte Treffer (★) bleiben' : '✓ automatisches Löschen aus'); }
+    catch (x) { note($('cleanupNote'), 'Fehler: ' + x.message, true); }
+  });
 
   // ---------- Zugangsschutz ----------
   async function loadAuth() {

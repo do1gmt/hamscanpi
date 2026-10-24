@@ -353,3 +353,13 @@ small.score { color: var(--muted); }
   .runs-table th { white-space: nowrap; }
 }
 .tz-diff { color: var(--amber); font-size: .8em; }   /* andere Zeitzone als jetzt (Nacht der Umstellung) */
+
+/* System */
+.sysgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+@media (min-width: 900px) { .sysgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.sysgrid .stat { padding: .35rem .55rem; min-width: 0; }
+.sysgrid .stat b { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sysgrid .stat span { font-size: .7rem; display: block; overflow-wrap: anywhere; }
+.sysgrid .stat.warn { border: 1px solid var(--amber); } .sysgrid .stat.warn b { color: var(--amber); }
+.sysgrid .stat.bad { border: 1px solid var(--red); } .sysgrid .stat.bad b { color: var(--red); }
+.sstv-dl { margin-top: .3rem; }
