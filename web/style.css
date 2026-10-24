@@ -391,7 +391,8 @@ h3.sub { font-size: .85rem; color: var(--muted); margin: .9rem 0 .3rem; font-wei
 .sched-now td { background: rgba(45,212,191,.06); }
 #scDays, #scBands { margin: .4rem 0; }
 
-.st-map { height: 380px; border-radius: 8px; margin: .5rem 0; background: var(--panel-2); }
+.st-map { height: 70vh; min-height: 420px; max-height: 900px; border-radius: 8px; margin: .5rem 0; background: var(--panel-2); resize: vertical; overflow: hidden; }
+@media (max-width: 599px) { .st-map { height: 60vh; min-height: 320px; } }
 .map-box summary { font-weight: 600; margin: .3rem 0; }
 .leaflet-popup-content { color: #111; font-size: .85rem; }
 table.heat { border-collapse: separate; border-spacing: 2px; font-size: .68rem; }

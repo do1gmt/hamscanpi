@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.3 – 2026-10-24
+
+- Live seek (PMSDR) in a full band (contest): the noise floor is now taken from the speech pauses and
+  the quietest spots of the window. Before, the floor sat on the stations themselves, nothing reached
+  the threshold, and the seek ran through the whole band and wrapped to the band start (3.500 MHz).
+- Seek starts right behind the current station, computed in voice position (LSB below, USB above the
+  carrier) – the next station close by is no longer skipped.
+- While the window moves, the tuned frequency no longer jumps around.
+- Station map larger (70 % of the window height) and resizable at its lower edge; the height is remembered.
+
 ## 1.7.2 – 2026-10-24
 
 - Live: tuning is heard almost immediately. The audio could lag several seconds behind (the server

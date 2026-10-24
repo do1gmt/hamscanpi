@@ -707,14 +707,22 @@ class LiveSession:
             return sk["state"] == "search"
         S = np.fft.fftshift(np.fft.fft(z[: n * nfft].reshape(n, nfft) * np.hanning(nfft), axis=1), axes=1)
         P = (np.abs(S) ** 2).mean(axis=0)
-        sk["acc"] = P if sk["acc"] is None else sk["acc"] + P
+        sk.setdefault("blocks", []).append(P)
         sk["n"] += 1
         if sk["n"] < 5:                          # 0,5 s sammeln
             return sk["state"] == "search"
-        P = sk["acc"] / sk["n"]
-        sk["acc"], sk["n"] = None, 0
+        B = np.array(sk["blocks"])
+        P = B.mean(axis=0)
+        Pmin = B.min(axis=0)                     # in den Sprechpausen sieht man das Rauschen
+        sk["blocks"], sk["n"] = [], 0
         f = np.fft.fftshift(np.fft.fftfreq(nfft, 1.0 / rate))
-        floor = float(np.percentile(P, 25)) or 1e-20
+        # Rauschboden aus den ruhigsten Stellen: im vollen Band (Contest) ist schon das untere Viertel
+        # belegt – mit dem 25-%-Wert lag die Schwelle so hoch, dass er keine Station fand und das ganze
+        # Band durchlief. Fensterränder (Filterflanke) auslassen.
+        inner = np.abs(f) < rate / 2 - 4000
+        # Pmin über 5 Blöcke liegt bei reinem Rauschen ~7 dB unter dem Mittel (Minimum von 5 Exponential-
+        # werten = Mittel/5) – daher ×5 zurückrechnen
+        floor = float(min(np.percentile(P[inner], 8), 5.0 * np.percentile(Pmin[inner], 30))) or 1e-20
         ssb = self.mode in ("usb", "lsb")
         bw = 2400.0 if ssb else (6000.0 if self.mode == "am" else 10000.0)
         center = self._pm_center
@@ -741,7 +749,9 @@ class LiveSession:
         # Suche: Kandidaten in Suchrichtung ab 2,5 kHz hinter der Startfrequenz
         d = seek["dir"]
         lim = rate / 2 - 4000
-        start = sk["from"] - center + d * 2500
+        # Suche beginnt knapp hinter der jetzigen Station: bei SSB in Sprachlage gerechnet (LSB-Sprache liegt
+        # unter dem Träger, USB darüber), sonst wäre die nächste Station dicht daneben übersprungen worden
+        start = mid_of(sk["from"] - center) + d * (1200 + 500 if not ssb else 500 + bw / 2)
         offs = np.arange(start, d * lim, d * 250.0)
         best = None
         for o in offs:
@@ -792,8 +802,9 @@ class LiveSession:
         dev.tune(new_center)
         self._pm_center = new_center
         sk["from"] = new_center - d * lim
-        self.freq_hz = int(sk["from"])
         sk["skip"] = 3
+        if not self._pm_in_window(self.freq_hz):    # alte Frequenz liegt nicht mehr im Fenster: stumm suchen
+            self.freq_hz = int(new_center - d * lim)
         arrow = "▲" if d > 0 else "▼"
         self.status_text = f"Suchlauf {arrow} {new_center/1e6:.3f} MHz …"
         return True
