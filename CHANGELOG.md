@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.0 – 2026-10-24
+
+- **Live on shortwave (PMSDR) much faster:** tuning within the 48-kHz window only changes the offset
+  in software – instant, without reopening the sound card (before: several seconds per click).
+- **Seek with the PMSDR:** searches the next occupied channel in the window (SSB voice 2.4 kHz, AM, FM),
+  puts the carrier from the edge of the voice (LSB/USB), holds while there is speech, moves the window
+  at its edge and wraps at the band edge.
+- **Waterfall orientation:** yellow line with frequency on the tuned frequency, shaded field = what you
+  hear (USB right of the line, LSB left, AM/FM both sides); frequency under the mouse pointer; tap on a
+  signal to tune so that it lies in the field (SSB: tap the middle of the voice); mouse wheel for fine
+  tuning (SSB 50 Hz, with Shift 1 kHz).
+- SSB: ◀/▶ switch to 1-kHz steps, hint "voice below 10 MHz mostly LSB, above USB".
+
 ## 1.6.4 – 2026-10-24
 
 - Shortwave voice watch: candidates without speech pauses are rejected (level varies by less than

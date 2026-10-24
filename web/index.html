@@ -238,10 +238,14 @@
     <div class="smeter"><div class="smeter-bar" id="liveLevel"></div></div>
     <div class="rds-box" id="liveRds" hidden></div>
     <div class="wf-wrap" id="wfWrap" hidden>
-      <canvas id="wf" width="512" height="160" title="Wasserfall – antippen zum Abstimmen"></canvas>
+      <div class="wf-box">
+        <canvas id="wf" width="512" height="160" title="Wasserfall – auf ein Signal tippen zum Abstimmen, Mausrad zum Feinstimmen"></canvas>
+        <div class="wf-pass" id="wfPass"></div><div class="wf-mark" id="wfMark"></div><div class="wf-hover" id="wfHover" hidden></div>
+      </div>
       <div class="wf-scale"><span id="wfLo"></span><span id="wfMid"></span><span id="wfHi"></span></div>
     </div>
     <div class="hint" id="liveText">aus</div>
+    <div class="hint" id="liveSsbHint" hidden>SSB: Sprache unter 10 MHz meist <b>LSB</b>, darüber <b>USB</b> – FT8 und andere Digitalbetriebsarten immer USB. Klingt es wie „Gequake“, ist meist das Seitenband falsch.</div>
     <label class="check"><input type="checkbox" id="liveFallback"> einfacher Player (falls kein Ton kommt)</label>
     <audio id="liveAudio" controls hidden></audio>
   </section>

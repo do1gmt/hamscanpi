@@ -48,6 +48,7 @@ class LiveSession:
         self.status_text = "bereit"
         self.thread = None
         self.pmsdr = None
+        self._pm_center = None                 # Mitte des aktuellen PMSDR-Fensters (für schnelles Abstimmen)
         self.restart_wanted = threading.Event()
 
     # ---------------- Abonnenten (HTTP-Streams)
@@ -118,7 +119,26 @@ class LiveSession:
             self.pmsdr.close()
         LIVE_LOCK.unlink(missing_ok=True)
 
+    def _pm_in_window(self, f):
+        """Liegt f im laufenden PMSDR-Fenster (abseits Rand und Gleichanteil)? Dann ohne Neustart abstimmen."""
+        c = self._pm_center
+        if c is None or not self.pmsdr:
+            return False
+        off = f - c
+        return 1500 <= abs(off) <= self.pmsdr.rate / 2 - 4000
+
     def tune(self, freq_hz=None, mode=None, squelch_db=None, gain=None):
+        # PMSDR: innerhalb des 48-kHz-Fensters nur die Ablage im Rechner ändern – sofort, ohne die
+        # Soundkarte neu zu öffnen (vorher dauerte jeder Klick mehrere Sekunden)
+        if (self.device != "rtlsdr" and self.running and gain is None and not self.scan
+                and (freq_hz is None or self._pm_in_window(int(freq_hz)))):
+            if freq_hz is not None:
+                self.freq_hz = int(freq_hz)
+            if mode is not None:
+                self.mode = mode
+            if squelch_db is not None:
+                self.squelch_db = float(squelch_db)
+            return
         if gain is not None:
             self.gain = gain
         if freq_hz is not None:
@@ -589,17 +609,20 @@ class LiveSession:
             self.pmsdr = PmsdrDevice(self.cfg)
         dev = self.pmsdr
         rate = dev.rate
-        self.active_hz = self.freq_hz
+        seek = self.scan if (self.scan and self.scan.get("kind") == "seek") else None
         center = self.freq_hz + 10000          # DC-Spike meiden
+        if seek:                               # Suchlauf: Fenster so legen, dass es in Suchrichtung weitergeht
+            center = self.freq_hz + seek["dir"] * int(rate / 2 - 6000)
         dev.tune(center)
-        self.status_text = f"Empfang {self.freq_hz/1e6:.4f} MHz ({self.mode})"
+        self._pm_center = center
         ppm = float(self.cfg.get("frequency_correction_ppm", 0.0))
-        offset = self.freq_hz - center * (1 + ppm * 1e-6)
         conj = bool(self.cfg.get("iq_conjugate", False))
         self._pmsdr_init_dsp(rate)
         cmd = ["arecord", "-q", "-D", f"plughw:{dev.card},{dev.dev}", "-f", "S16_LE", "-r", str(rate), "-c", "2", "-t", "raw"]
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         chunk_frames = rate // 10
+        shown = None
+        sk = {"state": "search", "acc": None, "n": 0, "quiet": 0.0, "skip": 3, "from": self.freq_hz} if seek else None
         while self.running and not self.restart_wanted.is_set():
             raw = self.proc.stdout.read(chunk_frames * 4)
             if not raw:
@@ -611,6 +634,13 @@ class LiveSession:
             s = s[: len(s) // 2 * 2].reshape(-1, 2).astype(np.float64) / 32768.0
             i, q = s[:, 0], s[:, 1]
             z = (i - 1j * q) if conj else (i + 1j * q)
+            center = self._pm_center
+            offset = self.freq_hz - center * (1 + ppm * 1e-6)          # bei jedem Block neu: schnelles Abstimmen
+            if self.active_hz != self.freq_hz or shown != (self.freq_hz, self.mode):
+                self.active_hz = self.freq_hz
+                shown = (self.freq_hz, self.mode)
+                if not sk:                       # beim Suchlauf meldet der Suchlauf selbst
+                    self.status_text = f"Empfang {self.freq_hz/1e6:.4f} MHz ({self.mode})"
             pcm = self._pmsdr_process(z, offset)
             try:                                         # Wasserfall: ganzes 48-kHz-Fenster der PMSDR
                 self._wf_tuned = center
@@ -618,8 +648,115 @@ class LiveSession:
             except Exception:
                 pass
             self._level(pcm)
+            if sk:
+                if self._pm_seek_step(sk, z, rate, seek, dev, ppm):
+                    pcm = b"\x00\x00" * (len(pcm) // 2)         # beim Weitersuchen stumm
             self._publish(pcm)
         self._kill()
+
+    # Suchlauf mit der PMSDR: im 48-kHz-Fenster nach dem nächsten belegten Kanal in Suchrichtung suchen,
+    # dort stehen bleiben, solange gesprochen wird, sonst weiter; am Fensterrand das Fenster versetzen
+    # (nur die Frequenz der PMSDR, die Soundkarte läuft weiter).
+    def _pm_seek_step(self, sk, z, rate, seek, dev, ppm):
+        if sk["skip"] > 0:                       # nach dem Versetzen kurz einschwingen lassen
+            sk["skip"] -= 1
+            return sk["state"] == "search"
+        nfft = 4096
+        n = len(z) // nfft
+        if n < 1:
+            return sk["state"] == "search"
+        S = np.fft.fftshift(np.fft.fft(z[: n * nfft].reshape(n, nfft) * np.hanning(nfft), axis=1), axes=1)
+        P = (np.abs(S) ** 2).mean(axis=0)
+        sk["acc"] = P if sk["acc"] is None else sk["acc"] + P
+        sk["n"] += 1
+        if sk["n"] < 5:                          # 0,5 s sammeln
+            return sk["state"] == "search"
+        P = sk["acc"] / sk["n"]
+        sk["acc"], sk["n"] = None, 0
+        f = np.fft.fftshift(np.fft.fftfreq(nfft, 1.0 / rate))
+        floor = float(np.percentile(P, 25)) or 1e-20
+        ssb = self.mode in ("usb", "lsb")
+        bw = 2400.0 if ssb else (6000.0 if self.mode == "am" else 10000.0)
+        center = self._pm_center
+        thr = float(seek.get("threshold_db", 10.0))
+        if ssb:
+            thr = min(thr, 8.0)
+
+        def box_db(mid_off):
+            m = np.abs(f - mid_off) <= bw / 2
+            m &= np.abs(f) > 1500                # Gleichanteil der PMSDR auslassen
+            return 10 * np.log10(P[m].mean() / floor) if m.any() else -99.0
+
+        side = 1.0 if self.mode == "usb" else -1.0
+        mid_of = (lambda carrier_off: carrier_off + side * 1500.0) if ssb else (lambda c: c)
+        if sk["state"] == "hold":
+            lvl = box_db(mid_of(self.freq_hz - center))
+            if lvl >= thr - 2:
+                sk["quiet"] = 0.0
+            else:
+                sk["quiet"] += 0.5
+                if sk["quiet"] >= float(seek.get("hold_s", 3.0)):
+                    sk["state"], sk["from"] = "search", self.freq_hz
+            return False
+        # Suche: Kandidaten in Suchrichtung ab 2,5 kHz hinter der Startfrequenz
+        d = seek["dir"]
+        lim = rate / 2 - 4000
+        start = sk["from"] - center + d * 2500
+        offs = np.arange(start, d * lim, d * 250.0)
+        best = None
+        for o in offs:
+            if abs(o) > lim:
+                break
+            if abs(o) < 1500 + bw / 2:
+                continue
+            lvl = box_db(o)
+            if lvl >= thr:
+                # bergauf zur stärksten Stelle (höchstens 4 kHz weiter)
+                cur, cur_l = o, lvl
+                for _ in range(16):
+                    nl = box_db(cur + d * 250)
+                    if nl < cur_l:
+                        break
+                    cur, cur_l = cur + d * 250, nl
+                best = (cur_l, cur)
+                break
+        if best:
+            lvl, mid = best
+            carrier = mid - side * 1500.0 if ssb else mid
+            if ssb:
+                # Träger aus der Kante der Sprache: LSB endet ~300 Hz unter dem Träger, USB beginnt ~300 Hz darüber
+                k = max(1, int(200 / (rate / nfft)))
+                sm = np.convolve(P, np.ones(k) / k, mode="same")
+                occ = (10 * np.log10(sm / floor + 1e-20) >= 6.0) & (np.abs(f - mid) <= 3000) & (np.abs(f) > 1500)
+                idx = np.flatnonzero(occ)
+                if len(idx):
+                    j = int(np.argmin(np.abs(f[idx] - mid)))
+                    lo_i = hi_i = idx[j]
+                    while lo_i - 1 in set(idx):
+                        lo_i -= 1
+                    while hi_i + 1 in set(idx):
+                        hi_i += 1
+                    edge = (f[hi_i] + 300.0) if side < 0 else (f[lo_i] - 300.0)
+                    if abs(edge - carrier) <= 3000:
+                        carrier = edge
+            self.freq_hz = int(round((center + carrier) / 10.0) * 10)
+            sk["state"], sk["quiet"] = "hold", 0.0
+            arrow = "▲" if d > 0 else "▼"
+            self.status_text = f"Suchlauf {arrow}: Signal auf {self.freq_hz/1e6:.4f} MHz (SNR {lvl:.0f} dB)"
+            return False
+        # nichts im Fenster: Fenster in Suchrichtung versetzen (innerhalb des Kurzwellenbands)
+        lo, hi = seek.get("band_lo"), seek.get("band_hi")
+        new_center = int(center + d * (rate - 12000))
+        if lo and hi and not (lo <= new_center - d * lim <= hi):
+            new_center = int((lo + lim) if d > 0 else (hi - lim))          # am Bandende von vorn
+        dev.tune(new_center)
+        self._pm_center = new_center
+        sk["from"] = new_center - d * lim
+        self.freq_hz = int(sk["from"])
+        sk["skip"] = 3
+        arrow = "▲" if d > 0 else "▼"
+        self.status_text = f"Suchlauf {arrow} {new_center/1e6:.3f} MHz …"
+        return True
 
 
 def live_active():

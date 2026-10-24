@@ -1450,14 +1450,17 @@ def live_start(data):
             check_not_restricted(freq)
         scan = None
         if data.get("seek") in ("up", "down"):
-            if device != "rtlsdr":
-                raise ValueError("Suchlauf geht nur mit dem RTL-SDR")
             thr = float(data.get("squelch_db", 0) or 0)
             scan = {"kind": "seek", "name": "Suchlauf " + ("▲" if data["seek"] == "up" else "▼"),
                     "dir": 1 if data["seek"] == "up" else -1,
                     "step": int(float(data.get("step_hz", 12500))),
                     "threshold_db": thr if thr > 0 else 10.0, "hold_s": float(data.get("hold_s", 3)),
                     "blocked": restricted_ranges()}
+            if device != "rtlsdr":           # PMSDR: im Band der Startfrequenz bleiben
+                for b in bandplan():
+                    if b.get("device") == "pmsdr" and b["start_hz"] <= freq <= b["stop_hz"]:
+                        scan["band_lo"], scan["band_hi"] = b["start_hz"], b["stop_hz"]
+                        break
         elif data.get("preset"):
             for p in live_presets():
                 if p["id"] == data["preset"]:

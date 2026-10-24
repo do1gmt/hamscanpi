@@ -726,21 +726,58 @@
         const img = ctx.createImageData(c.width, 1), n = w.row.length;
         for (let x = 0; x < c.width; x++) { const v = w.row[Math.floor(x * n / c.width)], p = wfPal[v]; img.data.set([p[0], p[1], p[2], 255], x * 4); }
         ctx.putImageData(img, 0, 0);
-        const off = w.active_hz && w.span_hz ? (w.active_hz - (w.center_hz - w.span_hz / 2)) / w.span_hz : -1;
-        if (off >= 0 && off <= 1) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(Math.round(off * c.width), 0, 1, 6); }
+        wfMarker(Date.now() - liveTouched < 1500 ? lf() : (w.active_hz || lf()));
         const k = v => (v / 1e6).toFixed(w.span_hz < 100000 ? 4 : 3);
         $('wfLo').textContent = k(w.center_hz - w.span_hz / 2); $('wfMid').textContent = k(w.center_hz); $('wfHi').textContent = k(w.center_hz + w.span_hz / 2);
       }
     } catch (e) { } finally { wfBusy = false; }
   }
   setInterval(pollWaterfall, 150);
-  $('wf').addEventListener('click', e => {                 // antippen: auf diese Frequenz abstimmen
+  // Durchlassbereich je Demodulator relativ zur Abstimmfrequenz (Hz): wo das Signal liegen muss
+  function passband() {
+    const m = $('liveMode').value;
+    return m === 'usb' ? [200, 2800] : m === 'lsb' ? [-2800, -200] : m === 'am' ? [-4500, 4500] : m === 'wfm' ? [-100000, 100000] : [-6250, 6250];
+  }
+  // Orientierung im Wasserfall: Strich auf der Abstimmfrequenz, Feld = was man gerade hört
+  function wfMarker(f) {
     if (!wfInfo || !wfInfo.span_hz) return;
-    const r = $('wf').getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
-    const step = ['usb', 'lsb'].includes($('liveMode').value) ? 100 : 12500;
-    const f = Math.round((wfInfo.center_hz - wfInfo.span_hz / 2 + x * wfInfo.span_hz) / step) * step;
-    $('liveFreq').value = (f / 1e6).toFixed(4); liveRetune();
+    const lo = wfInfo.center_hz - wfInfo.span_hz / 2, pos = v => (v - lo) / wfInfo.span_hz * 100;
+    const [a, b] = passband(), x = pos(f);
+    const show = x >= 0 && x <= 100;
+    $('wfMark').hidden = $('wfPass').hidden = !show;
+    if (!show) return;
+    $('wfMark').style.left = x + '%';
+    $('wfMark').dataset.f = (f / 1e6).toFixed(4);
+    const pa = Math.max(0, pos(f + a)), pb = Math.min(100, pos(f + b));
+    $('wfPass').style.left = pa + '%'; $('wfPass').style.width = Math.max(0.4, pb - pa) + '%';
+  }
+  function wfFreqAt(e) {
+    const r = $('wf').getBoundingClientRect(), x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    return { f: wfInfo.center_hz - wfInfo.span_hz / 2 + x * wfInfo.span_hz, x };
+  }
+  $('wf').addEventListener('click', e => {                 // auf ein Signal tippen: so abstimmen, dass es im Feld liegt
+    if (!wfInfo || !wfInfo.span_hz) return;
+    const m = $('liveMode').value, ssb = ['usb', 'lsb'].includes(m);
+    let { f } = wfFreqAt(e);
+    if (ssb) f += m === 'lsb' ? 1400 : -1400;              // Sprache liegt neben dem Träger: Mitte der Sprache antippen
+    const step = ssb ? 50 : m === 'wfm' ? 100000 : 12500;
+    f = Math.round(f / step) * step;
+    $('liveFreq').value = (f / 1e6).toFixed(ssb ? 5 : 4); wfMarker(f); liveRetune();
   });
+  $('wf').addEventListener('mousemove', e => {
+    if (!wfInfo || !wfInfo.span_hz) return;
+    const { f, x } = wfFreqAt(e), h = $('wfHover');
+    h.hidden = false; h.textContent = (f / 1e6).toFixed(4); h.style.left = (x * 100) + '%';
+  });
+  $('wf').addEventListener('mouseleave', () => { $('wfHover').hidden = true; });
+  $('wf').addEventListener('wheel', e => {                 // Mausrad: feinstimmen
+    if (!live.active) return;
+    e.preventDefault();
+    const m = $('liveMode').value, ssb = ['usb', 'lsb'].includes(m);
+    const st = ssb ? (e.shiftKey ? 1000 : 50) : m === 'wfm' ? 100000 : Number($('liveStep').value) || 12500;
+    const f = Math.round((lf() + (e.deltaY < 0 ? st : -st)) / st) * st;
+    $('liveFreq').value = (f / 1e6).toFixed(ssb ? 5 : 4); wfMarker(f); liveRetune();
+  }, { passive: false });
   const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 250); };
   // „Zuletzt gehört“ erst nach 5 s auf derselben Frequenz (kein Eintrag für jeden Zwischenschritt)
   let rememberTimer = null;
@@ -752,7 +789,14 @@
     $('liveFreq').value = (f / 1e6).toFixed(v % 1000 ? 5 : 4); liveRetune();
   }));
   $('liveFreq').addEventListener('change', liveRetune);
-  $('liveMode').addEventListener('change', liveRetune);
+  function ssbUi() {
+    const ssb = ['usb', 'lsb'].includes($('liveMode').value);
+    $('liveSsbHint').hidden = !ssb;
+    if (ssb && Number($('liveStep').value) >= 5000) $('liveStep').value = '1000';      // SSB: 1-kHz-Schritte
+    if (wfInfo) wfMarker(lf());
+  }
+  $('liveMode').addEventListener('change', () => { ssbUi(); liveRetune(); });
+  ssbUi();
   $('liveSquelch').addEventListener('change', liveRetune);
   $('liveGain').addEventListener('change', () => { try { localStorage.setItem('liveGain', $('liveGain').value); } catch (e) { } liveRetune(); });
   try { const g = localStorage.getItem('liveGain'); if (g !== null && [...$('liveGain').options].some(o => o.value === g)) $('liveGain').value = g; } catch (e) { }

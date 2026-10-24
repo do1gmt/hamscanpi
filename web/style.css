@@ -441,3 +441,10 @@ table.heat td.h0 { background: var(--panel-2); }
 .lightbox-open { font-size: .85rem; }
 .lightbox-close { background: none; border: 0; color: inherit; font-size: 1.1rem; cursor: pointer; padding: .1rem .3rem; }
 .lightbox-box img { display: block; max-width: 100%; max-height: calc(92vh - 2.6rem); object-fit: contain; background: #0c121c; }
+
+.wf-box { position: relative; }
+.wf-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ffd34d; box-shadow: 0 0 4px rgba(0,0,0,.8); pointer-events: none; }
+.wf-mark::before { content: attr(data-f); position: absolute; top: 2px; left: 4px; font: 600 .68rem var(--mono, monospace); color: #ffd34d; background: rgba(7,16,24,.75); padding: 0 .25rem; border-radius: 3px; white-space: nowrap; }
+.wf-pass { position: absolute; top: 0; bottom: 0; background: rgba(255,211,77,.16); border-left: 1px dashed rgba(255,211,77,.6); border-right: 1px dashed rgba(255,211,77,.6); pointer-events: none; }
+.wf-mark[hidden], .wf-pass[hidden] { display: none; }
+.wf-hover { position: absolute; bottom: 2px; transform: translateX(-50%); font: .66rem var(--mono, monospace); color: #fff; background: rgba(7,16,24,.8); padding: 0 .25rem; border-radius: 3px; pointer-events: none; }
