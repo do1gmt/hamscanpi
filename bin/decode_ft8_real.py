@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import sys
 import re
 import sqlite3
 import subprocess
@@ -436,8 +437,11 @@ def mark_real_ft8(
     )
 
 
-def main():
+def main(dry=False):
+    """dry=True: nur zählen, wie viele Aufnahmen auf FT8 zu prüfen wären (für die Statusanzeige)."""
 
+    if dry and not DECODER.exists():
+        return 0
     if not DECODER.exists():
         raise SystemExit(
             f"FT8-Decoder fehlt: "
@@ -523,6 +527,11 @@ def main():
             candidate = {}
         # Ein Dekodierversuch pro Aufnahme reicht.
         if data.get("ft8_tested") is True:
+            continue
+        if dry:
+            if not (candidate.get("type") == "FT8" and candidate.get("validated") is True) \
+                    and plan_dials.get((band, protocol), DIALS.get(band)) is not None:
+                tested += 1
             continue
         data["ft8_tested"] = True
         save_json(json_path, data)
@@ -688,6 +697,9 @@ def main():
                     pass
 
 
+    if dry:
+        return tested
+
     print()
     print(
         f"FT8-Kandidaten geprüft : {tested}"
@@ -707,4 +719,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--pending" in sys.argv:
+        print(main(dry=True) or 0)
+    else:
+        main()

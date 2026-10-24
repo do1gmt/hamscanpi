@@ -239,10 +239,22 @@ echo "Signale dekodieren ..."
 write_status "running" "decode" 90 "Bekannte Signale werden dekodiert"
 "$BASE/bin/decode_recordings.py" || python3 "$LOGT" WARN cycle step_failed step=decode_recordings
 
-echo
-echo "FT8-Nachrichten dekodieren ..."
-write_status "running" "ft8decode" 93 "FT8-Nachrichten werden dekodiert"
-"$BASE/bin/decode_ft8_real.py" || python3 "$LOGT" WARN cycle step_failed step=decode_ft8
+RDS_PENDING="$(python3 "$BASE/bin/decode_rds.py" --pending 2>/dev/null | tail -1)"
+if [ "${RDS_PENDING:-0}" -gt 0 ] 2>/dev/null; then
+    echo
+    echo "RDS der UKW-Sender ($RDS_PENDING Aufnahmen) ..."
+    write_status "running" "rds" 92 "RDS der UKW-Sender wird dekodiert"
+    "$BASE/bin/decode_rds.py" || python3 "$LOGT" WARN cycle step_failed step=decode_rds
+fi
+
+# FT8 nur, wenn es etwas zu prüfen gibt (Aufnahmen aus FT8/FT4-Segmenten oder mit FT8-Verdacht)
+FT8_PENDING="$(python3 "$BASE/bin/decode_ft8_real.py" --pending 2>/dev/null | tail -1)"
+if [ "${FT8_PENDING:-0}" -gt 0 ] 2>/dev/null; then
+    echo
+    echo "FT8-Nachrichten dekodieren ($FT8_PENDING Aufnahmen) ..."
+    write_status "running" "ft8decode" 93 "FT8-Nachrichten werden dekodiert"
+    "$BASE/bin/decode_ft8_real.py" || python3 "$LOGT" WARN cycle step_failed step=decode_ft8
+fi
 
 echo
 echo "Abschluss ..."

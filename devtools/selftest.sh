@@ -123,5 +123,16 @@ while i < len(m):
     sid, sl = struct.unpack("!HH", m[i:i + 4]); assert sl % 4 == 0; ids.append(sid); i += sl
 assert ids == [3, 2, 0x9992, 0x9993] and i == len(m), ids
 PY
+echo "== 9 RDS (UKW): Sendername, Radiotext, RT+, Uhrzeit aus einem verrauschten FM-Signal"
+python3 - <<'PY' && ok "RDS" || bad "RDS"
+import sys; sys.path.insert(0, "bin"); sys.path.insert(0, "devtools")
+import rds as R, rds_gen as G
+i = R.decode_mpx(G.mpx(freq_err_hz=5, clock_ppm=80, noise=0.03), 240000)
+assert i["ps"] == "TEST FM " and i["pi"] == "D3C2" and i["pty_name"] == "Pop", i
+assert i["rt"].startswith("Hallo Welt") and "äöü ß" in i["rt"], i["rt"]
+assert i["rtplus"].get("artist") == "Welt" and i["ct"]["local"] == "24.10.2026 11:30" and i["af"] == [90.1, 95.0], i
+I, Q = G.iq(snr_db=15); j = R.decode_iq(I, Q, 240000); assert j and j["ps"] == "TEST FM ", j
+print("   " + R.summary(i))
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

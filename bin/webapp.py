@@ -512,7 +512,8 @@ def decode_summary(recording_path):
                 plausible = False
         out.append({"type": d.get("type"), "confidence": conf, "text": text,
                     "detail": d.get("detail", ""), "plausible": plausible,
-                    "messages": d.get("messages", [])})
+                    "messages": d.get("messages", []),
+                    "ps": ((d.get("rds") or {}).get("ps") or "").strip() if d.get("type") == "RDS" else None})
     return out
 
 
@@ -886,6 +887,15 @@ def activity(days=30):
             "week": {str(d): {str(h): v for h, v in hs.items()} for d, hs in week.items()}}
 
 
+def fm_stations(days=0):
+    db = db_connect()
+    ST.ensure_tables(db)
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+    rows = [dict(r) for r in db.execute("SELECT * FROM fm_station WHERE last >= ? ORDER BY freq_khz", (since,))]
+    db.close()
+    return {"stations": rows}
+
+
 def stations_adif(days=30, q="", band=""):
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
     db = db_connect()
@@ -903,6 +913,8 @@ def stations_adif(days=30, q="", band=""):
 
 def watch_and_stations_cycle():
     """Neue Treffer: Rufzeichen eintragen, Beobachtungsliste prüfen, melden."""
+    if scan_running():                     # erst nach dem Scan: APRS/RDS/FT8 werden am Ende dekodiert
+        return
     db = db_connect()
     try:
         st = load_settings()
@@ -1497,6 +1509,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/stations":
                 return self.send_json(stations(int(qs.get("days", 30) or 0), qs.get("q", ""), qs.get("band", ""),
                                                max(1, min(int(qs.get("limit", 100)), 1000)), max(0, int(qs.get("offset", 0)))))
+            if path == "/api/fmstations":
+                return self.send_json(fm_stations(int(qs.get("days", 0) or 0)))
             if path == "/api/activity":
                 return self.send_json(activity(max(1, min(int(qs.get("days", 30) or 30), 365))))
             if path == "/api/stations.adi":

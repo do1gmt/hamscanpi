@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0 – 2026-10-24
+
+- **RDS for FM broadcast** (own decoder, no extra program): station name (PS), PI, programme type
+  (PTY/PTYN), traffic (TP/TA), music/speech, radio text, RT+ (artist/title), station clock (CT),
+  alternative frequencies (AF), ECC and data services (RT+, TMC, …).
+- Live listening ("FM wide"): RDS box below the S-meter after 1–3 s; "Recently heard" shows the
+  station name.
+- Scans of the band "Broadcast": RDS of every station on the hit card (📻 badge with the name) and a
+  new list *FM stations (RDS)* in the *Stations* tab.
+- Fix: "Recently heard" restarted entries with the wrong demodulator; the demodulator selection
+  follows the running reception.
+- Stations and watchlist are analysed after the scan has finished (APRS/RDS/FT8 are decoded at the end).
+- The status no longer shows "Decoding FT8" (or RDS) when the scan has nothing to decode for it.
+
 ## 1.2.2 – 2026-10-24
 
 - Screenshots in the README.

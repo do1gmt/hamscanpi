@@ -413,3 +413,15 @@ table.heat td.h0 { background: var(--panel-2); }
   .loglist li > span:first-child, .loglist li > span.lv { white-space: nowrap; }
 }
 .loglist .lmain { overflow-wrap: break-word; word-break: normal; }
+
+.rds-box { margin: .5rem 0; padding: .6rem .8rem; border: 1px solid rgba(45,212,191,.35); border-radius: 8px; background: rgba(45,212,191,.05); }
+.rds-ps { font-family: var(--mono, monospace); font-size: 1.5rem; font-weight: 700; letter-spacing: .12em; color: var(--teal); white-space: pre; margin-bottom: .3rem; }
+.rds-box .kv { display: flex; gap: .6rem; font-size: .85rem; padding: .1rem 0; }
+.rds-box .kv .k { color: var(--muted); min-width: 9.5em; flex: none; }
+.rds-box .kv .v { overflow-wrap: anywhere; }
+
+.fm-table td { white-space: nowrap; } .fm-table td.wrap { white-space: normal; min-width: 14em; }
+.rds-name { font-family: var(--mono, monospace); letter-spacing: .06em; white-space: pre; }
+@media (max-width: 599px) { .fm-table th:nth-child(3), .fm-table td:nth-child(3), .fm-table th:nth-child(4), .fm-table td:nth-child(4),
+  .fm-table th:nth-child(7), .fm-table td:nth-child(7) { display: none; } .fm-table { font-size: .8rem; } }
+.badge-rds { background: rgba(45,212,191,.12); color: var(--teal); border: 1px solid rgba(45,212,191,.4); font-family: var(--mono, monospace); text-transform: none; }

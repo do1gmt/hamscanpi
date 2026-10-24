@@ -181,6 +181,13 @@
     <p class="hint">ADIF ist das Austauschformat der Logbuchprogramme. Der Export ist ein SWL-Log (jede gehörte Aussendung ein Eintrag, SWL=Y) – mit deinem Rufzeichen und Locator aus den Einstellungen.</p>
   </section>
   <section class="panel">
+    <h2>UKW-Sender (RDS)</h2>
+    <p class="hint">Aus den Scans des Bands „Rundfunk“: je Frequenz der Sender mit Kennung (PI), Namen, Programmart und dem zuletzt gesendeten Text. Neue Sender und Überreichweiten (Tropo, Sporadic-E) fallen hier auf.</p>
+    <div class="table-wrap"><table class="table fm-table">
+      <thead><tr><th>MHz</th><th>Sender</th><th>PI</th><th>Programmart</th><th>Jetzt / Radiotext</th><th>Zuletzt (UTC)</th><th title="Anzahl Empfänge">×</th></tr></thead>
+      <tbody id="fmTable"></tbody></table></div>
+  </section>
+  <section class="panel">
     <h2>Aktivität</h2>
     <p class="hint">Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in UTC.</p>
     <div class="row filter-row">
@@ -219,6 +226,7 @@
       <button class="btn" id="liveSeekUp" title="Suchlauf aufwärts ab der eingestellten Frequenz">Suchlauf ▶▶</button>
     </div>
     <div class="smeter"><div class="smeter-bar" id="liveLevel"></div></div>
+    <div class="rds-box" id="liveRds" hidden></div>
     <div class="wf-wrap" id="wfWrap" hidden>
       <canvas id="wf" width="512" height="160" title="Wasserfall – antippen zum Abstimmen"></canvas>
       <div class="wf-scale"><span id="wfLo"></span><span id="wfMid"></span><span id="wfHi"></span></div>

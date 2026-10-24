@@ -41,6 +41,7 @@ class LiveSession:
         self.level_db = -120.0
         self.active_hz = self.freq_hz
         self.wf = {"seq": 0, "row": [], "center_hz": 0, "span_hz": 0}     # letzte Wasserfall-Zeile
+        self.rds = None                                                   # RDS des UKW-Senders (Live)
         self._wf_tuned = 0
         self.status_text = "bereit"
         self.thread = None
@@ -150,6 +151,7 @@ class LiveSession:
             "active_hz": self.active_hz, "mode": self.mode, "squelch_db": self.squelch_db,
             "level_db": round(self.level_db, 1), "scan": self.scan["name"] if self.scan else None,
             "snr_db": getattr(self, "snr_db", None), "clip_pct": getattr(self, "clip_pct", None),
+            "rds": self.rds if (self.mode == "wfm" and self.rds and self.rds.get("freq_hz") == self.active_hz) else None,
             "gain": self._rtl_gain() if self.device == "rtlsdr" else None,
             "text": self.status_text, "listeners": len(self.subscribers), "rate": OUT_RATE,
         }
@@ -237,6 +239,11 @@ class LiveSession:
         cmd.append("-")
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         demod = DSP.RtlDemod(self.mode)
+        rds = None
+        if self.mode == "wfm":
+            import rds as RDS
+            rds = RDS.RdsDecoder(DSP.MID_RATE)
+            self.rds = None
         blk = 9600 * 2 * 2                    # 20 ms Rohdaten (Vielfaches von 120 Werten)
         per_pub = 5                           # alle 100 ms an den Browser
         buf, nblk = [], 0
@@ -264,6 +271,13 @@ class LiveSession:
                 time.sleep(0.02)
                 continue
             buf.append(demod.process(raw, self.squelch_db))
+            if rds is not None and getattr(demod, "mpx", None) is not None:
+                try:
+                    inf = rds.feed(demod.mpx)
+                    if inf["groups"]:
+                        self.rds = dict(inf, freq_hz=int(freq_hz))
+                except Exception:
+                    rds = None
             nblk += 1
             if nblk % per_pub:
                 continue

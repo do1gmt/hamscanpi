@@ -34,6 +34,8 @@ PMSDR receiver (IW3AUT) for shortwave.
   **APRS** and **POCSAG** (via multimon-ng), **SSTV** on shortwave (14.230, 21.340, 28.680 USB,
   3.730 and 7.165 LSB) – including images whose start was missed and stations that are off-frequency.
 - Live listening with waterfall (tap to tune), seek function, signal-to-noise display and overload warning.
+- FM broadcast with RDS: station name, radio text, artist/title (RT+), clock, alternative frequencies –
+  live and for every scanned station (list of FM stations).
 - Band schedules: other bands by time of day and weekday.
 - On repeaters and FM channels the scanner stays until the QSO ends and records it as a whole.
 

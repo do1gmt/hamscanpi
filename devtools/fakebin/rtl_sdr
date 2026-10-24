@@ -8,15 +8,32 @@ n = int(a[a.index('-n') + 1]) if '-n' in a else None
 fc = float(a[a.index('-f') + 1]) if '-f' in a else 0.0
 fs = float(a[a.index('-s') + 1]) if '-s' in a else 1024000.0
 sigs = []
+rds_sig = None
 for spec in filter(None, os.environ.get("FAKE_SIGNALS", "").split(",")):
     f, kind = (spec.split(":") + ["fm"])[:2]
     if abs(float(f) - fc) < fs / 2 * 0.95:
-        sigs.append(float(f) - fc)
+        if kind == "rds":                                 # UKW-Sender mit RDS (aus devtools/rds_gen.py)
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+            import rds_gen
+            cache = f"/tmp/hsp_rds_mpx_{int(fs)}.npy"            # einmal erzeugen, dann wiederverwenden
+            if os.path.exists(cache):
+                m = np.load(cache)
+            else:
+                m = rds_gen.mpx(rate=int(fs)).astype(np.float32)
+                np.save(cache, m)
+            ph = 2 * np.pi * (75000 * np.cumsum(m.astype(np.float64)) / fs + (float(f) - fc) * np.arange(len(m)) / fs)
+            rds_sig = (np.exp(1j * ph) * 30).astype(np.complex64)
+        else:
+            sigs.append(float(f) - fc)
 rng = np.random.default_rng(); blk = 96000; sent = 0; t0 = time.time(); k = 0; ph = [0.0] * len(sigs); t_s = 0.0; ph_a = [0.0]
 try:
     while n is None or sent < n:
         m = blk if n is None else min(blk, n - sent)
         z = (rng.standard_normal(m) + 1j * rng.standard_normal(m)) * 6
+        if rds_sig is not None:
+            p0 = sent % len(rds_sig)
+            idx = (p0 + np.arange(m)) % len(rds_sig)
+            z = z + rds_sig[idx]
         stop = float(os.environ.get('FAKE_STOP_S', '0') or 0)
         if sigs and not (n is None and stop and t_s >= stop):
             t = t_s + np.arange(m) / fs

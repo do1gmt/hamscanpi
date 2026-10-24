@@ -82,6 +82,7 @@ class RtlDemod:
             prev = np.concatenate(([self.last], z240[:-1]))
             self.last = z240[-1] if len(z240) else self.last
             d = np.angle(z240 * np.conj(prev))
+            self.mpx = d                                            # Multiplexsignal (für RDS auf 57 kHz)
             d, self.de_zi = lfilter(self.de_b, self.de_a, d, zi=self.de_zi)
             d = self.lp_audio(d)
             audio = d[::10] * 0.4                                   # ±75 kHz Hub ≈ ±2 rad

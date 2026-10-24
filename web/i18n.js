@@ -49,7 +49,7 @@
     'Jetzt scannen': 'Scan now', 'Scan abbrechen': 'Stop scan', 'Scan läuft …': 'Scan running …', 'aus': 'off', 'jede Stunde': 'every hour',
     'nicht angeschlossen': 'not connected', 'Gesamtes Band': 'Whole band', 'weitere': 'more', 'Scan angefordert': 'Scan requested',
     'Scan startet': 'Scan starting', 'Bänder werden abgesucht': 'Scanning bands', 'Aufnahmen werden ausgewertet': 'Analysing recordings',
-    'FM/VHF-Aufnahmen': 'FM/VHF recordings', 'Signale werden dekodiert': 'Decoding signals', 'FT8 wird dekodiert': 'Decoding FT8',
+    'FM/VHF-Aufnahmen': 'FM/VHF recordings', 'Signale werden dekodiert': 'Decoding signals', 'FT8 wird dekodiert': 'Decoding FT8', 'RDS der UKW-Sender wird dekodiert': 'Decoding RDS of FM stations',
     'Abschluss': 'Finishing', 'Scan läuft': 'Scan running', 'Scan abgeschlossen': 'Scan finished', 'Fehler beim Scan': 'Scan error',
     'Server nicht erreichbar': 'Server not reachable', 'läuft gerade': 'running now', 'fällig – startet gleich': 'due – starting soon',
     'Scan fertig': 'Scan finished', 'Scan wird vorbereitet': 'Preparing scan', 'Treffer werden ausgewertet': 'Analysing hits',
@@ -149,6 +149,19 @@
     'Gerade läuft ein Scan oder eine Satellitenaufnahme. Abbrechen und live hören?': 'A scan or satellite recording is running. Stop it and listen live?',
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
+    // RDS
+    'UKW-Sender (RDS)': 'FM stations (RDS)', 'Sender': 'Station', 'Jetzt / Radiotext': 'Now / radio text', 'Anzahl Empfänge': 'Times received',
+    'Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.': 'No FM stations yet – switch on the band "Broadcast" under Scan.',
+    'Aus den Scans des Bands „Rundfunk“: je Frequenz der Sender mit Kennung (PI), Namen, Programmart und dem zuletzt gesendeten Text. Neue Sender und Überreichweiten (Tropo, Sporadic-E) fallen hier auf.':
+      'From the scans of the band "Broadcast": per frequency the station with identification (PI), name, programme type and the last text sent. New stations and openings (tropo, sporadic-E) stand out here.',
+    'Programmart': 'Programme type', 'Jetzt': 'Now playing', 'Radiotext': 'Radio text', 'Verkehrsfunk': 'Traffic',
+    'Uhrzeit Sender': 'Station clock', 'Alternativfrequenzen': 'Alternative frequencies', 'Kennung': 'Identification',
+    'Datendienste': 'Data services', 'Empfang': 'Reception', 'TP · Durchsage läuft': 'TP · announcement on air', 'nein': 'no',
+    'Nachrichten': 'News', 'Aktuelles': 'Current affairs', 'Bildung': 'Education', 'Hörspiel': 'Drama', 'Kultur': 'Culture',
+    'Wissenschaft': 'Science', 'Unterhaltung': 'Varied', 'Leichte Musik': 'Easy listening', 'Leichte Klassik': 'Light classical',
+    'Ernste Klassik': 'Serious classical', 'Sonstige Musik': 'Other music', 'Wetter': 'Weather', 'Wirtschaft': 'Finance',
+    'Kinder': "Children's", 'Soziales': 'Social affairs', 'Anrufsendung': 'Phone-in', 'Reise': 'Travel', 'Freizeit': 'Leisure',
+    'Landesmusik': 'National music', 'Dokumentation': 'Documentary', 'Alarmtest': 'Alarm test', 'Musik': 'Music',
     // PSK Reporter
     'FT8/FT4-Spots an PSK Reporter melden': 'Report FT8/FT4 spots to PSK Reporter', 'Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf': 'Heard FT8/FT4 stations then appear every 5 minutes on',
     '– mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.': '– with your callsign as receiver. Needs callsign and locator.',

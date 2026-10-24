@@ -392,7 +392,7 @@
   }
 
   function badges(h) {
-    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}`;
+    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}`;
   }
   function buildCard(h) {
     const el = document.createElement('article'); el.className = 'hit'; el.dataset.id = h.id;
@@ -620,8 +620,10 @@
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
     if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
     if (on && st.scan && st.active_hz) $('liveText').textContent = st.text;
+    if (on && st.mode && Date.now() - liveTouched > 2000 && document.activeElement !== $('liveMode') && $('liveMode').value !== st.mode) $('liveMode').value = st.mode;
     const lvl = Math.max(0, Math.min(100, (Number(st.level_db ?? -120) + 60) * 2));
     $('liveLevel').style.width = (on ? lvl : 0) + '%';
+    renderRds(on ? st.rds : null);
   }
   function liveEnsureCtx() {
     // muss synchron im Klick passieren, sonst bleibt der Browser stumm
@@ -843,7 +845,7 @@
     (bandplan || []).forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
   }
   function showView(name) {
-    if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); }, 0);   // nach dem Start des Skripts
+    if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); }, 0);   // nach dem Start des Skripts
     document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== name);
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
     localStorage.setItem('view', name);
@@ -852,8 +854,44 @@
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
-  const liveHist = [];
-  function liveRemember(f, m) { const t = `${(f / 1e6).toFixed(4)} MHz · ${m.toUpperCase()}`; if (liveHist[0] !== t) liveHist.unshift(t); liveHist.splice(8); $('liveHistory').innerHTML = liveHist.map(x => `<li><button type="button" class="linklike" data-hist="${x}">${x}</button></li>`).join(''); $('liveHistory').querySelectorAll('[data-hist]').forEach(el => el.addEventListener('click', () => { const [f, , m] = el.dataset.hist.split(' '); $('liveFreq').value = f; $('liveMode').value = m.toLowerCase(); liveStart({ freq_hz: Math.round(parseFloat(f) * 1e6), mode: m.toLowerCase(), squelch_db: Number($('liveSquelch').value) }); })); }
+  const liveHist = [];                 // [{f, m, name}] – name: Sendername aus RDS
+  function liveRemember(f, m, name) {
+    f = Math.round(f / 100) * 100;
+    const old = liveHist.findIndex(x => x.f === f && x.m === m);
+    if (old >= 0) { name = name || liveHist[old].name; liveHist.splice(old, 1); }
+    liveHist.unshift({ f, m, name: name || '' }); liveHist.splice(8); renderLiveHist();
+  }
+  function renderLiveHist() {
+    $('liveHistory').innerHTML = liveHist.map((x, i) => `<li><button type="button" class="linklike" data-hi="${i}">${(x.f / 1e6).toFixed(4)} MHz · ${x.m.toUpperCase()}${x.name ? ' · <b>' + esc(x.name) + '</b>' : ''}</button></li>`).join('');
+    $('liveHistory').querySelectorAll('[data-hi]').forEach(el => el.addEventListener('click', () => {
+      const x = liveHist[Number(el.dataset.hi)]; $('liveFreq').value = (x.f / 1e6).toFixed(4); $('liveMode').value = x.m;
+      liveStart({ freq_hz: x.f, mode: x.m, squelch_db: Number($('liveSquelch').value) });
+    }));
+  }
+  // RDS-Anzeige (UKW, „FM breit“)
+  function renderRds(r) {
+    const box = $('liveRds');
+    if (!r || !r.groups) { box.hidden = true; return; }
+    box.hidden = false;
+    const rp = r.rtplus || {};
+    const rows = [
+      ['Programmart', r.pty ? r.pty_name + (r.ptyn ? ` (${r.ptyn})` : '') : null],
+      ['Jetzt', rp.artist || rp.title ? [rp.artist, rp.title].filter(Boolean).join(' – ') : null],
+      ['Radiotext', r.rt],
+      ['Verkehrsfunk', r.tp ? (r.ta ? 'TP · Durchsage läuft' : 'TP') : 'nein'],
+      ['Uhrzeit Sender', r.ct ? `${r.ct.local} (UTC${r.ct.local_offset_min >= 0 ? '+' : ''}${r.ct.local_offset_min / 60})` : null],
+      ['Alternativfrequenzen', r.af && r.af.length ? r.af.map(f => f.toFixed(1)).join(' · ') + ' MHz' : null],
+      ['Kennung', `PI ${r.pi}${r.ecc ? ' · ECC ' + r.ecc : ''}${r.ms ? ' · ' + r.ms : ''}`],
+      ['Datendienste', r.oda && r.oda.length ? r.oda.join(', ') : null],
+      ['Empfang', `${r.groups} Gruppen, ${r.blocks ? Math.round(100 * r.blocks_ok / r.blocks) : 0} % fehlerfrei`],
+    ].filter(x => x[1]);
+    box.innerHTML = `<div class="rds-ps">${esc((r.ps || '…').trim() || '…')}</div>` +
+      rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>`).join('');
+    if (r.ps && r.ps.trim() && live.active) {
+      const h = liveHist[0];
+      if (h && Math.abs(h.f - r.freq_hz) < 1000 && h.name !== r.ps.trim()) { h.name = r.ps.trim(); renderLiveHist(); }
+    }
+  }
 
   // ---------- Satelliten ----------
   let satData = null;
@@ -1060,6 +1098,15 @@
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
   $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+
+  // ---------- UKW-Senderliste (RDS) ----------
+  async function loadFm() {
+    let d; try { d = await api('/api/fmstations'); } catch (e) { return; }
+    $('fmTable').innerHTML = d.stations.map(r => `<tr>
+        <td class="mono-num">${(r.freq_khz / 1000).toFixed(1)}</td><td><b class="rds-name">${esc(r.ps || '–')}</b></td><td>${esc(r.pi || '')}${r.ecc ? ` <small class="muted">${esc(r.ecc)}</small>` : ''}</td>
+        <td>${esc(r.pty || '')}</td><td class="wrap">${esc(r.now_playing || r.rt || '')}</td><td>${fmtTime(r.last)}</td><td>${r.n}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="muted">Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.</td></tr>';
+  }
 
   // ---------- Aktivität ----------
   async function loadActivity() {

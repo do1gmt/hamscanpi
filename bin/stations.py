@@ -53,6 +53,9 @@ def ensure_tables(db):
         id INTEGER PRIMARY KEY, peak_id INTEGER, rule_id TEXT, label TEXT, time TEXT, detail TEXT,
         UNIQUE(peak_id, rule_id))""")
     db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+    db.execute("""CREATE TABLE IF NOT EXISTS fm_station (
+        freq_khz INTEGER, pi TEXT, ps TEXT, pty TEXT, rt TEXT, now_playing TEXT, ecc TEXT, af TEXT,
+        first TEXT, last TEXT, n INTEGER, best_snr REAL, peak_id INTEGER, PRIMARY KEY (freq_khz, pi))""")
     row = db.execute("SELECT v FROM meta WHERE k='heard_parser'").fetchone()
     if not row or int(row[0]) < PARSER_VERSION:
         # Erkennung verbessert: alle Treffer noch einmal auswerten, ohne die Beobachtungsliste auszulösen
@@ -105,7 +108,7 @@ def ft8_senders(messages):
     return out
 
 
-PARSER_VERSION = 2               # bei Änderungen an der Erkennung werden alte Treffer neu ausgewertet
+PARSER_VERSION = 3               # bei Änderungen an der Erkennung werden alte Treffer neu ausgewertet
 
 
 def aprs_senders(text):
@@ -192,6 +195,9 @@ def ingest(db, limit=2000):
                 db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info)
                               VALUES (?,?,?,?,?,?,?,?,?)""", (pid, t, call, band, f or rf, typ, grid, s, text[:200]))
                 calls.append({"call": call, "grid": grid, "mode": typ})
+        for d in (dec or {}).get("decoders", []):
+            if d.get("type") == "RDS" and d.get("rds"):
+                upsert_fm(db, pid, rf, t, snr, d["rds"])
         img = REPORTS / f"{Path(rec).stem}_sstv.png" if rec else None
         out.append({"id": pid, "rf_hz": rf, "mode": mode, "segment_id": seg, "time": t, "band": band,
                     "decode": dec, "calls": calls, "image": str(img) if img and img.exists() else None})
@@ -199,6 +205,27 @@ def ingest(db, limit=2000):
     db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('heard_last_peak', ?)", (str(last),))
     db.commit()
     return out
+
+
+def upsert_fm(db, pid, rf, t, snr, info):
+    """UKW-Senderliste: je Frequenz (100 kHz) und PI ein Eintrag, Namen/Text vom letzten Empfang."""
+    fk = int(round(float(rf) / 100000.0)) * 100
+    pi = info.get("pi") or "?"
+    rp = info.get("rtplus") or {}
+    now = " – ".join(x for x in (rp.get("artist"), rp.get("title")) if x) or None
+    ps = (info.get("ps") or "").strip() or None
+    row = db.execute("SELECT n, ps, rt, best_snr FROM fm_station WHERE freq_khz=? AND pi=?", (fk, pi)).fetchone()
+    if row:
+        db.execute("""UPDATE fm_station SET ps=?, pty=?, rt=?, now_playing=?, ecc=?, af=?, last=?, n=?, best_snr=?, peak_id=?
+                      WHERE freq_khz=? AND pi=?""",
+                   (ps or row[1], info.get("pty_name"), info.get("rt") or row[2], now, info.get("ecc"),
+                    ",".join(str(x) for x in info.get("af") or []), t, row[0] + 1,
+                    max(float(row[3] or -99), float(snr or -99)), pid, fk, pi))
+    else:
+        db.execute("""INSERT INTO fm_station (freq_khz, pi, ps, pty, rt, now_playing, ecc, af, first, last, n, best_snr, peak_id)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   (fk, pi, ps, info.get("pty_name"), info.get("rt"), now, info.get("ecc"),
+                    ",".join(str(x) for x in info.get("af") or []), t, t, 1, snr, pid))
 
 
 # ------------------------------------------------------------------ Entfernung, ADIF
