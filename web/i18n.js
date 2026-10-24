@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    '↗ Original': '↗ original', 'Schließen': 'Close',
     'Meteor-M LRPT 137.100 / 137.900': 'Meteor-M LRPT 137.100 / 137.900',
     'NOAA-APT (NOAA-15/18/19) seit 2025 abgeschaltet. Meteor-M N2-3 und N2-4 senden digital (LRPT, 72k) – hörbar nur bei Überflug, Bilder brauchen SatDump.': 'NOAA APT (NOAA-15/18/19) switched off since 2025. Meteor-M N2-3 and N2-4 transmit digitally (LRPT, 72k) – audible only during a pass, images need SatDump.',
     'Störlinien': 'Interference lines', 'Erkannt durch': 'Detected by', 'Seit': 'Since', 'Scans': 'Scans', 'keine Störung': 'not interference', 'doch Störung': 'is interference',

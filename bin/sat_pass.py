@@ -377,7 +377,7 @@ class Channel:
             g = int(np.ceil(len(A) / 900))
             A = A[: len(A) // g * g].reshape(-1, g, A.shape[1]).mean(axis=1)
         lo = float(np.median(A)) - 2
-        v = np.clip((A - lo) / 22.0, 0, 1)
+        v = np.clip((A - lo) / 16.0, 0, 1)                   # 16 dB Spanne: schwache Linien gut sichtbar
         stops = np.array([[0, 0, 40], [0, 60, 160], [0, 170, 200], [240, 220, 40], [255, 60, 30]], float)
         x = v * (len(stops) - 1)
         i = np.minimum(x.astype(int), len(stops) - 2)

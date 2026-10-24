@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 – 2026-10-24
+
+- Waterfall opens in a window inside the dashboard (title, "↗ original", close with ✕, click
+  outside or Esc; Ctrl-click still opens a new tab).
+- Waterfall with more contrast (16 dB range), weak lines show more clearly.
+
 ## 1.6.0 – 2026-10-24
 
 - **Learned interference lines:** a frequency where a carrier without content (carrier only / no

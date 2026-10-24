@@ -1004,12 +1004,12 @@
         const multi = Object.keys(r.signal || {}).length > 1;
         const lineTxt = Object.entries(r.signal || {}).map(([cid, x]) => {
           const L = x && x.line, pre = multi ? `${esc(cid)}: ` : '';
-          let t = '';
-          if (L && L.kind === 'satellite') t = `<small class="ok">${pre}Satellit gehört${L.beacon ? ' (Bake)' : ''} – Linie steht fest bei ${(L.offset_hz / 1000).toFixed(1)} kHz</small>`;
-          else if (L && L.kind === 'local') t = `<small class="warn">${pre}örtliche Störung bei ${L.rf_mhz.toFixed(4)} MHz (wandert gegen den Doppler)</small>`;
-          else if (L) t = `<small class="muted">${pre}Linie nicht eindeutig zuzuordnen</small>`;
-          const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" target="_blank" rel="noopener"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
-          return t || wf ? `<br>${t}${wf}` : '';
+          let lt = '';
+          if (L && L.kind === 'satellite') lt = `<small class="ok">${pre}Satellit gehört${L.beacon ? ' (Bake)' : ''} – Linie steht fest bei ${(L.offset_hz / 1000).toFixed(1)} kHz</small>`;
+          else if (L && L.kind === 'local') lt = `<small class="warn">${pre}örtliche Störung bei ${L.rf_mhz.toFixed(4)} MHz (wandert gegen den Doppler)</small>`;
+          else if (L) lt = `<small class="muted">${pre}Linie nicht eindeutig zuzuordnen</small>`;
+          const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" class="lightbox" data-title="${esc(p.name)} · ${t(p.aos)}"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
+          return lt || wf ? `<br>${lt}${wf}` : '';
         }).join('');
         plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
@@ -1173,6 +1173,26 @@
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
   $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+
+  // ---------- Bildanzeige im Fenster (Wasserfall, SSTV …) ----------
+  function openLightbox(src, title) {
+    let lb = $('lightbox');
+    if (!lb) {
+      lb = document.createElement('div'); lb.id = 'lightbox'; lb.className = 'lightbox-bg';
+      lb.innerHTML = '<div class="lightbox-box"><div class="lightbox-head"><span class="lightbox-title"></span><a class="lightbox-open" target="_blank" rel="noopener">↗ Original</a><button type="button" class="lightbox-close" aria-label="Schließen">✕</button></div><img alt=""></div>';
+      document.body.appendChild(lb);
+      lb.addEventListener('click', e => { if (e.target === lb || e.target.classList.contains('lightbox-close')) lb.hidden = true; });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') lb.hidden = true; });
+    }
+    lb.querySelector('img').src = src; lb.querySelector('.lightbox-open').href = src;
+    lb.querySelector('.lightbox-title').textContent = title || '';
+    lb.hidden = false;
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a.lightbox');
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;           // Strg-Klick: wie bisher neuer Tab
+    e.preventDefault(); openLightbox(a.getAttribute('href'), a.dataset.title);
+  });
 
   // ---------- Störlinien ----------
   async function loadInterf() {

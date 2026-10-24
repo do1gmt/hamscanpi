@@ -432,3 +432,12 @@ table.heat td.h0 { background: var(--panel-2); }
 .row-inline { display: flex; gap: .4rem; } .row-inline input { flex: 1; min-width: 0; }
 .badge-interf { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.4); }
 .interf-table td { white-space: nowrap; }
+
+.lightbox-bg { position: fixed; inset: 0; z-index: 1000; background: rgba(5,8,14,.82); display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top,0) .8rem env(safe-area-inset-bottom,0); }
+.lightbox-bg[hidden] { display: none; }
+.lightbox-box { background: var(--panel, #172131); border: 1px solid var(--line, #2a3648); border-radius: 10px; max-width: min(96vw, 1200px); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+.lightbox-head { display: flex; align-items: center; gap: .8rem; padding: .45rem .7rem; border-bottom: 1px solid var(--line, #2a3648); font-size: .9rem; }
+.lightbox-title { flex: 1; font-weight: 600; }
+.lightbox-open { font-size: .85rem; }
+.lightbox-close { background: none; border: 0; color: inherit; font-size: 1.1rem; cursor: pointer; padding: .1rem .3rem; }
+.lightbox-box img { display: block; max-width: 100%; max-height: calc(92vh - 2.6rem); object-fit: contain; background: #0c121c; }
