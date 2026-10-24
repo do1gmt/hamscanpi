@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Lautstärke': 'Volume',
     'UKW-Sender (RDS)': 'FM stations (RDS)', 'Sender': 'Station', 'Jetzt / Radiotext': 'Now / radio text', 'Anzahl Empfänge': 'Times received',
     'Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.': 'No FM stations yet – switch on the band "Broadcast" under Scan.',
     'Aus den Scans des Bands „Rundfunk“: je Frequenz der Sender mit Kennung (PI), Namen, Programmart und dem zuletzt gesendeten Text. Neue Sender und Überreichweiten (Tropo, Sporadic-E) fallen hier auf.':
@@ -325,6 +326,13 @@
     [/^Empfang (.+?) · (\d+) dB über Rauschen/, 'Receiving $1 · $2 dB above noise'], [/ · ÜBERSTEUERT \(([\d.,]+) %\) – Verstärkung senken/, ' · OVERLOAD ($1 %) – reduce gain'],
     [/^Empfang (.+)$/, 'Receiving $1'], [/^(.+) scannt (\d+)\/(\d+)$/, '$1 scanning $2/$3'], [/^Grund: /, 'Reason: '], [/(\d+) Pakete\b/g, '$1 packets'],
     [/^Fehler: Gerade läuft ein Scan – bitte warten oder abbrechen lassen$/, 'Error: a scan is running – please wait or stop it'],
+    [/^kein Signal \(höchstens (-?\d+) dB über Rauschen\)$/, 'no signal (at most $1 dB above noise)'],
+    [/^Signal bis (-?\d+) dB, (\d+) s über 6 dB$/, 'signal up to $1 dB, $2 s above 6 dB'],
+    [/^(\d+) Gruppen, (\d+) % fehlerfrei$/, '$1 groups, $2 % error-free'], [/^(\d+) RDS-Gruppen, (\d+) % fehlerfrei/, '$1 RDS groups, $2 % error-free'],
+    [/ · Sprache$/, ' · speech'], [/ · Musik$/, ' · music'], [/ · Musik\b/g, ' · music'],
+    [/^Jetzt: /, 'Now: '], [/^Radiotext: /, 'Radio text: '], [/^Uhrzeit des Senders: /, 'Station clock: '],
+    [/^Alternativfrequenzen: /, 'Alternative frequencies: '], [/Datendienste: /, 'Data services: '], [/ · Durchsage/, ' · announcement'],
+    [/Sendername noch unvollständig/, 'station name incomplete'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

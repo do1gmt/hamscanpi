@@ -215,9 +215,10 @@
       <select id="liveStep"><option value="100">100 Hz</option><option value="1000">1 kHz</option><option value="5000">5 kHz</option><option value="8333">8,33 kHz</option><option value="12500" selected>12,5 kHz</option><option value="25000">25 kHz</option><option value="100000">100 kHz</option></select>
       <button type="button" class="btn btn-small" data-livestep="1">▶</button>
       <label class="field"><span>Verstärkung</span>
-        <select id="liveGain"><option value="">wie Scan</option><option value="0">automatisch</option><option value="9">9 dB</option><option value="20">20 dB</option><option value="30">30 dB</option><option value="40">40 dB</option><option value="49.6">49,6 dB</option></select>
+        <select id="liveGain"><option value="0" selected>automatisch</option><option value="">wie Scan</option><option value="9">9 dB</option><option value="20">20 dB</option><option value="30">30 dB</option><option value="40">40 dB</option><option value="49.6">49,6 dB</option></select>
       </label>
       <label class="field"><span>Rauschsperre / Suchlauf-Schwelle</span><input id="liveSquelch" type="range" min="0" max="40" value="0"></label>
+      <label class="field"><span>Lautstärke <small class="muted" id="liveVolTxt">80 %</small></span><input id="liveVol" type="range" min="0" max="150" value="80"></label>
     </div>
     <div class="row">
       <button class="btn btn-primary" id="liveStart">Hören</button>

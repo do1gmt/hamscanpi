@@ -654,6 +654,7 @@
     const el = $('liveAudio');
     if ($('liveFallback').checked) {
       el.hidden = false; el.src = '/api/live/stream.wav?t=' + Date.now();
+      el.volume = Math.min(1, liveVolume());
       el.play().catch(e => { $('liveText').textContent = 'Player: ' + e.message; });
       return;
     }
@@ -678,7 +679,7 @@
         if (!n) continue;
         const ab = live.ctx.createBuffer(1, n, live.rate); const ch = ab.getChannelData(0);
         for (let i = 0; i < n; i++) ch[i] = pcm[i] / 32768;
-        const src = live.ctx.createBufferSource(); src.buffer = ab; src.connect(live.ctx.destination);
+        const src = live.ctx.createBufferSource(); src.buffer = ab; src.connect(liveGainNode());
         const now = live.ctx.currentTime;
         if (live.nextT < now + 0.05) live.nextT = now + 0.25;   // kleiner Vorlauf gegen Aussetzer
         src.start(live.nextT); live.nextT += ab.duration;
@@ -739,7 +740,23 @@
   $('liveFreq').addEventListener('change', liveRetune);
   $('liveMode').addEventListener('change', liveRetune);
   $('liveSquelch').addEventListener('change', liveRetune);
-  $('liveGain').addEventListener('change', liveRetune);
+  $('liveGain').addEventListener('change', () => { try { localStorage.setItem('liveGain', $('liveGain').value); } catch (e) { } liveRetune(); });
+  try { const g = localStorage.getItem('liveGain'); if (g !== null && [...$('liveGain').options].some(o => o.value === g)) $('liveGain').value = g; } catch (e) { }
+  // Lautstärke (0–150 %, über 100 % lauter als die Sendung), je Browser gemerkt
+  function liveVolume() { return Number($('liveVol').value) / 100; }
+  function liveGainNode() {
+    if (!live.gain || live.gain.context !== live.ctx) { live.gain = live.ctx.createGain(); live.gain.connect(live.ctx.destination); }
+    live.gain.gain.value = liveVolume();
+    return live.gain;
+  }
+  function setVol() {
+    $('liveVolTxt').textContent = $('liveVol').value + ' %';
+    if (live.gain) live.gain.gain.value = liveVolume();
+    $('liveAudio').volume = Math.min(1, liveVolume());
+    try { localStorage.setItem('liveVol', $('liveVol').value); } catch (e) { }
+  }
+  try { const v = localStorage.getItem('liveVol'); if (v !== null) $('liveVol').value = v; } catch (e) { }
+  $('liveVol').addEventListener('input', setVol); setVol();
   $('liveFallback').addEventListener('change', () => { if (live.active) { liveEnsureCtx(); liveAudio(); } });
 
   async function pollLive() { try { const st = await api('/api/live/status'); if (st.active || live.active) liveSetUI(st); } catch (e) { } }
@@ -889,7 +906,8 @@
       rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>`).join('');
     if (r.ps && r.ps.trim() && live.active) {
       const h = liveHist[0];
-      if (h && Math.abs(h.f - r.freq_hz) < 1000 && h.name !== r.ps.trim()) { h.name = r.ps.trim(); renderLiveHist(); }
+      if (h && Math.abs(h.f - r.freq_hz) < 1000) { if (h.name !== r.ps.trim()) { h.name = r.ps.trim(); renderLiveHist(); } }
+      else liveRemember(r.freq_hz, 'wfm', r.ps.trim());       // z. B. per Suchlauf gefunden: mit Namen merken
     }
   }
 

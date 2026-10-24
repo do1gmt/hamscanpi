@@ -47,6 +47,8 @@ _EBU = {0x80: "á", 0x81: "à", 0x82: "é", 0x83: "è", 0x84: "í", 0x85: "ì", 
 
 def char(b):
     b &= 0xFF
+    if b == 0x0D:
+        return "\r"                                     # Ende des Radiotexts
     if 0x20 <= b < 0x7F:
         return "#" if b == 0x24 and False else chr(b)
     return _EBU.get(b, " ")
@@ -221,6 +223,7 @@ class RdsDecoder:
             if self._rt_ab is not None and ab != self._rt_ab:
                 self._rt = [" "] * 64
                 self._rt_seen = [False] * 16
+                inf["rtplus"] = {}                            # neuer Text: alte Titelangaben verwerfen
             self._rt_ab = ab
             seg = B & 0xF
             if ver == 0:
@@ -232,11 +235,21 @@ class RdsDecoder:
             elif D is not None:
                 self._rt[seg * 2], self._rt[seg * 2 + 1] = char(D >> 8), char(D)
             self._rt_seen[seg] = True
+            self._rt_seg = 4 if ver == 0 else 2
             raw = "".join(self._rt)
             end = raw.find("\r")
-            text = (raw[:end] if end >= 0 else raw).rstrip()
-            if self._rt_seen[0] and text:
+            n_used = end if end >= 0 else len(raw.rstrip())
+            # auch unvollständig anzeigen (fehlende Teile als „…“), sobald irgendein Teil da ist
+            segs = range(0, (n_used + self._rt_seg - 1) // self._rt_seg) if n_used else []
+            missing = [k for k in segs if not self._rt_seen[k]]
+            parts = []
+            for k in segs:
+                parts.append(raw[k * self._rt_seg:(k + 1) * self._rt_seg] if self._rt_seen[k] else "…")
+            text = "".join(parts)[:n_used + 1].rstrip()
+            text = " ".join(text.split())
+            if text and text != "…":
                 inf["rt"] = text
+                inf["rt_complete"] = not missing and end >= 0 or (not missing and n_used >= 60)
         elif gtype == 3 and ver == 0 and D is not None:      # 3A: Datendienste (ODA)
             name = ODA.get(D, f"AID {D:04X}")
             if name not in inf["oda"]:
@@ -271,8 +284,11 @@ class RdsDecoder:
             t2 = ((C & 1) << 5) | (D >> 11)
             s2, l2 = D >> 5 & 0x3F, D & 0x1F
             rt = "".join(self._rt)
+            sz = getattr(self, "_rt_seg", 4)
             for t, s, l in ((t1, s1, l1), (t2, s2, l2)):
-                if t in RTPLUS and l and s + l + 1 <= len(rt):
+                # nur, wenn alle Teile des Radiotexts für diesen Abschnitt schon empfangen sind
+                covered = all(self._rt_seen[k] for k in range(s // sz, min(16, (s + l) // sz + 1)))
+                if t in RTPLUS and l and s + l + 1 <= len(rt) and covered:
                     val = rt[s:s + l + 1].strip()
                     if val:
                         inf["rtplus"] = dict(inf["rtplus"], **{RTPLUS[t]: val})

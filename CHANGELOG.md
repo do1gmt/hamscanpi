@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 – 2026-10-24
+
+- Live listening: gain defaults to "automatic" (much better FM/RDS reception than the scan gain);
+  the choice is remembered per browser.
+- Volume slider (0–150 %), remembered per browser.
+- "Recently heard" also keeps stations found by seek, with their RDS name.
+- RDS: radio text is shown even when only partly received; the end-of-text marker is recognised;
+  RT+ artist/title only when the referenced part of the text is complete.
+- English UI: RDS reception line, music/speech and signal check translated.
+- README: live screenshot with a real RDS station.
+
 ## 1.3.0 – 2026-10-24
 
 - **RDS for FM broadcast** (own decoder, no extra program): station name (PS), PI, programme type
