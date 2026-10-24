@@ -33,6 +33,7 @@ import devices as DEV
 import notify as NOTIFY
 import auth as AUTH
 import housekeeping as HK
+import stations as ST
 
 BASE = Path(__file__).resolve().parent.parent
 REPORTS = BASE / "reports"
@@ -111,6 +112,7 @@ def ensure_schema():
         id INTEGER PRIMARY KEY AUTOINCREMENT, deleted_at TEXT NOT NULL,
         action TEXT NOT NULL, peak_id INTEGER, band TEXT, rf_hz REAL,
         recording_path TEXT, note TEXT)""")
+    ST.ensure_tables(db)                       # gehörte Stationen, Beobachtungsliste
     db.commit()
     db.close()
 
@@ -216,6 +218,13 @@ def load_settings():
         "selected_segments": segments,
         "record_seconds": float(scanner_config().get("record_seconds", 5.0)),
         "my_locator": str(data.get("my_locator", "") or "").upper(),
+        "my_call": str(data.get("my_call", "") or "").upper(),
+        "pskreporter": bool(data.get("pskreporter")),
+        "watchlist": data.get("watchlist") or [],
+        "schedules": data.get("schedules") or [],
+        "watch_events": ST.EVENTS,
+        "pi_time": time.strftime("%H:%M", time.localtime()), "pi_tz": time.strftime("%Z"),
+        "schedule_active": _active_schedule_info(data),
         "scan_raster": {d: (str((data.get("scan_raster") or {}).get(d, "normal"))
                             if str((data.get("scan_raster") or {}).get(d, "normal")) in RASTERS else "normal")
                         for d in ("pmsdr", "rtlsdr")},
@@ -226,7 +235,8 @@ def load_settings():
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
         "hardware": hw,
-        "notify": {k: ("••••" if k == "smtp_pass" and v else v) for k, v in (data.get("notify") or {}).items()},
+        "notify": {k: ("••••" if k in ("smtp_pass", "ntfy_token", "tg_token") and v else v)
+                   for k, v in (data.get("notify") or {}).items()},
         "devices": device_labels(),
         "antennas": (scanner_config().get("antennas") or {}),
     }
@@ -318,14 +328,17 @@ def save_settings(data):
         for k in ("enabled", "on_error", "on_scan_done", "on_live"):
             if k in data["notify"]:
                 n[k] = bool(data["notify"][k])
-        for k in ("smtp_host", "smtp_user", "mail_from", "mail_to", "tls"):
+        for k in ("smtp_host", "smtp_user", "mail_from", "mail_to", "tls", "push", "ntfy_url", "tg_chat"):
             if k in data["notify"]:
                 n[k] = str(data["notify"][k]).strip()
         for k in ("smtp_port", "min_new_hits", "throttle_min"):
             if k in data["notify"]:
                 n[k] = int(data["notify"][k] or 0)
-        if data["notify"].get("smtp_pass") and data["notify"]["smtp_pass"] != "••••":
-            n["smtp_pass"] = str(data["notify"]["smtp_pass"])
+        for k in ("smtp_pass", "ntfy_token", "tg_token"):          # Geheimnisse nur bei echter Eingabe ändern
+            if k in data["notify"] and data["notify"][k] != "••••":
+                n[k] = str(data["notify"][k])
+        if n.get("push") not in ("", "ntfy", "telegram", None):
+            raise ValueError("Push: ntfy, telegram oder aus")
         out["notify"] = n
     if "my_locator" in data:
         loc = str(data["my_locator"] or "").strip().upper()
@@ -333,6 +346,19 @@ def save_settings(data):
         if loc and not _re.fullmatch(r"[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?", loc):
             raise ValueError("Locator ungültig (z. B. JO31 oder JO31AB)")
         out["my_locator"] = loc
+    if "my_call" in data:
+        c = str(data["my_call"] or "").strip().upper()
+        if c and not __import__("re").fullmatch(r"[A-Z0-9/]{3,12}", c):
+            raise ValueError("Rufzeichen ungültig")
+        out["my_call"] = c
+    if "pskreporter" in data:
+        out["pskreporter"] = bool(data["pskreporter"])
+        if out["pskreporter"] and not (out.get("my_call") and out.get("my_locator")):
+            raise ValueError("Für PSK Reporter zuerst Rufzeichen und Locator eintragen")
+    if "watchlist" in data:
+        out["watchlist"] = clean_watchlist(data["watchlist"])
+    if "schedules" in data:
+        out["schedules"] = clean_schedules(data["schedules"])
     write_json(SETTINGS, out)
     return load_settings()
 
@@ -505,7 +531,8 @@ def list_hits(params):
     sql = """SELECT p.id, p.rf_hz, p.snr_db, p.level_db, p.recording_path,
                     COALESCE(p.protected,0) AS protected, p.segment_id, p.mode, p.sideband,
                     p.carrier_delta_hz, p.note, s.time, s.band, s.center_hz, s.noise_db, p.rec_center_hz,
-                    p.audio, p.audio_score
+                    p.audio, p.audio_score,
+                    (SELECT group_concat(w.label, ' · ') FROM watch_hit w WHERE w.peak_id = p.id) AS watch
              FROM peak p JOIN scan s ON s.id = p.scan_id WHERE 1=1"""
     args = []
     if band and band != "all":
@@ -563,6 +590,7 @@ def list_hits(params):
             "files": files, "decodes": decode_summary(r["recording_path"]),
             "rec": Path(r["recording_path"]).stem if r["recording_path"] else "",
             "audio": r["audio"], "audio_score": r["audio_score"],
+            "watch": r["watch"] or "",
         })
     return out
 
@@ -705,6 +733,188 @@ def scan_summary():
     return {"runs": sum(by.values()), "runs_failed": by.get("failed", 0) + by.get("aborted", 0),
             "hits": hits, "sat_passes": sat_done, "sat_hits": sat_hits, "sstv": sstv,
             "scan_minutes": round((busy or 0) / 60)}
+
+
+def _active_schedule_info(data):
+    try:
+        import scan_plan as SP
+        d = dict(data)
+        d["active_device"] = DEV.resolve_device("rtlsdr" if data.get("active_device") == "rtlsdr" else "pmsdr")
+        sc = SP.active_schedule(d, scanner_config())
+        return {"name": sc["name"], "bands": sc["bands"], "to": sc["to"]} if sc else None
+    except Exception:
+        return None
+
+
+def clean_schedules(items):
+    import secrets
+    import re as _re
+    names = {b["name"] for b in scanner_config().get("ranges", [])}
+    out = []
+    for it in items if isinstance(items, list) else []:
+        f, t = str(it.get("from", "")), str(it.get("to", ""))
+        if not (_re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", f) and _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t)) or f == t:
+            raise ValueError("Zeitplan: Uhrzeiten als HH:MM, Beginn und Ende verschieden")
+        bands = [b for b in it.get("bands") or [] if b in names]
+        if not bands:
+            raise ValueError("Zeitplan: mindestens ein Band wählen")
+        days = sorted({int(d) for d in it.get("days") or [] if 0 <= int(d) <= 6}) or list(range(7))
+        out.append({"id": str(it.get("id") or secrets.token_hex(4)), "name": str(it.get("name") or "").strip()[:40] or f"{f}–{t}",
+                    "days": days, "from": f, "to": t, "bands": bands, "enabled": bool(it.get("enabled", True))})
+    return out
+
+
+def clean_watchlist(items):
+    """Regeln der Beobachtungsliste prüfen (siehe stations.py)."""
+    import secrets
+    out = []
+    for it in items if isinstance(items, list) else []:
+        typ = str(it.get("type", ""))
+        val = str(it.get("value", "")).strip()
+        if typ not in ("freq", "call", "event", "dx") or not val:
+            raise ValueError("Beobachtung: Typ und Wert angeben")
+        if typ == "freq":
+            try:
+                f = float(val.replace(",", "."))
+            except ValueError:
+                raise ValueError(f"Frequenz ungültig: {val} (MHz, z. B. 439.400)")
+            if not 0.1 <= f <= 2000:
+                raise ValueError(f"Frequenz ungültig: {val} (MHz, z. B. 439.400)")
+        if typ == "event" and val not in ST.EVENTS:
+            raise ValueError("Ereignis unbekannt")
+        if typ == "dx":
+            try:
+                float(val)
+            except ValueError:
+                raise ValueError("Entfernung in km angeben")
+        if typ == "call" and not __import__("re").fullmatch(r"[A-Za-z0-9/*?-]{2,15}", val):
+            raise ValueError(f"Rufzeichen ungültig: {val}")
+        out.append({"id": str(it.get("id") or secrets.token_hex(4)), "type": typ,
+                    "value": val.upper() if typ == "call" else val,
+                    "label": str(it.get("label") or "").strip()[:60],
+                    "enabled": bool(it.get("enabled", True)), "mail": bool(it.get("mail", True)),
+                    "tolerance_khz": max(0.5, min(100.0, float(it.get("tolerance_khz") or 5))),
+                    "quiet_min": max(0, min(1440, int(it.get("quiet_min") or 30)))})
+    return out
+
+
+def stations(days=30, q="", band="", limit=100, offset=0):
+    """Gehörte Stationen, je Rufzeichen zusammengefasst, mit Entfernung und Richtung."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+    db = db_connect()
+    ST.ensure_tables(db)
+    where, args = ["time >= ?"], [since]
+    if q:
+        where.append("call LIKE ?"); args.append(q.upper().replace("*", "%") + ("%" if "*" not in q else ""))
+    if band:
+        where.append("band = ?"); args.append(band)
+    w = " AND ".join(where)
+    total = db.execute(f"SELECT COUNT(DISTINCT call) FROM heard WHERE {w}", args).fetchone()[0]
+    rows = db.execute(f"""SELECT call, COUNT(*) n, MIN(time) first, MAX(time) last,
+                                 group_concat(DISTINCT band) bands, group_concat(DISTINCT mode) modes,
+                                 MAX(snr) best_snr, MAX(grid) grid
+                          FROM heard WHERE {w} GROUP BY call ORDER BY last DESC LIMIT ? OFFSET ?""",
+                       args + [limit, offset]).fetchall()
+    db.close()
+    loc = load_settings().get("my_locator", "")
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["distance_km"], d["bearing"] = ST.distance_bearing(r["grid"], loc) if r["grid"] and loc else (None, None)
+        d["lat"] = d["lon"] = None
+        if r["grid"]:
+            try:
+                import satellites as SAT
+                d["lat"], d["lon"] = (round(x, 3) for x in SAT.locator_to_latlon(r["grid"]))
+            except Exception:
+                pass
+        out.append(d)
+    home = None
+    try:
+        import satellites as SAT
+        home = [round(x, 3) for x in SAT.locator_to_latlon(loc)] if loc else None
+    except Exception:
+        pass
+    return {"stations": out, "total": total, "offset": offset, "limit": limit, "home": home}
+
+
+def activity(days=30):
+    """Aktivität je Band und Stunde (UTC) sowie je Wochentag und Stunde.
+    Gezählt werden Treffer je Abstimmung – so verfälscht es nicht, wann und wie oft gescannt wurde."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    hidden = [b["name"] for b in scanner_config().get("ranges", []) if b.get("legal") == "restricted" and not restricted_allowed()]
+    excl = f" AND s.band NOT IN ({','.join('?' * len(hidden))})" if hidden else ""
+    db = db_connect()
+    tunes = db.execute(f"""SELECT s.band, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n FROM scan s
+                           WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY s.band, h""", [since] + hidden).fetchall()
+    hits = db.execute(f"""SELECT s.band, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n FROM peak p JOIN scan s ON s.id = p.scan_id
+                          WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY s.band, h""", [since] + hidden).fetchall()
+    wk_t = db.execute(f"""SELECT CAST(strftime('%w', s.time) AS INTEGER) d, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n
+                          FROM scan s WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY d, h""", [since] + hidden).fetchall()
+    wk_h = db.execute(f"""SELECT CAST(strftime('%w', s.time) AS INTEGER) d, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n
+                          FROM peak p JOIN scan s ON s.id = p.scan_id WHERE s.time >= ? AND s.band != 'Satelliten'{excl}
+                          GROUP BY d, h""", [since] + hidden).fetchall()
+    db.close()
+    bands = {}
+    for r in tunes:
+        bands.setdefault(r["band"], {})[r["h"]] = {"tunes": r["n"], "hits": 0}
+    for r in hits:
+        bands.setdefault(r["band"], {}).setdefault(r["h"], {"tunes": 0, "hits": 0})["hits"] = r["n"]
+    week = {}
+    for r in wk_t:
+        week.setdefault((r["d"] + 6) % 7, {})[r["h"]] = {"tunes": r["n"], "hits": 0}       # Mo = 0
+    for r in wk_h:
+        week.setdefault((r["d"] + 6) % 7, {}).setdefault(r["h"], {"tunes": 0, "hits": 0})["hits"] = r["n"]
+    order = [b["name"] for b in scanner_config().get("ranges", [])]
+    return {"days": days,
+            "bands": [{"band": b, "hours": {str(h): v for h, v in bands[b].items()}}
+                      for b in sorted(bands, key=lambda x: order.index(x) if x in order else 999)],
+            "week": {str(d): {str(h): v for h, v in hs.items()} for d, hs in week.items()}}
+
+
+def stations_adif(days=30, q="", band=""):
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+    db = db_connect()
+    ST.ensure_tables(db)
+    where, args = ["time >= ?"], [since]
+    if q:
+        where.append("call LIKE ?"); args.append(q.upper().replace("*", "%") + ("%" if "*" not in q else ""))
+    if band:
+        where.append("band = ?"); args.append(band)
+    rows = [dict(r) for r in db.execute(f"SELECT * FROM heard WHERE {' AND '.join(where)} ORDER BY time", args)]
+    db.close()
+    st = load_settings()
+    return ST.adif(rows, st.get("my_call", ""), st.get("my_locator", ""))
+
+
+def watch_and_stations_cycle():
+    """Neue Treffer: Rufzeichen eintragen, Beobachtungsliste prüfen, melden."""
+    db = db_connect()
+    try:
+        st = load_settings()
+        while True:
+            new = ST.ingest(db)
+            if not new:
+                break
+            for rule, p, detail in ST.check_rules(new, st.get("watchlist"), st.get("my_locator", "")):
+                label = rule.get("label") or f"{rule['type']} {rule['value']}"
+                cur = db.execute("INSERT OR IGNORE INTO watch_hit (peak_id, rule_id, label, time, detail) VALUES (?,?,?,?,?)",
+                                 (p["id"], rule["id"], label, p["time"], detail))
+                db.commit()
+                if cur.rowcount:
+                    APPLOG.log("INFO", "watch", "watch_hit", rule=label, detail=detail, peak_id=p["id"])
+                    if rule.get("mail", True):
+                        NOTIFY.notify_watch(rule["id"], label, detail, int(rule.get("quiet_min", 30)), image=p.get("image"))
+        if st.get("pskreporter") and st.get("my_call") and st.get("my_locator"):
+            try:
+                import pskreporter as PSK
+                ant = (scanner_config().get("antennas") or {}).get("pmsdr", "")
+                PSK.report(db, st["my_call"], st["my_locator"], ant,
+                           log=lambda level, event, **d: APPLOG.log(level, "pskreporter", event, **d))
+            except Exception as e:
+                APPLOG.log("WARN", "pskreporter", "pskreporter_failed", error=f"{type(e).__name__}: {e}")
+    finally:
+        db.close()
 
 
 def stats():
@@ -1039,7 +1249,8 @@ def sat_passes():
     st = load_settings()
     seg = (st.get("selected_segments") or {}).get("Satelliten") or ["all"]
     ids = [x["id"] for x in SAT.SATELLITES] if "all" in seg else [x for x in seg if x in SAT.BY_ID]
-    chip = "Satelliten" in (st.get("selected_bands") or [])
+    eff = (st.get("schedule_active") or {}).get("bands") if st.get("schedule_active") else st.get("selected_bands")
+    chip = "Satelliten" in (eff or [])
     # Satelliten nur mit dem RTL-SDR (gewähltes Gerät = angeschlossene Antenne)
     on = chip and st.get("active_device") == "rtlsdr"
     prio = st.get("sat_prio") or {}
@@ -1261,6 +1472,22 @@ class Handler(BaseHTTPRequestHandler):
                                                 max(0, int(qs.get("offset", 0)))))
             if path == "/api/scan-estimate":
                 return self.send_json(scan_estimate() or {})
+            if path == "/api/stations":
+                return self.send_json(stations(int(qs.get("days", 30) or 0), qs.get("q", ""), qs.get("band", ""),
+                                               max(1, min(int(qs.get("limit", 100)), 1000)), max(0, int(qs.get("offset", 0)))))
+            if path == "/api/activity":
+                return self.send_json(activity(max(1, min(int(qs.get("days", 30) or 30), 365))))
+            if path == "/api/stations.adi":
+                days = int(qs.get("days", 30) or 0)
+                body = stations_adif(days, qs.get("q", ""), qs.get("band", "")).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Disposition",
+                                 f'attachment; filename="hamscanpi_swl_{datetime.now(timezone.utc).strftime("%Y%m%d")}.adi"')
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path == "/api/system":
                 return self.send_json(HK.system_status())
             if path == "/api/scan-summary":
@@ -1311,6 +1538,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"entries": rows[:lim], "has_more": len(rows) > lim, "offset": off, "limit": lim})
             if path == "/api/logs/summary":
                 return self.send_json(APPLOG.summary(int(qs.get("hours", 24))))
+            if path == "/api/live/waterfall":
+                w = _live.wf if (_live and _live.running) else {"seq": 0, "row": []}
+                return self.send_json(dict(w, active_hz=getattr(_live, "active_hz", 0) if _live else 0))
             if path == "/api/live/status":
                 return self.send_json(live_status())
             if path == "/api/live/presets":
@@ -1428,6 +1658,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"ok": False, "error": "Scanprozess existiert nicht mehr"}, 409)
                 APPLOG.log("WARN", "webapp", "scan_stop_requested", pid=pid)
                 return self.send_json({"ok": True})
+            if path == "/api/push-test":
+                raw = read_json(SETTINGS, {}).get("notify") or {}
+                if not NOTIFY.push_on(raw):
+                    raise ValueError("Push ist nicht eingerichtet")
+                NOTIFY.send_push("HamScanPi", "Testnachricht – Push funktioniert. 73!", raw)
+                APPLOG.log("INFO", "notify", "test_push_sent", via=raw.get("push"))
+                return self.send_json({"ok": True})
             if path == "/api/notify-test":
                 raw = read_json(SETTINGS, {}).get("notify") or {}
                 NOTIFY.send_mail("Testnachricht", "Der Mailversand von HamScanPi funktioniert.\n", raw)
@@ -1486,6 +1723,16 @@ def main():
                 APPLOG.log("WARN", "housekeeping", "housekeeping_failed", error=f"{type(e).__name__}: {e}")
             time.sleep(900)
     threading.Thread(target=housekeeping_loop, daemon=True).start()
+
+    def watch_loop():
+        time.sleep(20)
+        while True:
+            try:
+                watch_and_stations_cycle()
+            except Exception as e:
+                APPLOG.log("WARN", "watch", "watch_failed", error=f"{type(e).__name__}: {e}")
+            time.sleep(60)
+    threading.Thread(target=watch_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()

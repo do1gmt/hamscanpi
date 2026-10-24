@@ -4,6 +4,9 @@ Mailversand für definierte Ereignisse. Einstellungen in config/web_settings.jso
 { "enabled": true, "smtp_host": "...", "smtp_port": 587, "smtp_user": "...", "smtp_pass": "...",
   "mail_from": "...", "mail_to": "...", "tls": "starttls"|"ssl"|"none",
   "on_error": true, "on_scan_done": true, "min_new_hits": 1, "on_live": false, "throttle_min": 30 }
+Push aufs Handy (zusätzlich oder statt Mail):
+  "push": "ntfy" | "telegram" | ""      ntfy: "ntfy_url" (z. B. https://ntfy.sh/mein-geheimes-thema), optional "ntfy_token"
+                                        telegram: "tg_token" (vom @BotFather), "tg_chat" (Chat-ID)
 Aufruf aus run_cycle: notify.py scan_done RUN_ID
 """
 import json
@@ -76,20 +79,89 @@ def _throttled(key, minutes):
 
 def notify_error(component, event, data):
     c = cfg()
-    if not (c.get("enabled") and c.get("on_error")):
+    if not ((c.get("enabled") or push_on(c)) and c.get("on_error")):
         return
     if _throttled("error", float(c.get("throttle_min", 30))):
         return
-    try:
-        send_mail(f"Fehler: {component} / {event}",
-                  f"Komponente: {component}\nEreignis: {event}\n\n{json.dumps(data, ensure_ascii=False, indent=2)}\n", c)
-    except Exception as e:
-        _log_fail(e)
+    send_all(f"Fehler: {component} / {event}",
+             f"Komponente: {component}\nEreignis: {event}\n\n{json.dumps(data, ensure_ascii=False, indent=2)}\n", c,
+             priority="high")
+
+
+def push_on(c):
+    return c.get("push") in ("ntfy", "telegram")
+
+
+def send_push(title, text, c, image=None, priority="default"):
+    """Push über ntfy oder Telegram. image: Pfad zu einem Bild (SSTV), wird mitgeschickt."""
+    import urllib.request
+    import urllib.parse
+    if c.get("push") == "ntfy":
+        url = str(c.get("ntfy_url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("ntfy: Adresse fehlt (z. B. https://ntfy.sh/mein-thema)")
+        from email.header import Header
+        enc = lambda v: Header(str(v), "utf-8").encode()          # Umlaute in Kopfzeilen (RFC 2047, ntfy kann das)
+        headers = {"Title": enc(title), "Priority": priority, "Tags": "satellite_antenna"}
+        if c.get("ntfy_token"):
+            headers["Authorization"] = "Bearer " + str(c["ntfy_token"])
+        if image and Path(image).exists():
+            headers["Filename"] = Path(image).name
+            headers["Message"] = enc(text.replace("\n", " ")[:300])
+            data = Path(image).read_bytes()
+            req = urllib.request.Request(url, data=data, headers=headers, method="PUT")
+        else:
+            req = urllib.request.Request(url, data=text.encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            r.read()
+    elif c.get("push") == "telegram":
+        tok, chat = str(c.get("tg_token") or "").strip(), str(c.get("tg_chat") or "").strip()
+        if not tok or not chat:
+            raise ValueError("Telegram: Bot-Token und Chat-ID angeben")
+        base = f"https://api.telegram.org/bot{tok}"
+        if image and Path(image).exists():
+            import uuid
+            b = uuid.uuid4().hex
+            body = (f"--{b}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat}\r\n"
+                    f"--{b}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{title}\n{text}\r\n"
+                    f"--{b}\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"{Path(image).name}\"\r\n"
+                    f"Content-Type: image/png\r\n\r\n").encode("utf-8") + Path(image).read_bytes() + f"\r\n--{b}--\r\n".encode()
+            req = urllib.request.Request(base + "/sendPhoto", data=body,
+                                         headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        else:
+            req = urllib.request.Request(base + "/sendMessage",
+                                         data=urllib.parse.urlencode({"chat_id": chat, "text": f"{title}\n{text}"}).encode())
+        with urllib.request.urlopen(req, timeout=15) as r:
+            r.read()
+
+
+def send_all(subject, text, c, image=None, priority="default"):
+    """An alle eingerichteten Wege: Mail (enabled) und Push."""
+    if c.get("enabled"):
+        try:
+            send_mail(subject, text, c)
+        except Exception as e:
+            _log_fail(e)
+    if push_on(c):
+        try:
+            send_push(subject, text, c, image=image, priority=priority)
+        except Exception as e:
+            _log_fail(e, "push_failed")
+
+
+def notify_watch(rule_id, label, detail, quiet_min=30, image=None):
+    """Meldung für einen Treffer der Beobachtungsliste – höchstens eine je Regel und quiet_min."""
+    c = cfg()
+    if not (c.get("enabled") or push_on(c)):
+        return
+    if quiet_min and _throttled(f"watch_{rule_id}", float(quiet_min)):
+        return
+    send_all(f"Beobachtet: {label}", f"{label}\n{detail}\n\nIm Dashboard unter Treffer (🔔).\n", c, image=image, priority="high")
 
 
 def notify_scan_done(run_id):
     c = cfg()
-    if not (c.get("enabled") and c.get("on_scan_done")):
+    if not ((c.get("enabled") or push_on(c)) and c.get("on_scan_done")):
         return
     import sqlite3
     db = sqlite3.connect(BASE / "data" / "scanner.db")
@@ -113,17 +185,14 @@ def notify_scan_done(run_id):
         lines.append(f"{h['band']:9s} {h['rf_hz']/1e6:10.4f} MHz  {h['snr_db']:5.1f} dB  {h['mode']}")
     if len(hits) > 40:
         lines.append(f"... und {len(hits)-40} weitere")
-    try:
-        send_mail(subject, "\n".join(lines) + "\n", c)
-    except Exception as e:
-        _log_fail(e)
+    send_all(subject, "\n".join(lines) + "\n", c, priority="low")
 
 
-def _log_fail(e):
+def _log_fail(e, event="mail_failed"):
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from applog import log
-        log("WARN", "notify", "mail_failed", error=str(e))
+        log("WARN", "notify", event, error=str(e))
     except Exception:
         pass
 

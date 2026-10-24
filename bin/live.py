@@ -40,6 +40,8 @@ class LiveSession:
         self.proc = None
         self.level_db = -120.0
         self.active_hz = self.freq_hz
+        self.wf = {"seq": 0, "row": [], "center_hz": 0, "span_hz": 0}     # letzte Wasserfall-Zeile
+        self._wf_tuned = 0
         self.status_text = "bereit"
         self.thread = None
         self.pmsdr = None
@@ -75,6 +77,21 @@ class LiveSession:
                     q.put_nowait(pcm_bytes)
                 except Exception:
                     pass
+
+    def _wf_row(self, z, rate, rf_center, span_hz, bins=256):
+        """Eine Wasserfall-Zeile: Leistungsspektrum um rf_center (±span/2), 0–255 skaliert."""
+        n = 4096 if len(z) >= 4096 else 1 << int(np.log2(max(256, len(z))))
+        seg = z[-n:] * np.hanning(n)
+        P = np.abs(np.fft.fftshift(np.fft.fft(seg))) ** 2
+        f = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / rate))
+        m = np.abs(f - (rf_center - self._wf_tuned)) <= span_hz / 2
+        if m.sum() < 8:
+            return
+        p = 10 * np.log10(P[m] + 1e-12)
+        p = np.interp(np.linspace(0, len(p) - 1, bins), np.arange(len(p)), p)
+        lo = float(np.percentile(p, 20))                     # Rauschen unten, 50 dB Bereich
+        row = np.clip((p - lo + 5) / 50 * 255, 0, 255).astype(int).tolist()
+        self.wf = {"seq": self.wf["seq"] + 1, "row": row, "center_hz": int(rf_center), "span_hz": int(span_hz)}
 
     def _level(self, pcm_bytes):
         a = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float64) / 32768.0
@@ -250,6 +267,13 @@ class LiveSession:
             nblk += 1
             if nblk % per_pub:
                 continue
+            try:                                         # Wasserfall: ±100 kHz (WFM ±250 kHz) um die Frequenz
+                u = np.frombuffer(raw, dtype=np.uint8).astype(np.float32)
+                zz = ((u[0::2] - 127.5) + 1j * (u[1::2] - 127.5)) / 127.5
+                self._wf_tuned = int(freq_hz) + DSP.TUNE_OFFSET
+                self._wf_row(zz, DSP.IN_RATE, int(freq_hz), 500000 if self.mode == "wfm" else 200000)
+            except Exception:
+                pass
             pcm = b"".join(buf)
             buf = []
             self.snr_db = round(demod.snr_db, 1)
@@ -519,6 +543,11 @@ class LiveSession:
             i, q = s[:, 0], s[:, 1]
             z = (i - 1j * q) if conj else (i + 1j * q)
             pcm = self._pmsdr_process(z, offset)
+            try:                                         # Wasserfall: ganzes 48-kHz-Fenster der PMSDR
+                self._wf_tuned = center
+                self._wf_row(z, rate, center, rate * 0.9)
+            except Exception:
+                pass
             self._level(pcm)
             self._publish(pcm)
         self._kill()

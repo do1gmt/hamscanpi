@@ -363,3 +363,43 @@ small.score { color: var(--muted); }
 .sysgrid .stat.warn { border: 1px solid var(--amber); } .sysgrid .stat.warn b { color: var(--amber); }
 .sysgrid .stat.bad { border: 1px solid var(--red); } .sysgrid .stat.bad b { color: var(--red); }
 .sstv-dl { margin-top: .3rem; }
+
+.badge-watch { background: rgba(245,185,66,.15); color: var(--amber); border: 1px solid rgba(245,185,66,.4); }
+.stations-table td { white-space: nowrap; }
+.stations-table a { color: var(--accent); text-decoration: none; }
+.watch-table td { white-space: normal; vertical-align: middle; }
+.watch-table td:last-child { width: 1%; text-align: right; }
+.watch-add { margin-top: .6rem; }
+@media (max-width: 599px) {
+  .stations-table th:nth-child(4), .stations-table td:nth-child(4), .stations-table th:nth-child(7), .stations-table td:nth-child(7),
+  .stations-table th:nth-child(8), .stations-table td:nth-child(8) { display: none; }
+  .stations-table { font-size: .8rem; }
+  .tabs-main button { padding: .5rem .3rem; font-size: .78rem; }
+}
+
+.tabs-main .ts { display: none; }
+@media (max-width: 599px) {
+  .tabs-main .tl { display: none; } .tabs-main .ts { display: inline; font-size: 1.15rem; }
+  .stations-table th:nth-child(2), .stations-table td:nth-child(2), .stations-table th:nth-child(5), .stations-table td:nth-child(5) { display: none; }
+  .stations-table td:nth-child(6) { white-space: normal; }
+}
+[hidden] { display: none !important; }   /* auch für Felder mit eigenem display */
+h3.sub { font-size: .85rem; color: var(--muted); margin: .9rem 0 .3rem; font-weight: 600; }
+
+.sched-on { color: var(--teal); font-weight: 600; }
+.sched-add summary { margin-top: .5rem; }
+.sched-now td { background: rgba(45,212,191,.06); }
+#scDays, #scBands { margin: .4rem 0; }
+
+.st-map { height: 380px; border-radius: 8px; margin: .5rem 0; background: var(--panel-2); }
+.map-box summary { font-weight: 600; margin: .3rem 0; }
+.leaflet-popup-content { color: #111; font-size: .85rem; }
+table.heat { border-collapse: separate; border-spacing: 2px; font-size: .68rem; }
+table.heat th { color: var(--muted); font-weight: 600; padding: 0 .25rem; text-align: right; white-space: nowrap; }
+table.heat td { width: 1.7em; height: 1.5em; text-align: center; border-radius: 3px; color: #04121a;
+  background: rgba(45, 212, 191, calc(.08 + var(--a, 0) * .92)); }
+table.heat td.h0 { background: var(--panel-2); }
+
+.wf-wrap { margin: .5rem 0; }
+#wf { width: 100%; height: 160px; display: block; border-radius: 6px; background: #071018; cursor: crosshair; image-rendering: pixelated; }
+.wf-scale { display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); font-family: var(--mono, monospace); }

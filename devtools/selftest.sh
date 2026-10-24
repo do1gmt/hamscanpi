@@ -84,5 +84,44 @@ peak = tracemalloc.get_traced_memory()[1] // 2**20
 print(f"   {len(r)} Bilder, Spitze {peak} MB:", "ok" if len(r) == 5 and peak < 400 else "FEHLER")
 sys.exit(0 if len(r) == 5 and peak < 400 else 1)
 PY
+echo "== 7 Rufzeichen aus Dekodierungen, ADIF"
+python3 - <<'PY' && ok "Rufzeichen und ADIF" || bad "Rufzeichen/ADIF"
+import sys; sys.path.insert(0, "bin")
+import stations as S
+f = S.ft8_senders([{"text": "CQ K1ABC FN42", "snr": -14}, {"text": "DL1XYZ OK2ABC -07", "snr": -3}, {"text": "CQ DX 9A1A JN75", "snr": 0}])
+assert [x[0] for x in f] == ["K1ABC", "OK2ABC", "9A1A"] and f[0][1] == "FN42", f
+v = S.senders_for({"decoders": [{"type": "FT8", "detail": "3 FT8-Nachrichten · Dial 14.074000 MHz USB", "messages": [{"text": "CQ K1ABC FN42", "snr": -14, "audio_hz": 1500}]}]})
+assert v[0][5] == 14075500.0, v
+a = S.aprs_senders("DL2ABC-9 → APRS über ARISS: !4807.00N/01134.00E>Mobil")
+assert a[0][0] == "DL2ABC-9" and a[0][1] == "JN58SC", a
+assert [x[0] for x in S.text_senders("CQ CQ DE OE3ABC OE3ABC K")] == ["OE3ABC"]
+assert S.text_senders("THE QUICK BROWN FOX 5NN") == []
+d, b = S.distance_bearing("FN42", "JO62QM"); assert 6000 < d < 6600 and 280 < b < 310, (d, b)
+x = S.adif([{"call": "K1ABC", "time": "2026-10-24T08:00:00+00:00", "freq_hz": 14074500, "mode": "FT8", "grid": "FN42", "snr": -14}], "N0CALL", "JO62QM")
+assert "<CALL:5>K1ABC" in x and "<BAND:3>20m" in x and "<RST_RCVD:3>-14" in x and x.count("<EOR>") == 1
+r = S.check_rules([{"id": 1, "rf_hz": 439401000, "band": "70cm", "calls": [{"call": "K1ABC", "grid": "FN42", "mode": "FT8"}]}],
+                  [{"id": "a", "type": "freq", "value": "439.400"}, {"id": "b", "type": "call", "value": "K1*"},
+                   {"id": "c", "type": "dx", "value": "5000"}, {"id": "d", "type": "call", "value": "DL*"}], "JO62QM")
+assert [x[0]["id"] for x in r] == ["a", "b", "c"], r
+PY
+echo "== 8 Zeitpläne, PSK-Reporter-Pakete"
+python3 - <<'PY' && ok "Zeitpläne und IPFIX" || bad "Zeitpläne/IPFIX"
+import sys, time, json, struct; sys.path.insert(0, "bin")
+import scan_plan as SP, pskreporter as P
+cfg = json.load(open("config/scanner.default.json"))
+st = {"active_device": "pmsdr", "selected_bands": ["20m"], "schedules": [
+      {"name": "Nacht", "days": list(range(7)), "from": "22:00", "to": "06:00", "bands": ["80m", "40m"], "enabled": True}]}
+t = lambda h: time.mktime((2026, 10, 27, h, 30, 0, 0, 0, -1))
+assert SP.effective_settings(st, cfg, t(23))["selected_bands"] == ["80m", "40m"]
+assert SP.effective_settings(st, cfg, t(3))["selected_bands"] == ["80m", "40m"]
+assert SP.effective_settings(st, cfg, t(12))["selected_bands"] == ["20m"]
+m = P.packets([{"call": "K1ABC", "freq_hz": 14075500, "mode": "FT8", "grid": "FN42", "snr": -14, "t": 1792800000}],
+              "N0CALL", "JO62QM", "", 1, 42)[0]
+v, ln = struct.unpack("!HH", m[:4]); assert v == 10 and ln == len(m) and ln % 4 == 0
+i = 16; ids = []
+while i < len(m):
+    sid, sl = struct.unpack("!HH", m[i:i + 4]); assert sl % 4 == 0; ids.append(sid); i += sl
+assert ids == [3, 2, 0x9992, 0x9993] and i == len(m), ids
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

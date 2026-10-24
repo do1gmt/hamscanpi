@@ -11,6 +11,8 @@ Pegelverlauf über die Zeit bestimmen und den Ton aus GENAU DIESER Aufnahme schn
 Störlinien fallen über die Bandbreite heraus (eine FFT-Linie statt eines Kanals),
 und jede Aufnahme wird nach dem Demodulieren bewertet: Ton / nur Träger / Rauschen.
 """
+import math
+import time
 import numpy as np
 from scipy.signal import welch, butter, sosfiltfilt
 
@@ -100,6 +102,102 @@ def audio_quality(zi, zq, rate, mode):
     return "rauschen", ratio
 
 
+FOLLOW_MODES = {"fm", "relais", "am", "dv"}         # Sprache: ganzes QSO aufnehmen
+
+
+def follow_qso(dev, center, chans, cfg, log=print):
+    """Am Fenster dranbleiben, solange auf einem der Kanäle gesprochen wird.
+
+    rtl_sdr läuft dabei durchgehend (keine Lücken wie bei mehreren Einzelaufnahmen); jede Sekunde
+    wird je Kanal geprüft, ob noch Signal da ist. Schluss ist, wenn alle Kanäle qso_hang_seconds
+    (Standard 4 s) still waren oder qso_max_seconds (Standard 120 s) erreicht sind.
+    Rückgabe {rf: (i, q)} mit 48-kHz-Ausschnitten (unnormiert)."""
+    import subprocess
+    from scipy.signal import resample_poly
+    rate = int(dev.rate)
+    max_s = float(cfg.get("qso_max_seconds", 120))
+    hang_s = float(cfg.get("qso_hang_seconds", 4))
+    g = math.gcd(AUDIO_RATE, rate)
+    up, down = AUDIO_RATE // g, rate // g
+    pad = 20 * down
+    cmd = [dev.binary, "-f", str(int(center)), "-s", str(rate), "-d", str(dev.index), "-p", str(dev.ppm)]
+    if dev.gain:
+        cmd += ["-g", str(dev.gain)]
+    if getattr(dev, "bias_t", False):
+        cmd += ["-T"]
+    cmd.append("-")
+    out = {c["rf"]: [] for c in chans}
+    tails = {c["rf"]: None for c in chans}
+    ref = {}                                       # Kanalleistung bei Signal (aus der ersten Sekunde)
+    silent = {c["rf"]: 0.0 for c in chans}
+    t0, n_done = time.time(), 0
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        log(f"      QSO-Verfolgung nicht möglich: {e}")
+        return {}
+    try:
+        while n_done / rate < max_s:
+            raw = p.stdout.read(rate * 2)          # 1 s
+            if not raw or len(raw) < rate:
+                break
+            u = np.frombuffer(raw, dtype=np.uint8)[: len(raw) // 2 * 2].reshape(-1, 2)
+            i = (u[:, 0].astype(np.float32) - 127.5) / 127.5
+            q = (u[:, 1].astype(np.float32) - 127.5) / 127.5
+            i -= i.mean(); q -= q.mean()
+            n_idx = np.arange(n_done, n_done + len(i), dtype=np.float64)
+            all_quiet = True
+            for c in chans:
+                rf = c["rf"]
+                z = (i + 1j * q).astype(np.complex64) * np.exp(-2j * np.pi * (rf - center) * n_idx / rate).astype(np.complex64)
+                tail = tails[rf]
+                zz = z if tail is None else np.concatenate([tail, z])
+                y = resample_poly(zz, up, down)
+                skip = 0 if tail is None else len(tail) * up // down
+                y = y[skip:skip + len(z) * up // down]
+                tails[rf] = z[-pad:]
+                out[rf].append(y.astype(np.complex64))
+                # Kanalleistung (±6 kHz) in 0,1-s-Rahmen
+                fr = AUDIO_RATE // 10
+                nfr = len(y) // fr
+                if nfr == 0:
+                    continue
+                Y = np.fft.fft(y[: nfr * fr].reshape(nfr, fr), axis=1)
+                f = np.fft.fftfreq(fr, 1.0 / AUDIO_RATE)
+                pw = (np.abs(Y[:, np.abs(f) <= 6000]) ** 2).sum(axis=1)
+                if rf not in ref:
+                    ref[rf] = float(np.percentile(pw, 90)) / (10 ** (max(6.0, c.get("level", 20.0)) / 20.0))
+                on = pw > ref[rf]
+                # Stille am Ende dieses Abschnitts hochzählen, bei Signal zurücksetzen
+                if on.any():
+                    last_on = int(np.flatnonzero(on)[-1])
+                    silent[rf] = (nfr - 1 - last_on) * 0.1
+                else:
+                    silent[rf] += nfr * 0.1
+                if silent[rf] < hang_s:
+                    all_quiet = False
+            n_done += len(i)
+            if all_quiet:
+                break
+    finally:
+        try:
+            p.terminate(); p.wait(timeout=3)
+        except Exception:
+            p.kill()
+    secs = n_done / rate
+    res = {}
+    for c in chans:
+        y = np.concatenate(out[c["rf"]]) if out[c["rf"]] else np.zeros(0, np.complex64)
+        # Stille am Ende bis auf 1 s abschneiden
+        cut = int(max(0.0, silent[c["rf"]] - 1.0) * AUDIO_RATE)
+        if cut and cut < len(y):
+            y = y[: len(y) - cut]
+        res[c["rf"]] = (y.real.astype(np.float64), y.imag.astype(np.float64))
+    freqs = ", ".join(f"{c['rf'] / 1e6:.4f}" for c in chans)
+    log(f"      QSO verfolgt: {freqs} MHz, {secs:.0f} s" + (" (Höchstdauer)" if secs >= max_s - 0.5 else ""))
+    return res
+
+
 def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
     """Ein Fenster belauschen. Rückgabe: Liste von Treffern (wie Scanner-Peaks)."""
     from devices import RECDIR, recording_name, wav_write_iq
@@ -165,7 +263,11 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
 
     hits, rejected = [], 0
     extra = None
+    follow = None                                    # verfolgte Durchgänge (Relais-/FM-QSOs), je Kanal
     del P
+    end_frames = frames - int(0.25 / frame_s)
+    to_follow = [c for c in picked if c["mode"] in FOLLOW_MODES and np.flatnonzero(c["active"]).size
+                 and np.flatnonzero(c["active"])[-1] >= end_frames]
     for c in picked:
         # Störlinie: eine einzelne FFT-Linie (≤ 2 kHz) die ganze Zeit an
         # (AM nicht: ATIS/VOLMET senden dauernd mit schmalem Träger – dort entscheidet die Tonprüfung)
@@ -181,11 +283,21 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
         ca = (act[0] * NFFT - a) * AUDIO_RATE // int(rate)
         cb = (act[-1] * NFFT - a) * AUDIO_RATE // int(rate)
         core = (zi[ca:cb], zq[ca:cb])
-        # Läuft der Durchgang bis zum Ende der Aufnahme: weiterhören (einmal je Fenster)
-        if act[-1] >= frames - int(0.25 / frame_s):
-            if extra is None:
-                extra = dev._grab(center, float(cfg.get("record_seconds", 6.0)))
-            xi, xq = dev._slice(extra[0], extra[1], center, c["rf"], AUDIO_RATE)
+        # Läuft der Durchgang bis zum Ende der Aufnahme: weiterhören
+        if act[-1] >= end_frames:
+            if c in to_follow and float(cfg.get("qso_max_seconds", 120)) > 0:
+                # Sprache/Relais: dranbleiben, bis der Durchgang (das Gespräch) endet
+                if follow is None:
+                    follow = follow_qso(dev, center, to_follow, cfg, log)
+                xi, xq = follow.get(c["rf"], (np.zeros(0), np.zeros(0)))
+                if len(xi):                                  # wie der erste Teil auf den Spitzenwert beziehen
+                    pk = float(np.max(np.abs(xi + 1j * xq))) or 1.0
+                    xi, xq = xi / pk * 0.8, xq / pk * 0.8
+            else:
+                if extra is None:
+                    extra = dev._grab(center, float(cfg.get("record_seconds", 6.0)))
+                xi, xq = dev._slice(extra[0], extra[1], center, c["rf"], AUDIO_RATE)
+            # gleicher Maßstab wie der erste Teil: beide Stücke auf ihren Spitzenwert bezogen
             zi, zq = np.concatenate([zi, xi]), np.concatenate([zq, xq])
         verdict, score = audio_quality(core[0], core[1], AUDIO_RATE, c["mode"])
         if verdict == "rauschen" and c["mode"] not in NOISY_OK:

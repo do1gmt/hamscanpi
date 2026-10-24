@@ -1976,5 +1976,7 @@
     "pmsdr": "",
     "rtlsdr": ""
   },
-  "allow_restricted_bands": false
+  "allow_restricted_bands": false,
+  "qso_max_seconds": 120,
+  "qso_hang_seconds": 4
 }

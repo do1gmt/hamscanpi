@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Ersatz für rtl_sdr in Tests: Rauschen in Echtzeit (ohne -n) bzw. so schnell wie möglich (mit -n).
-FAKE_SIGNALS="439200000:fm,446006250:fm" fügt FM-Signale (Sprachersatz: 300–2700 Hz Wobbelton, 3 kHz Hub) ein."""
+FAKE_SIGNALS="439200000:fm,446006250:fm" fügt FM-Signale (Sprachersatz: 300–2700 Hz Wobbelton, 3 kHz Hub) ein.
+FAKE_STOP_S=8: im Dauerbetrieb (ohne -n) verstummen die Signale nach 8 s – Ende eines Durchgangs."""
 import os, sys, time, numpy as np
 a = sys.argv
 n = int(a[a.index('-n') + 1]) if '-n' in a else None
@@ -16,7 +17,8 @@ try:
     while n is None or sent < n:
         m = blk if n is None else min(blk, n - sent)
         z = (rng.standard_normal(m) + 1j * rng.standard_normal(m)) * 6
-        if sigs:
+        stop = float(os.environ.get('FAKE_STOP_S', '0') or 0)
+        if sigs and not (n is None and stop and t_s >= stop):
             t = t_s + np.arange(m) / fs
             fa = 1500 + 1000 * np.sin(2 * np.pi * 0.7 * t)                 # Ton wandert 500–2500 Hz
             pa = ph_a[0] + 2 * np.pi * np.cumsum(fa) / fs

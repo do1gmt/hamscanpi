@@ -100,6 +100,53 @@ def rtl_centers(ranges, points, step):
     return sorted({int(round(c)) for c in centers})
 
 
+# ---------------------------------------------------------------- Zeitpläne
+# web_settings.json → "schedules": [{"id", "name", "days": [0..6] (Mo=0), "from": "HH:MM", "to": "HH:MM",
+#                                    "bands": [...], "enabled": true}]
+# Zeit ist die Ortszeit des Pi. "to" < "from" heißt über Mitternacht (22:00–06:00). Ein Zeitplan gilt nur,
+# wenn er Bänder des gerade gewählten Geräts enthält – sonst gilt die normale Auswahl.
+
+def _hm(s):
+    h, m = str(s).split(":")
+    return int(h) * 60 + int(m)
+
+
+def active_schedule(settings, cfg=None, now=None):
+    """Der gerade gültige Zeitplan (dict) oder None."""
+    import time as _t
+    lt = _t.localtime(now)
+    minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
+    cfg = cfg if cfg is not None else read_json(CFG, {"ranges": []})
+    dev = "rtlsdr" if settings.get("active_device") == "rtlsdr" else "pmsdr"
+    dev_bands = {b["name"] for b in cfg.get("ranges", []) if str(b.get("device", "pmsdr")) == dev}
+    for sc in settings.get("schedules") or []:
+        if not sc.get("enabled", True):
+            continue
+        try:
+            a, b = _hm(sc["from"]), _hm(sc["to"])
+        except Exception:
+            continue
+        days = set(sc.get("days") or range(7))
+        if a <= b:
+            inside = a <= minute < b and wd in days
+        else:                                               # über Mitternacht: Tag zählt ab Beginn
+            inside = (minute >= a and wd in days) or (minute < b and (wd - 1) % 7 in days)
+        if inside and dev_bands & set(sc.get("bands") or []):
+            return sc
+    return None
+
+
+def effective_settings(settings, cfg=None, now=None):
+    """Einstellungen mit den Bändern des aktiven Zeitplans (falls einer gilt)."""
+    sc = active_schedule(settings, cfg, now)
+    if not sc:
+        return settings
+    out = dict(settings)
+    out["selected_bands"] = list(sc.get("bands") or [])
+    out["schedule_active"] = sc.get("name") or "Zeitplan"
+    return out
+
+
 def make_plan(
     cfg=None,
     settings=None
@@ -115,6 +162,7 @@ def make_plan(
             SETTINGS,
             {}
         )
+    settings = effective_settings(settings, cfg)
 
     all_names = [
         str(b["name"])

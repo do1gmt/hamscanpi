@@ -31,7 +31,17 @@ PMSDR receiver (IW3AUT) for shortwave.
 - Decoders: **FT8/FT4** (via [ft8_lib](https://github.com/kgoba/ft8_lib)), **CW**, **RTTY**,
   **APRS** and **POCSAG** (via multimon-ng), **SSTV** on shortwave (14.230, 21.340, 28.680 USB,
   3.730 and 7.165 LSB) – including images whose start was missed and stations that are off-frequency.
-- Live listening with seek function, signal-to-noise display and overload warning.
+- Live listening with waterfall (tap to tune), seek function, signal-to-noise display and overload warning.
+- Band schedules: other bands by time of day and weekday.
+- On repeaters and FM channels the scanner stays until the QSO ends and records it as a whole.
+
+**Stations and alerts**
+- *Stations* tab: every transmitting callsign from FT8/FT4, APRS, CW and RTTY with locator, distance,
+  bearing and last heard – exportable as an ADIF SWL log.
+- Watchlist: alerts for a frequency, a callsign (`DL*`), DX beyond N km or events such as SSTV from
+  the ISS – in the log, on the hit card, by mail or as push to your phone (ntfy, Telegram).
+- Map of heard stations, activity overview by band and hour, optional reporting of FT8/FT4 spots
+  to [PSK Reporter](https://pskreporter.info).
 
 **Satellites (RTL-SDR)**
 - Switched on and off with the band chip *Satellites*; passes are only recorded while the RTL-SDR is the

@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0 – 2026-10-24
+
+- **Push to your phone** via ntfy or Telegram, in addition to or instead of mail – for errors, scans
+  and watchlist alerts; SSTV images are attached.
+- **Band schedules:** other bands at certain times of day and weekdays (e.g. 80/40 m at night),
+  incl. satellites; the active schedule is shown on the scan page. Times in the Pi's local time.
+- **Map** of heard stations with a locator (OpenStreetMap, loaded on demand).
+- **Activity overview:** hits per tuning by band and hour (UTC) and by weekday and hour.
+- **PSK Reporter:** heard FT8/FT4 stations are reported every 5 minutes (opt-in, IPFIX over UDP).
+- **Waterfall** in live listening (RTL-SDR ±100 kHz, PMSDR whole window); tap to tune.
+- FT8 spots keep their exact frequency (dial + audio offset).
+- **Watchlist:** get notified when the scanner hears a frequency (±tolerance), a callsign (wildcards
+  like `DL*`), a station farther than N km, or an event (SSTV from the ISS, any SSTV image, APRS via
+  the ISS, any satellite). Shown in the log, as 🔔 on the hit card and by mail (quiet time per rule).
+- **Whole QSOs:** on FM/repeater/AM/digital-voice channels the scanner stays on a transmission until
+  it ends (4 s of silence, at most 120 s, `qso_hang_seconds` / `qso_max_seconds`) and records it
+  without gaps.
+- **Heard stations:** new tab with all transmitting callsigns from FT8/FT4, APRS, CW and RTTY –
+  locator, distance and bearing, bands, modes, last heard; links to QRZ.com.
+- **ADIF export** of the heard stations as an SWL log; own callsign under *Settings → Station*.
+- Mobile: the settings tab is a ⚙ icon so six tabs fit.
+
 ## 1.0.0 – 2026-10-24
 
 First public release.

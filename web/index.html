@@ -22,9 +22,10 @@
 <nav class="tabs-main" aria-label="Bereiche">
   <button type="button" data-view="scan" class="on">Scan</button>
   <button type="button" data-view="hits">Treffer</button>
+  <button type="button" data-view="stations">Stationen</button>
   <button type="button" data-view="live">Live</button>
   <button type="button" data-view="logs">Protokoll</button>
-  <button type="button" data-view="settings">Einstellungen</button>
+  <button type="button" data-view="settings"><span class="tl">Einstellungen</span><span class="ts" aria-hidden="true">⚙</span></button>
 </nav>
 
 <main class="views">
@@ -135,9 +136,60 @@
           <div class="segment-list" id="moreSegmentList"></div>
         </details>
         <div class="save-note" id="bandSaveNote" aria-live="polite"></div>
+        <p class="hint sched-on" id="schedActiveNote" hidden></p>
+      </section>
+      <section class="panel" id="panel-sched">
+        <h2>Zeitpläne</h2>
+        <p class="hint" id="schedHint">Zu bestimmten Zeiten andere Bänder scannen, z. B. nachts 80 und 40 m. Solange ein Zeitplan gilt, ersetzt er die Auswahl oben (auch „Satelliten“). Er gilt nur, wenn er Bänder des gewählten Geräts enthält.</p>
+        <div id="schedList"></div>
+        <details class="sched-add"><summary>Zeitplan hinzufügen</summary>
+          <div class="filter-grid">
+            <label class="field"><span>Name</span><input id="scName" type="text" placeholder="z. B. Nacht" maxlength="40" autocomplete="off"></label>
+            <label class="field"><span>von</span><input id="scFrom" type="time" value="22:00"></label>
+            <label class="field"><span>bis</span><input id="scTo" type="time" value="06:00"></label>
+          </div>
+          <div class="chips" id="scDays"></div>
+          <div class="chips" id="scBands"></div>
+          <div class="actions"><button type="button" class="btn btn-primary" id="scAdd">Zeitplan speichern</button></div>
+        </details>
+        <div class="save-note" id="schedNote" aria-live="polite"></div>
       </section>
     </div>
   </div>
+</section>
+
+<section class="view" data-view="stations" hidden>
+  <section class="panel">
+    <h2>Gehörte Stationen</h2>
+    <p class="hint">Rufzeichen aus FT8/FT4, APRS, CW und RTTY – nur sendende Stationen. Entfernung und Richtung aus dem Locator der Station (FT8, APRS-Position) und deinem eigenen Locator.</p>
+    <div class="row filter-row">
+      <label class="field"><span>Rufzeichen</span><input id="stQuery" type="text" placeholder="DL1ABC oder DL*" autocapitalize="characters" autocomplete="off"></label>
+      <label class="field"><span>Band</span><select id="stBand"><option value="">alle</option></select></label>
+      <label class="field"><span>Zeitraum</span><select id="stDays"><option value="1">24 h</option><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="365">1 Jahr</option><option value="0">alles</option></select></label>
+      <a class="btn" id="stAdif" href="#" download>↓ ADIF-Export</a>
+    </div>
+    <details class="map-box" id="mapBox"><summary>Karte</summary>
+      <div id="stMap" class="st-map"></div>
+      <p class="hint" id="mapNote">Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Nur Stationen mit Locator.</p>
+    </details>
+    <div class="table-wrap"><table class="table stations-table">
+      <thead><tr><th>Rufzeichen</th><th>Locator</th><th>Entfernung</th><th>Bänder</th><th>Betriebsart</th><th>Zuletzt (UTC)</th><th title="Anzahl Aussendungen">×</th><th>SNR</th></tr></thead>
+      <tbody id="stTable"></tbody></table></div>
+    <div class="row pager-row">
+      <button type="button" class="btn btn-small" id="stPrev">◀</button><span class="hint" id="stPos"></span><button type="button" class="btn btn-small" id="stNext">▶</button>
+    </div>
+    <p class="hint">ADIF ist das Austauschformat der Logbuchprogramme. Der Export ist ein SWL-Log (jede gehörte Aussendung ein Eintrag, SWL=Y) – mit deinem Rufzeichen und Locator aus den Einstellungen.</p>
+  </section>
+  <section class="panel">
+    <h2>Aktivität</h2>
+    <p class="hint">Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in UTC.</p>
+    <div class="row filter-row">
+      <label class="field"><span>Zeitraum</span><select id="actDays"><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="90">90 Tage</option><option value="365">1 Jahr</option></select></label>
+    </div>
+    <div class="table-wrap"><table class="heat" id="actBands"></table></div>
+    <h3 class="sub">Wochentag und Stunde (alle Bänder)</h3>
+    <div class="table-wrap"><table class="heat" id="actWeek"></table></div>
+  </section>
 </section>
 
 <section class="view" data-view="live" hidden>
@@ -167,6 +219,10 @@
       <button class="btn" id="liveSeekUp" title="Suchlauf aufwärts ab der eingestellten Frequenz">Suchlauf ▶▶</button>
     </div>
     <div class="smeter"><div class="smeter-bar" id="liveLevel"></div></div>
+    <div class="wf-wrap" id="wfWrap" hidden>
+      <canvas id="wf" width="512" height="160" title="Wasserfall – antippen zum Abstimmen"></canvas>
+      <div class="wf-scale"><span id="wfLo"></span><span id="wfMid"></span><span id="wfHi"></span></div>
+    </div>
     <div class="hint" id="liveText">aus</div>
     <label class="check"><input type="checkbox" id="liveFallback"> einfacher Player (falls kein Ton kommt)</label>
     <audio id="liveAudio" controls hidden></audio>
@@ -211,13 +267,36 @@
     <div class="col">
       <section class="panel" id="panel-station">
         <h2>Station</h2>
+        <label class="field"><span>Mein Rufzeichen (für den ADIF-Export)</span>
+          <input id="myCall" type="text" placeholder="z. B. DL1ABC" maxlength="12" autocapitalize="characters" autocomplete="off">
+        </label>
         <label class="field"><span>Mein Locator (für Entfernung und Richtung bei FT8/FT4)</span>
           <input id="myLocator" type="text" placeholder="z. B. JO31AB" maxlength="8" autocapitalize="characters" autocomplete="off">
         </label>
+        <label class="check"><input type="checkbox" id="pskOn"> FT8/FT4-Spots an PSK Reporter melden</label>
+        <p class="hint">Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf <a href="https://pskreporter.info/pskmap.html" target="_blank" rel="noopener">pskreporter.info</a> – mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.</p>
         <label class="field"><span>Sprache / Language</span>
           <select id="uiLang"><option value="de">Deutsch</option><option value="en">English</option></select>
         </label>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-watch">
+        <h2>Beobachtungsliste</h2>
+        <p class="hint">Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn Mail eingerichtet ist, per Mail (höchstens eine je Regel in der Ruhezeit).</p>
+        <div id="watchList"></div>
+        <div class="filter-grid watch-add">
+          <label class="field"><span>Art</span><select id="wType">
+            <option value="freq">Frequenz (MHz)</option><option value="call">Rufzeichen</option><option value="dx">Entfernung ab (km)</option><option value="event">Ereignis</option>
+          </select></label>
+          <label class="field" id="wValWrap"><span>Wert</span><input id="wValue" type="text" placeholder="439.400" autocomplete="off"></label>
+          <label class="field" id="wEvWrap" hidden><span>Ereignis</span><select id="wEvent"></select></label>
+          <label class="field"><span>Bezeichnung</span><input id="wLabel" type="text" placeholder="z. B. Relais DB0XYZ" maxlength="60" autocomplete="off"></label>
+          <label class="field" id="wTolWrap"><span>Toleranz (kHz)</span><input id="wTol" type="number" value="5" min="0.5" max="100" step="0.5"></label>
+          <label class="field"><span>Ruhezeit (min)</span><input id="wQuiet" type="number" value="30" min="0" max="1440" step="5"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="wMail" checked> per Mail/Push melden</label>
+        <div class="actions"><button type="button" class="btn btn-primary" id="wAdd">Hinzufügen</button></div>
+        <div class="save-note" id="watchNote" aria-live="polite"></div>
       </section>
       <section class="panel" id="panel-auth">
         <h2>Zugangsschutz</h2>
@@ -285,7 +364,7 @@
     </div>
     <div class="col">
       <section class="panel" id="panel-notify">
-        <h2>Benachrichtigungen (Mail)</h2>
+        <h2>Benachrichtigungen</h2>
         <form class="form" id="notifyForm">
           <label class="check"><input type="checkbox" name="enabled"> Mailversand aktiv</label>
           <div class="filter-grid">
@@ -297,15 +376,26 @@
             <label class="field"><span>Absender</span><input name="mail_from" type="text" placeholder="pi@example.de"></label>
             <label class="field"><span>Empfänger</span><input name="mail_to" type="text" placeholder="ich@example.de"></label>
           </div>
+          <h3 class="sub">Push aufs Handy</h3>
+          <div class="filter-grid">
+            <label class="field"><span>Dienst</span><select name="push" id="pushType"><option value="">aus</option><option value="ntfy">ntfy</option><option value="telegram">Telegram</option></select></label>
+            <label class="field push-ntfy"><span>ntfy-Adresse</span><input name="ntfy_url" type="text" placeholder="https://ntfy.sh/mein-geheimes-thema" autocomplete="off"></label>
+            <label class="field push-ntfy"><span>ntfy-Zugangstoken (optional)</span><input name="ntfy_token" type="password" autocomplete="new-password"></label>
+            <label class="field push-tg"><span>Telegram-Bot-Token</span><input name="tg_token" type="password" autocomplete="new-password"></label>
+            <label class="field push-tg"><span>Telegram-Chat-ID</span><input name="tg_chat" type="text" autocomplete="off"></label>
+          </div>
+          <p class="hint push-ntfy">ntfy: App „ntfy“ aufs Handy, dort ein Thema abonnieren (am besten ein langer, zufälliger Name – wer ihn kennt, liest mit) und dieselbe Adresse hier eintragen.</p>
+          <p class="hint push-tg">Telegram: bei @BotFather einen Bot anlegen (Token), dem Bot eine Nachricht schreiben, die Chat-ID z. B. über @userinfobot erfahren.</p>
+          <h3 class="sub">Wann melden</h3>
           <div class="notify-rule">
-          <label class="check"><input type="checkbox" name="on_error"> Mail bei Fehlern</label>
+          <label class="check"><input type="checkbox" name="on_error"> bei Fehlern</label>
           <label class="inline-num">höchstens eine je <input name="throttle_min" type="number" min="1" value="30" inputmode="numeric"> min</label>
         </div>
           <div class="notify-rule">
-          <label class="check"><input type="checkbox" name="on_scan_done"> Mail nach jedem Scan</label>
+          <label class="check"><input type="checkbox" name="on_scan_done"> nach jedem Scan</label>
           <label class="inline-num">ab <input name="min_new_hits" type="number" min="0" value="1" inputmode="numeric"> Treffern, fehlgeschlagene Scans immer</label>
         </div>
-          <div class="actions"><button type="submit" class="btn btn-primary">Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button></div>
+          <div class="actions"><button type="submit" class="btn btn-primary">Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button><button type="button" class="btn" id="pushTest">Test-Push senden</button></div>
           <div class="save-note" id="notifyNote"></div>
           <p class="hint">Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.</p>
         </form>

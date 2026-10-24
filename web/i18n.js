@@ -144,6 +144,55 @@
     'DMR/C4FM/D-STAR: Spektrum + Rohton': 'DMR/C4FM/D-STAR: spectrum + raw audio',
     'Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme': 'only audible during a pass; an image needs ~10 min of recording',
     'Sprache / Language:': 'Sprache / Language:',
+    // PSK Reporter
+    'FT8/FT4-Spots an PSK Reporter melden': 'Report FT8/FT4 spots to PSK Reporter', 'Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf': 'Heard FT8/FT4 stations then appear every 5 minutes on',
+    '– mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.': '– with your callsign as receiver. Needs callsign and locator.',
+    '✓ PSK Reporter an – erste Spots nach etwa 5 min': '✓ PSK Reporter on – first spots after about 5 min', '✓ PSK Reporter aus': '✓ PSK Reporter off',
+    'An PSK Reporter gemeldet': 'Reported to PSK Reporter', 'PSK Reporter: Fehler': 'PSK Reporter: error',
+    'Für PSK Reporter zuerst Rufzeichen und Locator eintragen': 'For PSK Reporter enter callsign and locator first',
+    // Karte, Aktivität
+    'Wasserfall – antippen zum Abstimmen': 'Waterfall – tap to tune',
+    'Karte': 'Map', 'Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Nur Stationen mit Locator.': 'Map background: OpenStreetMap (needs internet in the browser). Only stations with a locator.',
+    'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.': 'Map not available – the browser cannot reach cdnjs.cloudflare.com or OpenStreetMap.',
+    'Aktivität': 'Activity', '90 Tage': '90 days', 'Noch keine Daten.': 'No data yet.', 'Wochentag und Stunde (alle Bänder)': 'Weekday and hour (all bands)',
+    'Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in UTC.':
+      'When there was something to hear on which band – hits per tuning, so the number of scans does not distort the picture. Hours in UTC.',
+    // Zeitpläne
+    'Zeitpläne': 'Schedules', 'Zeitplan hinzufügen': 'Add schedule', 'Name': 'Name', 'von': 'from', 'z. B. Nacht': 'e.g. Night',
+    'Zeitplan speichern': 'Save schedule', 'Noch kein Zeitplan.': 'No schedule yet.', 'täglich': 'daily', 'aktiv': 'active', '✓ Zeitplan gespeichert': '✓ Schedule saved',
+    'Mo': 'Mon', 'Di': 'Tue', 'Mi': 'Wed', 'Do': 'Thu', 'Fr': 'Fri', 'Sa': 'Sat', 'So': 'Sun',
+    'Zu bestimmten Zeiten andere Bänder scannen, z. B. nachts 80 und 40 m. Solange ein Zeitplan gilt, ersetzt er die Auswahl oben (auch „Satelliten“). Er gilt nur, wenn er Bänder des gewählten Geräts enthält.':
+      'Scan other bands at certain times, e.g. 80 and 40 m at night. While a schedule applies it replaces the selection above (including "Satellites"). It only applies if it contains bands of the selected receiver.',
+    'Zeitplan: Uhrzeiten als HH:MM, Beginn und Ende verschieden': 'Schedule: times as HH:MM, start and end must differ', 'Zeitplan: mindestens ein Band wählen': 'Schedule: choose at least one band',
+    // Push
+    'Benachrichtigungen': 'Notifications', 'Push aufs Handy': 'Push to your phone', 'Dienst': 'Service', 'ntfy-Adresse': 'ntfy address',
+    'ntfy-Zugangstoken (optional)': 'ntfy access token (optional)', 'Telegram-Bot-Token': 'Telegram bot token', 'Telegram-Chat-ID': 'Telegram chat ID',
+    'Wann melden': 'When to notify', 'bei Fehlern': 'on errors', 'nach jedem Scan': 'after every scan', 'Test-Push senden': 'Send test push',
+    'per Mail/Push melden': 'notify by mail/push', '✓ Test-Push verschickt – kommt er an?': '✓ Test push sent – did it arrive?',
+    'ntfy: App „ntfy“ aufs Handy, dort ein Thema abonnieren (am besten ein langer, zufälliger Name – wer ihn kennt, liest mit) und dieselbe Adresse hier eintragen.':
+      'ntfy: install the ntfy app, subscribe to a topic (best a long random name – anyone who knows it can read along) and enter the same address here.',
+    'Telegram: bei @BotFather einen Bot anlegen (Token), dem Bot eine Nachricht schreiben, die Chat-ID z. B. über @userinfobot erfahren.':
+      'Telegram: create a bot with @BotFather (token), send the bot a message, get your chat ID e.g. from @userinfobot.',
+    'Push ist nicht eingerichtet': 'Push is not set up',
+    // Stationen, Beobachtungsliste
+    'Stationen': 'Stations', 'Gehörte Stationen': 'Heard stations', 'Rufzeichen': 'Callsign', 'Zeitraum': 'Period', '1 Jahr': '1 year', 'alles': 'all',
+    '↓ ADIF-Export': '↓ ADIF export', 'Locator': 'Locator', 'Entfernung': 'Distance', 'Zuletzt (UTC)': 'Last (UTC)', 'Anzahl Aussendungen': 'Number of transmissions',
+    'DL1ABC oder DL*': 'DL1ABC or DL*', 'z. B. DL1ABC': 'e.g. DL1ABC', 'Mein Rufzeichen (für den ADIF-Export)': 'My callsign (for the ADIF export)',
+    '✓ Rufzeichen gespeichert': '✓ Callsign saved',
+    'Rufzeichen aus FT8/FT4, APRS, CW und RTTY – nur sendende Stationen. Entfernung und Richtung aus dem Locator der Station (FT8, APRS-Position) und deinem eigenen Locator.':
+      "Callsigns from FT8/FT4, APRS, CW and RTTY – transmitting stations only. Distance and bearing from the station's locator (FT8, APRS position) and your own locator.",
+    'Noch keine Stationen gehört – Rufzeichen kommen aus FT8/FT4, APRS, CW und RTTY.': 'No stations heard yet – callsigns come from FT8/FT4, APRS, CW and RTTY.',
+    'ADIF ist das Austauschformat der Logbuchprogramme. Der Export ist ein SWL-Log (jede gehörte Aussendung ein Eintrag, SWL=Y) – mit deinem Rufzeichen und Locator aus den Einstellungen.':
+      'ADIF is the exchange format of logbook programs. The export is an SWL log (one entry per heard transmission, SWL=Y) – with your callsign and locator from the settings.',
+    'Beobachtungsliste': 'Watchlist', 'Art': 'Type', 'Frequenz (MHz)': 'Frequency (MHz)', 'Entfernung ab (km)': 'Distance from (km)', 'Ereignis': 'Event',
+    'Wert': 'Value', 'Bezeichnung': 'Label', 'z. B. Relais DB0XYZ': 'e.g. repeater DB0XYZ', 'Toleranz (kHz)': 'Tolerance (kHz)', 'Ruhezeit (min)': 'Quiet time (min)',
+    'per Mail melden': 'notify by mail', 'Hinzufügen': 'Add', 'Noch keine Beobachtungen.': 'No watches yet.', '✓ Beobachtung hinzugefügt': '✓ Watch added',
+    'Beobachtungsliste': 'Watchlist', 'Entfernung ab': 'Distance from',
+    'Meldet sich, sobald der Scanner etwas Bestimmtes hört – im Protokoll, mit 🔔 auf der Trefferkarte und, wenn Mail eingerichtet ist, per Mail (höchstens eine je Regel in der Ruhezeit).':
+      'Reports as soon as the scanner hears something specific – in the log, with 🔔 on the hit card and, if mail is set up, by mail (at most one per rule within the quiet time).',
+    'SSTV-Bild von der ISS': 'SSTV image from the ISS', 'SSTV-Bild (alle)': 'SSTV image (any)', 'APRS über die ISS': 'APRS via the ISS',
+    'Satellit gehört (alle Treffer im Band Satelliten)': 'Satellite heard (any hit in the band Satellites)',
+    'Beobachtet': 'Watched', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
     // System, Aufräumen, Download
     'System': 'System', 'Automatisch löschen (ungeschützte Treffer)': 'Delete automatically (unprotected hits)',
     'CPU-Temperatur': 'CPU temperature', 'gedrosselt': 'throttled', 'war gedrosselt': 'was throttled', 'nein': 'no', 'ja': 'yes',
@@ -245,6 +294,11 @@
     [/^Aufnahmen \((\d+) Dateien\)$/, 'Recordings ($1 files)'], [/^abgebrochene Überflüge \((\d+) MB\)$/, 'interrupted passes ($1 MB)'],
     [/^Arbeitsspeicher frei von (\d+) MB$/, 'memory free of $1 MB'], [/^(\d+) Tage$/, '$1 days'], [/^Version – neu: (.+)$/, 'Version – new: $1'],
     [/Neue Version (.+) verfügbar – auf dem Pi: bin\/update\.sh/, 'New version $1 available – on the Pi: bin/update.sh'],
+    [/^Frequenz: (.+)$/, 'Frequency: $1'], [/^Rufzeichen: (.+)$/, 'Callsign: $1'], [/^Ereignis: (.+)$/, 'Event: $1'], [/^Entfernung ab: (.+)$/, 'Distance from: $1'],
+    [/ · Mail\/Push/, ' · mail/push'], [/^(\d+) Treffer \/ (\d+) Abstimmungen$/, '$1 hits / $2 tunings'], [/^Zeitplan „(.+)“ aktiv bis (\d\d:\d\d) – gescannt wird gerade: (.+)$/, 'Schedule "$1" active until $2 – now scanning: $3'],
+    [/^Uhrzeiten in der Ortszeit des Pi \(jetzt (.+)\)\.$/, "Times in the Pi's local time (now $1)."], [/^täglich · /, 'daily · '], [/ \(vorher speichern\)$/, ' (save first)'],
+    [/ · Ruhe (\d+) min/, ' · quiet $1 min'], [/SSTV-Bild von der ISS/g, 'SSTV image from the ISS'], [/SSTV-Bild \(alle\)/g, 'SSTV image (any)'],
+    [/APRS über die ISS/g, 'APRS via the ISS'], [/Satellit gehört \(alle Treffer im Band Satelliten\)/g, 'Satellite heard (any hit in the band Satellites)'], [/(\d+)° (NO|SO)$/, (m, a, d) => a + '° ' + d.replace('O', 'E')], [/(\d+)° O$/, '$1° E'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

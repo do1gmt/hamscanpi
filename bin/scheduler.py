@@ -116,6 +116,11 @@ def selected_satellites():
     except Exception:
         return [], ""
     _sat["prio"] = st.get("sat_prio") or {}
+    try:
+        from scan_plan import effective_settings
+        st = effective_settings(st)                 # aktiver Zeitplan bestimmt auch die Satelliten
+    except Exception:
+        pass
     if "Satelliten" not in (st.get("selected_bands") or []):
         return [], st.get("my_locator", "")
     # Das gewählte Gerät steht für die angeschlossene Antenne: Satelliten nur, wenn es der

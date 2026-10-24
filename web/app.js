@@ -42,8 +42,11 @@
   function zoneAt(d) {
     // Kürzel in der Sprache des Browsers: so heißt es in New York „EDT“, in Tokio „JST“, in Sydney „AEDT“
     // (mit fester Sprache gäbe es dort nur „GMT-4“ usw.); in Deutschland bleibt es „MESZ“/„MEZ“
-    try { return new Intl.DateTimeFormat(navigator.language || (EN ? 'en-GB' : 'de'), { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || (EN ? 'local' : 'Ortszeit'); }
-    catch (e) { return EN ? 'local' : 'Ortszeit'; }
+    for (const lang of [navigator.language, EN ? 'en-GB' : 'de']) {      // ungültige Sprachkennung → Rückfall
+      try { const z = new Intl.DateTimeFormat(lang, { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value; if (z) return z; }
+      catch (e) { }
+    }
+    return EN ? 'local' : 'Ortszeit';
   }
   let ZONE = zoneAt(new Date());
   function refreshZone() {                       // jede Minute: Seite kann über die Umstellung hinweg offen sein
@@ -92,6 +95,10 @@
     $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
+    $('myCall').value = settings.my_call || '';
+    $('pskOn').checked = !!settings.pskreporter;
+    renderSchedules();
+    renderWatch();
     const o833 = $('liveStep').querySelector('option[value="8333"]');     // 8,33-kHz-Raster gibt es nur im Flugfunk
     if (o833) o833.hidden = o833.disabled = !settings.allow_restricted;
     renderDeviceSwitch();
@@ -173,7 +180,7 @@
         if (settings.active_device === id || !present) return;
         try { const d = await post('/api/settings', { active_device: id }); settings = Object.assign(settings, d.settings); note($('scanSaveNote'), '✓ Gerät umgestellt – Antenne am ' + short(id) + ' anschließen'); }
         catch (e) { note($('scanSaveNote'), 'Fehler: ' + e.message, true); }
-        renderDeviceSwitch(); renderBands();
+        renderDeviceSwitch(); renderBands(); renderSchedules();
       });
       root.appendChild(b);
     }
@@ -194,6 +201,14 @@
     renderDeviceSwitch(); renderBands();
     toast('Geräte geändert: ' + ['rtlsdr', 'pmsdr'].map(id => `${devName(id)} ${hw[id]?.present ? 'da' : 'weg'}`).join(' · '));
   }
+  $('pskOn').addEventListener('change', async e => {
+    try { const d = await post('/api/settings', { pskreporter: e.target.checked }); settings.pskreporter = d.settings.pskreporter; note($('stationNote'), e.target.checked ? '✓ PSK Reporter an – erste Spots nach etwa 5 min' : '✓ PSK Reporter aus'); }
+    catch (x) { e.target.checked = false; note($('stationNote'), 'Fehler: ' + x.message, true); }
+  });
+  $('myCall').addEventListener('change', async () => {
+    try { const d = await post('/api/settings', { my_call: $('myCall').value }); settings.my_call = d.settings.my_call; note($('stationNote'), '✓ Rufzeichen gespeichert'); }
+    catch (e) { note($('stationNote'), 'Fehler: ' + e.message, true); }
+  });
   $('myLocator').addEventListener('change', async () => {
     try { const d = await post('/api/settings', { my_locator: $('myLocator').value }); settings.my_locator = d.settings.my_locator; note($('stationNote'), '✓ Locator gespeichert'); cards.forEach(el => { if (el.classList.contains('open')) fillBody(el, el.__hit); }); }
     catch (e) { note($('stationNote'), 'Fehler: ' + e.message, true); }
@@ -370,7 +385,7 @@
   }
 
   function badges(h) {
-    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}`;
+    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}`;
   }
   function buildCard(h) {
     const el = document.createElement('article'); el.className = 'hit'; el.dataset.id = h.id;
@@ -587,6 +602,7 @@
 
   // ---------- Live-Empfang ----------
   const live = { ctx: null, reader: null, nextT: 0, active: false, rate: 24000 };
+  let liveTouched = 0;                 // nach eigener Abstimmung nicht sofort vom Status überschreiben
   const lf = () => Math.round(parseFloat($('liveFreq').value.replace(',', '.')) * 1e6);
   function liveSetUI(st) {
     const on = !!st.active;
@@ -595,7 +611,7 @@
     $('liveStart').hidden = on; $('liveStop').hidden = !on;
     $('liveText').textContent = st.text || (on ? 'läuft' : 'aus');
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
-    if (on && st.active_hz && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
+    if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
     if (on && st.scan && st.active_hz) $('liveText').textContent = st.text;
     const lvl = Math.max(0, Math.min(100, (Number(st.level_db ?? -120) + 60) * 2));
     $('liveLevel').style.width = (on ? lvl : 0) + '%';
@@ -666,7 +682,39 @@
   $('liveSeekUp').addEventListener('click', () => liveSeek('up'));
   $('liveSeekDown').addEventListener('click', () => liveSeek('down'));
   let tuneTimer;
-  const liveRetune = () => { if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).catch(e => toast(e.message)), 250); };
+  // ---------- Wasserfall ----------
+  const wfPal = (() => { const p = []; for (let i = 0; i < 256; i++) { const t = i / 255;
+    const r = Math.round(255 * Math.min(1, Math.max(0, (t - .55) * 3))), g = Math.round(255 * Math.min(1, Math.max(0, t < .5 ? t * 1.6 : 1.3 - (t - .5) * .8))),
+          b = Math.round(255 * Math.min(1, Math.max(0, t < .35 ? .25 + t * 2 : 1 - (t - .35) * 2.2))); p.push([r, g, b]); } return p; })();
+  let wfSeq = 0, wfInfo = null, wfBusy = false;
+  async function pollWaterfall() {
+    if (wfBusy || !live.active || $('wfWrap').parentElement.closest('[hidden]') || document.visibilityState !== 'visible') return;
+    wfBusy = true;
+    try {
+      const w = await api('/api/live/waterfall');
+      if (w.row && w.row.length && w.seq !== wfSeq) {
+        wfSeq = w.seq; wfInfo = w; $('wfWrap').hidden = false;
+        const c = $('wf'), ctx = c.getContext('2d');
+        ctx.drawImage(c, 0, 0, c.width, c.height - 1, 0, 1, c.width, c.height - 1);      // nach unten schieben
+        const img = ctx.createImageData(c.width, 1), n = w.row.length;
+        for (let x = 0; x < c.width; x++) { const v = w.row[Math.floor(x * n / c.width)], p = wfPal[v]; img.data.set([p[0], p[1], p[2], 255], x * 4); }
+        ctx.putImageData(img, 0, 0);
+        const off = w.active_hz && w.span_hz ? (w.active_hz - (w.center_hz - w.span_hz / 2)) / w.span_hz : -1;
+        if (off >= 0 && off <= 1) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(Math.round(off * c.width), 0, 1, 6); }
+        const k = v => (v / 1e6).toFixed(w.span_hz < 100000 ? 4 : 3);
+        $('wfLo').textContent = k(w.center_hz - w.span_hz / 2); $('wfMid').textContent = k(w.center_hz); $('wfHi').textContent = k(w.center_hz + w.span_hz / 2);
+      }
+    } catch (e) { } finally { wfBusy = false; }
+  }
+  setInterval(pollWaterfall, 150);
+  $('wf').addEventListener('click', e => {                 // antippen: auf diese Frequenz abstimmen
+    if (!wfInfo || !wfInfo.span_hz) return;
+    const r = $('wf').getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+    const step = ['usb', 'lsb'].includes($('liveMode').value) ? 100 : 12500;
+    const f = Math.round((wfInfo.center_hz - wfInfo.span_hz / 2 + x * wfInfo.span_hz) / step) * step;
+    $('liveFreq').value = (f / 1e6).toFixed(4); liveRetune();
+  });
+  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).catch(e => toast(e.message)), 250); };
   document.querySelectorAll('[data-livestep]').forEach(b => b.addEventListener('click', () => {
     const v = Number($('liveStep').value), s = v === 8333 ? 25000 / 3 : v, dir = Number(b.dataset.livestep);
     const f = Math.round((Math.round(lf() / s) + dir) * s);       // auf das Raster einrasten
@@ -695,7 +743,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', pskreporter_sent: 'An PSK Reporter gemeldet', pskreporter_failed: 'PSK Reporter: Fehler', watch_hit: 'Beobachtung ausgelöst', watch_failed: 'Beobachtungsliste: Fehler', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -704,7 +752,7 @@
   };
   const KEY_TEXT = { run_id: 'Lauf', peaks: 'Treffer', rejected: 'verworfen', duration_s: 'Dauer s', band: 'Band', sat: 'Satellit', error: 'Fehler',
     reason: 'Grund', hits: 'Treffer', channels: 'Kanäle', max_el: 'max. Höhe°', freq_hz: 'Frequenz', rf_hz: 'Frequenz', device: 'Gerät',
-    problem: 'Problem', interval_min: 'Intervall min', coverage: 'abgehört (MHz)', windows: 'Fenstermitten (MHz)', segments: 'Segmente', channels_n: 'Kanäle', digital: 'Digital (MHz)', freq_mhz: 'Frequenzen (MHz)', seconds_band: 'Dauer s', seconds: 'Sekunden', tune_hz: 'Mitte', until: 'bis', per_channel: 'je Kanal', plan: 'Plan' };
+    problem: 'Problem', interval_min: 'Intervall min', rule: 'Regel', detail: 'Was', coverage: 'abgehört (MHz)', windows: 'Fenstermitten (MHz)', segments: 'Segmente', channels_n: 'Kanäle', digital: 'Digital (MHz)', freq_mhz: 'Frequenzen (MHz)', seconds_band: 'Dauer s', seconds: 'Sekunden', tune_hz: 'Mitte', until: 'bis', per_channel: 'je Kanal', plan: 'Plan' };
   function fmtVal(k, v) {
     if (v == null) return '';
     if ((k.endsWith('_hz') || k === 'rf_hz') && typeof v === 'number') return (v / 1e6).toFixed(4) + ' MHz';
@@ -730,7 +778,7 @@
       }
       $('logList').innerHTML = rows.map(({ r, n, first }) => {
         const data = r.data || {};
-        const mainKeys = r.event === 'band_scanned' ? ['band', 'coverage', 'hits'] : r.event === 'pass_start' ? ['sat', 'freq_mhz'] : ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'];
+        const mainKeys = r.event === 'band_scanned' ? ['band', 'coverage', 'hits'] : r.event === 'pass_start' ? ['sat', 'freq_mhz'] : r.event === 'watch_hit' ? ['rule', 'detail'] : ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'];
         const main = mainKeys.filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
         const all = Object.entries(data).map(([k, v]) => `<tr><td>${esc(KEY_TEXT[k] || k)}</td><td class="mono">${esc(fmtVal(k, v))}</td></tr>`).join('');
         const when = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
@@ -754,7 +802,16 @@
   function fillNotify() {
     const n = settings?.notify || {}; const f = $('notifyForm');
     for (const el of f.elements) { if (!el.name) continue; if (el.type === 'checkbox') el.checked = !!n[el.name]; else if (n[el.name] !== undefined) el.value = n[el.name]; }
+    pushFields();
   }
+  function pushFields() {
+    const t = $('pushType').value;
+    document.querySelectorAll('.push-ntfy').forEach(e => e.hidden = t !== 'ntfy');
+    document.querySelectorAll('.push-tg').forEach(e => e.hidden = t !== 'telegram');
+    $('pushTest').hidden = !t;
+  }
+  $('pushType').addEventListener('change', pushFields);
+  $('pushTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/push-test'); note($('notifyNote'), '✓ Test-Push verschickt – kommt er an?'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message + ' (vorher speichern)', true); } });
   $('notifyForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = $('notifyForm'); const n = {};
     for (const el of f.elements) { if (!el.name) continue; n[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
@@ -763,7 +820,12 @@
   $('notifyTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/notify-test'); note($('notifyNote'), '✓ Testmail verschickt'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); } });
 
   // ---------- Bereiche (Tabs) ----------
+  function fillStationBands() {
+    const sel = $('stBand'); if (sel.options.length > 1) return;
+    (bandplan || []).forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
+  }
   function showView(name) {
+    if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); }, 0);   // nach dem Start des Skripts
     document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== name);
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
     localStorage.setItem('view', name);
@@ -884,6 +946,147 @@
     if (go === 'sstv') { filter.mode = 'sstv'; localStorage.setItem('f.mode', 'sstv'); $('filterMode').value = 'sstv'; }
     showView('hits'); loadHits();
   }));
+
+  // ---------- Zeitpläne ----------
+  const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const scSel = { days: new Set([0, 1, 2, 3, 4, 5, 6]), bands: new Set() };
+  function renderSchedules() {
+    if (!settings) return;
+    const act = settings.schedule_active;
+    $('schedActiveNote').hidden = !act;
+    if (act) $('schedActiveNote').textContent = `Zeitplan „${act.name}“ aktiv bis ${act.to} – gescannt wird gerade: ${act.bands.join(', ')}`;
+    $('schedHint').dataset.pi = `${settings.pi_time} ${settings.pi_tz}`;
+    const list = settings.schedules || [];
+    $('schedList').innerHTML = list.length ? `<table class="table watch-table"><tbody>${list.map((r, i) => {
+      const days = r.days.length === 7 ? 'täglich' : r.days.map(d => DAYS[d]).join(' ');
+      const on = act && act.name === r.name;
+      return `<tr class="${on ? 'sched-now' : ''}"><td><label class="check"><input type="checkbox" data-si="${i}" ${r.enabled ? 'checked' : ''}> <b>${esc(r.name)}</b>${on ? ' <span class="badge badge-new">aktiv</span>' : ''}</label>
+        <small class="muted">${esc(days)} · ${r.from}–${r.to} · ${esc(r.bands.join(', '))}</small></td>
+        <td><button type="button" class="btn btn-small btn-danger" data-sdel="${i}">✕</button></td></tr>`; }).join('')}</tbody></table>
+        <p class="hint">Uhrzeiten in der Ortszeit des Pi (jetzt ${esc(settings.pi_time)} ${esc(settings.pi_tz)}).</p>` : '<p class="muted">Noch kein Zeitplan.</p>';
+    $('schedList').querySelectorAll('[data-si]').forEach(cb => cb.addEventListener('change', () => { const l = [...settings.schedules]; l[cb.dataset.si] = { ...l[cb.dataset.si], enabled: cb.checked }; saveSchedules(l); }));
+    $('schedList').querySelectorAll('[data-sdel]').forEach(b => b.addEventListener('click', () => { const l = [...settings.schedules]; l.splice(Number(b.dataset.sdel), 1); saveSchedules(l); }));
+    $('scDays').innerHTML = ''; DAYS.forEach((d, i) => { const c = chip(d, scSel.days.has(i)); c.addEventListener('click', () => { scSel.days.has(i) ? scSel.days.delete(i) : scSel.days.add(i); renderSchedules(); }); $('scDays').appendChild(c); });
+    $('scBands').innerHTML = '';
+    bandplan.filter(b => b.device === settings.active_device && b.legal !== 'restricted').forEach(b => {
+      const c = chip(b.name, scSel.bands.has(b.name)); c.addEventListener('click', () => { scSel.bands.has(b.name) ? scSel.bands.delete(b.name) : scSel.bands.add(b.name); renderSchedules(); }); $('scBands').appendChild(c);
+    });
+  }
+  async function saveSchedules(list, okText) {
+    try { const d = await post('/api/settings', { schedules: list }); settings = Object.assign(settings, d.settings); renderSchedules(); loadEstimate(); note($('schedNote'), okText || '✓ gespeichert'); return true; }
+    catch (e) { note($('schedNote'), 'Fehler: ' + e.message, true); return false; }
+  }
+  setInterval(async () => {                               // aktiver Zeitplan wechselt mit der Uhr
+    try { const d = await api('/api/settings'); Object.assign(settings, { schedule_active: d.schedule_active, pi_time: d.pi_time, pi_tz: d.pi_tz }); renderSchedules(); } catch (e) { }
+  }, 60000);
+  $('scAdd').addEventListener('click', async () => {
+    const sc = { name: $('scName').value.trim(), from: $('scFrom').value, to: $('scTo').value, days: [...scSel.days], bands: [...scSel.bands], enabled: true };
+    if (await saveSchedules([...(settings.schedules || []), sc], '✓ Zeitplan gespeichert')) { $('scName').value = ''; scSel.bands.clear(); renderSchedules(); }
+  });
+
+  // ---------- Gehörte Stationen ----------
+  const stPage = { offset: 0, per: 100 };
+  function stParams() { return new URLSearchParams({ q: $('stQuery').value.trim(), band: $('stBand').value, days: $('stDays').value }); }
+  async function loadStations() {
+    let d; try { d = await api(`/api/stations?${stParams()}&limit=${stPage.per}&offset=${stPage.offset}`); } catch (e) { return; }
+    const dir = b => b == null ? '' : ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(b / 45) % 8];
+    $('stTable').innerHTML = d.stations.map(r => `<tr>
+        <td><a href="https://www.qrz.com/db/${encodeURIComponent(r.call.split('-')[0])}" target="_blank" rel="noopener"><b>${esc(r.call)}</b></a></td>
+        <td>${esc(r.grid || '–')}</td>
+        <td>${r.distance_km != null ? `${r.distance_km} km <small class="muted">${r.bearing}° ${dir(r.bearing)}</small>` : '–'}</td>
+        <td>${esc((r.bands || '').split(',').join(', '))}</td><td>${esc((r.modes || '').split(',').join(', '))}</td>
+        <td>${fmtTime(r.last)}</td><td>${r.n}</td><td>${r.best_snr != null ? Math.round(r.best_snr) + ' dB' : '–'}</td></tr>`).join('')
+      || '<tr><td colspan="8" class="muted">Noch keine Stationen gehört – Rufzeichen kommen aus FT8/FT4, APRS, CW und RTTY.</td></tr>';
+    const a = d.total ? stPage.offset + 1 : 0, b = Math.min(d.total, stPage.offset + stPage.per);
+    $('stPos').textContent = `${a}–${b} von ${d.total}`;
+    $('stPrev').disabled = stPage.offset === 0; $('stNext').disabled = b >= d.total;
+    $('stAdif').href = `/api/stations.adi?${stParams()}`;
+    stLast = d;
+    if ($('mapBox').open) drawMap();
+  }
+  // ---------- Karte (Leaflet + OpenStreetMap, wird erst beim Aufklappen geladen) ----------
+  let stLast = null, map = null, mapLayer = null, leafletLoading = null;
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (leafletLoading) return leafletLoading;
+    leafletLoading = new Promise((res, rej) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(css);
+      const js = document.createElement('script'); js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; js.onload = res; js.onerror = rej; document.head.appendChild(js);
+    });
+    return leafletLoading;
+  }
+  async function drawMap() {
+    try { await loadLeaflet(); } catch (e) { $('mapNote').textContent = 'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.'; return; }
+    if (!map) {
+      map = L.map('stMap', { worldCopyJump: true }).setView([50, 10], 3);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12, attribution: '© OpenStreetMap' }).addTo(map);
+      mapLayer = L.layerGroup().addTo(map);
+    }
+    mapLayer.clearLayers();
+    const d = stLast || { stations: [] }; const pts = [];
+    const color = m => /FT8|FT4/.test(m || '') ? '#38bdf8' : /APRS/.test(m || '') ? '#f5b942' : '#2dd4bf';
+    if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }).bindTooltip('QTH').addTo(mapLayer); pts.push(d.home); }
+    for (const r of d.stations) {
+      if (r.lat == null) continue;
+      const p = [r.lat, r.lon]; pts.push(p);
+      if (d.home) L.polyline([d.home, p], { color: color(r.modes), weight: 1, opacity: .35 }).addTo(mapLayer);
+      L.circleMarker(p, { radius: 5, color: color(r.modes), fillOpacity: .8, weight: 1 })
+        .bindPopup(`<b>${esc(r.call)}</b> ${esc(r.grid || '')}<br>${r.distance_km != null ? r.distance_km + ' km, ' + r.bearing + '°<br>' : ''}${esc((r.modes || '').replace(/,/g, ', '))} · ${esc((r.bands || '').replace(/,/g, ', '))}<br>${fmtTime(r.last)}`).addTo(mapLayer);
+    }
+    setTimeout(() => map.invalidateSize(), 50);
+    if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
+  }
+  $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+
+  // ---------- Aktivität ----------
+  async function loadActivity() {
+    let d; try { d = await api('/api/activity?days=' + $('actDays').value); } catch (e) { return; }
+    const H = [...Array(24).keys()];
+    const cell = v => { if (!v || !v.tunes) return '<td class="h0"></td>';
+      const rate = v.hits / v.tunes; return `<td style="--a:${Math.min(1, rate * 4).toFixed(2)}" title="${v.hits} Treffer / ${v.tunes} Abstimmungen">${v.hits ? v.hits : ''}</td>`; };
+    const head = `<tr><th></th>${H.map(h => `<th>${String(h).padStart(2, '0')}</th>`).join('')}</tr>`;
+    $('actBands').innerHTML = d.bands.length ? head + d.bands.map(b => `<tr><th>${esc(b.band)}</th>${H.map(h => cell(b.hours[h])).join('')}</tr>`).join('')
+      : '<tr><td class="muted">Noch keine Daten.</td></tr>';
+    const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+    $('actWeek').innerHTML = head + WD.map((w, i) => `<tr><th>${w}</th>${H.map(h => cell((d.week[i] || {})[h])).join('')}</tr>`).join('');
+  }
+  $('actDays').addEventListener('change', loadActivity);
+  let stTimer = null;
+  $('stQuery').addEventListener('input', () => { clearTimeout(stTimer); stTimer = setTimeout(() => { stPage.offset = 0; loadStations(); }, 300); });
+  ['stBand', 'stDays'].forEach(id => $(id).addEventListener('change', () => { stPage.offset = 0; loadStations(); }));
+  $('stPrev').addEventListener('click', () => { stPage.offset = Math.max(0, stPage.offset - stPage.per); loadStations(); });
+  $('stNext').addEventListener('click', () => { stPage.offset += stPage.per; loadStations(); });
+
+  // ---------- Beobachtungsliste ----------
+  const W_TYPES = { freq: 'Frequenz', call: 'Rufzeichen', dx: 'Entfernung ab', event: 'Ereignis' };
+  function renderWatch() {
+    const list = (settings && settings.watchlist) || [], ev = (settings && settings.watch_events) || {};
+    if (!$('wEvent').options.length) $('wEvent').innerHTML = Object.entries(ev).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    $('watchList').innerHTML = list.length ? `<table class="table watch-table"><tbody>${list.map((r, i) => {
+      const what = r.type === 'event' ? (ev[r.value] || r.value) : r.type === 'freq' ? `${r.value} MHz ±${r.tolerance_khz} kHz` : r.type === 'dx' ? `≥ ${r.value} km` : r.value;
+      return `<tr><td><label class="check"><input type="checkbox" data-wi="${i}" ${r.enabled ? 'checked' : ''}> <b>${esc(r.label || what)}</b></label>
+        <small class="muted">${esc(W_TYPES[r.type] || r.type)}: ${esc(what)}${r.mail ? ' · Mail/Push' : ''} · Ruhe ${r.quiet_min} min</small></td>
+        <td><button type="button" class="btn btn-small btn-danger" data-wdel="${i}">✕</button></td></tr>`; }).join('')}</tbody></table>`
+      : '<p class="muted">Noch keine Beobachtungen.</p>';
+    $('watchList').querySelectorAll('[data-wi]').forEach(cb => cb.addEventListener('change', () => { const l = [...settings.watchlist]; l[cb.dataset.wi] = { ...l[cb.dataset.wi], enabled: cb.checked }; saveWatch(l); }));
+    $('watchList').querySelectorAll('[data-wdel]').forEach(b => b.addEventListener('click', () => { const l = [...settings.watchlist]; l.splice(Number(b.dataset.wdel), 1); saveWatch(l); }));
+  }
+  async function saveWatch(list, okText) {
+    try { const d = await post('/api/settings', { watchlist: list }); settings.watchlist = d.settings.watchlist; renderWatch(); note($('watchNote'), okText || '✓ gespeichert'); return true; }
+    catch (e) { note($('watchNote'), 'Fehler: ' + e.message, true); return false; }
+  }
+  function wTypeChanged() {
+    const t = $('wType').value;
+    $('wEvWrap').hidden = t !== 'event'; $('wValWrap').hidden = t === 'event'; $('wTolWrap').hidden = t !== 'freq';
+    $('wValue').placeholder = { freq: '439.400', call: 'DL1ABC oder DL*', dx: '2000' }[t] || '';
+  }
+  $('wType').addEventListener('change', wTypeChanged); wTypeChanged();
+  $('wAdd').addEventListener('click', async () => {
+    const t = $('wType').value;
+    const rule = { type: t, value: t === 'event' ? $('wEvent').value : $('wValue').value.trim(), label: $('wLabel').value.trim(),
+                   tolerance_khz: Number($('wTol').value) || 5, quiet_min: Number($('wQuiet').value) || 0, mail: $('wMail').checked, enabled: true };
+    if (await saveWatch([...(settings.watchlist || []), rule], '✓ Beobachtung hinzugefügt')) { $('wValue').value = ''; $('wLabel').value = ''; }
+  });
 
   // ---------- System ----------
   async function loadSystem() {
