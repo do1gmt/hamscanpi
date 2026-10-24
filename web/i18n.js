@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    '■ Suchlauf anhalten': '■ Stop seek', 'Suchlauf beenden und auf der aktuellen Frequenz weiterhören': 'End the seek and keep listening on the current frequency',
     'Antippen: dorthin abstimmen · Mausrad: feinstimmen': 'Tap: tune there · mouse wheel: fine tuning',
     'Wasserfall – auf ein Signal tippen zum Abstimmen, Mausrad zum Feinstimmen': 'Waterfall – tap a signal to tune, mouse wheel for fine tuning',
     'SSB: Sprache unter 10 MHz meist <b>LSB</b>, darüber <b>USB</b> – FT8 und andere Digitalbetriebsarten immer USB. Klingt es wie „Gequake“, ist meist das Seitenband falsch.': 'SSB: voice below 10 MHz is mostly <b>LSB</b>, above <b>USB</b> – FT8 and other digital modes always USB. If it sounds like "quacking", the sideband is usually wrong.',

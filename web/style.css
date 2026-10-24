@@ -450,3 +450,5 @@ table.heat td.h0 { background: var(--panel-2); }
 .wf-hover { position: absolute; bottom: 2px; transform: translateX(-50%); font: .66rem var(--mono, monospace); color: #fff; background: rgba(7,16,24,.8); padding: 0 .25rem; border-radius: 3px; pointer-events: none; }
 .spec-box { position: relative; } .spec-box .spec-img { display: block; width: 100%; cursor: crosshair; } .spec-box .wf-mark::before { top: 1.6rem; }
 .spec-box { margin: .6rem 0; } .hit-body .spec-box .spec-img { margin: 0; }
+.btn-seekstop { border-color: #fbbf24; color: #fbbf24; }
+#panel-live.seeking .wf-mark { background: #fbbf24; }

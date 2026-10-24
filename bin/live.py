@@ -53,7 +53,9 @@ class LiveSession:
 
     # ---------------- Abonnenten (HTTP-Streams)
     def subscribe(self):
-        q = queue.Queue(maxsize=200)
+        # höchstens ~1 s Ton puffern (Blöcke à 0,1 s bzw. 20 ms): lieber ein Stück verlieren als
+        # hinterherhinken – sonst hört man jede Abstimmung erst Sekunden später
+        q = queue.Queue(maxsize=12 if self.device != "rtlsdr" else 50)
         with self.lock:
             self.subscribers.append(q)
         return q
@@ -134,8 +136,10 @@ class LiveSession:
             gain = None
         # PMSDR: innerhalb des 48-kHz-Fensters nur die Ablage im Rechner ändern – sofort, ohne die
         # Soundkarte neu zu öffnen (vorher dauerte jeder Klick mehrere Sekunden)
-        if (self.device != "rtlsdr" and self.running and gain is None and not self.scan
+        if (self.device != "rtlsdr" and self.running and gain is None
+                and (not self.scan or self.scan.get("kind") == "seek")
                 and (freq_hz is None or self._pm_in_window(int(freq_hz)))):
+            self.scan = None                     # ein laufender Suchlauf endet hier (ohne Neustart)
             if freq_hz is not None:
                 self.freq_hz = int(freq_hz)
             if mode is not None:
@@ -670,6 +674,9 @@ class LiveSession:
             except Exception:
                 pass
             self._level(pcm)
+            if sk and not self.scan:             # Suchlauf angehalten (Knopf, Abstimmen)
+                sk = None
+                self.status_text = f"Empfang {self.freq_hz/1e6:.4f} MHz ({self.mode})"
             if sk:
                 if self._pm_seek_step(sk, z, rate, seek, dev, ppm):
                     pcm = b"\x00\x00" * (len(pcm) // 2)         # beim Weitersuchen stumm

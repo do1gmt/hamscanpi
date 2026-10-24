@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.2 – 2026-10-24
+
+- Live: tuning is heard almost immediately. The audio could lag several seconds behind (the server
+  buffered up to 20 s, the browser had no upper limit, and the two clocks drift apart); now at most
+  ~1 s on the server and 0.6 s in the browser – excess is dropped. Retune requests go out after 80 ms
+  instead of 250 ms.
+- Live: button "■ Stop seek" while seeking – stays on the current station (PMSDR: without restart).
+
 ## 1.7.1 – 2026-10-24
 
 - Fix: live shortwave stuttered on every tuning step. The dashboard sends the gain setting with every

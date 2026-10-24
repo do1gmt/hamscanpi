@@ -656,6 +656,9 @@
     live.active = on;
     $('panel-live').classList.toggle('on', on);
     $('liveStart').hidden = on; $('liveStop').hidden = !on;
+    const seeking = on && /^Suchlauf/.test(st.scan || '');
+    $('liveSeekStop').hidden = !seeking;
+    $('panel-live').classList.toggle('seeking', seeking);
     $('liveText').textContent = st.text || (on ? 'läuft' : 'aus');
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
     if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
@@ -721,7 +724,8 @@
         for (let i = 0; i < n; i++) ch[i] = pcm[i] / 32768;
         const src = live.ctx.createBufferSource(); src.buffer = ab; src.connect(liveGainNode());
         const now = live.ctx.currentTime;
-        if (live.nextT < now + 0.05) live.nextT = now + 0.25;   // kleiner Vorlauf gegen Aussetzer
+        if (live.nextT < now + 0.05) live.nextT = now + 0.2;    // kleiner Vorlauf gegen Aussetzer
+        if (live.nextT > now + 0.6) continue;                   // zu weit voraus (Uhren laufen auseinander): Stück auslassen, Verzögerung bleibt klein
         src.start(live.nextT); live.nextT += ab.duration;
       }
     })().catch(() => { });
@@ -738,6 +742,12 @@
   const liveSeek = dir => (clearTimeout(tuneTimer), liveStart({ seek: dir, freq_hz: lf(), mode: $('liveMode').value, step_hz: Number($('liveStep').value), squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }));
   $('liveSeekUp').addEventListener('click', () => liveSeek('up'));
   $('liveSeekDown').addEventListener('click', () => liveSeek('down'));
+  $('liveSeekStop').addEventListener('click', async () => {        // anhalten: auf der jetzigen Station bleiben
+    try {
+      const d = await post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value) });
+      liveSetUI(Object.assign({ active: true }, d.live));
+    } catch (e) { toast(e.message); }
+  });
   let tuneTimer;
   // ---------- Wasserfall ----------
   const wfPal = (() => { const p = []; for (let i = 0; i < 256; i++) { const t = i / 255;
@@ -808,7 +818,7 @@
     const f = Math.round((lf() + (e.deltaY < 0 ? st : -st)) / st) * st;
     $('liveFreq').value = (f / 1e6).toFixed(ssb ? 5 : 4); wfMarker(f); liveRetune();
   }, { passive: false });
-  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 250); };
+  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 80); };
   // „Zuletzt gehört“ erst nach 5 s auf derselben Frequenz (kein Eintrag für jeden Zwischenschritt)
   let rememberTimer = null;
   function liveRememberLater(f, m) { clearTimeout(rememberTimer); rememberTimer = setTimeout(() => { if (live.active && Math.abs(lf() - f) < 100 && $('liveMode').value === m) liveRemember(f, m); }, 5000); }
