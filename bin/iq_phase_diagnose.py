@@ -27,7 +27,7 @@ OFFSETS = [
 
 def find_alsa(name="Aureon", device=0):
     r = subprocess.run(
-        ["arecord", "-l"],
+        ["env", "LC_ALL=C", "arecord", "-l"],
         text=True,
         capture_output=True
     )

@@ -97,7 +97,7 @@ def selected_scan_bands(cfg):
 
 def find_alsa_device(name, device):
     r = subprocess.run(
-        ["arecord", "-l"],
+        ["env", "LC_ALL=C", "arecord", "-l"],
         text=True,
         capture_output=True
     )
@@ -110,7 +110,7 @@ def find_alsa_device(name, device):
             continue
 
         m = re.search(
-            r"card\s+(\d+):.*device\s+(\d+):",
+            r"(?:card|karte)\s+(\d+):.*(?:device|gerät)\s+(\d+):",
             line,
             re.IGNORECASE
         )

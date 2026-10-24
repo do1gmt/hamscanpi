@@ -26,7 +26,7 @@ CENTERS = [
 
 def find_alsa(name="Aureon", device=0):
     r = subprocess.run(
-        ["arecord", "-l"],
+        ["env", "LC_ALL=C", "arecord", "-l"],
         text=True,
         capture_output=True
     )
@@ -39,7 +39,7 @@ def find_alsa(name="Aureon", device=0):
             continue
 
         m = re.search(
-            r"card\s+(\d+):.*device\s+(\d+):",
+            r"(?:card|karte)\s+(\d+):.*(?:device|gerät)\s+(\d+):",
             line,
             re.IGNORECASE
         )

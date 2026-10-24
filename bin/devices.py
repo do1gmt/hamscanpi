@@ -77,14 +77,29 @@ class PmsdrDevice:
 
     @staticmethod
     def _find_alsa(name, device):
-        r = subprocess.run(["arecord", "-l"], capture_output=True, text=True)
+        r = subprocess.run(["env", "LC_ALL=C", "arecord", "-l"], capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("arecord -l fehlgeschlagen")
         for line in r.stdout.splitlines():
-            m = re.match(r"card (\d+): (\S+)", line)
+            m = re.match(r"(?:card|karte) (\d+): (\S+)", line, re.I)
             if m and name.lower() in line.lower():
                 return int(m.group(1)), device
-        raise RuntimeError(f"Soundkarte '{name}' nicht gefunden")
+        # Name nicht gefunden: Karte über die USB-Kennung suchen (ALSA benennt sie je nach Kernel anders)
+        ids, _ = _pmsdr_audio_cfg()
+        ids = ids or USB_IDS["aureon"]
+        for f in sorted(Path("/proc/asound").glob("card*/usbid")):
+            try:
+                vid, pid = f.read_text().strip().lower().split(":")
+            except Exception:
+                continue
+            if (vid, pid) in ids:
+                return int(f.parent.name[4:]), device
+        usb_there = any((d / "idVendor").exists() and ((d / "idVendor").read_text().strip(), (d / "idProduct").read_text().strip()) in ids
+                        for d in Path("/sys/bus/usb/devices").glob("*") if (d / "idProduct").exists())
+        if usb_there:
+            raise RuntimeError(f"Soundkarte '{name}' steckt (USB), wird aber nicht als Soundkarte erkannt – "
+                               "Stecker der Soundkarte ziehen und neu stecken oder den Pi neu starten")
+        raise RuntimeError(f"Soundkarte '{name}' nicht gefunden – ist die Soundkarte der PMSDR angesteckt?")
 
     @staticmethod
     def _open_fifo(path, wait_s=20.0):
@@ -532,7 +547,7 @@ def detect_hardware():
                 seen[k].append(d.name)
     if fake is None and not seen["aureon"] and ids_cfg is not None and not ids_cfg and alsa_name:
         try:
-            r = subprocess.run(["arecord", "-l"], capture_output=True, text=True, timeout=3)
+            r = subprocess.run(["env", "LC_ALL=C", "arecord", "-l"], capture_output=True, text=True, timeout=3)
             if alsa_name.lower() in r.stdout.lower():
                 seen["aureon"].append("alsa")
         except Exception:

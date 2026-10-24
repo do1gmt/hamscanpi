@@ -14,11 +14,11 @@ TX=3_705_370
 TARGET=TX-CENTER
 
 def find_alsa(name="Aureon", device=0):
-    r=subprocess.run(["arecord","-l"],text=True,capture_output=True)
+    r=subprocess.run(["env", "LC_ALL=C", "arecord", "-l"],text=True,capture_output=True)
     for line in r.stdout.splitlines():
         if name.lower() not in line.lower():
             continue
-        m=re.search(r"card\s+(\d+):.*device\s+(\d+):",line,re.I)
+        m=re.search(r"(?:card|karte)\s+(\d+):.*(?:device|gerät)\s+(\d+):",line,re.I)
         if m and int(m.group(2))==device:
             return int(m.group(1)),int(m.group(2))
     raise SystemExit("Aureon nicht gefunden")

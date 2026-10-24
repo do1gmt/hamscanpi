@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.2 – 2026-10-24
+
+- Fix: PMSDR "sound card 'Aureon' not found" on systems with a German locale – `arecord -l` prints
+  "Karte 3: …" instead of "card 3: …". arecord is now always called with `LC_ALL=C`, German output is
+  recognised as well, and the sound card is also found by its USB ID.
+- Clearer message when the sound card is on USB but not registered as a sound card.
+
 ## 1.6.1 – 2026-10-24
 
 - Waterfall opens in a window inside the dashboard (title, "↗ original", close with ✕, click
