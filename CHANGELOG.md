@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.4 – 2026-10-24
+
+- Signal check also for linear satellites (AO-7, AO-73, RS-44, FO-29, CAS-6, MO-122 …): strongest
+  spectral line in the transponder (beacon, SSB station) above the noise, per second. Until now
+  these passes showed "recorded · 0 hits" without any level, so there was no way to tell whether
+  the satellite was heard at all.
+
 ## 1.4.3 – 2026-10-24
 
 - README: screenshot of live TMC traffic messages.

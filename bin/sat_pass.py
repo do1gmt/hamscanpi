@@ -181,14 +181,14 @@ class Source:
             pass
 
 
-def signal_stats(pw):
+def signal_stats(pw, step_s=0.1):
     """Kurzfassung des Kanalpegels über den Überflug (je 0,1 s gemessen, Abstand zum Rauschen):
     höchster Wert, 90-%-Wert und Sekunden über 6 dB. Zeigt, ob der Satellit überhaupt zu hören war."""
     if pw is None or not len(pw):
         return {"max_db": None, "p90_db": None, "above6_s": 0}
     db = 10 * np.log10(np.asarray(pw, dtype=np.float64) + 1e-12)
     return {"max_db": round(float(db.max()), 1), "p90_db": round(float(np.percentile(db, 90)), 1),
-            "above6_s": round(float((db > 6.0).sum()) * 0.1)}
+            "above6_s": round(float((db > 6.0).sum()) * step_s)}
 
 
 class Channel:
@@ -236,6 +236,18 @@ class Channel:
         if self.chunk_t is None:
             self.chunk_t = t
         if self.kind == "linear":
+            # Pegel für die Signalprüfung: stärkste Spektrallinie (Bake, SSB-Station) gegen den Median,
+            # über 1 s gemittelt; reines Rauschen ergibt dabei ~4 dB, das wird abgezogen
+            n = min(len(bb), 4096)
+            S_ = np.abs(np.fft.fftshift(np.fft.fft(bb[:n] * np.hanning(n)))) ** 2
+            fr = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / OUT_RATE))
+            S_ = S_[np.abs(fr) < 20000]
+            self._lin_acc = S_ if getattr(self, "_lin_acc", None) is None or len(self._lin_acc) != len(S_) else self._lin_acc + S_
+            self._lin_n = getattr(self, "_lin_n", 0) + 1
+            if self._lin_n >= 10:
+                ratio = float(self._lin_acc.max() / max(np.median(self._lin_acc), 1e-30)) / 10 ** 0.42
+                self.snr_track.append(max(ratio, 1e-3))
+                self._lin_acc, self._lin_n = None, 0
             self.chunk.append(bb.astype(np.complex64))
             if len(self.chunk) >= 300:                        # 30 s
                 self._linear_chunk()
@@ -516,7 +528,8 @@ def main():
             hits = ch.evaluate(t0)
             n = db_save(ch.sat, hits)
             per_ch[ch.sat["id"]] = n
-            sig[ch.sat["id"]] = getattr(ch, "stats", None) or signal_stats(np.array(ch.snr_track))
+            sig[ch.sat["id"]] = getattr(ch, "stats", None) or signal_stats(
+                np.array(ch.snr_track), 1.0 if ch.kind == "linear" else 0.1)
             per_obj[ch.sat["norad"]] += n
             hits_total += n
         applog("INFO", "satellite", "pass_done", sat=name, hits=hits_total, per_channel=per_ch,
