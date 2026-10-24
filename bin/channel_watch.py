@@ -11,9 +11,11 @@ Pegelverlauf über die Zeit bestimmen und den Ton aus GENAU DIESER Aufnahme schn
 Störlinien fallen über die Bandbreite heraus (eine FFT-Linie statt eines Kanals),
 und jede Aufnahme wird nach dem Demodulieren bewertet: Ton / nur Träger / Rauschen.
 """
+import json
 import math
 import time
 import numpy as np
+from pathlib import Path
 from scipy.signal import welch, butter, sosfiltfilt
 
 CHANNEL_MODES = {"fm", "relais", "am", "aprs", "dv", "pocsag", "sat"}
@@ -110,6 +112,15 @@ def audio_quality(zi, zq, rate, mode):
 # gemessen, jeder Sender genau auf seiner Kanalmitte aufgenommen (für RDS) und mit automatischer
 # Verstärkung empfangen (bei fester Scan-Verstärkung fehlte RDS oft).
 
+RTL_GAINS = [0.9, 1.4, 2.7, 3.7, 7.7, 8.7, 12.5, 14.4, 15.7, 16.6, 19.7, 20.7, 22.9, 25.4, 28.0, 29.7,
+             32.8, 33.8, 36.4, 37.2, 38.6, 40.2, 42.1, 43.4, 43.9, 44.5, 48.0, 49.6]
+
+
+def _gain_step(g, n):
+    i = min(range(len(RTL_GAINS)), key=lambda k: abs(RTL_GAINS[k] - g))
+    return RTL_GAINS[max(0, min(len(RTL_GAINS) - 1, i + n))]
+
+
 FM_RASTER = 100000.0
 FM_RATE = 240000
 
@@ -138,10 +149,39 @@ def watch_fm(dev, band, center, cfg, selected, allowed=lambda rf: True, log=prin
         return [], 0
     secs = float(cfg.get("fm_record_seconds", 6.0))
     old_gain = getattr(dev, "gain", None)
-    if cfg.get("fm_auto_gain", True):
-        dev.gain = 0                                         # automatische Verstärkung des Sticks
     try:
-        i, q = dev._grab(center, secs)
+        if cfg.get("fm_auto_gain", True):
+            # eigene Regelung je Fenster (die Automatik im Stick übersteuert bei starken Ortssendern):
+            # Stufe vom letzten Scan, bei Übersteuerung sofort tiefer neu aufnehmen, bei leisem Signal
+            # beim nächsten Scan eine Stufe höher. Gemerkt in data/fm_gain.json.
+            gfile = Path(__file__).resolve().parent.parent / "data" / "fm_gain.json"
+            try:
+                memo = json.loads(gfile.read_text())
+            except Exception:
+                memo = {}
+            key = str(int(round(center / 1000)))
+            g = float(memo.get(key, 29.7))
+            for _ in range(3):
+                dev.gain = g
+                i, q = dev._grab(center, secs)
+                m = np.abs(np.concatenate([i[::50], q[::50]]))
+                clip, peak = float(np.mean(m > 0.985)), float(np.percentile(m, 99.5))
+                if clip > 0.003 and g > RTL_GAINS[0]:
+                    g = _gain_step(g, -3)
+                    log(f"      übersteuert ({clip*100:.1f} %) – neu mit {g:g} dB")
+                    continue
+                if peak < 0.25:
+                    memo[key] = _gain_step(g, +1)
+                else:
+                    memo[key] = g
+                break
+            try:
+                gfile.parent.mkdir(parents=True, exist_ok=True)
+                gfile.write_text(json.dumps(memo))
+            except OSError:
+                pass
+        else:
+            i, q = dev._grab(center, secs)
     finally:
         dev.gain = old_gain
     # mittleres Leistungsspektrum (stückweise: wenig Speicher)

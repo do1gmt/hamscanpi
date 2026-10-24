@@ -46,6 +46,10 @@ try:
                 ph[i] = float(p[-1] % (2 * np.pi))
                 z = z + 40 * np.exp(1j * p)
         t_s += m / fs
+        # Verstärkung nachbilden: -g skaliert, ohne -g (Stick-Automatik) deutlich zu viel
+        if os.environ.get("FAKE_GAIN"):
+            gdb = float(a[a.index('-g') + 1]) if '-g' in a else 45.0
+            z = z * 10 ** ((gdb - float(os.environ.get("FAKE_GAIN_REF", "29.7"))) / 20)
         out = np.empty(2 * m, np.uint8)
         out[0::2] = np.clip(z.real + 127.5, 0, 255); out[1::2] = np.clip(z.imag + 127.5, 0, 255)
         sys.stdout.buffer.write(out.tobytes()); sys.stdout.flush()

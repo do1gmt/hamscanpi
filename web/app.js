@@ -562,7 +562,8 @@
         const calls = new Set(); let cq = 0;
         d.messages.forEach(m => { const i = interpret(m.text); i.calls.forEach(c => calls.add(c)); if (i.kind === 'cq') cq++; });
         parts.push(`${d.type}: ${d.messages.length} Nachr., ${calls.size} Stationen${cq ? `, ${cq}× CQ` : ''}`);
-      } else if (d.plausible && d.text) parts.push(`${d.type}: ${d.text.slice(0, 40)}`);
+      } else if (d.type === 'RDS' && d.rds) parts.push(`RDS: ${rdsShort(d.rds)}`);
+      else if (d.plausible && d.text) parts.push(`${d.type}: ${d.text.slice(0, 40)}`);
     }
     return parts.join(' · ');
   }
@@ -585,6 +586,9 @@
           return `<span class="station">${st.call}${extra ? extra + '</span>' : ''}</span>`;
         });
         html += `<div class="stations">${list.join('')}</div>${!me ? '<p class="hint">Locator unter „Bänder &amp; Betriebsarten“ eintragen, dann stehen hier Entfernung und Richtung.</p>' : ''}</div>`;
+      } else if (d.type === 'RDS' && d.rds) {
+        const r = d.rds, ok = r.blocks ? Math.round(100 * r.blocks_ok / r.blocks) : 0;
+        html += `<div class="decode-block rds-box"><div class="decode-title"><b>RDS</b> · <span>${r.groups} Gruppen, ${ok} % fehlerfrei</span> · ${(h.rf_hz / 1e6).toFixed(1)} MHz</div>${rdsBody(r)}</div>`;
       } else {
         html += `<div class="decode-block ${d.plausible ? '' : 'implausible'}"><div class="decode-title"><b>${d.type}</b> · ${d.confidence}%${d.detail ? ' · ' + esc(d.detail) : ''}${d.plausible ? '' : ' · vermutlich Rauschen'}</div>${d.text ? `<div class="mono pre">${esc(d.text)}</div>` : ''}</div>`;
       }
@@ -731,9 +735,13 @@
     const f = Math.round((wfInfo.center_hz - wfInfo.span_hz / 2 + x * wfInfo.span_hz) / step) * step;
     $('liveFreq').value = (f / 1e6).toFixed(4); liveRetune();
   });
-  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRemember(lf(), $('liveMode').value)).catch(e => toast(e.message)), 250); };
+  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 250); };
+  // „Zuletzt gehört“ erst nach 5 s auf derselben Frequenz (kein Eintrag für jeden Zwischenschritt)
+  let rememberTimer = null;
+  function liveRememberLater(f, m) { clearTimeout(rememberTimer); rememberTimer = setTimeout(() => { if (live.active && Math.abs(lf() - f) < 100 && $('liveMode').value === m) liveRemember(f, m); }, 5000); }
   document.querySelectorAll('[data-livestep]').forEach(b => b.addEventListener('click', () => {
-    const v = Number($('liveStep').value), s = v === 8333 ? 25000 / 3 : v, dir = Number(b.dataset.livestep);
+    let v = Number($('liveStep').value); if ($('liveMode').value === 'wfm' && v < 100000) v = 100000;   // UKW: 100-kHz-Raster
+    const s = v === 8333 ? 25000 / 3 : v, dir = Number(b.dataset.livestep);
     const f = Math.round((Math.round(lf() / s) + dir) * s);       // auf das Raster einrasten
     $('liveFreq').value = (f / 1e6).toFixed(v % 1000 ? 5 : 4); liveRetune();
   }));
@@ -886,10 +894,8 @@
     }));
   }
   // RDS-Anzeige (UKW, „FM breit“)
-  function renderRds(r) {
-    const box = $('liveRds');
-    if (!r || !r.groups) { box.hidden = true; return; }
-    box.hidden = false;
+  // RDS-Inhalt (Live-Kasten und Trefferkarte): einzelne Zeilen, damit die Übersetzung greift
+  function rdsBody(r, withPs = true) {
     const rp = r.rtplus || {};
     const rows = [
       ['Programmart', r.pty ? r.pty_name + (r.ptyn ? ` (${r.ptyn})` : '') : null],
@@ -905,16 +911,32 @@
     const t = r.tmc || {};
     const tmcHead = t.encrypted ? 'verschlüsselt – nicht lesbar' : t.ltn ? `Ortstabelle ${t.ltn}${t.ltn === 1 ? ' (Deutschland)' : ''}${t.scope ? ' · ' + t.scope : ''}` : null;
     const msgs = (t.messages || []).slice(0, 20);
-    box.innerHTML = `<div class="rds-ps">${esc((r.ps || (r.ps_partial ? r.ps_partial : '…')).trim() || '…')}</div>` +
+    return (withPs ? `<div class="rds-ps">${esc((r.ps || (r.ps_partial ? r.ps_partial : '…')).trim() || '…')}</div>` : '') +
       rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>`).join('') +
       (tmcHead || msgs.length ? `<div class="tmc"><div class="kv"><span class="k">Verkehrsmeldungen (TMC)</span><span class="v">${esc(tmcHead || '')}${msgs.length ? ` · ${msgs.length} Meldung${msgs.length > 1 ? 'en' : ''}` : ''}</span></div>
         ${msgs.length ? '<ul class="tmc-list">' + msgs.map(m => `<li class="no-i18n">🚧 ${esc((EN && m.text_en) || m.text || ('Ereignis ' + m.event + ', Ort ' + m.location))}</li>`).join('') + '</ul>' : ''}</div>` : '');
+  }
+  function rdsShort(r) {                     // Kurzfassung für die Kopfzeile der Trefferkarte (schon übersetzt)
+    const tr = x => (window.I18N ? I18N.t(x) : x);
+    const rp = r.rtplus || {};
+    const ps = (r.ps || r.ps_partial || '').trim();
+    return [ps ? `„${ps}“` : null, r.pi ? `PI ${r.pi}` : null, r.pty ? tr(r.pty_name) : null,
+            rp.artist || rp.title ? [rp.artist, rp.title].filter(Boolean).join(' – ') : (r.rt_complete ? r.rt : null)]
+      .filter(Boolean).join(' · ');
+  }
+  // RDS-Anzeige (UKW, „FM breit“)
+  function renderRds(r) {
+    const box = $('liveRds');
+    if (!r || !r.groups) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = rdsBody(r);
     if (r.ps && r.ps.trim() && live.active) {
       const h = liveHist[0];
       if (h && Math.abs(h.f - r.freq_hz) < 1000) { if (h.name !== r.ps.trim()) { h.name = r.ps.trim(); renderLiveHist(); } }
       else liveRemember(r.freq_hz, 'wfm', r.ps.trim());       // z. B. per Suchlauf gefunden: mit Namen merken
     }
   }
+
 
   // ---------- Satelliten ----------
   let satData = null;

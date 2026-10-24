@@ -42,6 +42,8 @@ class LiveSession:
         self.active_hz = self.freq_hz
         self.wf = {"seq": 0, "row": [], "center_hz": 0, "span_hz": 0}     # letzte Wasserfall-Zeile
         self.rds = None                                                   # RDS des UKW-Senders (Live)
+        self._agc_gain = 29.7                                             # eigene Regelung bei „automatisch“
+        self._agc_hold = 0.0
         self._wf_tuned = 0
         self.status_text = "bereit"
         self.thread = None
@@ -219,6 +221,21 @@ class LiveSession:
         cmd.append("-")
         return cmd
 
+    RTL_GAINS = [0.9, 1.4, 2.7, 3.7, 7.7, 8.7, 12.5, 14.4, 15.7, 16.6, 19.7, 20.7, 22.9, 25.4, 28.0, 29.7,
+                 32.8, 33.8, 36.4, 37.2, 38.6, 40.2, 42.1, 43.4, 43.9, 44.5, 48.0, 49.6]
+
+    def _agc_step(self, gain, clip, peak):
+        """Nächste Verstärkungsstufe: bei Übersteuerung (> 0,3 % der Werte am Anschlag) zwei Stufen runter
+        (und 30 s nicht wieder rauf), bei sehr leisem Signal (Spitzen < 25 % des Bereichs) eine rauf."""
+        g = self.RTL_GAINS
+        i = min(range(len(g)), key=lambda k: abs(g[k] - gain))
+        if clip > 0.003 and i > 0:
+            self._agc_hold = time.time() + 30
+            return g[max(0, i - 2)]
+        if peak < 32 and i < len(g) - 1 and time.time() > self._agc_hold:
+            return g[i + 1]
+        return gain
+
     def _rtl_gain(self):
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
         g = getattr(self, "gain", None)
@@ -232,6 +249,11 @@ class LiveSession:
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
         self.active_hz = int(freq_hz)
         gain = self._rtl_gain()
+        # „automatisch“: nicht die Regelung im Stick (übersteuert bei starken Ortssendern), sondern eine
+        # eigene: feste Stufen, runter bei Übersteuerung, rauf wenn das Signal sehr leise ist
+        agc = not gain
+        if agc:
+            gain = self._agc_gain
         cmd = [rtl.get("binary", "rtl_sdr"), "-d", str(int(rtl.get("device_index", 0))),
                "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(rtl.get("ppm", 0)))]
         if gain:
@@ -242,8 +264,13 @@ class LiveSession:
         rds = None
         if self.mode == "wfm":
             import rds as RDS
-            rds = RDS.RdsDecoder(DSP.MID_RATE)
-            self.rds = None
+            # bei Neustart auf derselben Frequenz (z. B. neue Verstärkungsstufe) den Stand behalten
+            if getattr(self, "_rds_dec", None) is not None and getattr(self, "_rds_freq", None) == int(freq_hz):
+                rds = self._rds_dec
+            else:
+                rds = RDS.RdsDecoder(DSP.MID_RATE)
+                self._rds_dec, self._rds_freq = rds, int(freq_hz)
+                self.rds = None
         blk = 9600 * 2 * 2                    # 20 ms Rohdaten (Vielfaches von 120 Werten)
         per_pub = 5                           # alle 100 ms an den Browser
         buf, nblk = [], 0
@@ -251,6 +278,7 @@ class LiveSession:
         last_signal = time.time()
         idle_t = None
         base = f"{freq_hz/1e6:.4f} MHz ({self.mode})"
+        agc_clip, agc_peak, agc_n = 0.0, 0.0, 0
         self.status_text = f"Empfang {base}"
         while self.running and not self.restart_wanted.is_set():
             if max_s is not None and time.time() - t_start > max_s:
@@ -290,12 +318,27 @@ class LiveSession:
                 pass
             pcm = b"".join(buf)
             buf = []
+            if agc:
+                agc_clip += demod.clip_frac
+                u = np.frombuffer(raw, dtype=np.uint8)
+                agc_peak = max(agc_peak, float(np.percentile(np.abs(u.astype(np.int16) - 127), 99.5)))
+                agc_n += 1
+                if agc_n >= 10:                                  # ~1 s auswerten
+                    clip, peak = agc_clip / agc_n, agc_peak
+                    agc_clip, agc_peak, agc_n = 0.0, 0.0, 0
+                    new = self._agc_step(gain, clip, peak)
+                    if new != gain:
+                        self._agc_gain = new
+                        self.restart_wanted.set()                # mit neuer Stufe neu starten (kurze Lücke)
+                        break
             self.snr_db = round(demod.snr_db, 1)
             self.clip_pct = round(demod.clip_frac * 100, 2)
             self.level_db = demod.snr_db - 60.0        # Balken: 0 dB Abstand = leer, 50 dB = voll
             warn = ""
-            if demod.clip_frac > 0.002:
+            if demod.clip_frac > 0.002 and not agc:
                 warn = f" · ÜBERSTEUERT ({demod.clip_frac*100:.1f} %) – Verstärkung senken"
+            elif agc:
+                warn = f" · Verstärkung automatisch {gain:g} dB"
             self.status_text = f"Empfang {base} · {demod.snr_db:.0f} dB über Rauschen{warn}"
             self._publish(pcm)
             if hold_until_silent:

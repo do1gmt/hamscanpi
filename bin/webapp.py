@@ -513,7 +513,8 @@ def decode_summary(recording_path):
         out.append({"type": d.get("type"), "confidence": conf, "text": text,
                     "detail": d.get("detail", ""), "plausible": plausible,
                     "messages": d.get("messages", []),
-                    "ps": ((d.get("rds") or {}).get("ps") or "").strip() if d.get("type") == "RDS" else None})
+                    "ps": ((d.get("rds") or {}).get("ps") or "").strip() if d.get("type") == "RDS" else None,
+                    "rds": d.get("rds") if d.get("type") == "RDS" else None})
     return out
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1 – 2026-10-24
+
+- **Own automatic gain** instead of the stick's AGC, which overloads with strong local FM stations
+  (seen: 53 % of the samples clipped next to a transmitter site). Live: fixed gain steps, two steps
+  down on clipping, one step up when the signal is very weak; RDS is kept while it adjusts. FM scan:
+  per receive window, re-recorded at once with less gain when clipping, remembered for the next scan
+  (`data/fm_gain.json`).
+- English UI on FM hit cards: the RDS block and the header summary are now built from the decoded
+  data (programme type, radio text, AF, identification, reception, TMC) instead of German text.
+- Live: "Recently heard" only after 5 s on the same frequency (no entries for every step);
+  ◀/▶ use 100-kHz steps with "FM wide".
+
 ## 1.4.0 – 2026-10-24
 
 - **TMC traffic messages** from RDS (group 8A, single- and multi-group messages with quantity,

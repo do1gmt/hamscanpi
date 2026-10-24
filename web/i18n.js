@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Breites FM (UKW-Rundfunk), Mono.': 'Wide FM (broadcast), mono.', 'Sprache': 'Voice',
     'Verkehrsmeldung (Straße/Ort)': 'Traffic message (road/place)', 'A9 oder Nürnberg': 'A9 or Nuremberg', 'Verkehr': 'Traffic',
     'Verkehrsmeldungen (TMC)': 'Traffic messages (TMC)', 'verschlüsselt – nicht lesbar': 'encrypted – not readable',
     'Lautstärke': 'Volume',
@@ -338,6 +339,7 @@
     [/ \(unvollständig\)/g, ' (incomplete)'], [/Sendername nicht empfangen/, 'station name not received'],
     [/^Ortstabelle (\d+) \(Deutschland\)/, 'location table $1 (Germany)'], [/^Ortstabelle (\d+)/, 'location table $1'], [/ · (\d+) Meldung(en)?$/, ' · $1 message(s)'],
     [/^Verkehr: /, 'Traffic: '], [/^Verkehr: (.+)$/, 'Traffic: $1'], [/^TMC: verschlüsselt \(nicht lesbar\)$/, 'TMC: encrypted (not readable)'],
+    [/ · Verstärkung automatisch ([\d.]+) dB/, ' · gain automatic $1 dB'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
