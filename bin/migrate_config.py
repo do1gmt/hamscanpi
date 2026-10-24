@@ -27,6 +27,16 @@ for r in c.get("ranges", []):
         r["segments"] = SAT.segments_for_bandplan()
         fs = [s["center_hz"] for s in SAT.SATELLITES]
         r["start_hz"], r["stop_hz"] = min(fs), max(fs)
+# Wettersatelliten: NOAA-APT gibt es seit 2025 nicht mehr – Segment aus der Vorlage übernehmen
+dw = next((r for r in d.get("ranges", []) if r["name"] == "Wettersat"), None)
+for r in c.get("ranges", []):
+    if dw and r.get("name") == "Wettersat":
+        for sg in r.get("segments", []):
+            if sg.get("id") == "apt" and "NOAA" in sg.get("label", ""):
+                new = next((x for x in dw["segments"] if x["id"] == "apt"), None)
+                if new:
+                    sg.update(label=new["label"], frequencies_hz=new["frequencies_hz"], note=new["note"])
+                    added.append("Wettersat (Meteor statt NOAA)")
 names = {r["name"] for r in c.get("ranges", [])}
 new_bands = [r for r in d.get("ranges", []) if r["name"] not in names]
 c.setdefault("ranges", []).extend(new_bands)

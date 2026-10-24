@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 – 2026-10-24
+
+- **Learned interference lines:** a frequency where a carrier without content (carrier only / no
+  audio, no decode, not FM broadcast/APRS/FT8/…) shows up in at least 5 runs over at least 2 hours
+  is learned as interference (±3 kHz). Hits there are marked "⚡ interference" and hidden in the hit
+  list (checkbox "Interference lines" shows them); they create no station entries or watchlist alerts.
+  Local interference detected by the satellite waterfall is added too. New list in the *Stations*
+  tab with "not interference" to exclude a frequency permanently.
+- **Weather satellites:** NOAA-15/18/19 were decommissioned in 2025; the band plan segment is now
+  "Meteor-M LRPT 137.100 / 137.900" (also migrated in existing configs). Image decoding via SatDump
+  is still to come.
+
 ## 1.5.1 – 2026-10-24
 
 - Hit card shows only the SNR (level and noise were relative values without a fixed reference and

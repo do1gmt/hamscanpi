@@ -109,6 +109,27 @@ def linear_activity(z, rate, beacons=()):
     return best[0] >= 0.05, best[1], best[2]
 
 
+def remember_interference(rf_hz, sat_name):
+    """Örtliche Störung aus dem Satelliten-Wasserfall in die Liste der Störlinien (Reiter Stationen)."""
+    try:
+        db = sqlite3.connect(DB)
+        db.execute("PRAGMA busy_timeout=5000")
+        db.execute("""CREATE TABLE IF NOT EXISTS interference (id INTEGER PRIMARY KEY, band TEXT, rf_hz REAL,
+            first TEXT, last TEXT, n INTEGER, source TEXT, ignored INTEGER DEFAULT 0)""")
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        band = "2m" if rf_hz < 200e6 else "70cm"
+        row = db.execute("SELECT id FROM interference WHERE band=? AND ABS(rf_hz-?)<=3000", (band, rf_hz)).fetchone()
+        if row:
+            db.execute("UPDATE interference SET last=?, n=n+1 WHERE id=?", (now, row[0]))
+        else:
+            db.execute("INSERT INTO interference (band, rf_hz, first, last, n, source) VALUES (?,?,?,?,?,?)",
+                       (band, rf_hz, now, now, 1, f"Satelliten-Wasserfall ({sat_name})"))
+        db.commit()
+        db.close()
+    except Exception:
+        pass
+
+
 def db_save(sat, hits):
     if not hits:
         return 0
@@ -652,6 +673,9 @@ def main():
             try:                                              # Wasserfall und Einordnung der stärksten Linie
                 sig[ch.sat["id"]]["waterfall"] = ch.save_waterfall(t0, ch.sat.get("name") or ch.sat["id"])
                 sig[ch.sat["id"]]["line"] = ch.classify_line()
+                L = sig[ch.sat["id"]]["line"]
+                if L and L.get("kind") == "local" and not a.test:
+                    remember_interference(L["rf_mhz"] * 1e6, ch.sat.get("name") or ch.sat["id"])
             except Exception as e:
                 applog("WARN", "satellite", "waterfall_failed", sat=ch.sat["id"], error=f"{type(e).__name__}: {e}")
             per_obj[ch.sat["norad"]] += n

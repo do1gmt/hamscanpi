@@ -51,6 +51,7 @@
       </label>
       <label class="field grow"><span>Suche (MHz oder Notiz)</span><input id="search" type="search" placeholder="7.14 oder DL1…" autocomplete="off"></label>
       <label class="check"><input type="checkbox" id="filterAudio"> nur mit Ton</label>
+      <label class="check" title="Gelernte Störlinien (immer wieder gleiche Frequenz, nur Träger) – sonst ausgeblendet"><input type="checkbox" id="filterInterf"> Störlinien</label>
       <label class="check"><input type="checkbox" id="filterProtected"> nur ★</label>
     </div>
     <div class="result-count" id="hitCount" aria-live="polite"></div>
@@ -179,6 +180,14 @@
       <button type="button" class="btn btn-small" id="stPrev">◀</button><span class="hint" id="stPos"></span><button type="button" class="btn btn-small" id="stNext">▶</button>
     </div>
     <p class="hint">ADIF ist das Austauschformat der Logbuchprogramme. Der Export ist ein SWL-Log (jede gehörte Aussendung ein Eintrag, SWL=Y) – mit deinem Rufzeichen und Locator aus den Einstellungen.</p>
+  </section>
+  <section class="panel">
+    <h2>Störlinien</h2>
+    <p class="hint">Frequenzen, auf denen immer wieder ein Träger ohne Inhalt auftaucht (mindestens 5 Läufe über 2 Stunden, nur Träger, keine Dekodierung) oder die der Satelliten-Wasserfall als örtliche Störung erkannt hat. Treffer dort werden in der Trefferliste ausgeblendet. Typische Quellen: Schaltnetzteile, Monitore, Router, LED-Treiber, Störlinien des Sticks selbst. Mit „keine Störung“ nimmst du eine Frequenz dauerhaft aus.</p>
+    <div class="table-wrap"><table class="table interf-table">
+      <thead><tr><th>Band</th><th>MHz</th><th>Erkannt durch</th><th>Seit</th><th>Zuletzt (UTC)</th><th title="Anzahl">×</th><th></th></tr></thead>
+      <tbody id="interfTable"></tbody></table></div>
+    <p class="hint" id="interfHidden"></p>
   </section>
   <section class="panel">
     <h2>UKW-Sender (RDS)</h2>

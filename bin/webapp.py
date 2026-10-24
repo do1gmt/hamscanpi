@@ -550,7 +550,7 @@ def list_hits(params):
     sql = """SELECT p.id, p.rf_hz, p.snr_db, p.level_db, p.recording_path,
                     COALESCE(p.protected,0) AS protected, p.segment_id, p.mode, p.sideband,
                     p.carrier_delta_hz, p.note, s.time, s.band, s.center_hz, s.noise_db, p.rec_center_hz,
-                    p.audio, p.audio_score,
+                    p.audio, p.audio_score, COALESCE(p.interference, 0) AS interference,
                     (SELECT group_concat(w.label, ' · ') FROM watch_hit w WHERE w.peak_id = p.id) AS watch
              FROM peak p JOIN scan s ON s.id = p.scan_id WHERE 1=1"""
     args = []
@@ -569,6 +569,8 @@ def list_hits(params):
         args += hidden
     if params.get("audio", "") == "1":
         sql += " AND p.audio = 'ton'"
+    if params.get("interference", "") != "1":           # gelernte Störlinien ausblenden (einblendbar)
+        sql += " AND COALESCE(p.interference, 0) = 0"
     if q:
         try:
             mhz = float(q.replace(",", "."))
@@ -594,7 +596,7 @@ def list_hits(params):
         mode_v = r["mode"] or "unknown"
         sg, device = seg_index.get((r["band"], r["segment_id"]), ({}, "pmsdr"))
         out.append({
-            "device": device,
+            "device": device, "interference": bool(r["interference"]),
             "offset_hz": sg.get("offset_hz"),
             "segment_label": sg.get("label", ""),
             "segment_note": sg.get("note", ""),
@@ -891,6 +893,33 @@ def activity(days=30):
             "bands": [{"band": b, "hours": {str(h): v for h, v in bands[b].items()}}
                       for b in sorted(bands, key=lambda x: order.index(x) if x in order else 999)],
             "week": {str(d): {str(h): v for h, v in hs.items()} for d, hs in week.items()}}
+
+
+def interference_list():
+    db = db_connect()
+    ST.ensure_tables(db)
+    rows = [dict(r) for r in db.execute("SELECT * FROM interference ORDER BY ignored, band, rf_hz")]
+    hidden = db.execute("SELECT COUNT(*) FROM peak WHERE COALESCE(interference,0)=1").fetchone()[0]
+    db.close()
+    return {"lines": rows, "hidden_hits": hidden}
+
+
+def interference_set(data):
+    """Störlinie als „keine Störung“ markieren (ignored=1, Treffer wieder zeigen) oder zurücknehmen."""
+    iid, ignored = int(data["id"]), 1 if data.get("ignored") else 0
+    db = db_connect()
+    ST.ensure_tables(db)
+    row = db.execute("SELECT band, rf_hz FROM interference WHERE id=?", (iid,)).fetchone()
+    if not row:
+        db.close()
+        raise ValueError("unbekannte Störlinie")
+    db.execute("UPDATE interference SET ignored=? WHERE id=?", (ignored, iid))
+    db.execute("""UPDATE peak SET interference=? WHERE id IN (SELECT p.id FROM peak p JOIN scan s ON s.id=p.scan_id
+                  WHERE s.band=? AND ABS(p.rf_hz-?)<=?)""", (0 if ignored else 1, row[0], row[1], ST.INT_TOL_HZ))
+    db.commit()
+    db.close()
+    APPLOG.log("INFO", "webapp", "interference_changed", band=row[0], rf_mhz=round(row[1] / 1e6, 4), ignored=bool(ignored))
+    return {"ok": True}
 
 
 def fm_stations(days=0):
@@ -1566,6 +1595,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/stations":
                 return self.send_json(stations(int(qs.get("days", 30) or 0), qs.get("q", ""), qs.get("band", ""),
                                                max(1, min(int(qs.get("limit", 100)), 1000)), max(0, int(qs.get("offset", 0)))))
+            if path == "/api/interference":
+                return self.send_json(interference_list())
             if path == "/api/fmstations":
                 return self.send_json(fm_stations(int(qs.get("days", 0) or 0)))
             if path == "/api/activity":
@@ -1764,6 +1795,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"ok": False, "error": "Scanprozess existiert nicht mehr"}, 409)
                 APPLOG.log("WARN", "webapp", "scan_stop_requested", pid=pid)
                 return self.send_json({"ok": True})
+            if path == "/api/interference":
+                return self.send_json(interference_set(data))
             if path == "/api/telegram-chats":
                 # Chat-ID ermitteln: Telegram nach den letzten Nachrichten an den Bot fragen
                 tok = str(data.get("token") or "").strip()

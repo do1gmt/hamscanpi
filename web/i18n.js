@@ -150,6 +150,14 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Meteor-M LRPT 137.100 / 137.900': 'Meteor-M LRPT 137.100 / 137.900',
+    'NOAA-APT (NOAA-15/18/19) seit 2025 abgeschaltet. Meteor-M N2-3 und N2-4 senden digital (LRPT, 72k) – hörbar nur bei Überflug, Bilder brauchen SatDump.': 'NOAA APT (NOAA-15/18/19) switched off since 2025. Meteor-M N2-3 and N2-4 transmit digitally (LRPT, 72k) – audible only during a pass, images need SatDump.',
+    'Störlinien': 'Interference lines', 'Erkannt durch': 'Detected by', 'Seit': 'Since', 'Scans': 'Scans', 'keine Störung': 'not interference', 'doch Störung': 'is interference',
+    'Noch keine Störlinien erkannt.': 'No interference lines detected yet.', '⚡ Störlinie': '⚡ interference',
+    'Gelernte Störlinie – siehe Stationen → Störlinien': 'Learned interference line – see Stations → Interference lines',
+    'Gelernte Störlinien (immer wieder gleiche Frequenz, nur Träger) – sonst ausgeblendet': 'Learned interference lines (same frequency again and again, carrier only) – hidden otherwise',
+    'Frequenzen, auf denen immer wieder ein Träger ohne Inhalt auftaucht (mindestens 5 Läufe über 2 Stunden, nur Träger, keine Dekodierung) oder die der Satelliten-Wasserfall als örtliche Störung erkannt hat. Treffer dort werden in der Trefferliste ausgeblendet. Typische Quellen: Schaltnetzteile, Monitore, Router, LED-Treiber, Störlinien des Sticks selbst. Mit „keine Störung“ nimmst du eine Frequenz dauerhaft aus.':
+      'Frequencies where a carrier without content shows up again and again (at least 5 runs over 2 hours, carrier only, no decode) or that the satellite waterfall detected as local interference. Hits there are hidden in the hit list. Typical sources: switch-mode power supplies, monitors, routers, LED drivers, spurs of the stick itself. "Not interference" excludes a frequency permanently.',
     'SNR dB': 'SNR dB',
     'Chat-ID ermitteln': 'Find chat ID', 'frage Telegram …': 'asking Telegram …',
     'Noch keine Nachricht an den Bot gefunden – schreib deinem Bot in Telegram etwas (z. B. „hallo“) und drück dann noch einmal auf „Chat-ID ermitteln“.': 'No message to the bot found yet – write something to your bot in Telegram (e.g. "hello"), then press "Find chat ID" again.',
@@ -356,6 +364,7 @@
     [/^kein Signal \(SNR höchstens (-?\d+) dB\)$/, 'no signal (SNR at most $1 dB)'], [/^SNR bis (-?\d+) dB, (\d+) s über 6 dB$/, 'SNR up to $1 dB, $2 s above 6 dB'],
     [/ · SNR (-?\d+) dB/g, ' · SNR $1 dB'],
     [/^Suchlauf (.): Signal auf (.+) MHz \(SNR (-?\d+) dB\)$/, 'Seek $1: signal on $2 MHz (SNR $3 dB)'], [/^Suchlauf (.) (.+) MHz …$/, 'Seek $1 $2 MHz …'],
+    [/^(\d+) Treffer als Störlinie ausgeblendet – unter Treffer mit „Störlinien“ einblenden\.$/, '$1 hits hidden as interference – show them under Hits with "Interference lines".'], [/^Satelliten-Wasserfall \((.+)\)$/, 'satellite waterfall ($1)'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

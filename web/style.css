@@ -430,3 +430,5 @@ table.heat td.h0 { background: var(--panel-2); }
 .tmc-list { margin: .2rem 0 0; padding-left: 0; list-style: none; font-size: .84rem; }
 .tmc-list li { padding: .15rem 0; border-bottom: 1px dashed rgba(255,255,255,.06); }
 .row-inline { display: flex; gap: .4rem; } .row-inline input { flex: 1; min-width: 0; }
+.badge-interf { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.4); }
+.interf-table td { white-space: nowrap; }

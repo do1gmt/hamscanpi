@@ -70,7 +70,7 @@
   let lastStatus = null;
   let settings = null;        // {scan_interval_minutes, selected_bands, selected_segments}
   let lastState = null;
-  const filter = { band: localStorage.getItem('f.band') || 'all', mode: localStorage.getItem('f.mode') || 'all', sort: localStorage.getItem('f.sort') || 'time', q: '', protected: false, audio: localStorage.getItem('f.audio') === '1' };
+  const filter = { band: localStorage.getItem('f.band') || 'all', mode: localStorage.getItem('f.mode') || 'all', sort: localStorage.getItem('f.sort') || 'time', q: '', protected: false, audio: localStorage.getItem('f.audio') === '1', interf: localStorage.getItem('f.interf') === '1' };
   const open = new Set();     // geöffnete Trefferkarten
   const cards = new Map();    // id -> element
 
@@ -377,7 +377,7 @@
   // ---------- Treffer ----------
   let hitsTimer;
   async function loadHits() {
-    const qs = new URLSearchParams({ band: filter.band, mode: filter.mode, sort: filter.sort, q: filter.q, protected: filter.protected ? '1' : '0', audio: filter.audio ? '1' : '0', limit: '400' });
+    const qs = new URLSearchParams({ band: filter.band, mode: filter.mode, sort: filter.sort, q: filter.q, protected: filter.protected ? '1' : '0', audio: filter.audio ? '1' : '0', interference: filter.interf ? '1' : '0', limit: '400' });
     const d = await api('/api/hits?' + qs);
     const root = $('hits');
     const seen = new Set();
@@ -396,7 +396,7 @@
   }
 
   function badges(h) {
-    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}`;
+    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}${h.interference ? '<span class="badge badge-interf" title="Gelernte Störlinie – siehe Stationen → Störlinien">⚡ Störlinie</span>' : ''}`;
   }
   function buildCard(h) {
     const el = document.createElement('article'); el.className = 'hit'; el.dataset.id = h.id;
@@ -608,6 +608,8 @@
   $('search').addEventListener('input', e => { filter.q = e.target.value.trim(); clearTimeout(hitsTimer); hitsTimer = setTimeout(loadHits, 300); });
   $('filterProtected').addEventListener('change', e => { filter.protected = e.target.checked; loadHits(); });
   $('filterAudio').checked = filter.audio;
+  $('filterInterf').checked = filter.interf;
+  $('filterInterf').addEventListener('change', e => { filter.interf = e.target.checked; localStorage.setItem('f.interf', filter.interf ? '1' : '0'); loadHits(); });
   $('filterAudio').addEventListener('change', e => { filter.audio = e.target.checked; localStorage.setItem('f.audio', filter.audio ? '1' : '0'); loadHits(); });
 
   // Aufräumen
@@ -885,7 +887,7 @@
     (bandplan || []).forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
   }
   function showView(name) {
-    if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); }, 0);   // nach dem Start des Skripts
+    if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); loadInterf(); }, 0);   // nach dem Start des Skripts
     document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== name);
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
     localStorage.setItem('view', name);
@@ -1171,6 +1173,20 @@
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
   $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+
+  // ---------- Störlinien ----------
+  async function loadInterf() {
+    let d; try { d = await api('/api/interference'); } catch (e) { return; }
+    $('interfTable').innerHTML = d.lines.map(r => `<tr class="${r.ignored ? 'muted' : ''}">
+        <td>${esc(r.band)}</td><td class="mono-num">${(r.rf_hz / 1e6).toFixed(4)}</td><td>${r.source === 'scan' ? 'Scans' : esc(r.source)}</td>
+        <td>${fmtTime(r.first)}</td><td>${fmtTime(r.last)}</td><td>${r.n}</td>
+        <td><button type="button" class="btn btn-small" data-interf="${r.id}" data-ign="${r.ignored ? 0 : 1}">${r.ignored ? 'doch Störung' : 'keine Störung'}</button></td></tr>`).join('')
+      || '<tr><td colspan="7" class="muted">Noch keine Störlinien erkannt.</td></tr>';
+    $('interfHidden').textContent = d.hidden_hits ? `${d.hidden_hits} Treffer als Störlinie ausgeblendet – unter Treffer mit „Störlinien“ einblenden.` : '';
+    $('interfTable').querySelectorAll('[data-interf]').forEach(b => b.addEventListener('click', async () => {
+      try { await post('/api/interference', { id: Number(b.dataset.interf), ignored: b.dataset.ign === '1' }); loadInterf(); } catch (e) { toast(e.message); }
+    }));
+  }
 
   // ---------- UKW-Senderliste (RDS) ----------
   async function loadFm() {

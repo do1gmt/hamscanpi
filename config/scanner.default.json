@@ -1128,15 +1128,13 @@
       "segments": [
         {
           "id": "apt",
-          "label": "NOAA/Meteor APT 137.100 / 137.620 / 137.9125 / 137.900",
+          "label": "Meteor-M LRPT 137.100 / 137.900",
           "mode": "sat",
           "frequencies_hz": [
             137100000,
-            137620000,
-            137912500,
             137900000
           ],
-          "note": "Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme",
+          "note": "NOAA-APT (NOAA-15/18/19) seit 2025 abgeschaltet. Meteor-M N2-3 und N2-4 senden digital (LRPT, 72k) – hörbar nur bei Überflug, Bilder brauchen SatDump.",
           "legal": "public"
         }
       ],

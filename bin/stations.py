@@ -59,6 +59,7 @@ def ensure_tables(db):
         first TEXT, last TEXT, n INTEGER, best_snr REAL, peak_id INTEGER, PRIMARY KEY (freq_khz, pi))""")
     if "last_snr" not in {r[1] for r in db.execute("PRAGMA table_info(fm_station)")}:
         db.execute("ALTER TABLE fm_station ADD COLUMN last_snr REAL")
+    ensure_interference(db)
     row = db.execute("SELECT v FROM meta WHERE k='heard_parser'").fetchone()
     if not row or int(row[0]) < PARSER_VERSION:
         # Erkennung verbessert: alle Treffer noch einmal auswerten, ohne die Beobachtungsliste auszulösen
@@ -185,13 +186,20 @@ def ingest(db, limit=2000):
     ensure_tables(db)
     row = db.execute("SELECT v FROM meta WHERE k='heard_last_peak'").fetchone()
     last = int(row[0]) if row else 0
-    rows = db.execute("""SELECT p.id, p.rf_hz, p.mode, p.segment_id, p.recording_path, p.snr_db, s.time, s.band
+    rows = db.execute("""SELECT p.id, p.rf_hz, p.mode, p.segment_id, p.recording_path, p.snr_db, s.time, s.band, p.audio
                          FROM peak p JOIN scan s ON s.id = p.scan_id WHERE p.id > ? ORDER BY p.id LIMIT ?""",
                       (last, limit)).fetchall()
     out = []
     for r in rows:
-        pid, rf, mode, seg, rec, snr, t, band = r
+        pid, rf, mode, seg, rec, snr, t, band, audio = r
+        last = pid
         dec = decode_of(rec) if rec else None
+        if band != "Satelliten":
+            try:
+                if learn_interference(db, pid, rf, band, t, mode, audio, dec):
+                    continue                                  # Störlinie: keine Stationen, keine Regeln
+            except Exception:
+                pass
         calls = []
         if dec:
             for call, grid, s, text, typ, f in senders_for(dec):
@@ -205,10 +213,70 @@ def ingest(db, limit=2000):
         img = REPORTS / f"{Path(rec).stem}_sstv.png" if rec else None
         out.append({"id": pid, "rf_hz": rf, "mode": mode, "segment_id": seg, "time": t, "band": band, "snr_db": snr,
                     "decode": dec, "calls": calls, "image": str(img) if img and img.exists() else None})
-        last = pid
     db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('heard_last_peak', ?)", (str(last),))
     db.commit()
     return out
+
+
+# ------------------------------------------------------------------ Störlinien (gelernt)
+#
+# Eine Störlinie ist ein Treffer, der immer wieder auf derselben Frequenz auftaucht und nie etwas
+# enthält: nur Träger oder kein Ton, keine Dekodierung. Typisch: Schaltnetzteile, Monitore, Router,
+# Oberwellen von Taktgebern, Störlinien des Sticks selbst. Ab INT_MIN_RUNS verschiedenen Läufen
+# (mindestens INT_MIN_SPAN_H Stunden auseinander) wird die Frequenz gelernt; Treffer dort werden
+# markiert und in der Trefferliste ausgeblendet (einblendbar). „Keine Störung“ nimmt sie dauerhaft aus.
+INT_TOL_HZ = 3000
+INT_MIN_RUNS = 5
+INT_MIN_SPAN_H = 2
+INT_SKIP_MODES = {"wfm", "aprs", "pocsag", "dv", "ft8", "ft4", "sstv"}
+
+
+def ensure_interference(db):
+    db.execute("""CREATE TABLE IF NOT EXISTS interference (id INTEGER PRIMARY KEY, band TEXT, rf_hz REAL,
+        first TEXT, last TEXT, n INTEGER, source TEXT, ignored INTEGER DEFAULT 0)""")
+    if "interference" not in {r[1] for r in db.execute("PRAGMA table_info(peak)")}:
+        db.execute("ALTER TABLE peak ADD COLUMN interference INTEGER DEFAULT 0")
+
+
+def _empty_hit(mode, audio, dec):
+    if (mode or "") in INT_SKIP_MODES:
+        return False
+    if any(d.get("validated") or (d.get("plausible", True) and d.get("type") in ("RDS", "APRS", "FT8", "FT4", "SSTV"))
+           for d in (dec or {}).get("decoders", [])):
+        return False
+    return (audio or "") in ("traeger", "")
+
+
+def learn_interference(db, pid, rf, band, t, mode, audio, dec):
+    """Neuen Treffer prüfen: bekannte Störlinie? oder genug Wiederholungen, um sie zu lernen?"""
+    if not _empty_hit(mode, audio, dec):
+        return False
+    known = db.execute("SELECT id, ignored FROM interference WHERE band=? AND ABS(rf_hz-?)<=?",
+                       (band, rf, INT_TOL_HZ)).fetchone()
+    if known:
+        if known[1]:
+            return False
+        db.execute("UPDATE interference SET last=?, n=n+1 WHERE id=?", (t, known[0]))
+        db.execute("UPDATE peak SET interference=1 WHERE id=?", (pid,))
+        return True
+    rows = db.execute("""SELECT p.id, s.time, p.mode, p.audio FROM peak p JOIN scan s ON s.id=p.scan_id
+                         WHERE s.band=? AND ABS(p.rf_hz-?)<=? AND s.time >= datetime(?, '-7 days')""",
+                      (band, rf, INT_TOL_HZ, t)).fetchall()
+    rows = [r for r in rows if (r[2] or "") not in INT_SKIP_MODES and (r[3] or "") in ("traeger", "")]
+    runs = sorted({r[1][:15] for r in rows})               # je 10 Minuten ein Lauf
+    if len(runs) < INT_MIN_RUNS:
+        return False
+    try:
+        from datetime import datetime as _d
+        span_h = (_d.fromisoformat(runs[-1][:13] + ":00") - _d.fromisoformat(runs[0][:13] + ":00")).total_seconds() / 3600
+    except ValueError:
+        span_h = 0
+    if span_h < INT_MIN_SPAN_H:
+        return False
+    db.execute("INSERT INTO interference (band, rf_hz, first, last, n, source) VALUES (?,?,?,?,?,?)",
+               (band, rf, min(r[1] for r in rows), t, len(runs), "scan"))
+    db.executemany("UPDATE peak SET interference=1 WHERE id=?", [(r[0],) for r in rows])
+    return True
 
 
 def upsert_fm(db, pid, rf, t, snr, info):
