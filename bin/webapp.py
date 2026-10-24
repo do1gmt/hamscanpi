@@ -366,6 +366,19 @@ def save_settings(data):
 
 # ------------------------------------------------------------------ Status / Scan
 
+def stop_scan_or_pass():
+    """Laufenden Scan bzw. Überflug beenden (Überflug: Aufnahme stoppt, Rest wird ausgewertet)."""
+    import signal
+    for f in (BASE / "data" / "sat_rec.pid", BASE / "data" / "scan.pid"):
+        try:
+            os.kill(int(f.read_text().strip()), signal.SIGTERM)
+            APPLOG.log("WARN", "webapp", "stopped_for_live", what=f.stem)
+            return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
 def scan_running():
     r = subprocess.run(["/usr/bin/flock", "-n", str(LOCKFILE), "/usr/bin/true"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -897,6 +910,8 @@ def watch_and_stations_cycle():
             new = ST.ingest(db)
             if not new:
                 break
+            skip = ST.watch_skip_until(db)                  # nachträglich ausgewertete alte Treffer: kein Alarm
+            new = [p for p in new if p["id"] > skip]
             for rule, p, detail in ST.check_rules(new, st.get("watchlist"), st.get("my_locator", "")):
                 label = rule.get("label") or f"{rule['type']} {rule['value']}"
                 cur = db.execute("INSERT OR IGNORE INTO watch_hit (peak_id, rule_id, label, time, detail) VALUES (?,?,?,?,?)",
@@ -1307,6 +1322,12 @@ def _gain_value(v):
 def live_start(data):
     global _live
     with _live_lock:
+        if scan_running() and data.get("stop_scan"):
+            stop_scan_or_pass()
+            for _ in range(40):                      # bis der Stick frei ist (Scan beendet sich, Überflug gibt frei)
+                if not scan_running():
+                    break
+                time.sleep(0.5)
         if scan_running():
             raise ValueError("Gerade läuft ein Scan – bitte warten oder abbrechen lassen")
         if _live and _live.running:

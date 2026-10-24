@@ -83,7 +83,9 @@ def main():
         hits = ch.evaluate(t0)                             # löscht die Rohdatei am Ende
         n = SP.db_save(ch.sat, hits)
         total += n
-        print(f"   → {n} Treffer gespeichert")
+        st = getattr(ch, "stats", {}) or {}
+        print(f"   → {n} Treffer · Signal max {st.get('max_db')} dB, 90 % {st.get('p90_db')} dB, "
+              f"{st.get('above6_s')} s über 6 dB über dem Rauschen")
     if not a.list:
         print(f"Fertig: {total} Treffer. Im Dashboard unter Treffer (Filter SSTV) ansehen.")
 

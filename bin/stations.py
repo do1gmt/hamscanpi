@@ -53,6 +53,15 @@ def ensure_tables(db):
         id INTEGER PRIMARY KEY, peak_id INTEGER, rule_id TEXT, label TEXT, time TEXT, detail TEXT,
         UNIQUE(peak_id, rule_id))""")
     db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+    row = db.execute("SELECT v FROM meta WHERE k='heard_parser'").fetchone()
+    if not row or int(row[0]) < PARSER_VERSION:
+        # Erkennung verbessert: alle Treffer noch einmal auswerten, ohne die Beobachtungsliste auszulösen
+        mx = db.execute("SELECT COALESCE(MAX(id), 0) FROM peak").fetchone()[0] if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='peak'").fetchone() else 0
+        db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('heard_last_peak', '0')")
+        db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('watch_skip_until', ?)", (str(mx),))
+        db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('heard_parser', ?)", (str(PARSER_VERSION),))
+        db.commit()
 
 
 def is_call(tok):
@@ -96,13 +105,24 @@ def ft8_senders(messages):
     return out
 
 
+PARSER_VERSION = 2               # bei Änderungen an der Erkennung werden alte Treffer neu ausgewertet
+
+
 def aprs_senders(text):
+    """APRS-Absender. Formate: „DL1ABC → APRS über …: …“ (Satelliten), roh von multimon-ng
+    „AFSK1200: fm DL1ABC-1 to APDW18-0 via …“ und Drittverkehr „}DB0BH>APGE01,…:!4926.10N/…“."""
     out = []
-    for line in str(text or "").splitlines():
-        m = re.match(r"\s*([A-Z0-9]{1,6}(?:-\d{1,2})?)\s*(?:→|>)", line.upper())
+    lines = str(text or "").splitlines()
+    for idx, line in enumerate(lines):
+        up = line.upper()
+        m = (re.match(r"\s*(?:AFSK1200:\s*)?FM\s+([A-Z0-9]{1,6}(?:-\d{1,2})?)\s+TO\s", up)
+             or re.match(r"\s*\}?([A-Z0-9]{1,6}(?:-\d{1,2})?)\s*(?:→|>)", up))
         if not m:
             continue
         call = m.group(1)
+        if up.lstrip().startswith(("AFSK1200", "FM ")) and idx + 1 < len(lines) \
+                and not lines[idx + 1].lstrip().startswith("}"):     # „}“ = Drittverkehr, eigene Position
+            line = line + " " + lines[idx + 1]                 # Position steht bei multimon-ng in der nächsten Zeile
         base = call.split("-")[0]
         if not is_call(base):
             continue
@@ -234,6 +254,11 @@ def adif(rows, my_call="", my_grid=""):
 
 
 # ------------------------------------------------------------------ Beobachtungsliste
+
+def watch_skip_until(db):
+    row = db.execute("SELECT v FROM meta WHERE k='watch_skip_until'").fetchone()
+    return int(row[0]) if row else 0
+
 
 def check_rules(new_peaks, rules, my_locator=""):
     """Rückgabe Liste (rule, peak, detail) für jede passende Regel."""

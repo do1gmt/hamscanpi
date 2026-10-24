@@ -144,6 +144,11 @@
     'DMR/C4FM/D-STAR: Spektrum + Rohton': 'DMR/C4FM/D-STAR: spectrum + raw audio',
     'Nur hörbar bei Überflug; Bild braucht ~10 min Aufnahme': 'only audible during a pass; an image needs ~10 min of recording',
     'Sprache / Language:': 'Sprache / Language:',
+    // Nachträge aus den Screenshots
+    'AX.25 AFSK 1200 Bd – Dekodierung mit multimon-ng': 'AX.25 AFSK 1200 Bd – decoded with multimon-ng', 'starte …': 'starting …',
+    'Gerade läuft ein Scan oder eine Satellitenaufnahme. Abbrechen und live hören?': 'A scan or satellite recording is running. Stop it and listen live?',
+    'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
+    'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // PSK Reporter
     'FT8/FT4-Spots an PSK Reporter melden': 'Report FT8/FT4 spots to PSK Reporter', 'Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf': 'Heard FT8/FT4 stations then appear every 5 minutes on',
     '– mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.': '– with your callsign as receiver. Needs callsign and locator.',
@@ -304,6 +309,9 @@
     [/^Uhrzeiten in der Ortszeit des Pi \(jetzt (.+)\)\.$/, "Times in the Pi's local time (now $1)."], [/^täglich · /, 'daily · '], [/ \(vorher speichern\)$/, ' (save first)'],
     [/ · Ruhe (\d+) min/, ' · quiet $1 min'], [/SSTV-Bild von der ISS/g, 'SSTV image from the ISS'], [/SSTV-Bild \(alle\)/g, 'SSTV image (any)'],
     [/APRS über die ISS/g, 'APRS via the ISS'], [/Satellit gehört \(alle Treffer im Band Satelliten\)/g, 'Satellite heard (any hit in the band Satellites)'], [/(\d+)° (NO|SO)$/, (m, a, d) => a + '° ' + d.replace('O', 'E')], [/(\d+)° O$/, '$1° E'],
+    [/^Empfang (.+?) · (\d+) dB über Rauschen/, 'Receiving $1 · $2 dB above noise'], [/ · ÜBERSTEUERT \(([\d.,]+) %\) – Verstärkung senken/, ' · OVERLOAD ($1 %) – reduce gain'],
+    [/^Empfang (.+)$/, 'Receiving $1'], [/^(.+) scannt (\d+)\/(\d+)$/, '$1 scanning $2/$3'], [/^Grund: /, 'Reason: '], [/(\d+) Pakete\b/g, '$1 packets'],
+    [/^Fehler: Gerade läuft ein Scan – bitte warten oder abbrechen lassen$/, 'Error: a scan is running – please wait or stop it'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
@@ -330,6 +338,8 @@
     if (LANG !== 'en' || !s || typeof s !== 'string') return s;
     const k = s.trim();
     if (!k || !/[A-Za-zÄÖÜäöüß]/.test(k)) return s;
+    const pct = k.match(/^(.+?) (\d+)%$/);              // Statusanzeige „Bänder werden abgesucht 22%“
+    if (pct && D[pct[1]] !== undefined) return s.replace(k, `${D[pct[1]]} ${pct[2]}%`);
     let r = D[k];
     if (r === undefined) {
       r = k;

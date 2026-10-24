@@ -16,6 +16,8 @@ the ISS and from CubeSats.
 It works with an RTL-SDR stick (VHF/UHF, satellites) and optionally with a
 PMSDR receiver (IW3AUT) for shortwave.
 
+![Scan page: bands, satellite passes and scan status](docs/screenshots/scan.png)
+
 > **Status:** works daily on the author's station (Raspberry Pi, RTL-SDR, PMSDR).
 > The dashboard speaks **English and German** – switch under *Settings → Station*. Missing
 > translations live in `web/i18n.js`; pull requests are welcome.
@@ -62,6 +64,15 @@ PMSDR receiver (IW3AUT) for shortwave.
 - Scan, hits, live, log and settings – mobile first, no page reloads.
 - Scan history with paging, a readable event log, scan duration estimate, adjustable scan raster,
   satellite priorities, mail notifications.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![A hit with spectrum, audio player and APRS decode](docs/screenshots/hits.png) | ![Live listening with waterfall](docs/screenshots/live.png) |
+| Hit card: spectrum, audio with tuning and noise reduction, decoded APRS packets | Live listening with waterfall – tap to tune |
+| ![Readable event log](docs/screenshots/log.png) | ![Phone: satellite passes and live listening (German UI)](docs/screenshots/mobile.png) |
+| Event log with the monitored frequencies of every scan | On the phone (here with the German UI) |
 
 ## Hardware
 

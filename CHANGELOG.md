@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.2 – 2026-10-24
+
+- Screenshots in the README.
+- Satellite analysis needs far less memory: a 20-minute pass now ~170 MB instead of ~450 MB (the
+  tone analysis writes into the audio buffer, the search for images without header works in blocks).
+  `sat_recover.py` was killed by the system on 19–20-minute passes on a Pi with 1 GB.
+- Signal check per pass: highest channel level above noise and seconds above 6 dB – in the log,
+  in `sat_recover.py` and in the pass list ("no signal" when the satellite was not heard at all).
+- Live listening while a scan or satellite pass is running: the dashboard offers to stop it first.
+- APRS from multimon-ng (incl. third-party packets such as repeater beacons) now appears under
+  *Stations*, with position; older hits are analysed once more (without triggering the watchlist).
+- English UI: remaining German status texts translated (scan progress, live reception, APRS card,
+  log entries of live listening).
+- Phone: hit tiles in two columns, log time no longer wraps, older log entries show the date below
+  the time; "Recently heard" follows the demodulator after retuning.
+
 ## 1.2.1 – 2026-10-24
 
 - Satellite recordings can be stopped from the dashboard (button "Stop recording"): the stick is

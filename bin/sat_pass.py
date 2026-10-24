@@ -181,6 +181,16 @@ class Source:
             pass
 
 
+def signal_stats(pw):
+    """Kurzfassung des Kanalpegels über den Überflug (je 0,1 s gemessen, Abstand zum Rauschen):
+    höchster Wert, 90-%-Wert und Sekunden über 6 dB. Zeigt, ob der Satellit überhaupt zu hören war."""
+    if pw is None or not len(pw):
+        return {"max_db": None, "p90_db": None, "above6_s": 0}
+    db = 10 * np.log10(np.asarray(pw, dtype=np.float64) + 1e-12)
+    return {"max_db": round(float(db.max()), 1), "p90_db": round(float(np.percentile(db, 90)), 1),
+            "above6_s": round(float((db > 6.0).sum()) * 0.1)}
+
+
 class Channel:
     """Ein Kanal in der gemeinsamen Aufnahme: Mischer mit Doppler, 48 kHz, Auswertung."""
 
@@ -271,19 +281,32 @@ class Channel:
         if self.kind != "fm" or not self.audio_parts:
             self.tmp.unlink(missing_ok=True)
             return self.hits
-        audio = np.concatenate(self.audio_parts)
+        # zusammensetzen und dabei die Teilstücke freigeben (sonst liegt der Ton kurz doppelt im Speicher)
+        parts = self.audio_parts
         self.audio_parts = []
+        audio = np.empty(sum(len(x) for x in parts), dtype=np.float32)
+        end = len(audio)
+        while parts:
+            x = parts.pop()
+            audio[end - len(x):end] = x
+            end -= len(x)
+        del parts
         raw_iq = np.memmap(self.tmp, dtype=np.float32, mode="r").reshape(-1, 2)
 
         def iq(a, b):
             x = np.asarray(raw_iq[a:b])
             return x[:, 0] + 1j * x[:, 1]
         n_iq = len(raw_iq)
-        used = np.zeros(len(audio), bool)
         pw_all = np.array(self.snr_track)
+        used = np.zeros(len(pw_all) + 1, bool)                 # je 0,1 s (statt je Abtastwert: 20 min = 29 MB)
+        self.stats = signal_stats(pw_all)
+        if sat.get("aprs"):                                      # APRS braucht den Ton – vor SSTV, das ihn freigibt
+            self._aprs(audio, iq, n_iq, t0, pw_all)
         if sat.get("sstv"):
             import sstv_decode as SD
-            for k, img in enumerate(SD.decode_all(audio, 24000, headless=True)):
+            box = [audio]
+            del audio                                            # decode_all gibt den Ton nach der Tonanalyse frei
+            for k, img in enumerate(SD.decode_all(box, 24000, headless=True)):
                 s0 = int(max(0, img["start_s"] - 1) * 24000)
                 dur = SD.MODES[[v for v, m in SD.MODES.items() if m["name"] == img["mode"]][0]]
                 T = sum(d for _, d in dur["segs"]) / 1000.0 * dur["height"] / dur.get("lines_per", 1)
@@ -292,15 +315,15 @@ class Channel:
                 p = RECDIR / f"{stem}_{k}.wav"
                 write_iq(p, iq(s0, s1), 24000)
                 SD.save_png(img["image"], REPORTS / f"{stem}_{k}_sstv.png")
-                used[s0:s1] = True
+                used[int(s0 / 2400):int(s1 / 2400) + 1] = True
                 seg_pw = pw_all[int(s0 / 2400):max(int(s0 / 2400) + 1, int(s1 / 2400))]
                 snr_img = float(10 * np.log10(np.mean(seg_pw) + 1e-12)) if len(seg_pw) else 0.0
                 self.hits.append({"rf_hz": self.f0, "path": str(p), "mode": "sstv", "sideband": None, "snr_db": snr_img,
                                   "audio": "ton", "note": f"SSTV {img['mode']} ({sat['name']}), "
                                                           f"{img['complete']*100:.0f} % der Zeilen"})
                 print(f"   SSTV {img['mode']}: Bild gespeichert ({img['complete']*100:.0f} % der Zeilen)")
-        if sat.get("aprs"):
-            self._aprs(audio, iq, n_iq, t0, pw_all)
+        else:
+            del audio
         # Sprachdurchgänge (Kanal deutlich über dem Rauschen, ≥ 3 s, nicht schon SSTV)
         pw = pw_all
         if len(pw) and not sat.get("aprs"):
@@ -312,7 +335,7 @@ class Channel:
                     while e < len(on) and on[e:e + 20].any():
                         e += 1
                     a0, a1 = int(k * 0.1 * 24000), int(e * 0.1 * 24000)
-                    if e - k >= 30 and not used[a0:a1].mean() > 0.5:
+                    if e - k >= 30 and not used[k:e].mean() > 0.5:
                         p = RECDIR / (stem_for(sat, t0 + k * 0.1) + "_fm.wav")
                         write_iq(p, iq(a0, a1), 24000)
                         self.hits.append({"rf_hz": self.f0, "path": str(p), "mode": "fm", "sideband": None,
@@ -359,7 +382,7 @@ class Channel:
         s1 = min(n_iq, int((ts[-1] + 13) * 24000), s0 + 120 * 24000)   # höchstens 2 min Aufnahme
         p = RECDIR / (stem_for(self.sat, t0 + s0 / 24000) + "_aprs.wav")
         write_iq(p, iq(s0, s1), 24000)
-        seg = pw_all[int(s0 / 2400):max(int(s0 / 2400) + 1, int(s1 / 2400))]
+        seg = pw_all[int(s0 / 2400):max(int(s0 / 2400) + 1, int(s1 / 2400))] if len(pw_all) else pw_all
         self.hits.append({"rf_hz": self.f0, "path": str(p), "mode": "aprs", "sideband": None,
                           "snr_db": float(10 * np.log10(np.mean(seg) + 1e-12)) if len(seg) else 0.0,
                           "dec_type": "APRS", "note": "\n".join(packets[:60])})
@@ -485,6 +508,7 @@ def main():
     if not a.test:
         detach()                                              # ab hier ist der Stick frei
     hits_total, per_ch, per_obj = 0, {}, {o: 0 for o in objs}
+    sig = {}
     for k in keys:                                            # bricht die Auswertung ab, sieht man es im Dashboard
         SAT.write_result(k, state="evaluating", seconds=round(secs))
     try:
@@ -492,15 +516,19 @@ def main():
             hits = ch.evaluate(t0)
             n = db_save(ch.sat, hits)
             per_ch[ch.sat["id"]] = n
+            sig[ch.sat["id"]] = getattr(ch, "stats", None) or signal_stats(np.array(ch.snr_track))
             per_obj[ch.sat["norad"]] += n
             hits_total += n
         applog("INFO", "satellite", "pass_done", sat=name, hits=hits_total, per_channel=per_ch,
-               seconds=round(secs), problem=err)
+               seconds=round(secs), problem=err, signal=sig)
+        for cid, st_ in sig.items():
+            print(f"   {cid}: Signal max {st_['max_db']} dB, 90 % {st_['p90_db']} dB, {st_['above6_s']} s über 6 dB")
         state = "cancelled" if _stop["flag"] else ("done" if not err or secs > 60 else "error")
         for k in keys:
             o = next((x for x in objs if k.startswith(f"{x}_")), objs[0])
             SAT.write_result(k, state=state, hits=per_obj.get(o, 0), per_channel=per_ch,
-                             seconds=round(secs), error=err, shared=len(objs) > 1)
+                             seconds=round(secs), error=err, shared=len(objs) > 1,
+                             signal={c: v for c, v in sig.items() if SAT.BY_ID[c]["norad"] == o})
         if not a.test:
             for o in objs:
                 SAT.record_stats(o, t0, per_obj[o], secs)

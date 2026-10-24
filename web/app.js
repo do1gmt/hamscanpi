@@ -639,7 +639,14 @@
       liveSetUI(Object.assign({ active: true }, d.live));
       if (!body.preset && !body.seek) liveRemember(body.freq_hz, body.mode);
       await liveAudio();
-    } catch (e) { $('liveText').textContent = 'Fehler: ' + e.message; toast('Live: ' + e.message, 6000); liveSetUI({ active: false }); $('liveText').textContent = 'Fehler: ' + e.message; }
+    } catch (e) {
+      // Stick belegt: anbieten, den Scan bzw. die Satellitenaufnahme dafür abzubrechen
+      if (!body.stop_scan && /läuft ein Scan/.test(e.message) && confirm('Gerade läuft ein Scan oder eine Satellitenaufnahme. Abbrechen und live hören?')) {
+        $('liveText').textContent = 'Scan wird abgebrochen …';
+        return liveStart(Object.assign({}, body, { stop_scan: true }));
+      }
+      $('liveText').textContent = 'Fehler: ' + e.message; toast('Live: ' + e.message, 6000); liveSetUI({ active: false }); $('liveText').textContent = 'Fehler: ' + e.message;
+    }
   }
   async function liveAudio() {
     const el = $('liveAudio');
@@ -721,7 +728,7 @@
     const f = Math.round((wfInfo.center_hz - wfInfo.span_hz / 2 + x * wfInfo.span_hz) / step) * step;
     $('liveFreq').value = (f / 1e6).toFixed(4); liveRetune();
   });
-  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).catch(e => toast(e.message)), 250); };
+  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRemember(lf(), $('liveMode').value)).catch(e => toast(e.message)), 250); };
   document.querySelectorAll('[data-livestep]').forEach(b => b.addEventListener('click', () => {
     const v = Number($('liveStep').value), s = v === 8333 ? 25000 / 3 : v, dir = Number(b.dataset.livestep);
     const f = Math.round((Math.round(lf() / s) + dir) * s);       // auf das Raster einrasten
@@ -750,7 +757,7 @@
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
-    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', pass_cancelled: 'Überflug abgebrochen (Benutzer)', satellite_stop_requested: 'Abbruch der Satellitenaufnahme angefordert', pskreporter_sent: 'An PSK Reporter gemeldet', pskreporter_failed: 'PSK Reporter: Fehler', watch_hit: 'Beobachtung ausgelöst', watch_failed: 'Beobachtungsliste: Fehler', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
+    satellite_start: 'Überflug: Aufnahme startet', satellite_skipped: 'Überflug übersprungen', satellite_problem: 'Satelliten: Problem', satellite_paused: 'Satelliten pausiert (PMSDR gewählt)', band_scanned: 'Band abgehört', 'live.start': 'Live-Empfang gestartet', 'live.stop': 'Live-Empfang beendet', 'live.tune': 'Live-Empfang abgestimmt', api_error: 'Fehler bei einer Anfrage', stopped_for_live: 'Für Live-Empfang abgebrochen', pass_cancelled: 'Überflug abgebrochen (Benutzer)', satellite_stop_requested: 'Abbruch der Satellitenaufnahme angefordert', pskreporter_sent: 'An PSK Reporter gemeldet', pskreporter_failed: 'PSK Reporter: Fehler', watch_hit: 'Beobachtung ausgelöst', watch_failed: 'Beobachtungsliste: Fehler', auto_cleanup: 'Automatisch aufgeräumt', sat_raw_deleted: 'Rohdaten eines Überflugs gelöscht', disk_full: 'Speicherkarte fast voll', disk_low: 'Speicherkarte wird voll', disk_ok: 'Speicherplatz wieder ok', pass_aborted: 'Überflug abgebrochen', scan_skipped_disk_full: 'Scan ausgelassen (Speicher voll)', housekeeping_failed: 'Haushalt fehlgeschlagen',
     satellite_failed: 'Satelliten: Fehler', satellite_warning: 'Satelliten: Hinweis', pass_start: 'Überflug: Aufnahme läuft',
     pass_done: 'Überflug fertig', pass_failed: 'Überflug fehlgeschlagen', pass_eval_failed: 'Überflug: Auswertung fehlgeschlagen',
     pass_recording_problem: 'Überflug: Aufnahme gestört', loop_exception: 'Scheduler: Fehler in der Schleife',
@@ -786,11 +793,15 @@
       $('logList').innerHTML = rows.map(({ r, n, first }) => {
         const data = r.data || {};
         const mainKeys = r.event === 'band_scanned' ? ['band', 'coverage', 'hits'] : r.event === 'pass_start' ? ['sat', 'freq_mhz'] : r.event === 'watch_hit' ? ['rule', 'detail'] : ['error', 'reason', 'problem', 'sat', 'band', 'hits', 'peaks'];
+        const evName = EVENT_TEXT[`${r.component}.${r.event}`] || EVENT_TEXT[r.event] || r.event;
         const main = mainKeys.filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
         const all = Object.entries(data).map(([k, v]) => `<tr><td>${esc(KEY_TEXT[k] || k)}</td><td class="mono">${esc(fmtVal(k, v))}</td></tr>`).join('');
-        const when = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
+        // Uhrzeit; ältere Tage mit Datum darunter (passt in die schmale Spalte)
+        const full = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
+        const mt = full.match(/^(.*\S)\s+(\d\d:\d\d:\d\d)$/);
+        const when = mt ? `${mt[2]}<br><small class="muted">${esc(mt[1].replace(/^\S+\s+/, ''))}</small>` : full;
         const span = n > 1 ? `<span class="rep">${n}× seit ${fmtTime(first, true).replace(' UTC', '').replace(/^(heute|today) /, '')}</span>` : '';
-        return `<li class="${r.level}"><span>${when}</span><span class="lv">${r.level}</span><span>${esc(r.component)}</span><div class="lmain"><details><summary><b>${esc(EVENT_TEXT[r.event] || r.event)}</b> ${span} <span class="d">${main}</span></summary>
+        return `<li class="${r.level}"><span>${when}</span><span class="lv">${r.level}</span><span>${esc(r.component)}</span><div class="lmain"><details><summary><b>${esc(evName)}</b> ${span} <span class="d">${main}</span></summary>
           <table class="table log-detail"><tr><td>Ereignis</td><td class="mono">${esc(r.event)}</td></tr>${all}<tr><td>Zeit (UTC)</td><td class="mono">${esc(r.ts)}</td></tr></table></details></div></li>`;
       }).join('') || '<li>keine Einträge</li>';
       $('logPos').textContent = d.entries.length ? `Einträge ${logPage.offset + 1}–${logPage.offset + d.entries.length}` : '';
@@ -882,7 +893,12 @@
       if (p.status === 'joined' && !p.result) plan = `<span class="ok">gemeinsam</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.result) {
         const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted', cancelled: 'muted' }[r.state] || '';
-        plan = `<span class="${cls}">${esc(r.text)}${r.state === 'done' ? ` · ${r.hits || 0} Treffer` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}`;
+        // Signal: höchster Kanalpegel über dem Rauschen – zeigt, ob der Satellit überhaupt zu hören war
+        const sig = Object.values(r.signal || {}).filter(x => x && x.max_db != null);
+        const smax = sig.length ? Math.max(...sig.map(x => x.max_db)) : null, s6 = sig.reduce((a, x) => a + (x.above6_s || 0), 0);
+        const sigTxt = smax == null ? '' : smax < 6 ? `<br><small class="bad">kein Signal (höchstens ${smax.toFixed(0)} dB über Rauschen)</small>`
+          : `<br><small class="muted">Signal bis ${smax.toFixed(0)} dB, ${s6} s über 6 dB</small>`;
+        plan = `<span class="${cls}">${esc(r.text)}${r.state === 'done' ? ` · ${r.hits || 0} Treffer` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';

@@ -403,3 +403,13 @@ table.heat td.h0 { background: var(--panel-2); }
 .wf-wrap { margin: .5rem 0; }
 #wf { width: 100%; height: 160px; display: block; border-radius: 6px; background: #071018; cursor: crosshair; image-rendering: pixelated; }
 .wf-scale { display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); font-family: var(--mono, monospace); }
+/* Handy mit großer Schrift: Kacheln zweispaltig, Protokollzeit nicht umbrechen */
+@media (max-width: 479px) {
+  .stats:not(.stats-mini) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats:not(.stats-mini) .stat span { font-size: .72rem; }
+}
+@media (max-width: 599px) {
+  .loghead, .loglist li { grid-template-columns: 5.8rem 3.6rem 1fr; }
+  .loglist li > span:first-child, .loglist li > span.lv { white-space: nowrap; }
+}
+.loglist .lmain { overflow-wrap: break-word; word-break: normal; }

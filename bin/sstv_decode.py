@@ -60,30 +60,40 @@ MODES = {m["vis"]: m for m in [
 ]}
 
 
-def tone_frequency(audio, rate, chunk_s=30.0, pad_s=1.0):
+def tone_frequency(audio, rate, chunk_s=30.0, pad_s=1.0, inplace=False):
     """Momentanfrequenz in Hz je Abtastwert (float32).
 
     Blockweise (30 s mit 1 s Überlappung): ein ISS-Überflug hat 10–11 min Ton; in einem Stück
     brauchten Filter und Hilbert-Transformation rund 1,4 GB Speicher – auf dem Pi wurde der
-    Auswerteprozess dabei vom System beendet, ohne dass etwas im Protokoll stand."""
+    Auswerteprozess dabei vom System beendet, ohne dass etwas im Protokoll stand.
+    inplace=True schreibt das Ergebnis in das float32-Tonarray selbst (kein zweites Array:
+    bei einem 20-min-Überflug 110 MB weniger)."""
     sos = butter(4, [1000, 2600], btype="bandpass", fs=rate, output="sos")
     n = len(audio)
-    out = np.empty(n, dtype=np.float32)
+    if inplace and isinstance(audio, np.ndarray) and audio.dtype == np.float32:
+        out = audio
+    else:
+        out = np.empty(n, dtype=np.float32)
     C, P = int(chunk_s * rate), int(pad_s * rate)
     k = max(1, int(rate * 0.00025))                    # kurze Glättung (~0,25 ms) gegen Rauschspitzen
+    prev_tail = None                                   # Original-Ton vor dem Block (beim Überschreiben gesichert)
     for s0 in range(0, max(n, 1), C):
-        a0, a1 = max(0, s0 - P), min(n, s0 + C + P)
-        if a1 - a0 < 32:
-            out[s0:min(n, s0 + C)] = 0.0
+        e0 = min(n, s0 + C)
+        a1 = min(n, s0 + C + P)
+        head = prev_tail if prev_tail is not None else np.zeros(0, np.float32)
+        seg = np.concatenate([head, np.asarray(audio[s0:a1], dtype=np.float32)]).astype(np.float64)
+        lead = len(head)
+        prev_tail = np.array(audio[max(s0, e0 - P):e0], dtype=np.float32)   # vor dem Überschreiben sichern
+        if len(seg) < 32:
+            out[s0:e0] = 0.0
             continue
-        seg = np.asarray(audio[a0:a1], dtype=np.float64)
         padlen = min(3 * (2 * len(sos) + 1), len(seg) - 1)
         a = sosfiltfilt(sos, seg, padlen=padlen)
         ph = np.unwrap(np.angle(hilbert(a)))
         f = np.diff(ph) * rate / (2 * np.pi)
         f = np.concatenate([f, f[-1:]])
         f = np.convolve(f, np.ones(k) / k, mode="same")
-        out[s0:min(n, s0 + C)] = f[s0 - a0:s0 - a0 + min(C, n - s0)]
+        out[s0:e0] = f[lead:lead + (e0 - s0)]
     return out
 
 
@@ -292,8 +302,17 @@ def decode_headless(f, rate, min_lines=40):
     Synchronimpulse bestimmen, ab dem ersten Impuls dekodieren. Rückgabe dict oder None."""
     ms = rate / 1000.0
     k = max(1, int(4 * ms))
-    ind = np.convolve((np.abs(f - F_SYNC) < 120).astype(np.float32), (np.ones(k) / k).astype(np.float32), mode="same") > 0.7
-    edges = np.flatnonzero(np.diff(ind.astype(np.int8)) == 1)
+    # Synchronimpulse blockweise suchen (ganze 20-min-Aufnahme auf einmal: über 200 MB)
+    n = len(f)
+    ind = np.zeros(n, dtype=bool)
+    C = int(60 * rate)
+    kern = (np.ones(k) / k).astype(np.float32)
+    for s0 in range(0, n, C):
+        a, b = max(0, s0 - k), min(n, s0 + C + k)
+        m = np.convolve((np.abs(f[a:b] - F_SYNC) < 120).astype(np.float32), kern, mode="same") > 0.7
+        ind[s0:min(n, s0 + C)] = m[s0 - a:s0 - a + min(C, n - s0)]
+    edges = np.flatnonzero(ind[1:] & ~ind[:-1])
+    del ind
     if len(edges) < min_lines:
         return None
     best = None
@@ -329,7 +348,12 @@ def decode_headless(f, rate, min_lines=40):
 def decode_all(audio, rate, min_lines=0.3, auto_offset=False, headless=False):
     """Alle SSTV-Bilder einer Aufnahme. Rückgabe Liste dict(mode, image, sync, complete, start_s).
     auto_offset: Verstimmung (Kurzwelle) aus dem Synchronton ausgleichen.
-    headless: zusätzlich ein Bild ohne VIS-Kopf suchen (Aufnahme begann mitten im Bild)."""
+    headless: zusätzlich ein Bild ohne VIS-Kopf suchen (Aufnahme begann mitten im Bild).
+    audio darf eine Liste mit genau einem Array sein: dann wird es daraus entnommen und nach der
+    Tonfrequenzbestimmung freigegeben (bei 20-min-Überflügen ~110 MB weniger – wichtig am Pi mit 1 GB)."""
+    owned = isinstance(audio, list)                       # nur dann darf der Ton überschrieben werden
+    if owned:
+        audio = audio.pop()
     audio = np.asarray(audio, dtype=np.float32)
     if rate > 24000:                                       # Speicher (Pi: 1 GB) – 24 kHz reichen
         from math import gcd
@@ -337,7 +361,7 @@ def decode_all(audio, rate, min_lines=0.3, auto_offset=False, headless=False):
         g = gcd(24000, int(rate))
         audio = resample_poly(audio, 24000 // g, int(rate) // g).astype(np.float32)
         rate = 24000
-    f = tone_frequency(audio, rate).astype(np.float32)
+    f = tone_frequency(audio, rate, inplace=owned)
     del audio
     off = tone_offset(f) if auto_offset else 0.0
     if off:
