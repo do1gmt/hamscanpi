@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.4 – 2026-10-24
+
+- Shortwave voice watch: candidates without speech pauses are rejected (level varies by less than
+  9.5 dB during the dwell, `voice_min_dyn_db`). On quiet bands (15 m at night) noise near the edges of
+  the receive window was taken for SSB voice; measured on real recordings: speech 11–33 dB, these false
+  hits 1–8 dB.
+
 ## 1.6.3 – 2026-10-24
 
 - Scan history: an aborted run without an end time no longer gets the hits of later runs counted

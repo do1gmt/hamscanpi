@@ -565,7 +565,11 @@ def watch_voice(dev, band, center, cfg, selected, owner_half_width, corrected_rf
             occ = np.flatnonzero(wide >= max(6.0, float(wide.max()) - 25.0))
             lo_e = float(f[w0 + occ[0]]) if len(occ) else None
             hi_e = float(f[w0 + occ[-1]]) if len(occ) else None
-            cands.append(dict(off=off, frac=frac, level=float(np.median(ch[act])), width=width,
+            # Sprache hat Pausen zwischen Silben und Sätzen: Pegel schwankt um 20–30 dB. Rauschen an den
+            # Fensterrändern oder auf ruhigen Bändern liegt nur knapp über der Schwelle und schwankt
+            # kaum (gemessen: echte SSB-Sprache 40 m 24–33 dB, Fehlerkennungen 15 m nachts 1–10 dB).
+            dyn = float(np.percentile(ch, 90) - np.percentile(ch, 10))
+            cands.append(dict(off=off, frac=frac, level=float(np.median(ch[act])), width=width, dyn=dyn,
                               var=var, spec=spec, lo_e=lo_e, hi_e=hi_e,
                               excess=broadband_excess(off, ch, act)))
         off += VOICE_HOP
@@ -605,6 +609,12 @@ def watch_voice(dev, band, center, cfg, selected, owner_half_width, corrected_rf
             rejected += 1
             log(f"      {rf_mid/1e6:10.5f} MHz  breitbandige Störung (nur {c['excess']:.1f} dB über "
                 f"den Nachbarfenstern) – verworfen")
+            continue
+        # in 3 s Lauschzeit hat auch echte, dichte Sprache mitunter nur ~11 dB Schwankung (gemessen),
+        # Fehlerkennungen auf ruhigen Bändern 1–8 dB
+        if c["dyn"] < float(cfg.get("voice_min_dyn_db", 9.5)):
+            rejected += 1
+            log(f"      {rf_mid/1e6:10.5f} MHz  keine Sprechpausen (Pegel schwankt nur {c['dyn']:.1f} dB) – verworfen")
             continue
         if c["width"] < 600 or (c["var"] < 1.0 and c["frac"] > 0.9):
             rejected += 1
