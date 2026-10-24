@@ -429,3 +429,4 @@ table.heat td.h0 { background: var(--panel-2); }
 .rds-box .tmc { margin-top: .4rem; border-top: 1px solid var(--line); padding-top: .4rem; }
 .tmc-list { margin: .2rem 0 0; padding-left: 0; list-style: none; font-size: .84rem; }
 .tmc-list li { padding: .15rem 0; border-bottom: 1px dashed rgba(255,255,255,.06); }
+.row-inline { display: flex; gap: .4rem; } .row-inline input { flex: 1; min-width: 0; }

@@ -193,6 +193,28 @@ def next_passes():
     return _sat["passes"]
 
 
+def typical_scan_seconds():
+    """Typische Dauer eines Scans: Median der letzten erfolgreichen Läufe (sonst 2 min)."""
+    try:
+        db = sqlite3.connect(DB, timeout=5)
+        rows = [r[0] for r in db.execute("SELECT duration_s FROM run WHERE status='success' AND duration_s > 0 "
+                                         "ORDER BY id DESC LIMIT 5")]
+        db.close()
+        return float(sorted(rows)[len(rows) // 2]) if rows else 120.0
+    except Exception:
+        return 120.0
+
+
+def scan_starving(interval):
+    """Kam seit langem kein Scan mehr dran (viele Bildsatelliten hintereinander)? Dann scannen,
+    auch wenn ein Bildsatellit kurz danach kommt – er wird dann eben übersprungen."""
+    last = last_scan_time()
+    if last is None:
+        return True
+    limit = max(30 * 60, 3 * max(interval, 1) * 60)
+    return (datetime.now(timezone.utc) - last[0]).total_seconds() > limit
+
+
 def stop_running_scan(reason):
     pidf = BASE / "data" / "scan.pid"
     try:
@@ -296,6 +318,9 @@ while True:
         # steht schon im Plan (satellites.make_plan).
         now_t = time.time()
         soon = None
+        import satellites as SAT
+        scan_s = typical_scan_seconds() + 30          # ein Scan, der jetzt startet, wäre bis dann fertig
+        starving = scan_starving(interval)
         for p in next_passes():
             if p["key"] in _sat["started"]:
                 continue
@@ -303,15 +328,26 @@ while True:
                 start_sat_pass(p)
                 break
             if now_t < p["rec_start"]:
-                import satellites as SAT
-                if p["prio"] > SAT.OPPORTUNISTIC_PRIO:      # nur für wichtige Überflüge Scans verschieben
+                wait = p["rec_start"] - now_t
+                if p["prio"] > SAT.OPPORTUNISTIC_PRIO:
+                    # wichtige Überflüge: keinen Scan mehr starten, der nicht vorher fertig wird
+                    if wait < max(300, scan_s):
+                        soon = p
+                    break
+                # Bildsatelliten (nur bei freiem Stick): ebenso, außer es kam schon lange kein Scan mehr dran
+                if wait < scan_s and not starving:
                     soon = p
                     break
-        if due and soon and soon["rec_start"] - now_t < 300:
+        if due and soon:
+            try:
+                (BASE / "data" / "scan_postponed.json").write_text(json.dumps(
+                    {"name": soon["name"], "until": soon["rec_end"], "start": soon["rec_start"]}))
+            except OSError:
+                pass
             if _sat["postponed"] != soon["key"]:
                 _sat["postponed"] = soon["key"]
                 applog("INFO", "scheduler", "scan_postponed", reason=f"Überflug {soon['name']} in "
-                       f"{int((soon['rec_start'] - now_t) // 60)} min")
+                       f"{max(0, int((soon['rec_start'] - now_t) // 60))} min")
             due = False
         if due and sat_pass_active():
             due = False
@@ -331,6 +367,7 @@ while True:
         live_lock = BASE / "data" / "live.lock"
         live = live_lock.exists() and (time.time() - live_lock.stat().st_mtime) < 120
         if due and not scan_running() and not live:
+            (BASE / "data" / "scan_postponed.json").unlink(missing_ok=True)
             applog("INFO", "scheduler", "scan_start", reason="interval", interval_min=interval)
             run_scan()
 

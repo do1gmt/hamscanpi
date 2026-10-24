@@ -8,6 +8,7 @@ Zeiten: durchgehend UTC (ISO-8601 mit +00:00).
 """
 import io
 import json
+import re
 import os
 import time
 import mimetypes
@@ -448,6 +449,8 @@ def load_status():
             st["next_scan_at"] = nxt.isoformat(timespec="seconds")
     except Exception:
         pass
+    pp = read_json(BASE / "data" / "scan_postponed.json", None)        # wegen eines Überflugs zurückgestellt
+    st["scan_postponed"] = pp if pp and pp.get("until", 0) > time.time() else None
     return st
 
 
@@ -1731,6 +1734,31 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"ok": False, "error": "Scanprozess existiert nicht mehr"}, 409)
                 APPLOG.log("WARN", "webapp", "scan_stop_requested", pid=pid)
                 return self.send_json({"ok": True})
+            if path == "/api/telegram-chats":
+                # Chat-ID ermitteln: Telegram nach den letzten Nachrichten an den Bot fragen
+                tok = str(data.get("token") or "").strip()
+                if not tok or "•" in tok:
+                    tok = str((read_json(SETTINGS, {}).get("notify") or {}).get("tg_token") or "").strip()
+                if not re.fullmatch(r"\d+:[A-Za-z0-9_-]{20,}", tok):
+                    raise ValueError("Bot-Token fehlt oder hat nicht das Format 123456:ABC…")
+                import urllib.request, urllib.error
+                try:
+                    with urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/getUpdates", timeout=15) as r:
+                        res = json.loads(r.read().decode("utf-8"))
+                except urllib.error.HTTPError as e:
+                    raise ValueError("Telegram lehnt den Token ab – bitte prüfen" if e.code in (401, 404)
+                                     else f"Telegram: HTTP {e.code}")
+                except OSError as e:
+                    raise ValueError(f"Telegram nicht erreichbar: {e}")
+                chats = {}
+                for u in res.get("result", []):
+                    m = u.get("message") or u.get("channel_post") or u.get("my_chat_member") or {}
+                    c = m.get("chat") or {}
+                    if c.get("id") is not None:
+                        chats[c["id"]] = {"id": c["id"], "type": c.get("type"),
+                                          "name": c.get("title") or " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x)
+                                          or c.get("username") or ""}
+                return self.send_json({"chats": list(chats.values())})
             if path == "/api/push-test":
                 raw = read_json(SETTINGS, {}).get("notify") or {}
                 if not NOTIFY.push_on(raw):

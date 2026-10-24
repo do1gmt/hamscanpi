@@ -292,7 +292,10 @@
     $('scanStop').hidden = !(s.state === 'running');
     $('scanStop').textContent = s.phase === 'satellite' ? 'Aufnahme abbrechen' : 'Scan abbrechen';
     const nextPast = s.next_scan_at && new Date(s.next_scan_at) < Date.now();
-    $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade' : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
+    const pp = s.scan_postponed;
+    $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade'
+      : pp && nextPast ? `nach Überflug ${pp.name} (${new Date(pp.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })})`
+      : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
     if (s.state === 'error' && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
     if (lastState && lastState !== s.state && (s.state === 'done' || s.state === 'error' || s.state === 'cancelled')) { refreshData(); if (s.state === 'done') toast('Scan abgeschlossen – Treffer aktualisiert'); }
     if (busy && s.phase !== 'scan' && lastState === 'running') { /* Zwischenstände während der Auswertung */ }
@@ -857,6 +860,17 @@
     $('pushTest').hidden = !t;
   }
   $('pushType').addEventListener('change', pushFields);
+  $('tgFind').addEventListener('click', async () => {
+    const tok = document.querySelector('[name=tg_token]').value.trim();
+    note($('notifyNote'), 'frage Telegram …');
+    try {
+      const d = await post('/api/telegram-chats', { token: tok });
+      if (!d.chats.length) { note($('notifyNote'), 'Noch keine Nachricht an den Bot gefunden – schreib deinem Bot in Telegram etwas (z. B. „hallo“) und drück dann noch einmal auf „Chat-ID ermitteln“.', true); return; }
+      const c = d.chats.find(x => x.type === 'private') || d.chats[0];
+      $('tgChat').value = c.id;
+      note($('notifyNote'), `✓ Chat-ID ${c.id}${c.name ? ' (' + c.name + ')' : ''} eingetragen – jetzt Speichern, dann „Test-Push senden“.`);
+    } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); }
+  });
   $('pushTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/push-test'); note($('notifyNote'), '✓ Test-Push verschickt – kommt er an?'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message + ' (vorher speichern)', true); } });
   $('notifyForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = $('notifyForm'); const n = {};

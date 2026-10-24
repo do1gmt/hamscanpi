@@ -150,6 +150,9 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Chat-ID ermitteln': 'Find chat ID', 'frage Telegram …': 'asking Telegram …',
+    'Noch keine Nachricht an den Bot gefunden – schreib deinem Bot in Telegram etwas (z. B. „hallo“) und drück dann noch einmal auf „Chat-ID ermitteln“.': 'No message to the bot found yet – write something to your bot in Telegram (e.g. "hello"), then press "Find chat ID" again.',
+    'Bot-Token fehlt oder hat nicht das Format 123456:ABC…': 'Bot token missing or not in the format 123456:ABC…', 'Telegram lehnt den Token ab – bitte prüfen': 'Telegram rejects the token – please check',
     'Breites FM (UKW-Rundfunk), Mono.': 'Wide FM (broadcast), mono.', 'Sprache': 'Voice',
     'Verkehrsmeldung (Straße/Ort)': 'Traffic message (road/place)', 'A9 oder Nürnberg': 'A9 or Nuremberg', 'Verkehr': 'Traffic',
     'Verkehrsmeldungen (TMC)': 'Traffic messages (TMC)', 'verschlüsselt – nicht lesbar': 'encrypted – not readable',
@@ -342,6 +345,8 @@
     [/^Verkehr: /, 'Traffic: '], [/^Verkehr: (.+)$/, 'Traffic: $1'], [/^TMC: verschlüsselt \(nicht lesbar\)$/, 'TMC: encrypted (not readable)'],
     [/ · Verstärkung automatisch ([\d.]+) dB/, ' · gain automatic $1 dB'],
     [/^vom Benutzer abgebrochen nach (\d+) s$/, 'stopped by the user after $1 s'],
+    [/^nach Überflug (.+) \((.+)\)$/, 'after pass $1 ($2)'],
+    [/^✓ Chat-ID (-?\d+)(.*) eingetragen – jetzt Speichern, dann „Test-Push senden“\.$/, '✓ chat ID $1$2 filled in – now Save, then "Send test push".'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.5 – 2026-10-24
+
+- No scan is started any more that would still be running when a satellite pass begins – now also
+  for the image satellites (priority ≤ 2, recorded only when the stick is free), which were almost
+  never recorded with short scan intervals. The expected scan duration is the median of the last
+  runs. If no scan has run for a long time (30 min or 3 intervals), the scan goes first.
+- Scan page: "Next scan" shows "after pass X (hh:mm)" while a scan is held back for a pass.
+- Telegram: button "Find chat ID" next to the chat ID field – asks Telegram with the bot token for
+  the chats that wrote to the bot and fills in the ID (no @userinfobot needed).
+
 ## 1.4.4 – 2026-10-24
 
 - Signal check also for linear satellites (AO-7, AO-73, RS-44, FO-29, CAS-6, MO-122 …): strongest
