@@ -77,6 +77,8 @@ finish_run() {
 
     if [ "$RC" -eq 0 ]; then
         STATUS="success"
+    elif [ "${CANCELLED:-0}" -eq 1 ]; then
+        STATUS="cancelled"                 # vom Benutzer oder für einen Überflug – kein Fehler
     else
         STATUS="failed"
     fi
@@ -96,7 +98,7 @@ WHERE id=$RUN_ID;
         write_status "done" "done" 100 "Scan fertig"
         python3 "$LOGT" INFO cycle run_done run_id="$RUN_ID" peaks="$PEAKS" rejected="$REJECTED" duration_s="$DUR"
     elif [ "$CANCELLED" -eq 1 ]; then
-        write_status "error" "error" 100 "Scan vom Benutzer abgebrochen"
+        write_status "cancelled" "cancelled" 100 "Scan abgebrochen"
         python3 "$LOGT" WARN cycle run_cancelled run_id="$RUN_ID"
     else
         ERRLINE="$(grep -E 'Error|FEHLER|Fehler|Traceback|error|keine Daten|nicht gefunden' "$TMP" 2>/dev/null | grep -v '^  File' | tail -1 | cut -c1-200)"

@@ -646,7 +646,7 @@ def list_runs(limit=25, offset=0):
         if r.get("status") == "running" and (k + offset > 0 or not busy):
             r["status"] = "aborted"
     # Fehler- und Abbruchgründe aus dem Protokoll
-    want = {r["id"] for r in out if r.get("status") in ("failed", "aborted")}
+    want = {r["id"] for r in out if r.get("status") in ("failed", "aborted", "cancelled")}
     if want:
         try:
             for e in APPLOG.read(limit=3000, level="WARN"):

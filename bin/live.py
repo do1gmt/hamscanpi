@@ -254,12 +254,14 @@ class LiveSession:
         agc = not gain
         if agc:
             gain = self._agc_gain
-        cmd = [rtl.get("binary", "rtl_sdr"), "-d", str(int(rtl.get("device_index", 0))),
-               "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(rtl.get("ppm", 0)))]
-        if gain:
-            cmd += ["-g", str(gain)]
-        cmd.append("-")
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        def spawn(g):
+            cmd = [rtl.get("binary", "rtl_sdr"), "-d", str(int(rtl.get("device_index", 0))),
+                   "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(rtl.get("ppm", 0)))]
+            if g:
+                cmd += ["-g", str(g)]
+            cmd.append("-")
+            return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.proc = spawn(gain)
         demod = DSP.RtlDemod(self.mode)
         rds = None
         if self.mode == "wfm":
@@ -328,9 +330,15 @@ class LiveSession:
                     agc_clip, agc_peak, agc_n = 0.0, 0.0, 0
                     new = self._agc_step(gain, clip, peak)
                     if new != gain:
-                        self._agc_gain = new
-                        self.restart_wanted.set()                # mit neuer Stufe neu starten (kurze Lücke)
-                        break
+                        # nur rtl_sdr mit neuer Stufe neu starten – Empfang, Suchlauf-Halt und RDS laufen weiter
+                        self._agc_gain = gain = new
+                        try:
+                            self.proc.terminate(); self.proc.wait(timeout=2)
+                        except Exception:
+                            self.proc.kill()
+                        self.proc = spawn(gain)
+                        last_signal = time.time()
+                        continue
             self.snr_db = round(demod.snr_db, 1)
             self.clip_pct = round(demod.clip_frac * 100, 2)
             self.level_db = demod.snr_db - 60.0        # Balken: 0 dB Abstand = leer, 50 dB = voll

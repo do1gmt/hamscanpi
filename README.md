@@ -80,6 +80,9 @@ PMSDR receiver (IW3AUT) for shortwave.
 | ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |
 | Settings: station (ADIF, PSK Reporter), watchlist, mail and push notifications | Satellite priorities with the last 14 days, system status of the Pi |
 
+![Stations: heard callsigns with distance and bearing, FM stations with RDS](docs/screenshots/stations.png)
+*Stations: callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export); FM stations with RDS name, PI, programme type and radio text.*
+
 ## Hardware
 
 | Part | Notes |

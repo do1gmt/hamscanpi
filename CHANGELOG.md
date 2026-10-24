@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.2 – 2026-10-24
+
+- Fix: live seek no longer runs on after finding a station. A gain step of the automatic gain
+  restarted the whole reception, and the seek then continued from the station it had just found;
+  now only `rtl_sdr` is restarted with the new gain, reception, seek hold and RDS continue.
+- FM station list keeps the last complete radio text instead of overwriting it with fragments.
+- README: screenshot of the *Stations* tab.
+- A scan stopped by the user (or for a satellite pass) is no longer reported as an error: status
+  "Scan cancelled" instead of "Scan error", grey in the scan history, no error badge on the log tab,
+  no "failed" mail, not counted as an error in the 24-h tile.
+
 ## 1.4.1 – 2026-10-24
 
 - **Own automatic gain** instead of the stick's AGC, which overloads with strong local FM stations

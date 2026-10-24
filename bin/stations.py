@@ -219,7 +219,9 @@ def upsert_fm(db, pid, rf, t, snr, info):
     if row:
         db.execute("""UPDATE fm_station SET ps=?, pty=?, rt=?, now_playing=?, ecc=?, af=?, last=?, n=?, best_snr=?, peak_id=?
                       WHERE freq_khz=? AND pi=?""",
-                   (ps or row[1], info.get("pty_name"), info.get("rt") or row[2], now, info.get("ecc"),
+                   (ps or row[1], info.get("pty_name"),
+                    # vollständigen Radiotext bevorzugen: Bruchstück nur, wenn noch gar nichts da ist
+                    info.get("rt") if (info.get("rt_complete") or not row[2]) else row[2], now, info.get("ecc"),
                     ",".join(str(x) for x in info.get("af") or []), t, row[0] + 1,
                     max(float(row[3] or -99), float(snr or -99)), pid, fk, pi))
     else:

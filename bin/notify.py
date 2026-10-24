@@ -173,6 +173,8 @@ def notify_scan_done(run_id):
                          FROM peak p JOIN scan s ON s.id=p.scan_id WHERE s.time >= ? ORDER BY p.snr_db DESC""",
                       (run["started_at"],)).fetchall()
     db.close()
+    if run["status"] == "cancelled":
+        return                                     # abgebrochen (Benutzer/Überflug): keine Meldung
     if run["status"] != "success":
         subject = f"Scan #{run_id} fehlgeschlagen"
     else:

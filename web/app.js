@@ -274,6 +274,7 @@
     if (st === 'running') return { prepare: 'Scan startet', scan: 'Bänder werden abgesucht', analyze: 'Aufnahmen werden ausgewertet', fm: 'FM/VHF-Aufnahmen', decode: 'Signale werden dekodiert', ft8decode: 'FT8 wird dekodiert', report: 'Abschluss' }[ph] || 'Scan läuft';
     if (st === 'done') return 'Scan abgeschlossen';
     if (st === 'error') return 'Fehler beim Scan';
+    if (st === 'cancelled') return 'Scan abgebrochen';
     return 'Bereit';
   }
   async function pollStatus() {
@@ -293,7 +294,7 @@
     const nextPast = s.next_scan_at && new Date(s.next_scan_at) < Date.now();
     $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade' : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
     if (s.state === 'error' && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
-    if (lastState && lastState !== s.state && (s.state === 'done' || s.state === 'error')) { refreshData(); if (s.state === 'done') toast('Scan abgeschlossen – Treffer aktualisiert'); }
+    if (lastState && lastState !== s.state && (s.state === 'done' || s.state === 'error' || s.state === 'cancelled')) { refreshData(); if (s.state === 'done') toast('Scan abgeschlossen – Treffer aktualisiert'); }
     if (busy && s.phase !== 'scan' && lastState === 'running') { /* Zwischenstände während der Auswertung */ }
     lastState = s.state;
   }
@@ -348,13 +349,13 @@
     runsPage.total = d.total;
     const dev = { pmsdr: devName('pmsdr'), rtlsdr: devName('rtlsdr') };
     $('runsTable').querySelector('tbody').innerHTML = d.runs.map(r => {
-      const st = { success: 'ok', failed: 'Fehler', running: 'läuft', aborted: 'abgebrochen' }[r.status] || r.status;
+      const st = { success: 'ok', failed: 'Fehler', running: 'läuft', aborted: 'abgebrochen', cancelled: 'abgebrochen' }[r.status] || r.status;
       const hpb = r.hits_per_band || {};
       const bands = (r.bands || []).map(b => hpb[b] ? `${esc(b)} <span class="n">${hpb[b]}</span>` : esc(b)).join(', ') || '<span class="muted">–</span>';
       const why = r.reason ? `<div class="run-why">${esc(r.reason)}</div>` : '';
       return `<tr title="Lauf ${r.id}"><td>${fmtTime(r.started_at)}<br><small class="muted">${r.finished_at ? 'bis ' + fmtTime(r.finished_at, false) : ''}</small></td>
         <td>${r.device ? `<small class="muted">${dev[r.device] || r.device}</small><br>` : ''}${bands}</td>
-        <td class="${r.status === 'success' ? 'ok' : r.status === 'running' ? '' : 'bad'}">${st}${why}</td>
+        <td class="${r.status === 'success' ? 'ok' : r.status === 'running' ? '' : r.status === 'cancelled' ? 'muted' : 'bad'}">${st}${why}</td>
         <td>${r.peaks ?? ''}${r.rejected ? ` <small class="muted">/ ${r.rejected}</small>` : ''}</td><td>${r.tunes ?? ''}</td><td>${fmtDur(r.duration_s)}</td></tr>`;
     }).join('') || '<tr><td colspan="6">noch kein Lauf</td></tr>';
     const a = d.total ? runsPage.offset + 1 : 0, b = Math.min(d.total, runsPage.offset + runsPage.per);
