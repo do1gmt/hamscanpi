@@ -1248,18 +1248,27 @@
     mapLayer.clearLayers();
     const d = stLast || { stations: [] }; const pts = [];
     const color = m => /FT8|FT4/.test(m || '') ? '#38bdf8' : /APRS/.test(m || '') ? '#f5b942' : '#2dd4bf';
+    // Füllfarbe nach SNR: blau (schwach, ≤ −20 dB) → grün → gelb → rot (stark, ≥ +10 dB)
+    const snrColor = v => { if (v == null) return '#94a3b8'; const t = Math.max(0, Math.min(1, (v + 20) / 30));
+      const stops = [[59, 130, 246], [34, 197, 94], [234, 179, 8], [239, 68, 68]], x = t * 3, i = Math.min(2, Math.floor(x)), f = x - i;
+      const c = stops[i].map((a, k) => Math.round(a + (stops[i + 1][k] - a) * f)); return `rgb(${c.join(',')})`; };
+    const labels = $('mapLabels').checked;
+    const snrTxt = v => v == null ? '' : `${v > 0 ? '+' : ''}${Math.round(v)} dB`;
     if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }).bindTooltip('QTH').addTo(mapLayer); pts.push(d.home); }
     for (const r of d.stations) {
       if (r.lat == null) continue;
       const p = [r.lat, r.lon]; pts.push(p);
       if (d.home) L.polyline([d.home, p], { color: color(r.modes), weight: 1, opacity: .35 }).addTo(mapLayer);
-      L.circleMarker(p, { radius: 5, color: color(r.modes), fillOpacity: .8, weight: 1 })
-        .bindPopup(`<b>${esc(r.call)}</b> ${esc(r.grid || '')}<br>${r.distance_km != null ? r.distance_km + ' km, ' + r.bearing + '°<br>' : ''}${esc((r.modes || '').replace(/,/g, ', '))} · ${esc((r.bands || '').replace(/,/g, ', '))}<br>${fmtTime(r.last)}`).addTo(mapLayer);
+      const mk = L.circleMarker(p, { radius: 6, color: color(r.modes), fillColor: snrColor(r.best_snr), fillOpacity: .9, weight: 2 })
+        .bindPopup(`<b>${esc(r.call)}</b> ${esc(r.grid || '')}${r.best_snr != null ? ` · <b>SNR ${snrTxt(r.best_snr)}</b>` : ''}<br>${r.distance_km != null ? r.distance_km + ' km, ' + r.bearing + '°<br>' : ''}${esc((r.modes || '').replace(/,/g, ', '))} · ${esc((r.bands || '').replace(/,/g, ', '))}<br>${fmtTime(r.last)}`).addTo(mapLayer);
+      if (labels) mk.bindTooltip(`${esc(r.call)} ${snrTxt(r.best_snr)}`, { permanent: true, direction: 'right', offset: [6, 0], className: 'map-lbl' });
     }
     setTimeout(() => map.invalidateSize(), 50);
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
   $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+  try { $('mapLabels').checked = localStorage.getItem('mapLabels') !== '0'; } catch (e) { $('mapLabels').checked = true; }
+  $('mapLabels').addEventListener('change', () => { try { localStorage.setItem('mapLabels', $('mapLabels').checked ? '1' : '0'); } catch (e) { } if ($('mapBox').open) drawMap(); });
 
   // ---------- Bildanzeige im Fenster (Wasserfall, SSTV …) ----------
   function openLightbox(src, title) {

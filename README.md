@@ -83,6 +83,9 @@ PMSDR receiver (IW3AUT) for shortwave.
 ![Stations: heard callsigns with distance and bearing, FM stations with RDS](docs/screenshots/stations.png)
 *Stations: callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export); FM stations with RDS name, PI, programme type and radio text.*
 
+![Map of heard stations: FT8 on 80/60/40/30/20 m from JN59, up to the US east coast](docs/screenshots/map.png)
+*Map of heard stations (one evening of FT8 scans on 80–20 m with an HF-360 vertical): lines from the own locator, up to 7,900 km.*
+
 <img src="docs/screenshots/tmc.png" width="560" alt="Live FM reception with RDS and TMC traffic messages">
 
 *Live FM reception with RDS and TMC traffic messages in plain text (German location table of BASt).*

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.4 – 2026-10-24
+
+- Station map shows reception values: point colour by SNR (blue weak … red strong, with legend), label
+  "callsign SNR" next to each point (switchable), SNR in the popup.
+- README: map screenshot (FT8 evening on 80–20 m).
+
 ## 1.7.3 – 2026-10-24
 
 - Live seek (PMSDR) in a full band (contest): the noise floor is now taken from the speech pauses and

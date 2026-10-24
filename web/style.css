@@ -453,3 +453,8 @@ table.heat td.h0 { background: var(--panel-2); }
 .spec-box { margin: .6rem 0; } .hit-body .spec-box .spec-img { margin: 0; }
 .btn-seekstop { border-color: #fbbf24; color: #fbbf24; }
 #panel-live.seeking .wf-mark { background: #fbbf24; }
+
+.map-opts { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; align-items: center; font-size: .82rem; margin: .3rem 0; }
+.map-legend { color: var(--muted); } .map-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin: 0 .2rem 0 .5rem; vertical-align: -1px; }
+.leaflet-tooltip.map-lbl { background: rgba(15,22,32,.82); color: #e7edf4; border: 1px solid rgba(255,255,255,.15); box-shadow: none; padding: 0 .3rem; font: 600 .68rem var(--mono, monospace); }
+.leaflet-tooltip.map-lbl::before { display: none; }

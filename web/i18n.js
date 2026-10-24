@@ -150,6 +150,7 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Rufzeichen und SNR an die Punkte schreiben': 'Write callsign and SNR next to the points',
     '■ Suchlauf anhalten': '■ Stop seek', 'Suchlauf beenden und auf der aktuellen Frequenz weiterhören': 'End the seek and keep listening on the current frequency',
     'Antippen: dorthin abstimmen · Mausrad: feinstimmen': 'Tap: tune there · mouse wheel: fine tuning',
     'Wasserfall – auf ein Signal tippen zum Abstimmen, Mausrad zum Feinstimmen': 'Waterfall – tap a signal to tune, mouse wheel for fine tuning',
@@ -373,6 +374,7 @@
     [/(FT8|FT4): (\d+) Nachr\., (\d+) Stationen(, (\d+)× CQ)?/g, (m, t, n, st, _c, c) => `${t}: ${n} msgs, ${st} stations${c ? `, ${c}× CQ` : ''}`],
     [/ · Trägerkorrektur ([+-−]?\d+) Hz/g, ' · carrier correction $1 Hz'], [/ · kein Segment/g, ' · no segment'],
     [/Rechner ausgelastet \((\d+) %\)/g, 'computer busy ($1 %)'], [/(\d+)× Daten verloren/g, '$1× data lost'],
+    [/^Punktfarbe = SNR:/, 'Point colour = SNR:'], [/ · Rand: FT8 blau, APRS gelb$/, ' · border: FT8 blue, APRS yellow'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],
