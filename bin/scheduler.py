@@ -171,7 +171,9 @@ def next_passes():
     try:
         import satellites as SAT
         from devices import detect_hardware
-        res = SAT.upcoming(ids, loc, hours=8, past_s=0, prio=_sat.get("prio"))
+        # past_s: laufende Überflüge behalten ihre echte Aufgangszeit (und damit ihren Schlüssel),
+        # auch wenn der Plan mitten im Überflug neu gerechnet wird
+        res = SAT.upcoming(ids, loc, hours=8, past_s=1800, prio=_sat.get("prio"))
         # geplant wird je Aufnahme (eine Aufnahme kann mehrere Satelliten mitschneiden)
         _sat["passes"] = [dict(key=r["key"], keys=r["keys"], name=r["name"], channels=r["channels"],
                                rec_start=r["start"], rec_end=r["end"], prio=r["prio"], max_el=r["max_el"],

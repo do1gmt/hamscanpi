@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.8 – 2026-10-24
+
+- Fix (continued): passes recorded after a plan recalculation in the middle of the pass were stored
+  under a key from the recalculation time (e.g. AO-7: 13:49 instead of AOS 13:42) and still showed
+  "not recorded". The scheduler now keeps passes in progress with their real AOS, and the pass list
+  accepts results of the same satellite from anywhere within the pass window.
+
 ## 1.4.7 – 2026-10-24
 
 - Fix: the pass list showed "not recorded" for passes that were recorded. Results are stored under

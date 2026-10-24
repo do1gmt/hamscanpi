@@ -1339,7 +1339,7 @@ def sat_passes():
     passes = []
     for p in res.get("passes", []):
         q = dict(p)
-        r = results.get(p["key"]) or _near_result(results, p["key"])
+        r = results.get(p["key"]) or _near_result(results, p["key"], p.get("aos"), p.get("los"))
         if r and r.get("state") in ("running", "evaluating") and now > p["los"] + 1800:
             # Aufnahme bzw. Auswertung nie fertig geworden (Prozess beendet, z. B. Speicher voll)
             q["result"] = dict(r, state="error", text=SAT_STATE_TEXT["error"],
@@ -1352,24 +1352,33 @@ def sat_passes():
     return dict(res, passes=passes, nesdr=bool((st.get("hardware") or {}).get("rtlsdr", {}).get("present")))
 
 
-def _near_result(results, key, tol_min=3):
-    """Ergebnis auch finden, wenn sich der Überflug-Schlüssel (NORAD_Minute der Aufgangszeit) seit der
-    Aufnahme um ein paar Minuten verschoben hat – neue Bahndaten verschieben die Aufgangszeit oft
-    um einige Sekunden, und über eine Minutengrenze hinweg ändert sich dann der Schlüssel."""
+def _near_result(results, key, aos=None, los=None, tol_min=3):
+    """Ergebnis eines Überflugs auch unter einem anderen Schlüssel finden (NORAD_Minute).
+    Der Schlüssel entsteht aus der Aufgangszeit, wie der Scheduler sie gerade kennt: rechnet er den
+    Plan während eines laufenden Überflugs neu, beginnt der Überflug für ihn „jetzt“ – das Ergebnis
+    steht dann z. B. unter 13:49 statt unter 13:42. Neue Bahndaten verschieben die Zeit ebenfalls.
+    Deshalb: gleicher Satellit und Schlüsselzeit innerhalb des Überflugs (oder ±3 min)."""
     try:
         norad, minute = key.rsplit("_", 1)
         minute = int(minute)
     except ValueError:
         return None
+    lo, hi = minute - tol_min, minute + tol_min
+    if aos and los:
+        lo, hi = min(lo, int(aos // 60) - tol_min), max(hi, int(los // 60))
     best = None
     for k, v in results.items():
         try:
             n2, m2 = k.rsplit("_", 1)
-            d = abs(int(m2) - minute)
+            m2 = int(m2)
         except ValueError:
             continue
-        if n2 == norad and d <= tol_min and (best is None or d < best[0]):
-            best = (d, v)
+        if n2 == norad and lo <= m2 <= hi:
+            d = abs(m2 - minute)
+            # ein fertiges Ergebnis schlägt ein abgebrochenes, sonst das zeitlich nächste
+            rank = (0 if v.get("state") == "done" else 1, d)
+            if best is None or rank < best[0]:
+                best = (rank, v)
     return best[1] if best else None
 
 
