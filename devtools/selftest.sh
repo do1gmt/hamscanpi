@@ -10,7 +10,7 @@
 set -e
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-cp -r "$SRC/bin" "$SRC/config" "$SRC/devtools" "$T/"
+cp -r "$SRC/bin" "$SRC/config" "$SRC/devtools" "$SRC/share" "$T/"
 mkdir -p "$T/data" "$T/log" "$T/recordings" "$T/reports"
 cp "$T/config/web_settings.example.json" "$T/config/web_settings.json"
 cp "$T/config/scanner.default.json" "$T/config/scanner.json"
@@ -45,17 +45,21 @@ python3 devtools/sim_pass.py /tmp/hsp_iss.u8 $T0 75 437675000 437550000:sstv:0.3
 python3 bin/sat_pass.py --sats iss_sstv70,iss_rpt --test /tmp/hsp_iss.u8 --start $T0 --until $((T0+75)) | tail -2
 ls reports/*iss_sstv70*_sstv.png >/dev/null 2>&1 && ok "SSTV-Bild" || bad "SSTV-Bild"
 echo "== 3 gemeinsame Aufnahme"
-read T1 CH TUNE <<<"$(python3 - <<'PY'
+# Welche zwei Satelliten gemeinsam aufgenommen werden, hängt von der Uhrzeit ab – das SSTV-Bild
+# kommt deshalb auf den ersten, der Ton auf den zweiten Kanal des tatsächlich gewählten Paars.
+read T1 CH TUNE SIG1 SIG2 C1 <<<"$(python3 - <<'PY'
 import sys; sys.path.insert(0, "bin")
 import satellites as S
 r = S.upcoming(["lobachevsky", "qmrkwt2", "hc1px"], "JO62QM", fetch=False, past_s=0)
 x = next(x for x in r["recordings"] if len(x["keys"]) > 1)
-print(int((x["start"] + x["end"]) / 2) - 30, ",".join(x["channels"]), S.tuning_for(x["channels"]))
+a, b = (S.BY_ID[c] for c in x["channels"][:2])
+print(int((x["start"] + x["end"]) / 2) - 30, ",".join(x["channels"]), S.tuning_for(x["channels"]),
+      f"{a['center_hz']}:sstv:0.3:{a['norad']}", f"{b['center_hz']}:tone:0.2:{b['norad']}", a["id"])
 PY
 )"
-python3 devtools/sim_pass.py /tmp/hsp_train.u8 $T1 60 $TUNE 436320000:sstv:0.3:67284 436950000:tone:0.2:67291 >/dev/null
+python3 devtools/sim_pass.py /tmp/hsp_train.u8 $T1 60 $TUNE $SIG1 $SIG2 >/dev/null
 python3 bin/sat_pass.py --sats $CH --test /tmp/hsp_train.u8 --start $T1 --until $((T1+60)) | tail -2
-ls reports/*lobachevsky*_sstv.png >/dev/null 2>&1 && ok "SSTV-Bild (eigener Doppler)" || bad "SSTV-Bild (eigener Doppler)"
+ls reports/*_${C1}_*sstv.png >/dev/null 2>&1 && ok "SSTV-Bild (eigener Doppler, $C1)" || bad "SSTV-Bild (eigener Doppler, $C1)"
 if command -v multimon-ng >/dev/null; then
   echo "== 4 APRS"
   python3 devtools/sim_pass.py /tmp/hsp_aprs.u8 $T0 30 145600000 145825000:aprs:0.3 >/dev/null
@@ -133,6 +137,17 @@ assert i["rt"].startswith("Hallo Welt") and "äöü ß" in i["rt"], i["rt"]
 assert i["rtplus"].get("artist") == "Welt" and i["ct"]["local"] == "24.10.2026 11:30" and i["af"] == [90.1, 95.0], i
 I, Q = G.iq(snr_db=15); j = R.decode_iq(I, Q, 240000); assert j and j["ps"] == "TEST FM ", j
 print("   " + R.summary(i))
+PY
+echo "== 10 TMC-Verkehrsmeldungen (RDS 8A) mit deutscher Ortstabelle"
+python3 - <<'PY' && ok "TMC" || bad "TMC"
+import sys; sys.path.insert(0, "bin"); sys.path.insert(0, "devtools")
+import rds as R, rds_gen as G
+t = R.decode_mpx(G.mpx(), 240000)["tmc"]
+assert t["ltn"] == 1 and not t["encrypted"], t
+txt = [m["text"] for m in t["messages"]]
+assert any("A9" in x and "zwischen AS Hilpoltstein (56) und AS Allersberg (55): Stau" in x and "bis 1 h" in x for x in txt), txt
+assert any("2 Fahrstreifen gesperrt auf 3 km" in x for x in txt), txt
+print("   " + txt[-1])
 PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -150,6 +150,8 @@
     'Gerade läuft ein Scan – bitte warten oder abbrechen lassen': 'A scan is running – please wait or stop it',
     'Live-Empfang abgestimmt': 'Live reception tuned', 'Fehler bei einer Anfrage': 'Request error', 'Für Live-Empfang abgebrochen': 'Stopped for live reception',
     // RDS
+    'Verkehrsmeldung (Straße/Ort)': 'Traffic message (road/place)', 'A9 oder Nürnberg': 'A9 or Nuremberg', 'Verkehr': 'Traffic',
+    'Verkehrsmeldungen (TMC)': 'Traffic messages (TMC)', 'verschlüsselt – nicht lesbar': 'encrypted – not readable',
     'Lautstärke': 'Volume',
     'UKW-Sender (RDS)': 'FM stations (RDS)', 'Sender': 'Station', 'Jetzt / Radiotext': 'Now / radio text', 'Anzahl Empfänge': 'Times received',
     'Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.': 'No FM stations yet – switch on the band "Broadcast" under Scan.',
@@ -215,7 +217,7 @@
       'Reports as soon as the scanner hears something specific – in the log, with 🔔 on the hit card and, if mail is set up, by mail (at most one per rule within the quiet time).',
     'SSTV-Bild von der ISS': 'SSTV image from the ISS', 'SSTV-Bild (alle)': 'SSTV image (any)', 'APRS über die ISS': 'APRS via the ISS',
     'Satellit gehört (alle Treffer im Band Satelliten)': 'Satellite heard (any hit in the band Satellites)',
-    'Beobachtet': 'Watched', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
+    'Beobachtet': 'Watched', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
     // System, Aufräumen, Download
     'System': 'System', 'Automatisch löschen (ungeschützte Treffer)': 'Delete automatically (unprotected hits)',
     'CPU-Temperatur': 'CPU temperature', 'gedrosselt': 'throttled', 'war gedrosselt': 'was throttled', 'nein': 'no', 'ja': 'yes',
@@ -333,6 +335,9 @@
     [/^Jetzt: /, 'Now: '], [/^Radiotext: /, 'Radio text: '], [/^Uhrzeit des Senders: /, 'Station clock: '],
     [/^Alternativfrequenzen: /, 'Alternative frequencies: '], [/Datendienste: /, 'Data services: '], [/ · Durchsage/, ' · announcement'],
     [/Sendername noch unvollständig/, 'station name incomplete'],
+    [/ \(unvollständig\)/g, ' (incomplete)'], [/Sendername nicht empfangen/, 'station name not received'],
+    [/^Ortstabelle (\d+) \(Deutschland\)/, 'location table $1 (Germany)'], [/^Ortstabelle (\d+)/, 'location table $1'], [/ · (\d+) Meldung(en)?$/, ' · $1 message(s)'],
+    [/^Verkehr: /, 'Traffic: '], [/^Verkehr: (.+)$/, 'Traffic: $1'], [/^TMC: verschlüsselt \(nicht lesbar\)$/, 'TMC: encrypted (not readable)'],
     [/^Treffer · /, 'Hits · '],
     [/^Zugangsschutz aktiv/, 'Access protection on'], [/ · dieses Gerät ist in einem freigegebenen Netz$/, ' · this device is in a trusted network'], [/ · angemeldet$/, ' · logged in'],
     [/Ungültiges Netz: (.+) \(Beispiel (.+)\)/, 'Invalid network: $1 (example $2)'],

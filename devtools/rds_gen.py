@@ -54,6 +54,16 @@ def groups(pi=0xD3C2, ps="TEST FM ", rt="Hallo Welt – Grüße aus JN59 äöü 
     C = ((t1 & 7) << 13) | (s1 << 7) | (l1 << 1) | (t2 >> 5)
     D = ((t2 & 0x1F) << 11) | (s2 << 5) | l2
     g += group(pi, B, C, D)
+    # TMC: 3A (AID CD46, Ortstabelle 1, national), Eingruppenmeldung „Stau“ A9 AS Allersberg, Ausdehnung 2,
+    # Mehrgruppenmeldung „(Q) Fahrstreifen gesperrt“ mit Menge 2 und Länge 3 km in Gegenrichtung
+    g += group(pi, (3 << 12) | (tp << 10) | (pty << 5) | 16, (0 << 14) | (1 << 6) | (1 << 2), 0xCD46)
+    tmc_single = group(pi, (8 << 12) | (tp << 10) | (pty << 5) | (1 << 3) | 3, (0 << 15) | (0 << 14) | (2 << 11) | 101, 12748)
+    free = "0100" + "00010" + "0010" + "00011"
+    free = free + "0" * (28 - len(free))
+    tmc_multi = (group(pi, (8 << 12) | (tp << 10) | (pty << 5) | 5, (1 << 15) | (1 << 14) | (0 << 11) | 500, 12748)
+                 + group(pi, (8 << 12) | (tp << 10) | (pty << 5) | 5, (0 << 15) | (1 << 14) | (0 << 12) | int(free[:12], 2),
+                         int(free[12:], 2)))
+    g += tmc_single + tmc_single + tmc_multi
     return g * 3
 
 

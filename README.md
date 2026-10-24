@@ -36,6 +36,8 @@ PMSDR receiver (IW3AUT) for shortwave.
 - Live listening with waterfall (tap to tune), seek function, signal-to-noise display and overload warning.
 - FM broadcast with RDS: station name, radio text, artist/title (RT+), clock, alternative frequencies –
   live and for every scanned station (list of FM stations).
+- TMC traffic messages from RDS in plain text (road, direction, between which junctions, event,
+  duration) using the German location table – live, on hit cards and as watchlist alerts ("A9").
 - Band schedules: other bands by time of day and weekday.
 - On repeaters and FM channels the scanner stays until the QSO ends and records it as a whole.
 
@@ -75,6 +77,8 @@ PMSDR receiver (IW3AUT) for shortwave.
 | Hit card: spectrum, audio with tuning and noise reduction, decoded APRS packets | Live listening: FM broadcast with RDS (station, programme type, RT+, AF) and waterfall |
 | ![Readable event log](docs/screenshots/log.png) | ![Phone: satellite passes and live listening (German UI)](docs/screenshots/mobile.png) |
 | Event log with the monitored frequencies of every scan | On the phone (here with the German UI) |
+| ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |
+| Settings: station (ADIF, PSK Reporter), watchlist, mail and push notifications | Satellite priorities with the last 14 days, system status of the Pi |
 
 ## Hardware
 
@@ -124,6 +128,13 @@ Forgot the password? On the Pi: `python3 bin/auth.py set` (or `python3 bin/auth.
 > If you make the dashboard reachable from the internet, put it behind HTTPS (e.g. a reverse proxy
 > or a VPN such as WireGuard/Tailscale). The built-in server speaks plain HTTP. Behind a reverse
 > proxy every request comes from the proxy's address, so do not list that address as trusted.
+
+## Data sources
+
+- Orbital elements: [CelesTrak](https://celestrak.org) (fallback: AMSAT).
+- TMC traffic messages: *Location Code List* LCL 22.0 and *Event Code List* ECL 4.01 of the
+  Bundesanstalt für Straßenwesen (BASt), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/);
+  converted to `share/tmc/` (see the README there).
 
 ## Legal
 

@@ -72,7 +72,7 @@ def block_ok(w, offset):
 
 def _empty_info():
     return {"pi": None, "ps": None, "pty": None, "pty_name": None, "tp": None, "ta": None, "ms": None,
-            "rt": None, "rtplus": {}, "ct": None, "af": [], "ecc": None, "ptyn": None, "oda": [],
+            "rt": None, "rtplus": {}, "ps_partial": None, "rt_complete": False, "ct": None, "af": [], "ecc": None, "ptyn": None, "oda": [],
             "groups": 0, "blocks_ok": 0, "blocks": 0}
 
 
@@ -209,6 +209,10 @@ class RdsDecoder:
                 self._ps_seen[seg] = True
                 if all(self._ps_seen):
                     inf["ps"] = "".join(self._ps)
+                    inf["ps_partial"] = None
+                elif not inf.get("ps"):
+                    # noch nicht alle vier Teile: Bekanntes zeigen, Fehlendes als „_“
+                    inf["ps_partial"] = "".join(self._ps[k] if self._ps_seen[k // 2] else "_" for k in range(8))
             if ver == 0 and C is not None:
                 for code in (C >> 8, C & 0xFF):
                     if 1 <= code <= 204:
@@ -256,6 +260,15 @@ class RdsDecoder:
                 inf["oda"] = inf["oda"] + [name]
             if D == 0x4BD7:
                 self._rtplus_group = B & 0x1F                # Gruppentyp, der RT+ trägt
+            if D in (0xCD46, 0xCD47) and C is not None:      # TMC: Systemangaben
+                t = inf.setdefault("tmc", {"messages": []})
+                if C >> 14 == 0:
+                    t["ltn"] = C >> 6 & 0x3F                  # Ortstabelle (1 = Deutschland), 0 = verschlüsselt
+                    t["encrypted"] = t["ltn"] == 0
+                    t["scope"] = ", ".join(n for b, n in ((3, "international"), (2, "national"), (1, "regional"), (0, "urban"))
+                                           if C >> b & 1) or None
+                elif C >> 14 == 1:
+                    t["sid"] = C >> 6 & 0x3F
         elif gtype == 4 and ver == 0 and C is not None and D is not None:   # 4A: Uhrzeit
             mjd = ((B & 3) << 15) | (C >> 1)
             hour = ((C & 1) << 4) | (D >> 12)
@@ -269,9 +282,11 @@ class RdsDecoder:
                              "local": (utc + _dt.timedelta(minutes=offs)).strftime("%d.%m.%Y %H:%M")}
             except (ValueError, OverflowError):
                 pass
-        elif gtype == 8 and ver == 0:                        # 8A: TMC
+        elif gtype == 8 and ver == 0:                        # 8A: TMC-Verkehrsmeldungen
             if "TMC" not in inf["oda"]:
                 inf["oda"] = inf["oda"] + ["TMC"]
+            if C is not None and D is not None:
+                self._tmc(B, C, D)
         elif gtype == 10 and ver == 0 and C is not None and D is not None:  # 10A: Programmartname
             seg = B & 1
             for j, c in enumerate([C >> 8, C, D >> 8, D]):
@@ -292,6 +307,91 @@ class RdsDecoder:
                     val = rt[s:s + l + 1].strip()
                     if val:
                         inf["rtplus"] = dict(inf["rtplus"], **{RTPLUS[t]: val})
+
+
+TMC_LABEL_BITS = {0: 3, 1: 3, 2: 5, 3: 5, 4: 5, 5: 8, 6: 8, 7: 8, 8: 8, 9: 11, 10: 16, 11: 16, 12: 16, 13: 16, 14: 0}
+
+
+def _tmc_free(bits):
+    """Zusatzangaben einer Mehrgruppenmeldung (Bitfolge als Text) → dict."""
+    out, i = {}, 0
+    while i + 4 <= len(bits):
+        lab = int(bits[i:i + 4], 2)
+        i += 4
+        if lab == 15 or lab not in TMC_LABEL_BITS:
+            break
+        n = TMC_LABEL_BITS[lab]
+        if i + n > len(bits):
+            break
+        v = int(bits[i:i + n], 2) if n else 0
+        i += n
+        if lab == 0 and v:
+            out["duration"] = v
+        elif lab == 2 and v:
+            out["length_km"] = v if v <= 10 else 10 + (v - 10) * 5
+        elif lab == 3 and v:
+            out["speed"] = v * 5
+        elif lab in (4, 5):
+            out["quantity"] = v
+        elif lab == 6:
+            out.setdefault("supplementary", []).append(v)
+        elif lab == 9 and v:
+            out.setdefault("events", []).append(v)
+        elif lab == 0 and not v and "1" not in bits[i:]:
+            break                                           # Auffüllung mit Nullen
+    return out
+
+
+def _tmc_store(dec, m):
+    """Meldung in der Liste des Senders ablegen (Wiederholungen zusammenfassen)."""
+    import time as _t
+    t = dec.info.setdefault("tmc", {"messages": []})
+    t.setdefault("messages", [])
+    key = (m["location"], m["event"], m["direction"])
+    now = _t.time()
+    for x in t["messages"]:
+        if (x["location"], x["event"], x["direction"]) == key:
+            x.update(m, last=now, n=x.get("n", 1) + 1)
+            break
+    else:
+        t["messages"] = ([dict(m, first=now, last=now, n=1)] + t["messages"])[:80]
+    try:
+        import tmc as T
+        for x in t["messages"]:
+            if (x["location"], x["event"], x["direction"]) == key:
+                d = T.describe(x, t.get("ltn"))
+                x["text"], x["text_en"], x["road"] = d["text"], d.get("text_en"), d.get("road")
+                x["lat"], x["lon"] = d.get("lat"), d.get("lon")
+    except Exception:
+        pass
+
+
+def _tmc_group(self, B, C, D):
+    if B >> 4 & 1:                                          # T = 1: Abstimm-/Verwaltungsinformation
+        return
+    if B >> 3 & 1:                                          # F = 1: Eingruppenmeldung
+        _tmc_store(self, {"event": C & 0x7FF, "location": D, "direction": C >> 14 & 1, "extent": C >> 11 & 7,
+                          "duration": B & 7, "diversion": C >> 15 & 1, "extra": {}})
+        return
+    ci = B & 7
+    pend = self.__dict__.setdefault("_tmc_multi", {})
+    if C >> 15 & 1:                                         # erste Gruppe einer Mehrgruppenmeldung
+        pend[ci] = {"msg": {"event": C & 0x7FF, "location": D, "direction": C >> 14 & 1, "extent": C >> 11 & 7,
+                            "duration": 0, "diversion": 0}, "bits": ""}
+        return
+    p = pend.get(ci)
+    if not p:
+        return
+    gsi = C >> 12 & 3
+    p["bits"] += format(C & 0xFFF, "012b") + format(D, "016b")
+    if gsi == 0:                                            # letzte Gruppe
+        extra = _tmc_free(p["bits"])
+        m = dict(p["msg"], extra=extra, duration=extra.get("duration", 0))
+        del pend[ci]
+        _tmc_store(self, m)
+
+
+RdsDecoder._tmc = _tmc_group
 
 
 def decode_mpx(mpx, rate):
@@ -321,7 +421,8 @@ def details(info):
     if not info or not info.get("groups"):
         return ""
     L = []
-    head = [f"„{info['ps'].strip()}“" if info.get("ps") else "Sendername noch unvollständig",
+    head = [f"„{info['ps'].strip()}“" if info.get("ps") else
+            (f"„{info['ps_partial']}“ (unvollständig)" if info.get("ps_partial") else "Sendername nicht empfangen"),
             f"PI {info['pi']}" if info.get("pi") else None,
             (info.get("pty_name") + (f" ({info['ptyn']})" if info.get("ptyn") else "")) if info.get("pty") else None,
             ("TP" + (" · Durchsage" if info.get("ta") else "")) if info.get("tp") else None, info.get("ms")]
@@ -341,6 +442,11 @@ def details(info):
              ("Datendienste: " + ", ".join(info["oda"])) if info.get("oda") else None]
     if any(extra):
         L.append(" · ".join(x for x in extra if x))
+    t = info.get("tmc") or {}
+    if t.get("encrypted"):
+        L.append("TMC: verschlüsselt (nicht lesbar)")
+    for m in (t.get("messages") or [])[:15]:
+        L.append("Verkehr: " + (m.get("text") or f"Ereignis {m['event']}, Ort {m['location']}"))
     return "\n".join(L)
 
 
@@ -348,12 +454,13 @@ def summary(info):
     """Kurztext für Trefferkarten und Listen."""
     if not info or not info.get("groups"):
         return ""
-    parts = [f"„{info['ps'].strip()}“" if info.get("ps") else None,
+    parts = [f"„{info['ps'].strip()}“" if info.get("ps") else
+             (f"„{info['ps_partial']}“" if info.get("ps_partial") else None),
              f"PI {info['pi']}" if info.get("pi") else None,
              info.get("pty_name") if info.get("pty") else None]
     rp = info.get("rtplus") or {}
     if rp.get("artist") or rp.get("title"):
         parts.append(" – ".join(x for x in (rp.get("artist"), rp.get("title")) if x))
-    elif info.get("rt"):
-        parts.append(info["rt"])
+    elif info.get("rt") and info.get("rt_complete"):
+        parts.append(info["rt"])                        # unvollständigen Text nicht in die Kurzfassung
     return " · ".join(p for p in parts if p)

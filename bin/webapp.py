@@ -786,7 +786,7 @@ def clean_watchlist(items):
     for it in items if isinstance(items, list) else []:
         typ = str(it.get("type", ""))
         val = str(it.get("value", "")).strip()
-        if typ not in ("freq", "call", "event", "dx") or not val:
+        if typ not in ("freq", "call", "event", "dx", "traffic") or not val:
             raise ValueError("Beobachtung: Typ und Wert angeben")
         if typ == "freq":
             try:
@@ -804,6 +804,8 @@ def clean_watchlist(items):
                 raise ValueError("Entfernung in km angeben")
         if typ == "call" and not __import__("re").fullmatch(r"[A-Za-z0-9/*?-]{2,15}", val):
             raise ValueError(f"Rufzeichen ungültig: {val}")
+        if typ == "traffic" and not 1 < len(val) <= 40:
+            raise ValueError("Verkehr: Straße (z. B. A9) oder Ort angeben")
         out.append({"id": str(it.get("id") or secrets.token_hex(4)), "type": typ,
                     "value": val.upper() if typ == "call" else val,
                     "label": str(it.get("label") or "").strip()[:60],
@@ -911,6 +913,26 @@ def stations_adif(days=30, q="", band=""):
     return ST.adif(rows, st.get("my_call", ""), st.get("my_locator", ""))
 
 
+_live_tmc_seen = set()
+
+
+def live_traffic_check(st):
+    """Verkehrsregeln der Beobachtungsliste auch gegen die TMC-Meldungen des Live-Empfangs prüfen."""
+    rules = [r for r in st.get("watchlist") or [] if r.get("type") == "traffic" and r.get("enabled", True)]
+    if not rules or not (_live and _live.running and _live.rds):
+        return
+    for m in ((_live.rds or {}).get("tmc") or {}).get("messages", []):
+        for rule in rules:
+            key = (rule["id"], m.get("location"), m.get("event"), m.get("direction"))
+            if key in _live_tmc_seen or not ST.traffic_match(rule["value"], m):
+                continue
+            _live_tmc_seen.add(key)
+            label = rule.get("label") or f"Verkehr {rule['value']}"
+            APPLOG.log("INFO", "watch", "watch_hit", rule=label, detail=m.get("text"), source="live")
+            if rule.get("mail", True):
+                NOTIFY.notify_watch(rule["id"], label, m.get("text") or "", int(rule.get("quiet_min", 30)))
+
+
 def watch_and_stations_cycle():
     """Neue Treffer: Rufzeichen eintragen, Beobachtungsliste prüfen, melden."""
     if scan_running():                     # erst nach dem Scan: APRS/RDS/FT8 werden am Ende dekodiert
@@ -933,6 +955,7 @@ def watch_and_stations_cycle():
                     APPLOG.log("INFO", "watch", "watch_hit", rule=label, detail=detail, peak_id=p["id"])
                     if rule.get("mail", True):
                         NOTIFY.notify_watch(rule["id"], label, detail, int(rule.get("quiet_min", 30)), image=p.get("image"))
+        live_traffic_check(st)
         if st.get("pskreporter") and st.get("my_call") and st.get("my_locator"):
             try:
                 import pskreporter as PSK

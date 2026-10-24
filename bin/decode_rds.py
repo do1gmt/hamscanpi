@@ -83,7 +83,7 @@ def main(only_new=True):
         if info:
             ok = round(100 * info["blocks_ok"] / max(1, info["blocks"]))
             decs.insert(0, {"type": "RDS", "confidence": min(99, 60 + info["groups"]), "validated": True,
-                            "text": R.details(info),
+                            "text": R.summary(info) + "\n" + "\n".join(R.details(info).split("\n")[1:]),
                             "detail": f"{info['groups']} RDS-Gruppen, {ok} % fehlerfrei · {rf/1e6:.1f} MHz",
                             "rds": info})
             found += 1

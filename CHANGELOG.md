@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0 – 2026-10-24
+
+- **TMC traffic messages** from RDS (group 8A, single- and multi-group messages with quantity,
+  length, speed, extra events, supplementary info, duration, diversion): plain text with road,
+  direction, "between junction X and Y" and event, using the German *Location Code List* LCL 22.0 and
+  the *Event Code List* ECL 4.01 of BASt (CC BY 4.0, converted to `share/tmc/`). Encrypted TMC is
+  recognised. Shown live under the RDS box (German/English), on FM hit cards, and usable in the
+  watchlist ("traffic message for A9" – live and from scans, with mail/push).
+- README: new scan page screenshot; screenshots of the settings page and of satellite priorities with
+  the system status.
+- English UI: reason for interrupted scans translated.
+- RDS: an incompletely received station name is shown with gaps („__ST FM“) instead of nothing;
+  the one-line summary only contains complete radio text.
+- Self test on GitHub: the shared-recording step no longer depends on the time of day (the pair of
+  satellites recorded together changes with the orbits; the test failed with HC1PX + QMR-KWT-2).
+
 ## 1.3.2 – 2026-10-24
 
 - **FM broadcast scan rebuilt:** stations are found by their power per 100-kHz channel instead of

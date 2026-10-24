@@ -902,8 +902,13 @@
       ['Datendienste', r.oda && r.oda.length ? r.oda.join(', ') : null],
       ['Empfang', `${r.groups} Gruppen, ${r.blocks ? Math.round(100 * r.blocks_ok / r.blocks) : 0} % fehlerfrei`],
     ].filter(x => x[1]);
-    box.innerHTML = `<div class="rds-ps">${esc((r.ps || '…').trim() || '…')}</div>` +
-      rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>`).join('');
+    const t = r.tmc || {};
+    const tmcHead = t.encrypted ? 'verschlüsselt – nicht lesbar' : t.ltn ? `Ortstabelle ${t.ltn}${t.ltn === 1 ? ' (Deutschland)' : ''}${t.scope ? ' · ' + t.scope : ''}` : null;
+    const msgs = (t.messages || []).slice(0, 20);
+    box.innerHTML = `<div class="rds-ps">${esc((r.ps || (r.ps_partial ? r.ps_partial : '…')).trim() || '…')}</div>` +
+      rows.map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>`).join('') +
+      (tmcHead || msgs.length ? `<div class="tmc"><div class="kv"><span class="k">Verkehrsmeldungen (TMC)</span><span class="v">${esc(tmcHead || '')}${msgs.length ? ` · ${msgs.length} Meldung${msgs.length > 1 ? 'en' : ''}` : ''}</span></div>
+        ${msgs.length ? '<ul class="tmc-list">' + msgs.map(m => `<li class="no-i18n">🚧 ${esc((EN && m.text_en) || m.text || ('Ereignis ' + m.event + ', Ort ' + m.location))}</li>`).join('') + '</ul>' : ''}</div>` : '');
     if (r.ps && r.ps.trim() && live.active) {
       const h = liveHist[0];
       if (h && Math.abs(h.f - r.freq_hz) < 1000) { if (h.name !== r.ps.trim()) { h.name = r.ps.trim(); renderLiveHist(); } }
@@ -1146,7 +1151,7 @@
   $('stNext').addEventListener('click', () => { stPage.offset += stPage.per; loadStations(); });
 
   // ---------- Beobachtungsliste ----------
-  const W_TYPES = { freq: 'Frequenz', call: 'Rufzeichen', dx: 'Entfernung ab', event: 'Ereignis' };
+  const W_TYPES = { freq: 'Frequenz', call: 'Rufzeichen', dx: 'Entfernung ab', event: 'Ereignis', traffic: 'Verkehr' };
   function renderWatch() {
     const list = (settings && settings.watchlist) || [], ev = (settings && settings.watch_events) || {};
     if (!$('wEvent').options.length) $('wEvent').innerHTML = Object.entries(ev).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
@@ -1166,7 +1171,7 @@
   function wTypeChanged() {
     const t = $('wType').value;
     $('wEvWrap').hidden = t !== 'event'; $('wValWrap').hidden = t === 'event'; $('wTolWrap').hidden = t !== 'freq';
-    $('wValue').placeholder = { freq: '439.400', call: 'DL1ABC oder DL*', dx: '2000' }[t] || '';
+    $('wValue').placeholder = { freq: '439.400', call: 'DL1ABC oder DL*', dx: '2000', traffic: 'A9 oder Nürnberg' }[t] || '';
   }
   $('wType').addEventListener('change', wTypeChanged); wTypeChanged();
   $('wAdd').addEventListener('click', async () => {

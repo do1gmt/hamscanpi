@@ -35,6 +35,7 @@ CALL_RX = re.compile(r"\b((?:[A-Z]{1,2}|[0-9][A-Z]|[A-Z][0-9])[0-9][A-Z0-9]{0,3}
 GRID_RX = re.compile(r"^[A-R]{2}[0-9]{2}([A-X]{2})?$")
 NOT_CALLS = {"RR73", "RRR", "CQ", "DX", "QRZ", "TEST", "DE", "TNX", "73"}
 APRS_POS = re.compile(r"[!=/@](?:\d{6}[hz/])?(\d{2})(\d{2}\.\d{2})([NS]).(\d{3})(\d{2}\.\d{2})([EW])")
+# Regeltyp „traffic“: TMC-Verkehrsmeldungen (Scan des Bands Rundfunk und Live-Empfang)
 EVENTS = {
     "iss_sstv": "SSTV-Bild von der ISS",
     "sstv": "SSTV-Bild (alle)",
@@ -282,6 +283,17 @@ def adif(rows, my_call="", my_grid=""):
 
 # ------------------------------------------------------------------ Beobachtungsliste
 
+def traffic_match(val, m):
+    """Passt eine Verkehrsmeldung zur Regel? Straßennummer genau (A9 ≠ A93), sonst Text enthält Wert."""
+    v = val.strip().upper()
+    if not v:
+        return False
+    road = (m.get("road") or "").upper()
+    if road and road == v:
+        return True
+    return v.lower() in (m.get("text") or "").lower() and not (v[:1] in "ABLSK" and v[1:].isdigit())
+
+
 def watch_skip_until(db):
     row = db.execute("SELECT v FROM meta WHERE k='watch_skip_until'").fetchone()
     return int(row[0]) if row else 0
@@ -321,6 +333,14 @@ def check_rules(new_peaks, rules, my_locator=""):
                                 break
                 except ValueError:
                     pass
+            elif typ == "traffic":                           # TMC-Verkehrsmeldung zu Straße oder Ort
+                for d in (p.get("decode") or {}).get("decoders", []):
+                    for m in ((d.get("rds") or {}).get("tmc") or {}).get("messages", []):
+                        if traffic_match(val, m):
+                            detail = m.get("text") or f"Ereignis {m.get('event')}"
+                            break
+                    if detail:
+                        break
             elif typ == "event":
                 dec = p.get("decode") or {}
                 types = {str(d.get("type", "")).upper() for d in dec.get("decoders", [])}
