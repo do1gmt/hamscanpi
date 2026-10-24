@@ -102,6 +102,85 @@ def audio_quality(zi, zq, rate, mode):
     return "rauschen", ratio
 
 
+# ====================================================================== UKW-Rundfunk (RTL-SDR)
+#
+# Ein UKW-Sender ist ±100 kHz breit und hat keine scharfe Spektrallinie: die Spitzensuche findet
+# „irgendwo“ im Sender eine Spitze, die bei der Bestätigung nicht mehr an derselben Stelle liegt –
+# die meisten Sender wurden deshalb verworfen. Hier wird stattdessen die Leistung je 100-kHz-Kanal
+# gemessen, jeder Sender genau auf seiner Kanalmitte aufgenommen (für RDS) und mit automatischer
+# Verstärkung empfangen (bei fester Scan-Verstärkung fehlte RDS oft).
+
+FM_RASTER = 100000.0
+FM_RATE = 240000
+
+
+def fm_channels(band, selected, lo, hi):
+    out = []
+    for seg in band.get("segments", []):
+        if seg.get("mode") != "wfm" or not ("all" in (selected or ["all"]) or str(seg.get("id")) in set(selected)):
+            continue
+        for a, b in seg.get("ranges", []):
+            f = np.ceil(max(a, lo) / FM_RASTER) * FM_RASTER
+            while f <= min(b, hi):
+                out.append(float(f))
+                f += FM_RASTER
+    return sorted(set(out))
+
+
+def watch_fm(dev, band, center, cfg, selected, allowed=lambda rf: True, log=print):
+    """Ein Fenster einige Sekunden aufnehmen, Sender je 100-kHz-Kanal finden und einzeln (240 kHz,
+    Mitte = Sender) speichern. Rückgabe (Treffer, verworfen)."""
+    from devices import RECDIR, recording_name, wav_write_iq
+    rate = float(dev.rate)
+    reach = rate / 2 * 0.9 - 100000                          # Sender muss ganz ins Fenster passen
+    chans = [f for f in fm_channels(band, selected, center - reach, center + reach) if allowed(f)]
+    if not chans:
+        return [], 0
+    secs = float(cfg.get("fm_record_seconds", 6.0))
+    old_gain = getattr(dev, "gain", None)
+    if cfg.get("fm_auto_gain", True):
+        dev.gain = 0                                         # automatische Verstärkung des Sticks
+    try:
+        i, q = dev._grab(center, secs)
+    finally:
+        dev.gain = old_gain
+    # mittleres Leistungsspektrum (stückweise: wenig Speicher)
+    N = 4096
+    acc, frames = np.zeros(N), 0
+    win = np.hanning(N).astype(np.float32)
+    step = max(N, len(i) // 200)
+    for a in range(0, len(i) - N, step):
+        z = (i[a:a + N] + 1j * q[a:a + N]) * win
+        acc += np.abs(np.fft.fftshift(np.fft.fft(z))) ** 2
+        frames += 1
+    if not frames:
+        return [], 0
+    P = acc / frames
+    f = np.fft.fftshift(np.fft.fftfreq(N, 1.0 / rate))
+    floor = float(np.percentile(P, 15))
+    thr = float(cfg.get("fm_threshold_db", 10.0))
+    snr = {}
+    for rf in chans:
+        m = np.abs(f - (rf - center)) <= 75000
+        if m.sum():
+            snr[rf] = 10 * np.log10(float(P[m].mean()) / floor + 1e-12)
+    hits = []
+    for rf, s in snr.items():
+        # Sender = über der Schwelle und stärker als beide Nachbarkanäle (Seitenbänder starker Sender)
+        if s < thr or s < snr.get(rf - FM_RASTER, -99) or s < snr.get(rf + FM_RASTER, -99):
+            continue
+        zi, zq = dev._slice(i, q, center, rf, FM_RATE)
+        RECDIR.mkdir(parents=True, exist_ok=True)
+        path = RECDIR / recording_name(band["name"], rf)
+        wav_write_iq(path, zi, zq, FM_RATE)
+        hits.append({"rf_hz": rf, "offset_hz": rf - center, "level_db": 10 * np.log10(floor + 1e-20) + s,
+                     "snr_db": round(s, 1), "recording_path": str(path), "rec_center_hz": rf,
+                     "segment_id": "wfm", "mode": "wfm", "sideband": None, "audio": "ton", "audio_score": None})
+        log(f"      {rf/1e6:7.1f} MHz  UKW-Sender {s:4.1f} dB")
+    del i, q
+    return hits, 0
+
+
 FOLLOW_MODES = {"fm", "relais", "am", "dv"}         # Sprache: ganzes QSO aufnehmen
 
 

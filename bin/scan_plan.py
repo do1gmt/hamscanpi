@@ -326,9 +326,12 @@ def make_plan(
 
         if str(band.get("device", "pmsdr")) == "rtlsdr":
             all_specs = {str(x["id"]): x for x in band.get("segments", [])}
+            rng_fm = []                     # UKW-Rundfunk: Sender sind ±100 kHz breit -> engere Fenster
             if "all" in requested:
                 rng, pts, keep = [(band["start_hz"], band["stop_hz"])], [], []
                 use = list(all_specs)
+                if all_specs and all(x.get("mode") == "wfm" for x in all_specs.values()):
+                    rng_fm, rng = rng, []
             else:
                 rng, pts, keep = [], [], []
                 use = [str(x) for x in requested]
@@ -337,10 +340,12 @@ def make_plan(
                 if not spec:
                     continue
                 if "all" not in requested:
-                    rng += [tuple(x) for x in spec.get("ranges", [])]
+                    (rng_fm if spec.get("mode") == "wfm" else rng).extend(tuple(x) for x in spec.get("ranges", []))
                 fl = [int(x) for x in spec.get("frequencies_hz", [])]
                 (keep if spec.get("mode") in DIGITAL_MODES else pts).extend(fl)
             centers = set(rtl_centers(rng, pts, step)) | set(keep)
+            if rng_fm:
+                centers |= set(rtl_centers(rng_fm, [], 2 * 380000))
 
         if not centers:
             continue

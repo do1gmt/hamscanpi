@@ -1728,6 +1728,31 @@ def main():
                         save_scan(db, band["name"], center, result, fresh)
                         print(f"{center/1e6:9.3f} MHz  Kanalwache: {len(fresh)} Treffer mit Aufnahme")
 
+                # UKW-Rundfunk (RTL-SDR): Sender je 100-kHz-Kanal statt Spitzensuche (siehe channel_watch)
+                if cfg.get("device") == "rtlsdr" and any(sg.get("mode") == "wfm" for sg in band.get("segments", [])):
+                    candidates = [
+                        p for p in candidates
+                        if (classify_segment(band, p["rf_hz"]) or {}).get("mode") != "wfm"
+                    ]
+                    try:
+                        fm_hits, _ = CW.watch_fm(dev_obj, band, center, cfg, selected_segments,
+                                                 allowed=lambda rf: rf_allowed(band["name"], rf))
+                    except Exception as e:
+                        applog("WARN", "scanner", "fm_watch_failed", band=name, center_hz=int(center),
+                               error=f"{type(e).__name__}: {e}")
+                        print(f"   UKW-Suche fehlgeschlagen: {e}")
+                        fm_hits = []
+                    fresh = []
+                    for p in fm_hits:
+                        if any(abs(p["rf_hz"] - r) < 50000 for r in band_seen_rf):
+                            continue
+                        band_seen_rf.append(p["rf_hz"])
+                        fresh.append(p)
+                    if fresh:
+                        total_peaks += len(fresh)
+                        save_scan(db, band["name"], center, result, fresh)
+                        print(f"{center/1e6:9.3f} MHz  UKW: {len(fresh)} Sender aufgenommen")
+
                 if ft8_watch_on:
                     candidates = [
                         p for p in candidates

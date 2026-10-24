@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 – 2026-10-24
+
+- **FM broadcast scan rebuilt:** stations are found by their power per 100-kHz channel instead of
+  the peak search (whose confirmation rejected most FM stations), recorded exactly on the channel
+  centre and with automatic gain – so RDS can be decoded for every station. Settings:
+  `fm_record_seconds` (6), `fm_threshold_db` (10), `fm_auto_gain` (true).
+- Narrower receive windows for the FM band, so every station fits completely into a window.
+
 ## 1.3.1 – 2026-10-24
 
 - Live listening: gain defaults to "automatic" (much better FM/RDS reception than the scan gain);

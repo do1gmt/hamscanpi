@@ -1978,5 +1978,8 @@
   },
   "allow_restricted_bands": false,
   "qso_max_seconds": 120,
-  "qso_hang_seconds": 4
+  "qso_hang_seconds": 4,
+  "fm_record_seconds": 6,
+  "fm_threshold_db": 10,
+  "fm_auto_gain": true
 }
