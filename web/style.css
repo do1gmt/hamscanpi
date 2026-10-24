@@ -423,7 +423,7 @@ table.heat td.h0 { background: var(--panel-2); }
 .fm-table td { white-space: nowrap; } .fm-table td.wrap { white-space: normal; min-width: 14em; }
 .rds-name { font-family: var(--mono, monospace); letter-spacing: .06em; white-space: pre; }
 @media (max-width: 599px) { .fm-table th:nth-child(3), .fm-table td:nth-child(3), .fm-table th:nth-child(4), .fm-table td:nth-child(4),
-  .fm-table th:nth-child(7), .fm-table td:nth-child(7) { display: none; } .fm-table { font-size: .8rem; } }
+  .fm-table th:nth-child(8), .fm-table td:nth-child(8) { display: none; } .fm-table { font-size: .8rem; } }
 .badge-rds { background: rgba(45,212,191,.12); color: var(--teal); border: 1px solid rgba(45,212,191,.4); font-family: var(--mono, monospace); text-transform: none; }
 
 .rds-box .tmc { margin-top: .4rem; border-top: 1px solid var(--line); padding-top: .4rem; }

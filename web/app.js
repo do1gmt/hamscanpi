@@ -452,7 +452,7 @@
     if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
     if (h.segment_note) html += `<p class="hint">${esc(h.segment_note)}</p>`;
     const sat = h.band === 'Satelliten';
-    html += `<p class="hint">${sat ? `Rauschabstand ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `Pegel ${h.level_db.toFixed(0)} dB · Rauschen ${h.noise_db.toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
+    html += `<p class="hint">${sat ? `SNR ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `Pegel ${h.level_db.toFixed(0)} dB · Rauschen ${(h.snr_db != null ? h.level_db - h.snr_db : h.noise_db).toFixed(0)} dB · SNR ${(h.snr_db != null ? h.snr_db : h.level_db - h.noise_db).toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
     // Audio: FM zuerst, sonst SSB je nach Betriebsart
     if (f.fm && !f.iq) html += player('FM', f.fm);   // sonst übernimmt „Empfang“ (abstimmbar)
     if (f.iq) {
@@ -583,7 +583,7 @@
           return `<tr><td>${m.snr > 0 ? '+' : ''}${Math.round(m.snr)}</td><td>${m.audio_hz}</td><td class="mono">${esc(m.text)}</td><td>${esc(i.desc)}</td></tr>`;
         });
         html += `<div class="decode-block"><div class="decode-title"><b>${d.type}</b> · ${d.messages.length} Nachrichten${d.detail ? ' · ' + esc(d.detail) : ''}</div>
-          <div class="table-wrap"><table class="table"><thead><tr><th>dB</th><th>Hz</th><th>Nachricht</th><th>Bedeutung</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+          <div class="table-wrap"><table class="table"><thead><tr><th>SNR dB</th><th>Hz</th><th>Nachricht</th><th>Bedeutung</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
         const list = [...stations.values()].sort((a, b) => b.n - a.n).map(st => {
           let extra = st.grid ? ` <span class="muted">${st.grid}` : '';
           if (st.grid && me) { const p = gridToLatLon(st.grid); if (p) { const db = distBearing(me, p); extra += ` · ${db.km} km · ${db.deg}°`; } }
@@ -996,9 +996,20 @@
         // Signal: höchster Kanalpegel über dem Rauschen – zeigt, ob der Satellit überhaupt zu hören war
         const sig = Object.values(r.signal || {}).filter(x => x && x.max_db != null);
         const smax = sig.length ? Math.max(...sig.map(x => x.max_db)) : null, s6 = sig.reduce((a, x) => a + (x.above6_s || 0), 0);
-        const sigTxt = smax == null ? '' : smax < 6 ? `<br><small class="bad">kein Signal (höchstens ${smax.toFixed(0)} dB über Rauschen)</small>`
-          : `<br><small class="muted">Signal bis ${smax.toFixed(0)} dB, ${s6} s über 6 dB</small>`;
-        plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}`;
+        const sigTxt = smax == null ? '' : smax < 6 ? `<br><small class="bad">kein Signal (SNR höchstens ${smax.toFixed(0)} dB)</small>`
+          : `<br><small class="muted">SNR bis ${smax.toFixed(0)} dB, ${s6} s über 6 dB</small>`;
+        // je Kanal: Einordnung der stärksten Linie und Wasserfallbild
+        const multi = Object.keys(r.signal || {}).length > 1;
+        const lineTxt = Object.entries(r.signal || {}).map(([cid, x]) => {
+          const L = x && x.line, pre = multi ? `${esc(cid)}: ` : '';
+          let t = '';
+          if (L && L.kind === 'satellite') t = `<small class="ok">${pre}Satellit gehört${L.beacon ? ' (Bake)' : ''} – Linie steht fest bei ${(L.offset_hz / 1000).toFixed(1)} kHz</small>`;
+          else if (L && L.kind === 'local') t = `<small class="warn">${pre}örtliche Störung bei ${L.rf_mhz.toFixed(4)} MHz (wandert gegen den Doppler)</small>`;
+          else if (L) t = `<small class="muted">${pre}Linie nicht eindeutig zuzuordnen</small>`;
+          const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" target="_blank" rel="noopener"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
+          return t || wf ? `<br>${t}${wf}` : '';
+        }).join('');
+        plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';
@@ -1166,8 +1177,8 @@
     let d; try { d = await api('/api/fmstations'); } catch (e) { return; }
     $('fmTable').innerHTML = d.stations.map(r => `<tr>
         <td class="mono-num">${(r.freq_khz / 1000).toFixed(1)}</td><td><b class="rds-name">${esc(r.ps || '–')}</b></td><td>${esc(r.pi || '')}${r.ecc ? ` <small class="muted">${esc(r.ecc)}</small>` : ''}</td>
-        <td>${esc(r.pty || '')}</td><td class="wrap">${esc(r.now_playing || r.rt || '')}</td><td>${fmtTime(r.last)}</td><td>${r.n}</td></tr>`).join('')
-      || '<tr><td colspan="7" class="muted">Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.</td></tr>';
+        <td>${esc(r.pty || '')}</td><td class="wrap">${esc(r.now_playing || r.rt || '')}</td><td>${r.last_snr != null ? Math.round(r.last_snr) + ' dB' : '–'}${r.best_snr != null && r.best_snr > (r.last_snr ?? -99) + 0.5 ? ` <small class="muted">(max ${Math.round(r.best_snr)})</small>` : ''}</td><td>${fmtTime(r.last)}</td><td>${r.n}</td></tr>`).join('')
+      || '<tr><td colspan="8" class="muted">Noch keine UKW-Sender – Band „Rundfunk“ unter Scan einschalten.</td></tr>';
   }
 
   // ---------- Aktivität ----------

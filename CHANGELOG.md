@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5.0 – 2026-10-24
+
+- **Waterfall per satellite pass** (Doppler-corrected, whole recording, beacon and transponder/channel
+  marked): link "📊 waterfall" under the result in the pass list. A satellite signal stands as a
+  straight line, a transmitter on the ground moves against the Doppler as a curve.
+- **Automatic assessment** of the strongest line: "satellite heard (beacon) – line fixed at …" or
+  "local interference at 145.9xx MHz (moves against the Doppler)"; needs ≥ 15 s of signal and
+  ≥ 1.5 kHz of Doppler change.
+- Waterfall images are deleted after 14 days.
+- Hit card: "Level · noise · SNR" now consistent. The noise shown came from the scan snapshot, which
+  is measured differently from the channel watch, so level minus noise gave odd values (e.g. 81 dB);
+  now noise = level − SNR, and the SNR is shown explicitly.
+- **SNR everywhere:** heard stations also for APRS/CW/RTTY (SNR of the hit; FT8 per message),
+  FM station list (last SNR, best in brackets), watchlist alerts (mail/push/log: "· SNR 21 dB"),
+  pass list ("SNR up to … dB"), live status and seek ("SNR 25 dB"), scan mail, FT8 table header.
+- Simulator: NORAD 0 = transmitter on the ground (no Doppler) for tests.
+
 ## 1.4.8 – 2026-10-24
 
 - Fix (continued): passes recorded after a plan recalculation in the middle of the pass were stored

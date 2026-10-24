@@ -347,7 +347,7 @@ class LiveSession:
                 warn = f" · ÜBERSTEUERT ({demod.clip_frac*100:.1f} %) – Verstärkung senken"
             elif agc:
                 warn = f" · Verstärkung automatisch {gain:g} dB"
-            self.status_text = f"Empfang {base} · {demod.snr_db:.0f} dB über Rauschen{warn}"
+            self.status_text = f"Empfang {base} · SNR {demod.snr_db:.0f} dB{warn}"
             self._publish(pcm)
             if hold_until_silent:
                 if demod.snr_db >= (hold_thr if hold_thr is not None else 8.0):
@@ -479,7 +479,7 @@ class LiveSession:
                 continue
             c, lvl = hit
             self.freq_hz = int(c)
-            self.status_text = f"Suchlauf {arrow}: Signal auf {c/1e6:.4f} MHz ({lvl:.0f} dB)"
+            self.status_text = f"Suchlauf {arrow}: Signal auf {c/1e6:.4f} MHz (SNR {lvl:.0f} dB)"
             # hören, solange der Kanal belegt ist (plus Nachlauf), dann weitersuchen
             self._rtl_listen(c, hold_until_silent=True, silence_s=max(hold, 2.0), hold_thr=max(4.0, thr - 4.0))
             if not self.running or self.restart_wanted.is_set():

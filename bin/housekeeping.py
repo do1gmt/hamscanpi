@@ -183,6 +183,13 @@ def run(settings, bulk_delete, log):
                     hint="Rohaufnahme eines abgebrochenen Überflugs, älter als 48 h")
         except OSError:
             pass
+    # 2b. Wasserfallbilder der Überflüge nach 14 Tagen (die Überflugliste zeigt ohnehin nur 3 Tage)
+    for p in (BASE / "reports").glob("*_waterfall.png"):
+        try:
+            if now - p.stat().st_mtime > 14 * 86400:
+                p.unlink()
+        except OSError:
+            pass
     # 3. Speicherplatz
     du = shutil.disk_usage(str(BASE))
     pct = 100.0 * du.used / du.total

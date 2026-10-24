@@ -236,6 +236,9 @@ class Channel:
         y = y * np.exp(-1j * (self.phase + inc * self.n2))
         self.phase = float((self.phase + inc * len(self.n2)) % (2 * np.pi))
         y96 = y                                               # 96 kHz, Doppler korrigiert (für die Bakenmessung)
+        n = min(len(y96), 8192)
+        S_full = np.abs(np.fft.fftshift(np.fft.fft(y96[:n] * self._win(n)))) ** 2
+        self._wf_feed(S_full, n, t, dop)
         y, self.zi2 = sosfilt(self.lp2, y, zi=self.zi2)
         bb = y[::2]                                           # 48 kHz, Kanal bei 0 Hz
         if self.chunk_t is None:
@@ -244,9 +247,8 @@ class Channel:
             # Pegel für die Signalprüfung: stärkste Spektrallinie (Bake, SSB-Station) gegen den Median,
             # über 1 s gemittelt; reines Rauschen ergibt dabei ~4 dB, das wird abgezogen
             # gemessen bei 96 kHz: Transponder (±20 kHz) und die Bake(n) (±2,5 kHz), Rauschen aus ±40 kHz
-            n = min(len(y96), 8192)
-            S_ = np.abs(np.fft.fftshift(np.fft.fft(y96[:n] * np.hanning(n)))) ** 2
-            fr = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / (IN_RATE // 10)))
+            S_ = S_full.copy()
+            fr = self._freqs(n)
             near = np.abs(fr) < 20000
             for bo in self.beacon_offs:
                 near |= np.abs(fr - bo) < 2500
@@ -277,6 +279,112 @@ class Channel:
         dens = float(np.median(S_[(fr > 14000) & (fr < 22000)])) / 0.693 / np.sum(np.hanning(4096) ** 2)
         pw = float(np.mean(np.abs(c) ** 2))
         self.snr_track.append(pw / max(dens * 18000.0 / OUT_RATE, 1e-20))
+
+    # ------------------------------------------------------------ Wasserfall und Einordnung
+    WF_BINS = 512
+
+    def _win(self, n):
+        if getattr(self, "_win_n", 0) != n:
+            self._win_cache, self._win_n = np.hanning(n).astype(np.float32), n
+        return self._win_cache
+
+    def _freqs(self, n):
+        if getattr(self, "_fr_n", 0) != n:
+            self._fr_cache, self._fr_n = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / (IN_RATE // 10))), n
+        return self._fr_cache
+
+    def _wf_feed(self, S, n, t, dop):
+        """Je Sekunde eine Wasserfall-Zeile (dopplerkorrigiert) und die stärkste Linie im Kanal merken."""
+        if not hasattr(self, "wf_rows"):
+            self.wf_rows, self.lines, self._wf_acc, self._wf_n = [], [], None, 0
+            self.wf_span = 40000.0 if self.kind == "linear" else 25000.0
+        self._wf_acc = S if self._wf_acc is None or len(self._wf_acc) != len(S) else self._wf_acc + S
+        self._wf_n += 1
+        if self._wf_n < 10:
+            return
+        P = self._wf_acc / self._wf_n
+        self._wf_acc, self._wf_n = None, 0
+        fr = self._freqs(n)
+        m = np.abs(fr) < self.wf_span
+        Pm, fm = P[m], fr[m]
+        k = len(Pm) // self.WF_BINS * self.WF_BINS
+        row = Pm[:k].reshape(self.WF_BINS, -1).mean(axis=1)
+        self.wf_rows.append(10 * np.log10(row + 1e-20).astype(np.float32))
+        # stärkste Linie dort, wo der Satellit senden kann (Transponder/Kanal und Baken)
+        near = np.abs(fm) < (20000 if self.kind == "linear" else 9000)
+        for bo in self.beacon_offs:
+            near |= np.abs(fm - bo) < 2500
+        if near.any():
+            med = float(np.median(Pm[near]))
+            i = int(np.argmax(np.where(near, Pm, 0)))
+            self.lines.append((t, float(fm[i]), 10 * np.log10(Pm[i] / max(med, 1e-30)) - 4.2, float(dop)))
+
+    def classify_line(self):
+        """Steht die stärkste Linie nach der Dopplerkorrektur fest (= Satellit) oder wandert sie genau
+        gegen den Doppler (= Sender auf der Erde, örtliche Störung)?"""
+        L = [x for x in getattr(self, "lines", []) if x[2] >= 6.0]
+        if len(L) < 15:
+            return None
+        f = np.array([x[1] for x in L])
+        d = np.array([x[3] for x in L])
+        res = {"seconds": len(L), "offset_hz": round(float(np.median(f))), "doppler_span_hz": round(float(np.ptp(d)))}
+        if np.ptp(d) < 1500:
+            res["kind"] = "unclear"                          # zu wenig Doppler zum Unterscheiden
+            return res
+        s_sat, s_loc = float(np.std(f)), float(np.std(f + d))
+        if s_sat < 0.35 * s_loc and s_sat < 800:
+            res["kind"] = "satellite"
+            res["beacon"] = any(abs(res["offset_hz"] - b) < 1500 for b in self.beacon_offs)
+        elif s_loc < 0.35 * s_sat and s_loc < 800:
+            res["kind"] = "local"
+            res["rf_mhz"] = round((self.f0 + float(np.median(f + d))) / 1e6, 4)
+        else:
+            res["kind"] = "unclear"
+        return res
+
+    def save_waterfall(self, t0, name):
+        """Wasserfallbild (Zeit nach unten, Frequenz relativ zur Kanalmitte, dopplerkorrigiert)."""
+        rows = getattr(self, "wf_rows", [])
+        if len(rows) < 5:
+            return None
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            return None
+        A = np.array(rows)
+        if len(A) > 900:                                     # höchstens 900 Zeilen
+            g = int(np.ceil(len(A) / 900))
+            A = A[: len(A) // g * g].reshape(-1, g, A.shape[1]).mean(axis=1)
+        lo = float(np.median(A)) - 2
+        v = np.clip((A - lo) / 22.0, 0, 1)
+        stops = np.array([[0, 0, 40], [0, 60, 160], [0, 170, 200], [240, 220, 40], [255, 60, 30]], float)
+        x = v * (len(stops) - 1)
+        i = np.minimum(x.astype(int), len(stops) - 2)
+        fr = (x - i)[..., None]
+        rgb = (stops[i] * (1 - fr) + stops[i + 1] * fr).astype(np.uint8)
+        W = self.WF_BINS * 2
+        img = Image.fromarray(rgb).resize((W, max(len(A), 300)), Image.NEAREST)   # kurze Aufnahmen strecken
+        top, bottom = 34, 22
+        canvas = Image.new("RGB", (W, img.height + top + bottom), (12, 18, 28))
+        canvas.paste(img, (0, top))
+        dr = ImageDraw.Draw(canvas)
+        span = self.wf_span
+        xpos = lambda off: int((off + span) / (2 * span) * W)
+        for off in ([-20000, 20000] if self.kind == "linear" else [-9000, 9000]):   # Kanal/Transponder
+            dr.line([(xpos(off), top), (xpos(off), top + img.height)], fill=(90, 110, 130))
+        for bo in self.beacon_offs:                                                  # Bake
+            for yy in range(top, top + img.height, 8):
+                dr.line([(xpos(bo), yy), (xpos(bo), yy + 4)], fill=(45, 212, 191))
+            dr.text((xpos(bo) + 3, top + 2), "Bake", fill=(45, 212, 191))
+        dr.text((6, 4), f"{name} {self.f0/1e6:.3f} MHz - dopplerkorrigiert - "
+                        f"{time.strftime('%d.%m.%Y %H:%M UTC', time.gmtime(t0))}", fill=(230, 230, 230))
+        dr.text((6, 18), f"{len(rows)} s, oben Anfang, unten Ende", fill=(150, 160, 170))
+        for k in range(-int(span // 10000), int(span // 10000) + 1):
+            off = k * 10000
+            dr.text((max(0, xpos(off) - 12), top + img.height + 5), f"{off/1000:+.0f}k", fill=(150, 160, 170))
+        out = REPORTS / (stem_for(self.sat, t0) + "_waterfall.png")
+        canvas.save(out, optimize=True)
+        return out.name
 
     def _linear_chunk(self):
         zc = np.concatenate(self.chunk)
@@ -539,14 +647,23 @@ def main():
             hits = ch.evaluate(t0)
             n = db_save(ch.sat, hits)
             per_ch[ch.sat["id"]] = n
-            sig[ch.sat["id"]] = getattr(ch, "stats", None) or signal_stats(
-                np.array(ch.snr_track), 1.0 if ch.kind == "linear" else 0.1)
+            sig[ch.sat["id"]] = dict(getattr(ch, "stats", None) or signal_stats(
+                np.array(ch.snr_track), 1.0 if ch.kind == "linear" else 0.1))
+            try:                                              # Wasserfall und Einordnung der stärksten Linie
+                sig[ch.sat["id"]]["waterfall"] = ch.save_waterfall(t0, ch.sat.get("name") or ch.sat["id"])
+                sig[ch.sat["id"]]["line"] = ch.classify_line()
+            except Exception as e:
+                applog("WARN", "satellite", "waterfall_failed", sat=ch.sat["id"], error=f"{type(e).__name__}: {e}")
             per_obj[ch.sat["norad"]] += n
             hits_total += n
         applog("INFO", "satellite", "pass_done", sat=name, hits=hits_total, per_channel=per_ch,
                seconds=round(secs), problem=err, signal=sig)
         for cid, st_ in sig.items():
             print(f"   {cid}: Signal max {st_['max_db']} dB, 90 % {st_['p90_db']} dB, {st_['above6_s']} s über 6 dB")
+            if st_.get("line"):
+                print(f"   {cid}: stärkste Linie {st_['line']}")
+            if st_.get("waterfall"):
+                print(f"   {cid}: Wasserfall reports/{st_['waterfall']}")
         state = "cancelled" if _stop["flag"] else ("done" if not err or secs > 60 else "error")
         for k in keys:
             o = next((x for x in objs if k.startswith(f"{x}_")), objs[0])

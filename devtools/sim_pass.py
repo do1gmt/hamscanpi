@@ -84,7 +84,7 @@ with open(out, 'wb') as fo:
         tt = np.arange(blk) / FS
         z = (rng.standard_normal(blk) + 1j * rng.standard_normal(blk)) * 0.05
         for i, (f, kind, lv, a, nor) in enumerate(mods):
-            dop = trk(nor).doppler_hz(f, t + 0.05)
+            dop = trk(nor).doppler_hz(f, t + 0.05) if nor else 0.0          # NORAD 0: Sender auf der Erde
             # Audio auf 960k hochrechnen (Halten genügt nicht: linear interpolieren)
             ia = (b0 + np.arange(blk)) * A_RATE / FS
             au = np.interp(ia, np.arange(len(a)), a, right=0.0) if kind != 'carrier' else np.zeros(blk)

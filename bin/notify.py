@@ -184,7 +184,7 @@ def notify_scan_done(run_id):
     lines = [f"Lauf #{run_id}  Status: {run['status']}  Start: {run['started_at']}  Dauer: {run['duration_s']} s",
              f"Treffer: {run['peaks']}  verworfen: {run['rejected']}", ""]
     for h in hits[:40]:
-        lines.append(f"{h['band']:9s} {h['rf_hz']/1e6:10.4f} MHz  {h['snr_db']:5.1f} dB  {h['mode']}")
+        lines.append(f"{h['band']:9s} {h['rf_hz']/1e6:10.4f} MHz  SNR {h['snr_db']:4.0f} dB  {h['mode']}")
     if len(hits) > 40:
         lines.append(f"... und {len(hits)-40} weitere")
     send_all(subject, "\n".join(lines) + "\n", c, priority="low")
