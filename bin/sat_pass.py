@@ -83,7 +83,7 @@ def write_iq(path, z, rate):
         w.writeframes(inter.tobytes())
 
 
-def linear_activity(z, rate):
+def linear_activity(z, rate, beacons=()):
     """SSB-Aktivität in einem Abschnitt: (aktiv?, Versatz der stärksten Station in Hz, Pegel dB)."""
     nf = 1024
     n = len(z) // nf
@@ -95,6 +95,8 @@ def linear_activity(z, rate):
     floor = float(np.percentile(per_bin, 25))
     line = 10 * np.log10(per_bin / floor + 1e-12) > 8.0             # Baken, Träger ausblenden
     line = np.convolve(line.astype(float), np.ones(5), mode="same") > 0
+    for bo in beacons:                                                # Baken sind keine Aktivität
+        line |= np.abs(f - bo) < 4000
     P[:, line | (np.abs(f) > rate / 2 * 0.92)] = floor
     box = int(2400 / (rate / nf))
     best = (0.0, 0.0, 0.0)
@@ -204,7 +206,9 @@ class Channel:
         self.tab = np.exp(-2j * np.pi * self.base_off * n / IN_RATE).astype(np.complex64)
         self.tab_step = np.exp(-2j * np.pi * self.base_off * BLOCK / IN_RATE)
         self.rot = 1.0 + 0j
-        self.lp = butter(6, 32000, fs=IN_RATE, output="sos")
+        # lineare Satelliten: Stufe 1 breiter, damit die Bake neben dem Transponder mit hineinpasst
+        self.beacon_offs = [b - self.f0 for b in sat.get("beacons", []) if abs(b - self.f0) < 40000]
+        self.lp = butter(6, 42000 if self.beacon_offs else 32000, fs=IN_RATE, output="sos")
         self.zi = (sosfilt_zi(self.lp) * 0).astype(np.complex128)
         self.lp2 = butter(6, 21000, fs=IN_RATE // 10, output="sos")
         self.zi2 = (sosfilt_zi(self.lp2) * 0).astype(np.complex128)
@@ -231,6 +235,7 @@ class Channel:
         inc = 2 * np.pi * dop / (IN_RATE / 10)
         y = y * np.exp(-1j * (self.phase + inc * self.n2))
         self.phase = float((self.phase + inc * len(self.n2)) % (2 * np.pi))
+        y96 = y                                               # 96 kHz, Doppler korrigiert (für die Bakenmessung)
         y, self.zi2 = sosfilt(self.lp2, y, zi=self.zi2)
         bb = y[::2]                                           # 48 kHz, Kanal bei 0 Hz
         if self.chunk_t is None:
@@ -238,14 +243,20 @@ class Channel:
         if self.kind == "linear":
             # Pegel für die Signalprüfung: stärkste Spektrallinie (Bake, SSB-Station) gegen den Median,
             # über 1 s gemittelt; reines Rauschen ergibt dabei ~4 dB, das wird abgezogen
-            n = min(len(bb), 4096)
-            S_ = np.abs(np.fft.fftshift(np.fft.fft(bb[:n] * np.hanning(n)))) ** 2
-            fr = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / OUT_RATE))
-            S_ = S_[np.abs(fr) < 20000]
+            # gemessen bei 96 kHz: Transponder (±20 kHz) und die Bake(n) (±2,5 kHz), Rauschen aus ±40 kHz
+            n = min(len(y96), 8192)
+            S_ = np.abs(np.fft.fftshift(np.fft.fft(y96[:n] * np.hanning(n)))) ** 2
+            fr = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / (IN_RATE // 10)))
+            near = np.abs(fr) < 20000
+            for bo in self.beacon_offs:
+                near |= np.abs(fr - bo) < 2500
+            S_ = np.where(near, S_, 0.0)[np.abs(fr) < 40000] if self.beacon_offs else S_[near]
             self._lin_acc = S_ if getattr(self, "_lin_acc", None) is None or len(self._lin_acc) != len(S_) else self._lin_acc + S_
             self._lin_n = getattr(self, "_lin_n", 0) + 1
             if self._lin_n >= 10:
-                ratio = float(self._lin_acc.max() / max(np.median(self._lin_acc), 1e-30)) / 10 ** 0.42
+                acc = self._lin_acc
+                med = np.median(acc[acc > 0]) if np.any(acc > 0) else 1e-30
+                ratio = float(acc.max() / max(med, 1e-30)) / 10 ** 0.42
                 self.snr_track.append(max(ratio, 1e-3))
                 self._lin_acc, self._lin_n = None, 0
             self.chunk.append(bb.astype(np.complex64))
@@ -269,7 +280,7 @@ class Channel:
 
     def _linear_chunk(self):
         zc = np.concatenate(self.chunk)
-        act, off_hz, lvl = linear_activity(zc, OUT_RATE)
+        act, off_hz, lvl = linear_activity(zc, OUT_RATE, self.beacon_offs)
         if act:
             p = RECDIR / (stem_for(self.sat, self.chunk_t) + ".wav")
             write_iq(p, zc, OUT_RATE)

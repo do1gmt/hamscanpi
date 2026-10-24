@@ -1339,7 +1339,7 @@ def sat_passes():
     passes = []
     for p in res.get("passes", []):
         q = dict(p)
-        r = results.get(p["key"])
+        r = results.get(p["key"]) or _near_result(results, p["key"])
         if r and r.get("state") in ("running", "evaluating") and now > p["los"] + 1800:
             # Aufnahme bzw. Auswertung nie fertig geworden (Prozess beendet, z. B. Speicher voll)
             q["result"] = dict(r, state="error", text=SAT_STATE_TEXT["error"],
@@ -1350,6 +1350,27 @@ def sat_passes():
             q["result"] = {"state": "missed", "text": "nicht aufgenommen" if p.get("rec_start") else "übersprungen"}
         passes.append(q)
     return dict(res, passes=passes, nesdr=bool((st.get("hardware") or {}).get("rtlsdr", {}).get("present")))
+
+
+def _near_result(results, key, tol_min=3):
+    """Ergebnis auch finden, wenn sich der Überflug-Schlüssel (NORAD_Minute der Aufgangszeit) seit der
+    Aufnahme um ein paar Minuten verschoben hat – neue Bahndaten verschieben die Aufgangszeit oft
+    um einige Sekunden, und über eine Minutengrenze hinweg ändert sich dann der Schlüssel."""
+    try:
+        norad, minute = key.rsplit("_", 1)
+        minute = int(minute)
+    except ValueError:
+        return None
+    best = None
+    for k, v in results.items():
+        try:
+            n2, m2 = k.rsplit("_", 1)
+            d = abs(int(m2) - minute)
+        except ValueError:
+            continue
+        if n2 == norad and d <= tol_min and (best is None or d < best[0]):
+            best = (d, v)
+    return best[1] if best else None
 
 
 def _gain_value(v):

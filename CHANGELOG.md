@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.7 – 2026-10-24
+
+- Fix: the pass list showed "not recorded" for passes that were recorded. Results are stored under
+  the pass key (NORAD + minute of AOS); fresh orbital elements shift the AOS by a few seconds, and
+  across a minute boundary the key changed, so the result was no longer found. Results are now
+  matched to the same satellite within ±3 minutes.
+
+- Signal check of linear satellites now includes their beacon (AO-73 BPSK 145.935, RS-44 CW 435.605,
+  AO-7 145.9775, TO-108 145.910, MO-122 435.800; FO-29 is too far from the transponder). The beacon
+  sits outside the transponder band and was not measured – AO-73 in daylight sends only its beacon,
+  so "no signal" said nothing. Beacons are not counted as transponder activity.
+
 ## 1.4.6 – 2026-10-24
 
 - Fix: a satellite pass could be lost without a trace ("not recorded"): the recording was started
