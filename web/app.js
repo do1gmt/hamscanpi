@@ -452,7 +452,7 @@
     if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
     if (h.segment_note) html += `<p class="hint">${esc(h.segment_note)}</p>`;
     const sat = h.band === 'Satelliten';
-    html += `<p class="hint">${sat ? `SNR ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `Pegel ${h.level_db.toFixed(0)} dB · Rauschen ${(h.snr_db != null ? h.level_db - h.snr_db : h.noise_db).toFixed(0)} dB · SNR ${(h.snr_db != null ? h.snr_db : h.level_db - h.noise_db).toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
+    html += `<p class="hint">${sat ? `SNR ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `SNR ${(h.snr_db != null ? h.snr_db : h.level_db - h.noise_db).toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
     // Audio: FM zuerst, sonst SSB je nach Betriebsart
     if (f.fm && !f.iq) html += player('FM', f.fm);   // sonst übernimmt „Empfang“ (abstimmbar)
     if (f.iq) {

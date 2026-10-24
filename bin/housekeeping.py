@@ -190,6 +190,11 @@ def run(settings, bulk_delete, log):
                 p.unlink()
         except OSError:
             pass
+    for p in (BASE / "reports").glob("*_spectrum2*.png"):            # alte Spektrumbilder (vor 1.5.1)
+        try:
+            p.unlink()
+        except OSError:
+            pass
     # 3. Speicherplatz
     du = shutil.disk_usage(str(BASE))
     pct = 100.0 * du.used / du.total

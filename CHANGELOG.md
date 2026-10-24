@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1 – 2026-10-24
+
+- Hit card shows only the SNR (level and noise were relative values without a fixed reference and
+  only confused); spectrum axis labelled "SNR (dB)" – 0 dB is the noise floor.
+
 ## 1.5.0 – 2026-10-24
 
 - **Waterfall per satellite pass** (Doppler-corrected, whole recording, beacon and transponder/channel

@@ -1195,7 +1195,7 @@ def spectrum_png(peak_id, lang="de"):
     if not row or not row["recording_path"] or not Path(row["recording_path"]).exists():
         raise ValueError("Keine I/Q-Aufnahme vorhanden")
     en = lang == "en"
-    out = REPORTS / f"{Path(row['recording_path']).stem}_spectrum2{'_en' if en else ''}.png"
+    out = REPORTS / f"{Path(row['recording_path']).stem}_spectrum3{'_en' if en else ''}.png"
     if out.exists():
         return out
     import matplotlib
@@ -1234,7 +1234,7 @@ def spectrum_png(peak_id, lang="de"):
         a, b = (rf + d - 0.003, rf + d) if sb == "LSB" else (rf + d, rf + d + 0.003)
         ax.axvspan(a, b, color="#2dd4bf", alpha=.15, label=f"{'voice window' if en else 'Sprachfenster'} {sb}")
     ax.ticklabel_format(useOffset=False, style="plain", axis="x")
-    ax.set_xlabel("MHz", color="#9aaabc"); ax.set_ylabel("dB (rel.)", color="#9aaabc")
+    ax.set_xlabel("MHz", color="#9aaabc"); ax.set_ylabel("SNR (dB)", color="#9aaabc")      # 0 dB = Rauschboden (Median)
     ax.tick_params(colors="#9aaabc", labelsize=8)
     for sp in ax.spines.values():
         sp.set_color("#2c3a4d")
