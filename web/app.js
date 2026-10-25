@@ -289,6 +289,11 @@
     if (!(s.live_active && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
     const btn = $('scanNow'); btn.disabled = busy; btn.textContent = busy ? 'Scan läuft …' : 'Jetzt scannen';
     lastStatus = s;
+    const pend = (s.hardware && s.hardware.rtlsdr && s.hardware.rtlsdr.pending) || 0;
+    const tsys = document.querySelector('.tabs-main [data-view=system]');
+    if (tsys) { const n = tsys.querySelector('.n'); if (pend && !n) tsys.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); if (!pend && n) n.remove(); }
+    if (pend && !window._stickToast) { window._stickToast = true; toast('Neuer SDR-Stick erkannt – unter System → Geräte festlegen, was er sein soll.', 8000); }
+    if (!pend) window._stickToast = false;
     $('scanStop').hidden = !(s.state === 'running');
     $('scanStop').textContent = s.phase === 'satellite' ? 'Aufnahme abbrechen' : 'Scan abbrechen';
     const nextPast = s.next_scan_at && new Date(s.next_scan_at) < Date.now();
@@ -979,7 +984,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1432,7 +1437,7 @@
     const at = [];
     at.push(`<div class="stat ${s.activity === 'idle' ? '' : 'act-on'}"><b>${ACT_TEXT[s.activity] || s.activity}</b><span>gerade</span></div>`);
     if (hw) {
-      at.push(`<div class="stat ${hw.rtlsdr.present ? '' : 'warn'}"><b>${hw.rtlsdr.present ? 'steckt' : 'fehlt'}</b><span>NESDR (RTL-SDR)</span></div>`);
+      at.push(`<div class="stat ${hw.rtlsdr.present ? '' : 'warn'}"><b>${hw.rtlsdr.present ? 'steckt' : 'fehlt'}</b><span>Haupt-Stick${hw.rtlsdr.label ? ': <span class="no-i18n">' + esc(hw.rtlsdr.label) + '</span>' : ''}</span></div>`);
       at.push(`<div class="stat"><b>${hw.pmsdr.present ? 'steckt' : hw.pmsdr.usb ? 'ohne Audio' : 'abgesteckt'}</b><span>PMSDR (Kurzwelle)</span></div>`);
     }
     $('sysActivity').innerHTML = at.join('');
@@ -1446,6 +1451,79 @@
       n.wlan ? ['WLAN', `${n.wlan.iface}: ${n.wlan.dbm} dBm`] : null, ['läuft seit', s.uptime_h != null ? fmtUp(s.uptime_h) : null]].filter(x => x && x[1] != null);
     $('sysPi').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd class="no-i18n">${esc(v)}</dd>`).join('');
   }
+
+  // ---------- System: Geräte (SDR-Sticks) ----------
+  const ROLE_TEXT = { main: 'Haupt-Stick', spare: 'Reserve', ignore: 'ignoriert', '': 'neu – noch nicht festgelegt' };
+  let sticksEditing = false;
+  function fmtSeen(t) { return new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  function renderSticks(d) {
+    const list = d.sticks || [];
+    $('sticksNew').hidden = !d.pending;
+    $('sticksNew').textContent = d.pending ? 'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt HamScanPi ihn nicht.' : '';
+    if (!list.length) { $('sticksList').innerHTML = '<div class="muted">Kein SDR-Stick angesteckt.</div>'; return; }
+    $('sticksList').innerHTML = list.map(r => {
+      const role = r.role || '';
+      const badge = r.kind === 'other' ? '<span class="badge">nicht unterstützt</span>'
+        : `<span class="badge ${role === 'main' ? 'b-main' : role === '' ? 'b-new' : ''}">${ROLE_TEXT[role]}</span>`;
+      const where = r.present ? `steckt · Port ${esc(r.port || '?')}` : `zuletzt gesehen ${fmtSeen(r.last_seen)}`;
+      const info = [`Seriennummer <span class="no-i18n">${esc(r.serial || '–')}</span>`, r.kind === 'rtl' ? `Tuner <span class="no-i18n">${esc(r.tuner || '?')}</span>` : null].filter(Boolean).join(' · ');
+      const warn = [];
+      if (r.duplicate) warn.push('Dieser Stick lässt sich nicht sicher über seine Seriennummer ansprechen (gleiche Nummer wie ein anderer Stick, oder eine Nummer wie 00000001, die rtl_sdr als Gerätenummer liest). HamScanPi nimmt dann die USB-Reihenfolge – die kann sich ändern. Eigene Seriennummer schreiben (dafür die anderen Sticks abziehen).');
+      else if (r.generic && r.present && d.rtl_present > 1) warn.push('Seriennummer ab Werk (bei vielen Sticks gleich). Solange nur ein solcher Stick steckt, kein Problem – sonst eigene Nummer schreiben.');
+      if (r.v4) warn.push('RTL-SDR Blog V4 (Tuner R828D): braucht den rtl-sdr-Treiber von rtl-sdr.com, sonst stimmt er falsch ab.');
+      if (r.note) warn.push(r.note + ' – dieser Eintrag kann vergessen werden.');
+      let body = '';
+      if (r.kind === 'rtl') {
+        body = `<div class="stick-form" data-key="${esc(r.key)}">
+          <label class="field"><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
+          <label class="field"><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
+          <label class="field"><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
+          <label class="field"><span>Antenne</span><input data-f="antenna" type="text" maxlength="60" placeholder="z. B. Discone" value="${esc(r.antenna || '')}"></label>
+          <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}</div>
+        </div>`;
+      } else if (!r.present) {
+        body = `<div class="stick-actions" data-key="${esc(r.key)}"><button class="btn btn-danger" data-a="forget">Vergessen</button></div>`;
+      } else {
+        body = '<p class="hint">Erkannt, aber HamScanPi kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.</p>';
+      }
+      return `<div class="stick-card${r.present ? '' : ' absent'}${role === '' && r.kind === 'rtl' && r.present ? ' pending' : ''}">
+        <div class="stick-head"><b class="no-i18n">${esc(r.label)}</b>${badge}</div>
+        <div class="stick-sub">${where} · ${info}</div>
+        ${warn.map(w => `<p class="hint warn-text">${esc(w)}</p>`).join('')}${body}</div>`;
+    }).join('');
+    $('sticksList').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => stickAction(b)));
+    $('sticksList').querySelectorAll('input, select').forEach(el => {
+      el.addEventListener('focus', () => { sticksEditing = true; });
+      el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
+    });
+  }
+  async function stickAction(b) {
+    const box = b.closest('[data-key]'), key = box.dataset.key, a = b.dataset.a;
+    try {
+      let d;
+      if (a === 'save') {
+        const f = {}; box.querySelectorAll('[data-f]').forEach(el => { f[el.dataset.f] = el.value; });
+        if (f.role === 'main' && !confirm('Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.')) return;
+        d = await post('/api/sticks/update', Object.assign({ key }, f));
+        note($('sticksNote'), '✓ gespeichert');
+      } else if (a === 'forget') {
+        if (!confirm('Diesen Eintrag vergessen? Rolle, ppm und Notiz gehen verloren.')) return;
+        d = await post('/api/sticks/forget', { key });
+        note($('sticksNote'), '✓ vergessen');
+      } else if (a === 'serial') {
+        const sn = prompt('Neue Seriennummer (4–16 Zeichen, Buchstaben, Ziffern, - und _).\nAlle anderen RTL-Sticks vorher abziehen. Danach den Stick ab- und wieder anstecken.', 'HSP' + String(Date.now()).slice(-5));
+        if (!sn) return;
+        d = await post('/api/sticks/serial', { key, serial: sn });
+        alert(`Seriennummer ${d.serial} geschrieben. Jetzt den Stick ab- und wieder anstecken – erst danach meldet er sich mit der neuen Nummer.`);
+      }
+      sticksEditing = false; renderSticks(d); pollStatus();
+    } catch (e) { note($('sticksNote'), e.message, true); }
+  }
+  async function loadSticks() {
+    if (sticksEditing) return;                       // keine Eingabe überschreiben
+    try { renderSticks(await api('/api/sticks')); } catch (e) { /* nächste Runde */ }
+  }
+  setInterval(() => { if (sysVisible()) loadSticks(); }, 15000);
 
   // ---------- System: Verlauf ----------
   let histHours = Number(localStorage.getItem('histHours') || 24), histData = null;
@@ -1528,7 +1606,7 @@
   window.addEventListener('resize', () => { clearTimeout(histResize); histResize = setTimeout(() => { if (sysVisible()) renderHistory(); }, 200); });
   setInterval(() => { if (sysVisible()) loadSysLive(); }, 5000);
   setInterval(() => { if (sysVisible()) loadHistory(); }, 60000);
-  document.addEventListener('visibilitychange', () => { if (sysVisible()) { loadSysLive(); loadHistory(); loadSystem(); } });
+  document.addEventListener('visibilitychange', () => { if (sysVisible()) { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); } });
   $('cleanupAuto').addEventListener('change', async e => {
     try { const d = await post('/api/settings', { cleanup_auto_days: Number(e.target.value) }); settings.cleanup_auto_days = d.settings.cleanup_auto_days;
           note($('cleanupNote'), Number(e.target.value) ? '✓ gespeichert – wird alle 15 min geprüft, geschützte Treffer (★) bleiben' : '✓ automatisches Löschen aus'); }

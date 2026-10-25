@@ -234,10 +234,12 @@ class LiveSession:
     # ---------------- RTL-SDR: hoeren
     def _rtl_fm_cmd(self, freq_hz):
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
-        gain = rtl.get("gain", 0)
-        ppm = int(rtl.get("ppm", 0))
+        import sticks as STK
+        sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
+        gain = sp["gain"]
+        ppm = int(sp["ppm"])
         m = {"nfm": "fm", "wfm": "wbfm", "am": "am", "usb": "usb", "lsb": "lsb"}.get(self.mode, "fm")
-        cmd = ["rtl_fm", "-d", str(int(rtl.get("device_index", 0))), "-M", m, "-f", str(int(freq_hz)), "-p", str(ppm)]
+        cmd = ["rtl_fm", "-d", sp["d"], "-M", m, "-f", str(int(freq_hz)), "-p", str(ppm)]
         if m == "wbfm":
             cmd += ["-s", "200000", "-r", str(OUT_RATE)]
         elif m in ("usb", "lsb"):
@@ -269,14 +271,19 @@ class LiveSession:
     def _rtl_gain(self):
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
         g = getattr(self, "gain", None)
-        return rtl.get("gain", 0) if g is None else g
+        if g is None:
+            import sticks as STK
+            return STK.rtl_params(rtl)["gain"]          # Verstärkung des Haupt-Sticks, sonst Konfiguration
+        return g
 
     def _rtl_listen(self, freq_hz, hold_until_silent=False, silence_s=3.0, max_s=None, hold_thr=None):
         """Hören mit eigener Demodulation (live_dsp): rtl_sdr-Rohdaten -> PCM.
         Zeigt Übersteuerung und Rauschabstand an; hold_until_silent beendet nach silence_s
         ohne Signal (für den Suchlauf)."""
         import live_dsp as DSP
+        import sticks as STK
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
+        sp = STK.rtl_params(rtl)                        # Haupt-Stick (Seriennummer), eigener ppm
         self.active_hz = int(freq_hz)
         gain = self._rtl_gain()
         # „automatisch“: nicht die Regelung im Stick (übersteuert bei starken Ortssendern), sondern eine
@@ -285,8 +292,8 @@ class LiveSession:
         if agc:
             gain = self._agc_gain
         def spawn(g):
-            cmd = [rtl.get("binary", "rtl_sdr"), "-d", str(int(rtl.get("device_index", 0))),
-                   "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(rtl.get("ppm", 0)))]
+            cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"],
+                   "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(sp["ppm"]))]
             if g:
                 cmd += ["-g", str(g)]
             cmd.append("-")

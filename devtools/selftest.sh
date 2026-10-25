@@ -181,5 +181,55 @@ assert h["bucket_s"] == 120 and 700 <= len(h["points"]) <= 722, (h["bucket_s"], 
 assert any(p["act"] == 1 for p in h["points"])
 print(f"   CPU {v['cpu']['total']} %, {v['mem']['available']} MB frei, Verlauf 24 h: {len(h['points'])} Punkte")
 PY
+echo "== 12 SDR-Sticks: Erkennung, Rollen, Haupt-Stick über Seriennummer"
+mkdir -p fakeusb fakebin2
+printf '#!/bin/bash\necho "Found Rafael Micro R820T tuner" >&2\nexit 1\n' > fakebin2/rtl_test
+printf '#!/bin/bash\nread a; [ "$a" = y ] || exit 1\necho "Configuration successfully written." >&2\n' > fakebin2/rtl_eeprom
+chmod +x fakebin2/*
+PATH="$PWD/fakebin2:$PATH" HSP_SYSFS_USB="$PWD/fakeusb" python3 - <<'PY' && ok "Sticks" || bad "Sticks"
+import os, sys, shutil; sys.path.insert(0, "bin")
+import sticks as S, devices as D
+def dev(port, vid, pid, man, prod, sn, num):
+    d = f"fakeusb/{port}"; os.makedirs(d, exist_ok=True)
+    for k, v in dict(idVendor=vid, idProduct=pid, manufacturer=man, product=prod, serial=sn, busnum="1", devnum=num).items():
+        open(f"{d}/{k}", "w").write(v + "\n")
+assert S.rtl_params({"device_index": 0, "ppm": 3})["d"] == "0"                 # ohne Stick: alte Vorgabe
+dev("1-1.2", "0bda", "2838", "Nooelec", "NESDR SMArt v5", "38291044", "4")
+p = S.rtl_params({"ppm": 3, "gain": 20})
+assert p["d"] == "38291044" and p["ppm"] == 3 and p["how"] == "serial", p          # erster Stick = Haupt-Stick
+dev("1-1.3", "0bda", "2838", "Realtek", "RTL2838UHIDIR", "00000001", "5")
+reg, present, new = S.sync(notify=False)
+k2 = "sn:0bda:2838:00000001"
+assert new == [k2] and reg["sticks"][k2]["role"] is None                          # neuer Stick: nicht benutzt
+assert S.rtl_params({})["d"] == "38291044"
+D._HW_CACHE["v"] = None; hw = D.detect_hardware()["rtlsdr"]
+assert hw["present"] and hw["pending"] == 1, hw
+S.update(k2, role="main", ppm=42)
+p = S.rtl_params({"ppm": 3})
+assert p["d"] == "1" and p["how"] == "order" and p["ppm"] == 42, p              # „00000001“ läse rtl_sdr als Gerät 1
+assert any(r["duplicate"] for r in S.overview()["sticks"] if r["serial"] == "00000001")
+assert S.load()["sticks"]["sn:0bda:2838:38291044"]["role"] == "spare"
+shutil.rmtree("fakeusb/1-1.3")                                                    # Haupt-Stick weg: kein Ersatz
+try:
+    S.rtl_params({}); raise AssertionError("NoMainStick erwartet")
+except S.NoMainStick:
+    pass
+D._HW_CACHE["v"] = None; assert not D.detect_hardware()["rtlsdr"]["present"]
+dev("1-1.4", "1d50", "6089", "Great Scott Gadgets", "HackRF One", "a06063c8", "6")
+assert any(r["kind"] == "other" for r in S.overview()["sticks"])
+try:
+    S.update("sn:1d50:6089:a06063c8", role="main"); raise AssertionError("Fremdgerät als Haupt-Stick?")
+except ValueError:
+    pass
+shutil.rmtree("fakeusb/1-1.2"); shutil.rmtree("fakeusb/1-1.4")
+dev("1-1.3", "0bda", "2838", "Realtek", "RTL2838UHIDIR", "00000001", "5")
+assert S.probe_tuners() == "Rafael Micro R820T"
+assert S.write_serial(k2, "DO1GMT2") == "DO1GMT2"
+r = S.load()["sticks"]["sn:0bda:2838:DO1GMT2"]
+assert r["role"] == "main" and r["ppm"] == 42, r
+shutil.rmtree("fakeusb/1-1.3"); dev("1-1.3", "0bda", "2838", "Realtek", "RTL2838UHIDIR", "DO1GMT2", "5")   # neu angesteckt
+assert S.rtl_params({})["d"] == "DO1GMT2" and S.rtl_params({})["how"] == "serial"
+print("   Haupt-Stick über Seriennummer, neuer Stick wartet auf Zuordnung, HackRF erkannt, Seriennummer geschrieben")
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

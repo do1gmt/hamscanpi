@@ -496,3 +496,22 @@ table.heat td.h0 { background: var(--panel-2); }
 .histlegend .act { display: inline-block; width: .9rem; height: .45rem; border-radius: 2px; margin-left: .4rem; }
 .histlegend .act:first-child { margin-left: 0; }
 .histread { font-size: .8rem; min-height: 1.2em; font-variant-numeric: tabular-nums; }
+
+/* System → Geräte (SDR-Sticks) */
+.stick-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem; margin-bottom: .55rem; }
+.stick-card.absent { opacity: .65; }
+.stick-card.pending { border-color: var(--amber); }
+.stick-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
+.stick-sub { font-size: .78rem; color: var(--muted); margin: .15rem 0 .3rem; overflow-wrap: anywhere; }
+.stick-card .hint.warn-text { color: var(--amber); margin: .25rem 0; }
+.stick-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; margin-top: .3rem; }
+@media (min-width: 1200px) { .stick-form { grid-template-columns: 1.4fr .7fr .9fr 1.2fr; } }
+.stick-form .field { margin: 0; }
+.stick-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .2rem; }
+.badge.b-main { color: var(--teal); border-color: var(--teal); }
+.badge.b-new { color: var(--amber); border-color: var(--amber); }
+#sticksNew { color: var(--amber); }
+@media (max-width: 640px) {
+  .tabs-main button { position: relative; }
+  .tabs-main button .n { position: absolute; top: 3px; right: 4px; margin: 0; font-size: .6rem; line-height: 1; }
+}

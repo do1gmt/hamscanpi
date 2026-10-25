@@ -305,12 +305,12 @@ def rtl_diagnose(stderr, hung, got, expected, index=0):
     return f"nur {got} von {expected} Bytes" + (f" – {e.strip().splitlines()[-1]}" if e.strip() else "")
 
 
-def usb_reset_rtl(index=0):
+def usb_reset_rtl(index=0, node=None):
     """RTL-Stick per USBDEVFS_RESET neu anmelden (wie Ab- und Anstecken).
     Braucht Schreibrecht auf /dev/bus/usb/… – die udev-Regel des Pakets rtl-sdr
     gibt das der Gruppe plugdev, in der der Pi-Benutzer normalerweise ist."""
-    found = []
-    for d in sorted(Path("/sys/bus/usb/devices").glob("*")):
+    found = [node] if node else []
+    for d in ([] if node else sorted(Path("/sys/bus/usb/devices").glob("*"))):
         try:
             vid = (d / "idVendor").read_text().strip()
             pid = (d / "idProduct").read_text().strip()
@@ -322,7 +322,7 @@ def usb_reset_rtl(index=0):
             found.append(f"/dev/bus/usb/{bus:03d}/{dev:03d}")
     if not found:
         return False, "kein RTL-Stick im USB-Baum gefunden"
-    node = found[min(index, len(found) - 1)]
+    node = node or found[min(int(index) if str(index).isdigit() else 0, len(found) - 1)]
     try:
         fd = os.open(node, os.O_WRONLY)
         try:
@@ -346,9 +346,12 @@ class RtlDevice:
         self.rate = int(cfg.get("sample_rate", 1024000))
         rtl = cfg.get("rtlsdr", {}) if isinstance(cfg.get("rtlsdr"), dict) else {}
         self.binary = rtl.get("binary", "rtl_sdr")
-        self.index = int(rtl.get("device_index", 0))
-        self.gain = rtl.get("gain", 0)            # 0 = automatisch
-        self.ppm = int(rtl.get("ppm", 0))
+        import sticks as STK
+        sp = STK.rtl_params(rtl)                  # Haupt-Stick über Seriennummer, eigener ppm/Verstärkung
+        self.index = sp["d"]                      # "-d"-Argument: Seriennummer oder Nummer
+        self.node = sp["node"]
+        self.gain = sp["gain"]                    # 0 = automatisch
+        self.ppm = int(sp["ppm"])
         self.bias_t = bool(rtl.get("bias_t", False))
         self.center = None
         if shutil.which(self.binary) is None:
@@ -415,7 +418,7 @@ class RtlDevice:
             if diag.startswith("Stick belegt von"):
                 break   # ein lebender Prozess hält ihn – ein Reset würde dem nur den Stick wegziehen
             if attempt == 1:
-                ok, how = usb_reset_rtl(self.index)
+                ok, how = usb_reset_rtl(self.index, node=self.node)
                 _applog("INFO" if ok else "WARN", "scanner", "rtl_usb_reset", ok=ok, detail=how)
                 time.sleep(2.0 if ok else 0.5)
         raise RuntimeError("RTL-SDR liefert keine Daten: " + problems[-1])
@@ -550,7 +553,8 @@ def _detect_hardware():
     usb_ids = dict(USB_IDS)
     if ids_cfg is not None:
         usb_ids["aureon"] = ids_cfg
-    for d in ([] if fake is not None else Path("/sys/bus/usb/devices").glob("*")):
+    import sticks as STK
+    for d in ([] if fake is not None else STK.sysfs().glob("*")):
         try:
             vid = (d / "idVendor").read_text().strip()
             pid = (d / "idProduct").read_text().strip()
@@ -566,8 +570,20 @@ def _detect_hardware():
                 seen["aureon"].append("alsa")
         except Exception:
             pass
+    rtl = {"present": bool(seen["rtlsdr"]), "port": ", ".join(seen["rtlsdr"])}
+    if fake is None and seen["rtlsdr"]:
+        try:                                       # mehrere Sticks: zählt nur der Haupt-Stick (System → Geräte)
+            import sticks as STK
+            reg, present, _ = STK.sync()
+            hit = STK.main_device(present, reg)
+            rtl.update(present=hit is not None, port=hit[1]["port"] if hit else "", label=STK._label(hit[0]) if hit else None,
+                       others=sum(1 for d in present if d["kind"] == "rtl") - (1 if hit else 0),
+                       pending=sum(1 for d in present if d["kind"] == "rtl"
+                                   and (reg["sticks"].get(STK.key_of(d)) or {}).get("role") is None))
+        except Exception:
+            pass
     return {
-        "rtlsdr": {"present": bool(seen["rtlsdr"]), "port": ", ".join(seen["rtlsdr"])},
+        "rtlsdr": rtl,
         "pmsdr": {"present": bool(seen["pmsdr_usb"]) and bool(seen["aureon"]),
                   "usb": bool(seen["pmsdr_usb"]), "audio": bool(seen["aureon"]),
                   "control": (_unit_state("pmsdr-control") if seen["pmsdr_usb"] and fake is None

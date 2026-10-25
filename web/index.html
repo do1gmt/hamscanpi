@@ -309,6 +309,13 @@
           <tbody id="sysProcs"></tbody></table></div>
         <p class="hint">CPU in Prozent des ganzen Prozessors (alle Kerne zusammen), gemessen seit der letzten Anzeige.</p>
       </section>
+      <section class="panel" id="panel-sticks">
+        <h2>Geräte</h2>
+        <p class="hint warn-text" id="sticksNew" hidden></p>
+        <div id="sticksList"><div class="muted">–</div></div>
+        <div class="save-note" id="sticksNote" aria-live="polite"></div>
+        <p class="hint">HamScanPi benutzt für VHF/UHF, Satelliten und Live nur den <b>Haupt-Stick</b> und spricht ihn über seine Seriennummer an – egal an welchem USB-Port. Ein neu angesteckter Stick wird nie von selbst benutzt. ppm und Verstärkung leer = Werte aus dem Bandplan. Die PMSDR (Kurzwelle) ist davon unabhängig.</p>
+      </section>
       <section class="panel" id="panel-pi">
         <h2>Raspberry Pi</h2>
         <dl class="kv" id="sysPi"></dl>

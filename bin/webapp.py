@@ -36,6 +36,7 @@ import notify as NOTIFY
 import auth as AUTH
 import housekeeping as HK
 import sysmon as SYSMON
+import sticks as STK
 import stations as ST
 
 BASE = Path(__file__).resolve().parent.parent
@@ -1657,6 +1658,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(HK.system_status())
             if path == "/api/system/live":
                 return self.send_json(SYSMON.live())
+            if path == "/api/sticks":
+                return self.send_json(STK.overview())
             if path == "/api/system/history":
                 return self.send_json(SYSMON.history(int(qs.get("hours", 24) or 24)))
             if path == "/api/scan-summary":
@@ -1903,6 +1906,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/delete-hit":
                 delete_hit(int(data["peak_id"]))
                 return self.send_json({"ok": True})
+            if path == "/api/sticks/update":
+                f = {k: data[k] for k in ("role", "ppm", "gain", "antenna") if k in data}
+                r = STK.update(str(data.get("key", "")), **f)
+                DEV._HW_CACHE["v"] = None                          # Geräteanzeige sofort neu
+                APPLOG.log("INFO", "webapp", "stick_updated", stick=r.get("product"), serial=r.get("serial"), **f)
+                return self.send_json({"ok": True, **STK.overview()})
+            if path == "/api/sticks/forget":
+                STK.forget(str(data.get("key", "")))
+                return self.send_json({"ok": True, **STK.overview()})
+            if path == "/api/sticks/serial":
+                if scan_running() or LIVE.live_active():
+                    raise ValueError("Stick belegt (Scan, Überflug oder Live) – später noch einmal")
+                sn = STK.write_serial(str(data.get("key", "")), data.get("serial"))
+                return self.send_json({"ok": True, "serial": sn, **STK.overview()})
             if path == "/api/delete-old":
                 n, kept = bulk_delete(int(data.get("days", 7)))
                 return self.send_json({"ok": True, "deleted": n, "protected": kept})

@@ -177,10 +177,12 @@ class Source:
             self.f = open(test, "rb")
             return
         rtl = cfg.get("rtlsdr", {})
-        cmd = [rtl.get("binary", "rtl_sdr"), "-d", str(int(rtl.get("device_index", 0))), "-f", str(int(tune_hz)),
-               "-s", str(IN_RATE), "-p", str(int(rtl.get("ppm", 0)))]
-        if rtl.get("gain"):
-            cmd += ["-g", str(rtl["gain"])]
+        import sticks as STK
+        sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
+        cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"], "-f", str(int(tune_hz)),
+               "-s", str(IN_RATE), "-p", str(int(sp["ppm"]))]
+        if sp["gain"]:
+            cmd += ["-g", str(sp["gain"])]
         cmd.append("-")
         self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.f = self.p.stdout

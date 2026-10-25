@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.8 – 2026-10-25
+
+- **SDR sticks are recognised and told apart** (new panel *System → Devices*). HamScanPi reads manufacturer,
+  product and serial number of every connected stick from `/sys` – without opening it, so also during a scan –
+  and keeps a register in `data/sticks.json` (survives updates).
+  - Each stick has a **role**: main stick (VHF/UHF, satellites, live), spare, or ignore; plus its own
+    **ppm correction**, **gain** and an antenna note. Empty ppm/gain = values from the band plan.
+  - Only the **main stick** is used, and it is opened by its **serial number** (`rtl_sdr -d <serial>`), so the
+    USB port and order no longer matter. Before, every program opened "device 0".
+  - The first RTL stick of an installation becomes the main stick automatically (existing setups: the NESDR).
+  - **A newly connected stick is never used on its own.** It is logged, announced by mail/push (Telegram), and
+    the System tab shows "!" until you choose its role. If the main stick is unplugged, HamScanPi does not fall
+    back to another stick.
+  - The scheduler reads each stick's tuner type once while idle (`rtl_test` under the scan lock, so a scan or
+    pass always has priority).
+  - Sticks with the same serial number (factory `00000001` on many cheap sticks) are flagged; with only that
+    stick connected, **"Write serial number"** gives it an own one via `rtl_eeprom` (after confirmation; role and
+    settings move along; effective after re-plugging).
+  - RTL-SDR Blog V4 (R828D) gets a hint about the driver from rtl-sdr.com.
+  - Serial numbers that `rtl_sdr -d` would read as a device number (e.g. `00000001` = octal 1) are not used as
+    serial; such a stick is opened by USB order and flagged, like duplicates.
+  - Other SDRs (Airspy, HackRF, SDRplay, FUNcube) are shown as "detected, not supported" instead of staying invisible.
+- USB reset after a hanging stick now resets exactly the main stick.
+- Mobile: notice badges on the tabs no longer widen the tab bar.
+- Self-test: new section 12 (sticks, with a simulated USB tree).
+
 ## 1.7.7 – 2026-10-25
 
 - **New tab "System"** (between Log and Settings; on phones a small chart icon). The former

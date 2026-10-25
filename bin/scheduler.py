@@ -324,6 +324,18 @@ while True:
                 if not _sat.get("sysmon_err"):
                     applog("WARN", "scheduler", "sysmon_failed", error=f"{type(exc).__name__}: {exc}")
                 _sat["sysmon_err"] = True
+        # SDR-Sticks: neue erkennen und melden (alle 30 s), Tuner-Typ im Leerlauf abfragen
+        if time.time() - _sat.get("sticks_t", 0) > 30:
+            _sat["sticks_t"] = time.time()
+            try:
+                import sticks as STK
+                STK.sync()
+                if not sat_pass_active() and not live_active_now() and not scan_running():
+                    STK.probe_tuners()
+            except Exception as exc:
+                if not _sat.get("sticks_err"):
+                    applog("WARN", "scheduler", "sticks_failed", error=f"{type(exc).__name__}: {exc}")
+                _sat["sticks_err"] = True
 
         # manueller Scan
         if TRIGGER.exists():

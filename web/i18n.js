@@ -240,6 +240,28 @@
     'vorheriger Überflug nahm noch auf': 'previous pass was still recording', 'Scan lief (Bildsatelliten nur bei freiem Stick)': 'a scan was running (image satellites only when the stick is free)',
     'Stick belegt': 'stick busy', 'Live-Empfang lief': 'live reception was running', 'Auswertung nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'analysis did not finish (process stopped, possibly memory)',
     'Aufnahme nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'recording did not finish (process stopped, possibly memory)', 'Speicherkarte fast voll': 'SD card almost full', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
+    // System → Geräte (1.7.8)
+    'Geräte': 'Devices', 'Haupt-Stick': 'Main stick', 'Reserve': 'Spare', 'ignoriert': 'ignored', 'neu – noch nicht festgelegt': 'new – not assigned yet',
+    '– festlegen –': '– choose –', 'Rolle': 'Role', 'ppm': 'ppm', 'Verstärkung (dB)': 'Gain (dB)', 'Antenne': 'Antenna', 'Bandplan': 'band plan',
+    'z. B. Discone': 'e.g. discone', 'Speichern': 'Save', 'Seriennummer schreiben': 'Write serial number', 'Vergessen': 'Forget',
+    'nicht unterstützt': 'not supported', 'Kein SDR-Stick angesteckt.': 'No SDR stick connected.', '✓ vergessen': '✓ forgotten',
+    'Erkannt, aber HamScanPi kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.': 'Detected, but HamScanPi cannot receive with this device. It is not used.',
+    'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt HamScanPi ihn nicht.': 'New stick detected – please choose what it should be. Until then HamScanPi does not use it.',
+    'Neuer SDR-Stick erkannt – unter System → Geräte festlegen, was er sein soll.': 'New SDR stick detected – choose its role under System → Devices.',
+    'Dieser Stick lässt sich nicht sicher über seine Seriennummer ansprechen (gleiche Nummer wie ein anderer Stick, oder eine Nummer wie 00000001, die rtl_sdr als Gerätenummer liest). HamScanPi nimmt dann die USB-Reihenfolge – die kann sich ändern. Eigene Seriennummer schreiben (dafür die anderen Sticks abziehen).': 'This stick cannot be addressed reliably by its serial number (same number as another stick, or a number like 00000001 that rtl_sdr reads as a device number). HamScanPi then uses the USB order – which can change. Write an own serial number (unplug the other sticks first).',
+    'Seriennummer ab Werk (bei vielen Sticks gleich). Solange nur ein solcher Stick steckt, kein Problem – sonst eigene Nummer schreiben.': 'Factory serial number (the same on many sticks). No problem as long as only one such stick is connected – otherwise write an own number.',
+    'RTL-SDR Blog V4 (Tuner R828D): braucht den rtl-sdr-Treiber von rtl-sdr.com, sonst stimmt er falsch ab.': 'RTL-SDR Blog V4 (R828D tuner): needs the rtl-sdr driver from rtl-sdr.com, otherwise it tunes wrongly.',
+    'Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.': 'Use this stick as the main stick? The previous main stick becomes spare. Scans, passes and live reception then use this stick.',
+    'Diesen Eintrag vergessen? Rolle, ppm und Notiz gehen verloren.': 'Forget this entry? Role, ppm and note are lost.',
+    'Kein Haupt-Stick angesteckt – unter System → Geräte einen Stick als Haupt-Stick wählen': 'No main stick connected – choose a main stick under System → Devices',
+    'Der Stick steckt noch – erst abstecken, dann vergessen': 'The stick is still connected – unplug it first, then forget it',
+    'Dieses Gerät unterstützt HamScanPi nicht': 'HamScanPi does not support this device', 'Diese Seriennummer ist schon vergeben': 'This serial number is already taken',
+    'Bitte nur diesen einen Stick angesteckt lassen (alle anderen RTL-Sticks abziehen), sonst ist nicht sicher, welcher beschrieben wird': 'Leave only this one stick connected (unplug all other RTL sticks), otherwise it is not certain which one gets written',
+    'Seriennummer: 4–16 Zeichen, nur Buchstaben, Ziffern, - und _': 'Serial number: 4–16 characters, letters, digits, - and _ only',
+    'Stick belegt (Scan, Überflug oder Live) – später noch einmal': 'Stick busy (scan, pass or live) – try again later',
+    'ppm zwischen -200 und 200': 'ppm between -200 and 200', 'Verstärkung zwischen 0 und 60 dB (0 = automatisch)': 'gain between 0 and 60 dB (0 = automatic)',
+    'HamScanPi benutzt für VHF/UHF, Satelliten und Live nur den': 'For VHF/UHF, satellites and live reception HamScanPi only uses the', 'Haupt-Stick ': 'main stick ',
+    'und spricht ihn über seine Seriennummer an – egal an welchem USB-Port. Ein neu angesteckter Stick wird nie von selbst benutzt. ppm und Verstärkung leer = Werte aus dem Bandplan. Die PMSDR (Kurzwelle) ist davon unabhängig.': 'and addresses it by its serial number – whatever USB port it is on. A newly connected stick is never used on its own. Empty ppm and gain = values from the band plan. The PMSDR (shortwave) is independent of this.',
     // Reiter System (1.7.7)
     'Zustand': 'Status', 'Jetzt': 'Now', 'Prozessor je Kern': 'CPU per core', 'Arbeitsspeicher': 'Memory', 'Prozess': 'Process',
     'CPU in Prozent des ganzen Prozessors (alle Kerne zusammen), gemessen seit der letzten Anzeige.': 'CPU as a percentage of the whole processor (all cores together), measured since the last update.',
@@ -292,6 +314,12 @@
 
   // Textteile mit eingesetzten Werten (Reihenfolge zählt)
   const P = [
+    [/^steckt · Port (.+)$/, 'connected · port $1'], [/^zuletzt gesehen (.+)$/, 'last seen $1'], [/ · Seriennummer$/, ' · serial number'],
+    [/^ · Tuner $/, ' · tuner '], [/^Haupt-Stick: $/, 'Main stick: '],
+    [/^(.+) – dieser Eintrag kann vergessen werden\.$/, (m, x) => x.replace(/^neue Seriennummer (.+) geschrieben$/, 'new serial number $1 written') + ' – this entry can be forgotten.'],
+    [/^Seriennummer (.+) geschrieben\. Jetzt den Stick ab- und wieder anstecken – erst danach meldet er sich mit der neuen Nummer\.$/, 'Serial number $1 written. Now unplug the stick and plug it in again – only then does it report the new number.'],
+    [/^Neue Seriennummer \(4–16 Zeichen, Buchstaben, Ziffern, - und _\)\.\nAlle anderen RTL-Sticks vorher abziehen\. Danach den Stick ab- und wieder anstecken\.$/, 'New serial number (4–16 characters, letters, digits, - and _).\nUnplug all other RTL sticks first. Afterwards unplug the stick and plug it in again.'],
+    [/^rtl_eeprom fehlgeschlagen/, 'rtl_eeprom failed'],
     [/^Takt \(höchstens (\d+) MHz\)$/, 'Clock (max. $1 MHz)'], [/^Last 1 min \(5 min ([\d.]+) · 15 min ([\d.]+), (\d+) Kerne\)$/, 'Load 1 min (5 min $1 · 15 min $2, $3 cores)'],
     [/^Arbeitsspeicher verfügbar von (\d+) MB$/, 'memory available of $1 MB'], [/^Swap belegt von (\d+) MB$/, 'swap used of $1 MB'],
     [/^Programme (\d+) MB$/, 'programs $1 MB'], [/^Zwischenspeicher (\d+) MB$/, 'cache $1 MB'], [/^frei (\d+) MB$/, 'free $1 MB'],
@@ -491,6 +519,7 @@
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
     const c = window.confirm.bind(window), a = window.alert.bind(window);
     window.confirm = m => c(t(m));
+    const pr = window.prompt.bind(window); window.prompt = (m, d) => pr(t(m), d);
     window.alert = m => a(t(m));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
