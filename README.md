@@ -112,7 +112,7 @@ systemd services (`hamscanpi-web`, `hamscanpi-scheduler`). Then open `http://<pi
 and enter your locator under *Settings → Station*.
 
 Update later with `bin/update.sh` – it pulls the new version, completes your local configuration and
-restarts the services. The dashboard shows a notice under *Settings → System* when a new version is out.
+restarts the services. The dashboard shows a notice under *System → Status* when a new version is out.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ### Files

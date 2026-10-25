@@ -979,6 +979,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1365,7 +1366,7 @@
     if (await saveWatch([...(settings.watchlist || []), rule], '✓ Beobachtung hinzugefügt')) { $('wValue').value = ''; $('wLabel').value = ''; }
   });
 
-  // ---------- System ----------
+  // ---------- System: Zustand (alle 60 s, startet auf dem Pi einige Prozesse) ----------
   async function loadSystem() {
     let s; try { s = await api('/api/system'); } catch (e) { return; }
     const tiles = [], warn = [];
@@ -1375,16 +1376,12 @@
     if (dcls) warn.push(d.used_pct >= 95 ? 'Speicherkarte fast voll – keine neuen Scans und Überflüge, bis wieder Platz ist.' : 'Speicherkarte wird voll – alte Treffer aufräumen oder automatisch löschen lassen.');
     tile(`${s.recordings.gb} GB`, `Aufnahmen (${s.recordings.files} Dateien)`);
     if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – auf dem Pi: python3 bin/sat_recover.py'); }
-    if (s.memory) tile(`${s.memory.available_mb} MB`, `Arbeitsspeicher frei von ${s.memory.total_mb} MB`, s.memory.available_mb < 200 ? 'warn' : '');
-    if (s.cpu_temp_c != null) tile(`${s.cpu_temp_c} °C`, 'CPU-Temperatur', s.cpu_temp_c >= 80 ? 'bad' : s.cpu_temp_c >= 70 ? 'warn' : '');
     if (s.throttled) {
       const t = s.throttled; const now = t.now, ever = t.since_boot;
       tile(now ? 'gedrosselt' : ever ? 'war gedrosselt' : 'nein', 'Drosselung / Unterspannung', now ? 'bad' : ever ? 'warn' : '');
       if (t.undervoltage) warn.push('Unterspannung erkannt – Netzteil prüfen (der RTL-Stick zieht zusätzlich Strom).');
     }
     if (s.time_sync != null) { tile(s.time_sync ? 'ja' : 'nein', 'Uhr synchron (NTP)', s.time_sync ? '' : 'bad'); if (!s.time_sync) warn.push('Die Uhr des Pi ist nicht synchron – Satellitenzeiten und Doppler werden ungenau.'); }
-    if (s.load) tile(s.load[0].toFixed(2), 'Last (1 min)');
-    if (s.uptime_h != null) tile(s.uptime_h >= 48 ? `${Math.round(s.uptime_h / 24)} Tage` : `${s.uptime_h} h`, 'läuft seit');
     const svc = s.services || {};
     for (const [u, st] of Object.entries(svc)) { if (u === 'pmsdr-control' && st !== 'active' && st !== 'activating') continue; tile(st === 'active' ? 'läuft' : st, u, st === 'active' ? '' : 'warn'); }
     const v = s.version || {};
@@ -1394,7 +1391,144 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
-  loadSystem(); setInterval(() => { if (document.visibilityState === 'visible' && !$('panel-system').closest('[hidden]')) loadSystem(); }, 60000);
+  const sysVisible = () => document.visibilityState === 'visible' && !$('panel-system').closest('[hidden]');
+  loadSystem(); setInterval(() => { if (sysVisible()) loadSystem(); }, 60000);
+
+  // ---------- System: Jetzt (alle 5 s, liest nur /proc und /sys) ----------
+  const ACT_TEXT = { idle: 'Leerlauf', scan: 'Scan läuft', live: 'Live-Empfang', sat: 'Überflug wird aufgenommen' };
+  let sysMemTotal = null;
+  const lvl = (v, w, b) => v == null ? '' : v >= b ? 'bad' : v >= w ? 'warn' : '';
+  const fmtUp = h => h >= 48 ? `${Math.round(h / 24)} Tage` : `${h} h`;
+  async function loadSysLive() {
+    let s; try { s = await api('/api/system/live'); } catch (e) { $('sysLiveAge').textContent = '· keine Verbindung'; return; }
+    $('sysLiveAge').textContent = '· ' + new Date(s.t * 1000).toLocaleTimeString(I18N.locale);
+    const tiles = [], warn = [];
+    const tile = (val, label, cls = '') => tiles.push(`<div class="stat ${cls}"><b>${val}</b><span>${label}</span></div>`);
+    const c = s.cpu || {}, m = s.mem || {};
+    if (c.total != null) tile(`${Math.round(c.total)} %`, 'Prozessor gesamt', lvl(c.total, 70, 90));
+    if (s.temp_c != null) tile(`${s.temp_c.toFixed(1)} °C`, 'CPU-Temperatur', lvl(s.temp_c, 70, 80));
+    if (c.freq_mhz) tile(`${c.freq_mhz} MHz`, c.freq_max_mhz ? `Takt (höchstens ${c.freq_max_mhz} MHz)` : 'Takt');
+    if (s.load) tile(s.load[0].toFixed(2), `Last 1 min (5 min ${s.load[1].toFixed(2)} · 15 min ${s.load[2].toFixed(2)}, ${s.pi.cores} Kerne)`, lvl(s.load[0] / (s.pi.cores || 1), 1, 2));
+    if (m.total) {
+      sysMemTotal = m.total;
+      tile(`${m.available} MB`, `Arbeitsspeicher verfügbar von ${m.total} MB`, m.available < 120 ? 'bad' : m.available < 200 ? 'warn' : '');
+      tile(m.swap_total ? `${m.swap_used} MB` : 'aus', m.swap_total ? `Swap belegt von ${m.swap_total} MB` : 'Swap', lvl(m.swap_used, 100, 300));
+      if (m.available < 200) warn.push('Wenig freier Arbeitsspeicher – Überflüge und Scans können sich verzögern.');
+      if (m.swap_used >= 100) warn.push('Der Pi lagert auf die Speicherkarte aus (Swap) – das bremst alles. In der Prozessliste steht, wer den Speicher belegt.');
+    }
+    if (s.temp_c >= 80) warn.push('CPU sehr heiß – ab etwa 80 °C drosselt der Pi den Takt.');
+    $('sysNow').innerHTML = tiles.join('');
+    $('sysCores').innerHTML = (c.cores || []).map((v, i) => `<div class="corebar"><span>${i + 1}</span><div class="bar"><i class="${lvl(v, 70, 90)}" style="width:${Math.min(100, v)}%"></i></div><b>${Math.round(v)} %</b></div>`).join('');
+    if (m.total) {
+      const pct = x => (100 * x / m.total).toFixed(1);
+      $('sysMemBar').innerHTML = `<i class="m-used" style="width:${pct(m.used)}%"></i><i class="m-cache" style="width:${pct(m.cache)}%"></i>`;
+      $('sysMemLegend').innerHTML = `<span><i class="m-used"></i>Programme ${m.used} MB</span><span><i class="m-cache"></i>Zwischenspeicher ${m.cache} MB</span><span><i class="m-free"></i>frei ${m.free} MB</span>`;
+    }
+    $('sysNowNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
+    $('sysNowNote').classList.toggle('warn-text', warn.length > 0);
+    // HamScanPi
+    let hw = (lastStatus && lastStatus.hardware) || null;
+    if (!hw) { try { hw = (await api('/api/status')).hardware || null; } catch (e) { /* kommt mit der nächsten Anzeige */ } }
+    const at = [];
+    at.push(`<div class="stat ${s.activity === 'idle' ? '' : 'act-on'}"><b>${ACT_TEXT[s.activity] || s.activity}</b><span>gerade</span></div>`);
+    if (hw) {
+      at.push(`<div class="stat ${hw.rtlsdr.present ? '' : 'warn'}"><b>${hw.rtlsdr.present ? 'steckt' : 'fehlt'}</b><span>NESDR (RTL-SDR)</span></div>`);
+      at.push(`<div class="stat"><b>${hw.pmsdr.present ? 'steckt' : hw.pmsdr.usb ? 'ohne Audio' : 'abgesteckt'}</b><span>PMSDR (Kurzwelle)</span></div>`);
+    }
+    $('sysActivity').innerHTML = at.join('');
+    const procs = s.procs || [];
+    const ownSum = procs.reduce((a, p) => a + p.rss_mb, 0);
+    $('sysProcs').innerHTML = procs.map(p => `<tr><td>${p.label ? esc(p.label) + ' <small class="muted no-i18n">' + esc(p.name) + '</small>' : '<span class="no-i18n">' + esc(p.name) + '</span>'}</td><td class="num ${lvl(p.rss_mb, 250, 450)}">${p.rss_mb.toFixed(0)} MB</td><td class="num">${p.cpu == null ? '–' : p.cpu.toFixed(1) + ' %'}</td></tr>`).join('')
+      + `<tr class="muted"><td>HamScanPi zusammen</td><td class="num">${ownSum.toFixed(0)} MB</td><td></td></tr><tr class="muted"><td>übrige Prozesse</td><td class="num">${s.other_rss_mb} MB</td><td></td></tr>`;
+    // Pi
+    const pi = s.pi || {}, n = s.net || {};
+    const kv = [['Modell', pi.model], ['System', pi.os], ['Kernel', pi.kernel], ['Python', pi.python], ['Rechnername', n.hostname], ['IP-Adresse', n.ip],
+      n.wlan ? ['WLAN', `${n.wlan.iface}: ${n.wlan.dbm} dBm`] : null, ['läuft seit', s.uptime_h != null ? fmtUp(s.uptime_h) : null]].filter(x => x && x[1] != null);
+    $('sysPi').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd class="no-i18n">${esc(v)}</dd>`).join('');
+  }
+
+  // ---------- System: Verlauf ----------
+  let histHours = Number(localStorage.getItem('histHours') || 24), histData = null;
+  const ACT_CLS = { 1: 'scan', 2: 'live', 3: 'sat' }, ACT_NAME = { 0: 'Leerlauf', 1: 'Scan', 2: 'Live', 3: 'Überflug' };
+  async function loadHistory() {
+    try { histData = await api('/api/system/history?hours=' + histHours); } catch (e) { return; }
+    renderHistory();
+  }
+  function histTime(t) {
+    const d = new Date(t * 1000);
+    return histHours > 24 ? d.toLocaleString(I18N.locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+  }
+  function renderHistory() {
+    const box = $('histCharts'), h = histData;
+    if (!h) return;
+    if (!h.points.length) { box.innerHTML = '<div class="muted">Noch keine Messpunkte – der Zeitplaner schreibt den ersten eine Minute nach seinem Start (nach dem Update also gleich).</div>'; $('histRead').textContent = ''; return; }
+    const W = Math.max(280, box.clientWidth || 600), L = 40, R = 8, CH = 74, BAND = 6, GAP = 2.5 * h.bucket_s;
+    const x = t => L + (W - L - R) * (t - h.from) / Math.max(1, h.to - h.from);
+    const pts = h.points;
+    const memTop = Math.max(sysMemTotal || 0, ...pts.map(p => p.mem_avail || 0), ...pts.map(p => p.swap || 0), 100);
+    const temps = pts.map(p => p.temp).filter(v => v != null);
+    const tLo = Math.min(40, ...temps.map(v => Math.floor(v / 5) * 5)), tHi = Math.max(80, ...temps.map(v => Math.ceil(v / 5) * 5));
+    const chart = (title, lo, hi, unit, series, ticks) => {
+      const y = v => BAND + 4 + (CH - 8) * (1 - (v - lo) / (hi - lo));
+      let g = '';
+      for (const tv of ticks) g += `<line x1="${L}" x2="${W - R}" y1="${y(tv)}" y2="${y(tv)}" class="grid"/><text x="${L - 4}" y="${y(tv) + 3}" class="ax" text-anchor="end">${tv}${unit}</text>`;
+      // Tätigkeit und Drosselung als Band oben
+      const bw = Math.max(1, (W - L - R) * h.bucket_s / Math.max(1, h.to - h.from));
+      for (const p of pts) {
+        if (p.act) g += `<rect x="${x(p.t)}" y="0" width="${bw + 0.5}" height="${BAND}" class="act-${ACT_CLS[p.act]}"/>`;
+        if (p.throttled) g += `<rect x="${x(p.t)}" y="${CH + BAND - 3}" width="${bw + 0.5}" height="3" class="act-thr"/>`;
+      }
+      for (const sr of series) {
+        let d = '', prev = null;
+        for (const p of pts) {
+          const v = p[sr.key]; if (v == null) { prev = null; continue; }
+          d += (prev == null || p.t - prev > GAP ? 'M' : 'L') + x(p.t).toFixed(1) + ',' + y(Math.max(lo, Math.min(hi, v))).toFixed(1);
+          prev = p.t;
+        }
+        g += `<path d="${d}" class="${sr.cls}"/>`;
+      }
+      return `<div class="hchart"><div class="htitle">${title}</div><svg width="${W}" height="${CH + BAND}" viewBox="0 0 ${W} ${CH + BAND}">${g}<line class="cursor" x1="-10" x2="-10" y1="0" y2="${CH + BAND}"/></svg></div>`;
+    };
+    const memStep = memTop > 600 ? 400 : 200;
+    const memTicks = []; for (let v = 0; v <= memTop; v += memStep) memTicks.push(v);
+    let html = chart('Prozessor (Mittel je Minute, dünn: Spitze)', 0, 100, '%', [{ key: 'cpu_peak', cls: 'l-peak' }, { key: 'cpu', cls: 'l-cpu' }], [0, 50, 100])
+      + chart('Arbeitsspeicher verfügbar · Swap belegt (MB)', 0, memTop, '', [{ key: 'mem_avail', cls: 'l-mem' }, { key: 'swap', cls: 'l-swap' }], memTicks)
+      + chart('CPU-Temperatur', tLo, tHi, '°', [{ key: 'temp', cls: 'l-temp' }], [tLo, Math.round((tLo + tHi) / 2), tHi]);
+    // Zeitachse
+    const n = Math.max(2, Math.min(7, Math.floor((W - L) / 80)));
+    let ax = '';
+    for (let i = 0; i < n; i++) { const t = h.from + (h.to - h.from) * i / (n - 1); ax += `<text x="${x(t)}" y="11" class="ax" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${histTime(t)}</text>`; }
+    html += `<svg class="haxis" width="${W}" height="14">${ax}</svg>`;
+    box.innerHTML = html;
+    const pick = ev => {
+      const r = box.getBoundingClientRect(), px = ev.clientX - r.left;
+      if (px < L || px > W - R) return;
+      const t = h.from + (px - L) / (W - L - R) * (h.to - h.from);
+      let best = pts[0]; for (const p of pts) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+      if (Math.abs(best.t - t) > GAP) { $('histRead').textContent = histTime(t) + ' · keine Daten'; return; }
+      box.querySelectorAll('.cursor').forEach(l => { l.setAttribute('x1', x(best.t)); l.setAttribute('x2', x(best.t)); });
+      const f = (v, u, k = 0) => v == null ? '–' : v.toFixed(k) + u;
+      $('histRead').textContent = `${histTime(best.t)} · CPU ${f(best.cpu, ' %')} (Spitze ${f(best.cpu_peak, ' %')}) · verfügbar ${f(best.mem_avail, ' MB')} · Swap ${f(best.swap, ' MB')} · ${f(best.temp, ' °C', 1)} · ${ACT_NAME[best.act || 0]}${best.throttled ? ' · gedrosselt' : ''}`;
+    };
+    box.onpointermove = pick; box.onpointerdown = pick;
+    const maxSwap = Math.max(...pts.map(p => p.swap || 0));
+    $('histNote').textContent = (maxSwap >= 100 ? `Swap bis ${maxSwap} MB in diesem Zeitraum – zu Zeiten mit viel Swap können Aufnahmen Lücken haben. ` : '')
+      + 'Der Zeitplaner schreibt einmal pro Minute einen Messpunkt (7 Tage aufbewahrt). Antippen oder mit der Maus zeigen die Werte zu einem Zeitpunkt.';
+  }
+  document.querySelectorAll('#histRange .chip').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.h) === histHours);
+    b.addEventListener('click', () => {
+      histHours = Number(b.dataset.h); localStorage.setItem('histHours', histHours);
+      document.querySelectorAll('#histRange .chip').forEach(x => x.classList.toggle('on', x === b));
+      loadHistory();
+    });
+  });
+  let histResize = null;
+  window.addEventListener('resize', () => { clearTimeout(histResize); histResize = setTimeout(() => { if (sysVisible()) renderHistory(); }, 200); });
+  setInterval(() => { if (sysVisible()) loadSysLive(); }, 5000);
+  setInterval(() => { if (sysVisible()) loadHistory(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (sysVisible()) { loadSysLive(); loadHistory(); loadSystem(); } });
   $('cleanupAuto').addEventListener('change', async e => {
     try { const d = await post('/api/settings', { cleanup_auto_days: Number(e.target.value) }); settings.cleanup_auto_days = d.settings.cleanup_auto_days;
           note($('cleanupNote'), Number(e.target.value) ? '✓ gespeichert – wird alle 15 min geprüft, geschützte Treffer (★) bleiben' : '✓ automatisches Löschen aus'); }

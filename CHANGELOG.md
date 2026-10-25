@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.7 – 2026-10-25
+
+- **New tab "System"** (between Log and Settings; on phones a small chart icon). The former
+  *Settings → System* panel (now "Status") and "Clean-up" moved there.
+  - **Now** (refreshed every 5 s while the tab is open): CPU total and per core, clock, temperature,
+    load, memory bar (programs / cache / free) and swap, with warnings for low memory, swap ≥ 100 MB and heat.
+  - **HamScanPi**: what is running right now (idle / scan / live / pass), whether NESDR and PMSDR are
+    connected, and HamScanPi's own processes (web interface, scheduler, scan, pass, rtl_sdr, …) with RAM
+    and CPU, plus the rest of the system.
+  - **Raspberry Pi**: model, OS, kernel, Python, hostname, IP, Wi-Fi level, uptime.
+  - **History** (1 h / 6 h / 24 h / 7 days): CPU (average and peak), available memory and swap,
+    temperature; a colour band marks scans, passes and live reception, a red mark throttling. Tap or
+    hover to read the values at a point in time – e.g. to see whether the Pi was swapping during a pass.
+- New `bin/sysmon.py`: reads only `/proc` and `/sys` (no extra packages, no processes started for the
+  5-s view). The scheduler writes one data point per minute to its own `data/sysmon.db` (kept 7 days),
+  so it never competes with a scan for the lock on `scanner.db`. Whether a scan is running is read from
+  `/proc/locks` without touching the scan lock.
+- Self-test: new section 11 (system values, process assignment, activity, history).
+
 ## 1.7.6 – 2026-10-25
 
 - README: map screenshot with SNR colours.

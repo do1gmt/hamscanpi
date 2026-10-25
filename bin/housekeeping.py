@@ -2,7 +2,7 @@
 """
 Systemzustand und Haushalt – läuft im Webserver alle 15 Minuten.
 
-  * Systemzustand für Einstellungen → System: Speicherkarte, Aufnahmen, Arbeitsspeicher, CPU-Temperatur
+  * Systemzustand für den Reiter System → Zustand: Speicherkarte, Aufnahmen, Arbeitsspeicher, CPU-Temperatur
     und Drosselung, Uhrzeit-Synchronisation (wichtig für den Doppler), Dienste, Version, Update.
   * Automatisch aufräumen: ungeschützte Treffer älter als N Tage löschen (Einstellung, 0 = aus).
   * Speicherschutz: ab 85 % Belegung Warnung, ab 95 % Fehler (Mail, falls eingerichtet) und keine neuen

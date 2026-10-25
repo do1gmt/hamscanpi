@@ -458,3 +458,41 @@ table.heat td.h0 { background: var(--panel-2); }
 .map-legend { color: var(--muted); } .map-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin: 0 .2rem 0 .5rem; vertical-align: -1px; }
 .leaflet-tooltip.map-lbl { background: rgba(15,22,32,.82); color: #e7edf4; border: 1px solid rgba(255,255,255,.15); box-shadow: none; padding: 0 .3rem; font: 600 .68rem var(--mono, monospace); }
 .leaflet-tooltip.map-lbl::before { display: none; }
+
+/* Reiter System (1.7.7) */
+.tabs-main .ts .ico { vertical-align: -3px; }
+.panel h3.sub { font-size: .8rem; color: var(--muted); font-weight: 600; margin: .8rem 0 .35rem; }
+.corebars { display: grid; gap: .3rem; }
+.corebar { display: grid; grid-template-columns: 1.2rem minmax(0, 1fr) 3.2rem; align-items: center; gap: .5rem; font-size: .8rem; }
+.corebar span { color: var(--muted); }
+.corebar b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.corebar .bar { height: 10px; background: var(--panel-2); border-radius: 5px; overflow: hidden; }
+.corebar .bar i { display: block; height: 100%; background: var(--teal); transition: width .4s; }
+.corebar .bar i.warn { background: var(--amber); } .corebar .bar i.bad { background: var(--red); }
+.membar { display: flex; height: 14px; background: var(--panel-2); border-radius: 7px; overflow: hidden; }
+.membar i { display: block; height: 100%; transition: width .4s; }
+.m-used { background: var(--accent); } .m-cache { background: #3b6e8f; } .m-free { background: var(--panel-2); border: 1px solid var(--line); }
+.memlegend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .78rem; color: var(--muted); margin-top: .35rem; }
+.memlegend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+.sysgrid .stat.act-on { border: 1px solid var(--teal); } .sysgrid .stat.act-on b { color: var(--teal); }
+.procs-table td.num, .procs-table th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.procs-table td.warn { color: var(--amber); } .procs-table td.bad { color: var(--red); }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .3rem .9rem; margin: 0; font-size: .9rem; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+#histRange { margin-bottom: .6rem; }
+#histCharts { touch-action: pan-y; user-select: none; }
+.hchart { margin-bottom: .5rem; }
+.htitle { font-size: .75rem; color: var(--muted); margin-bottom: .15rem; }
+#histCharts svg { display: block; overflow: visible; }
+#histCharts .grid { stroke: var(--line); stroke-width: 1; }
+#histCharts .ax { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+#histCharts .cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }
+#histCharts path { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.l-cpu { stroke: var(--accent); } .l-peak { stroke: var(--accent); stroke-width: 1 !important; opacity: .35; }
+.l-mem { stroke: var(--green); } .l-swap { stroke: var(--amber); } .l-temp { stroke: var(--red); }
+.act-scan { fill: var(--teal); background: var(--teal); } .act-sat { fill: #a78bfa; background: #a78bfa; }
+.act-live { fill: var(--accent); background: var(--accent); } .act-thr { fill: var(--red); background: var(--red); }
+.histlegend { font-size: .75rem; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; margin-top: .3rem; }
+.histlegend .act { display: inline-block; width: .9rem; height: .45rem; border-radius: 2px; margin-left: .4rem; }
+.histlegend .act:first-child { margin-left: 0; }
+.histread { font-size: .8rem; min-height: 1.2em; font-variant-numeric: tabular-nums; }

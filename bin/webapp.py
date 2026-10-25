@@ -35,6 +35,7 @@ import devices as DEV
 import notify as NOTIFY
 import auth as AUTH
 import housekeeping as HK
+import sysmon as SYSMON
 import stations as ST
 
 BASE = Path(__file__).resolve().parent.parent
@@ -1529,7 +1530,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "PMSDR/2"
 
     def log_message(self, fmt, *args):  # ruhig bleiben
-        if "/api/status" in (args[0] if args else ""):
+        if any(x in (args[0] if args else "") for x in ("/api/status", "/api/system/live")):
             return
         sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
 
@@ -1654,6 +1655,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/system":
                 return self.send_json(HK.system_status())
+            if path == "/api/system/live":
+                return self.send_json(SYSMON.live())
+            if path == "/api/system/history":
+                return self.send_json(SYSMON.history(int(qs.get("hours", 24) or 24)))
             if path == "/api/scan-summary":
                 return self.send_json(scan_summary())
             if path == "/api/stats":

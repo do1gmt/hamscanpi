@@ -149,5 +149,37 @@ assert any("A9" in x and "zwischen AS Hilpoltstein (56) und AS Allersberg (55): 
 assert any("2 Fahrstreifen gesperrt auf 3 km" in x for x in txt), txt
 print("   " + txt[-1])
 PY
+echo "== 11 Systemwerte und Verlauf (Reiter System)"
+python3 - <<'PY' && ok "Systemwerte" || bad "Systemwerte"
+import os, sys, time, subprocess, fcntl; sys.path.insert(0, "bin")
+import sysmon as S
+v = S.live()
+assert v["cpu"]["total"] is not None and v["mem"]["total"] > 0 and v["activity"] == "idle", v
+# Zuordnung: eigenes Skript (relativ) ja, Shell mit dem Pfad nur im Text nein
+open("bin/zz_selftest.py", "w").write("import time\ntime.sleep(5)\n")
+a = subprocess.Popen(["python3", "bin/zz_selftest.py"])
+b = subprocess.Popen(["bash", "-c", f"cd {os.getcwd()} && sleep 5; echo bin/zz_selftest.py"])
+time.sleep(0.5)
+own, _ = S._proc_list()
+assert a.pid in own and b.pid not in own, own
+a.kill(); b.kill(); os.remove("bin/zz_selftest.py")
+# Tätigkeit: Scan-Sperre wird erkannt, ohne sie anzufassen
+f = open("data/scan.lock", "w"); fcntl.flock(f, fcntl.LOCK_EX)
+assert S.activity() == 1
+fcntl.flock(f, fcntl.LOCK_UN); f.close()
+assert S.activity() == 0
+# Sampler schreibt, Verlauf fasst zusammen
+s = S.Sampler(period=1); t0 = time.time()
+s.tick(t0); time.sleep(1.1); row = s.tick()
+assert row and row[1] is not None, row
+db = S._db(); now = int(time.time() // 60 * 60)
+db.executemany("INSERT OR REPLACE INTO samples VALUES (?,?,?,?,?,?,?,?)",
+               [(now - k * 60, 10.0, 20.0, 500, 0, 50.0, 0, 1 if k % 10 == 0 else 0) for k in range(1, 1500)])
+db.commit(); db.close()
+h = S.history(24)
+assert h["bucket_s"] == 120 and 700 <= len(h["points"]) <= 722, (h["bucket_s"], len(h["points"]))
+assert any(p["act"] == 1 for p in h["points"])
+print(f"   CPU {v['cpu']['total']} %, {v['mem']['available']} MB frei, Verlauf 24 h: {len(h['points'])} Punkte")
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

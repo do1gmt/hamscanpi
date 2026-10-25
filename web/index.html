@@ -25,6 +25,7 @@
   <button type="button" data-view="stations">Stationen</button>
   <button type="button" data-view="live">Live</button>
   <button type="button" data-view="logs">Protokoll</button>
+  <button type="button" data-view="system"><span class="tl">System</span><span class="ts" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24" width="18" height="18"><path d="M3 20h18M5 16l4-5 4 3 6-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
   <button type="button" data-view="settings"><span class="tl">Einstellungen</span><span class="ts" aria-hidden="true">⚙</span></button>
 </nav>
 
@@ -287,6 +288,77 @@
   </section>
 </section>
 
+<section class="view" data-view="system" hidden>
+  <div class="two-col">
+    <div class="col">
+      <section class="panel" id="panel-now">
+        <h2>Jetzt <small class="muted" id="sysLiveAge"></small></h2>
+        <div class="sysgrid" id="sysNow"><div class="muted">–</div></div>
+        <h3 class="sub">Prozessor je Kern</h3>
+        <div class="corebars" id="sysCores"></div>
+        <h3 class="sub">Arbeitsspeicher</h3>
+        <div class="membar" id="sysMemBar"></div>
+        <div class="memlegend" id="sysMemLegend"></div>
+        <p class="hint" id="sysNowNote"></p>
+      </section>
+      <section class="panel" id="panel-procs">
+        <h2>HamScanPi</h2>
+        <div class="sysgrid" id="sysActivity"></div>
+        <div class="table-wrap"><table class="table procs-table">
+          <thead><tr><th>Prozess</th><th>RAM</th><th>CPU</th></tr></thead>
+          <tbody id="sysProcs"></tbody></table></div>
+        <p class="hint">CPU in Prozent des ganzen Prozessors (alle Kerne zusammen), gemessen seit der letzten Anzeige.</p>
+      </section>
+      <section class="panel" id="panel-pi">
+        <h2>Raspberry Pi</h2>
+        <dl class="kv" id="sysPi"></dl>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel" id="panel-hist">
+        <h2>Verlauf</h2>
+        <div class="chips" id="histRange">
+          <button type="button" class="chip" data-h="1">1 h</button><button type="button" class="chip" data-h="6">6 h</button>
+          <button type="button" class="chip on" data-h="24">24 h</button><button type="button" class="chip" data-h="168">7 Tage</button>
+        </div>
+        <div id="histCharts"><div class="muted">–</div></div>
+        <div class="histread" id="histRead" aria-live="polite"></div>
+        <div class="histlegend"><span class="act act-scan"></span>Scan <span class="act act-sat"></span>Überflug <span class="act act-live"></span>Live <span class="act act-thr"></span>gedrosselt</div>
+        <p class="hint" id="histNote">Der Zeitplaner schreibt einmal pro Minute einen Messpunkt (7 Tage aufbewahrt). Antippen oder mit der Maus zeigen die Werte zu einem Zeitpunkt.</p>
+      </section>
+      <section class="panel" id="panel-system">
+        <h2>Zustand</h2>
+        <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
+        <p class="hint" id="sysNote"></p>
+      </section>
+      <section class="panel" id="panel-cleanup">
+        <h2>Aufräumen</h2>
+        <div class="row">
+          <label class="field"><span>Älter als</span>
+            <select id="cleanupDays">
+              <option value="1">1 Tag</option><option value="3">3 Tage</option>
+              <option value="7" selected>7 Tage</option><option value="14">14 Tage</option><option value="30">30 Tage</option>
+            </select>
+          </label>
+          <button class="btn" id="cleanupPreview">Prüfen</button>
+          <button class="btn btn-danger" id="cleanupOld">Alte löschen</button>
+        </div>
+        <div class="save-note" id="cleanupNote" aria-live="polite"></div>
+        <label class="field"><span>Automatisch löschen (ungeschützte Treffer)</span>
+          <select id="cleanupAuto">
+            <option value="0">aus</option><option value="7">älter als 7 Tage</option><option value="14">älter als 14 Tage</option>
+            <option value="30">älter als 30 Tage</option><option value="60">älter als 60 Tage</option><option value="90">älter als 90 Tage</option>
+            <option value="180">älter als 180 Tage</option>
+          </select>
+        </label>
+        <button class="btn btn-danger btn-wide" id="cleanupAll">Alle ungeschützten Treffer löschen</button>
+        <p class="hint">Geschützte Treffer (★) werden nie automatisch gelöscht.</p>
+        <details><summary>Löschprotokoll</summary><ul class="plain" id="deletionLog"></ul></details>
+      </section>
+    </div>
+  </div>
+</section>
+
 <section class="view" data-view="settings" hidden>
   <div class="two-col">
     <div class="col">
@@ -356,35 +428,6 @@
         <p class="hint">Überschneiden sich zwei Überflüge, gewinnt die höhere Punktzahl: Priorität × 10, dazu bis 15 Punkte für die Höhe des Überflugs und bis 15 Punkte für die Wartezeit seit der letzten Aufnahme (1 Punkt je 4 Stunden). Abgezogen werden bis 15 Punkte, wenn ein Satellit in den letzten 14 Tagen mehrmals ohne jedes Signal aufgenommen wurde – ein einziger Treffer hebt das wieder auf. Passen die Frequenzen in ein Empfangsfenster, werden beide gemeinsam aufgenommen. 0 = nie aufnehmen, „immer zuerst“ schlägt alles.</p>
         <div class="table-wrap"><table class="table satprio-table"><thead><tr><th>Kanal</th><th>Priorität</th><th>Zuletzt (14 Tage)</th></tr></thead><tbody id="satPrio"></tbody></table></div>
         <div class="save-note" id="satPrioNote" aria-live="polite"></div>
-      </section>
-      <section class="panel" id="panel-system">
-        <h2>System</h2>
-        <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
-        <p class="hint" id="sysNote"></p>
-      </section>
-      <section class="panel" id="panel-cleanup">
-        <h2>Aufräumen</h2>
-        <div class="row">
-          <label class="field"><span>Älter als</span>
-            <select id="cleanupDays">
-              <option value="1">1 Tag</option><option value="3">3 Tage</option>
-              <option value="7" selected>7 Tage</option><option value="14">14 Tage</option><option value="30">30 Tage</option>
-            </select>
-          </label>
-          <button class="btn" id="cleanupPreview">Prüfen</button>
-          <button class="btn btn-danger" id="cleanupOld">Alte löschen</button>
-        </div>
-        <div class="save-note" id="cleanupNote" aria-live="polite"></div>
-        <label class="field"><span>Automatisch löschen (ungeschützte Treffer)</span>
-          <select id="cleanupAuto">
-            <option value="0">aus</option><option value="7">älter als 7 Tage</option><option value="14">älter als 14 Tage</option>
-            <option value="30">älter als 30 Tage</option><option value="60">älter als 60 Tage</option><option value="90">älter als 90 Tage</option>
-            <option value="180">älter als 180 Tage</option>
-          </select>
-        </label>
-        <button class="btn btn-danger btn-wide" id="cleanupAll">Alle ungeschützten Treffer löschen</button>
-        <p class="hint">Geschützte Treffer (★) werden nie automatisch gelöscht.</p>
-        <details><summary>Löschprotokoll</summary><ul class="plain" id="deletionLog"></ul></details>
       </section>
     </div>
     <div class="col">

@@ -240,6 +240,22 @@
     'vorheriger Überflug nahm noch auf': 'previous pass was still recording', 'Scan lief (Bildsatelliten nur bei freiem Stick)': 'a scan was running (image satellites only when the stick is free)',
     'Stick belegt': 'stick busy', 'Live-Empfang lief': 'live reception was running', 'Auswertung nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'analysis did not finish (process stopped, possibly memory)',
     'Aufnahme nicht beendet (Prozess abgebrochen, evtl. Speicher)': 'recording did not finish (process stopped, possibly memory)', 'Speicherkarte fast voll': 'SD card almost full', 'Prozess ohne Abschluss verschwunden (Neustart, Dienst gestoppt, Speicher voll?)': 'process vanished without finishing (restart, service stopped, out of memory?)', 'unterbrochen': 'interrupted', 'Abstimmung:': 'Tuning:', '↓ I/Q-Rohdaten (für SDR-Software)': '↓ I/Q raw data (for SDR software)', 'Beobachtung ausgelöst': 'Watch triggered', 'QSO verfolgt': 'QSO followed',
+    // Reiter System (1.7.7)
+    'Zustand': 'Status', 'Jetzt': 'Now', 'Prozessor je Kern': 'CPU per core', 'Arbeitsspeicher': 'Memory', 'Prozess': 'Process',
+    'CPU in Prozent des ganzen Prozessors (alle Kerne zusammen), gemessen seit der letzten Anzeige.': 'CPU as a percentage of the whole processor (all cores together), measured since the last update.',
+    'Raspberry Pi': 'Raspberry Pi', 'Verlauf': 'History', '1 h': '1 h', '6 h': '6 h', '24 h': '24 h', 'Überflug': 'Pass',
+    'Der Zeitplaner schreibt einmal pro Minute einen Messpunkt (7 Tage aufbewahrt). Antippen oder mit der Maus zeigen die Werte zu einem Zeitpunkt.': 'The scheduler writes one data point per minute (kept for 7 days). Tap or hover to see the values at a point in time.',
+    'Prozessor gesamt': 'CPU total', 'Takt': 'Clock', 'Swap': 'Swap', 'Leerlauf': 'Idle', 'Überflug wird aufgenommen': 'Recording a pass',
+    'gerade': 'right now', 'steckt': 'connected', 'fehlt': 'missing', 'ohne Audio': 'no audio', 'abgesteckt': 'unplugged',
+    'NESDR (RTL-SDR)': 'NESDR (RTL-SDR)', 'HamScanPi zusammen': 'HamScanPi total', 'übrige Prozesse': 'other processes',
+    'Modell': 'Model', 'Kernel': 'Kernel', 'Python': 'Python', 'Rechnername': 'Hostname', 'IP-Adresse': 'IP address', 'WLAN': 'Wi-Fi',
+    'Weboberfläche': 'Web interface', 'Zeitplaner': 'Scheduler', 'Scan-Ablauf': 'Scan cycle', 'SSTV-Wache': 'SSTV watch', 'FT8-Wache': 'FT8 watch',
+    'Kanalwache': 'Channel watch', 'Benachrichtigung': 'Notification', 'Auswertung': 'Analysis', '· keine Verbindung': '· no connection',
+    'Prozessor (Mittel je Minute, dünn: Spitze)': 'CPU (average per minute, thin: peak)', 'Arbeitsspeicher verfügbar · Swap belegt (MB)': 'Memory available · swap used (MB)',
+    'Noch keine Messpunkte – der Zeitplaner schreibt den ersten eine Minute nach seinem Start (nach dem Update also gleich).': 'No data points yet – the scheduler writes the first one a minute after it starts (so right after the update).',
+    'Wenig freier Arbeitsspeicher – Überflüge und Scans können sich verzögern.': 'Little free memory – passes and scans may be delayed.',
+    'Der Pi lagert auf die Speicherkarte aus (Swap) – das bremst alles. In der Prozessliste steht, wer den Speicher belegt.': 'The Pi is swapping to the SD card – that slows everything down. The process list shows what is using the memory.',
+    'CPU sehr heiß – ab etwa 80 °C drosselt der Pi den Takt.': 'CPU very hot – from about 80 °C the Pi lowers its clock.',
     // System, Aufräumen, Download
     'System': 'System', 'Automatisch löschen (ungeschützte Treffer)': 'Delete automatically (unprotected hits)',
     'CPU-Temperatur': 'CPU temperature', 'gedrosselt': 'throttled', 'war gedrosselt': 'was throttled', 'nein': 'no', 'ja': 'yes',
@@ -276,6 +292,14 @@
 
   // Textteile mit eingesetzten Werten (Reihenfolge zählt)
   const P = [
+    [/^Takt \(höchstens (\d+) MHz\)$/, 'Clock (max. $1 MHz)'], [/^Last 1 min \(5 min ([\d.]+) · 15 min ([\d.]+), (\d+) Kerne\)$/, 'Load 1 min (5 min $1 · 15 min $2, $3 cores)'],
+    [/^Arbeitsspeicher verfügbar von (\d+) MB$/, 'memory available of $1 MB'], [/^Swap belegt von (\d+) MB$/, 'swap used of $1 MB'],
+    [/^Programme (\d+) MB$/, 'programs $1 MB'], [/^Zwischenspeicher (\d+) MB$/, 'cache $1 MB'], [/^frei (\d+) MB$/, 'free $1 MB'],
+    [/ · keine Daten$/, ' · no data'],
+    [/^(.+) · CPU (.+) \(Spitze (.+)\) · verfügbar (.+) · Swap (.+?) · (.+?) · (Leerlauf|Scan|Live|Überflug)( · gedrosselt)?$/,
+     (m, t, c, pk, av, sw, tp, a, th) => `${t} · CPU ${c} (peak ${pk}) · available ${av} · swap ${sw} · ${tp} · ${{ Leerlauf: 'idle', Scan: 'scan', Live: 'live', 'Überflug': 'pass' }[a]}${th ? ' · throttled' : ''}`],
+    [/^Swap bis (\d+) MB in diesem Zeitraum – zu Zeiten mit viel Swap können Aufnahmen Lücken haben\. /, 'Swap up to $1 MB in this period – recordings may have gaps at times with heavy swapping. '],
+    [/Der Zeitplaner schreibt einmal pro Minute einen Messpunkt \(7 Tage aufbewahrt\)\. Antippen oder mit der Maus zeigen die Werte zu einem Zeitpunkt\.$/, 'The scheduler writes one data point per minute (kept for 7 days). Tap or hover to see the values at a point in time.'],
     [/^Scan abgebrochen: /, 'Scan aborted: '],
     [/^Scan fehlgeschlagen: /, 'Scan failed: '],
     [/^Fehler: /, 'Error: '],

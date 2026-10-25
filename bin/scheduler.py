@@ -308,10 +308,22 @@ if not _cfg.exists() and (BASE / "config" / "scanner.default.json").exists():
     import shutil
     shutil.copy(BASE / "config" / "scanner.default.json", _cfg)
 log("Scheduler gestartet")
+try:
+    import sysmon as SYSMON                                       # Verlauf für den Reiter „System“
+    _sysmon = SYSMON.Sampler()
+except Exception:
+    _sysmon = None
 
 while True:
     try:
         (BASE / "data" / "scheduler.heartbeat").touch()
+        if _sysmon:
+            try:
+                _sysmon.tick()
+            except Exception as exc:                              # Verlauf darf den Zeitplaner nie stören
+                if not _sat.get("sysmon_err"):
+                    applog("WARN", "scheduler", "sysmon_failed", error=f"{type(exc).__name__}: {exc}")
+                _sat["sysmon_err"] = True
 
         # manueller Scan
         if TRIGGER.exists():
