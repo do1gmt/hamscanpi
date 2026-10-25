@@ -41,13 +41,23 @@ if [ -n "$NEED" ]; then sudo apt-get install -y -q $NEED >/dev/null; fi
 ok "Pakete vorhanden"
 
 # Nicht mitten in einen Überflug hinein: der Neustart der Dienste beendet auch die Aufnahme.
-# Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 15 min keine beginnt.
+# Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 15 min keine beginnt
+# (Aufnahmen "wenn Stick frei" zählen nicht). Eine laufende Aufnahme mit höchstens 3 min Rest wird
+# sauber beendet (wie "Abbrechen" im Dashboard), ihre Auswertung wird nie unterbrochen.
 # Sofort einspielen: HSP_SOFORT=1 bash hamscanpi-update.sh
 if [ -z "${HSP_SOFORT:-}" ] && [ -f "$NEW/config/web_settings.json" ] && [ -f "$TMP/repo/bin/update_window.py" ]; then
     first=1
     while :; do
         W="$(HSP_BASE="$NEW" python3 "$TMP/repo/bin/update_window.py" 2>/dev/null)" || break
         S="${W%% *}"; R="${W#* }"
+        if [ "$S" = STOP ]; then                # Aufnahme fast zu Ende oder unwichtig: sauber beenden
+            P="${R%% *}"; R="${R#* }"
+            [ "$first" = 1 ] && bold "Warten auf ein freies Fenster" && first=0
+            echo "  $(date +%H:%M) $R – wird beendet, das Aufgenommene wird noch ausgewertet"
+            kill -TERM "$P" 2>/dev/null || sudo kill -TERM "$P" 2>/dev/null || true
+            sleep 15
+            continue
+        fi
         case "$S" in ''|*[!0-9]*) break;; esac
         [ "$S" -gt 0 ] || break
         [ "$first" = 1 ] && bold "Warten auf ein freies Fenster" && first=0

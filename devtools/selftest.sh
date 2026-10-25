@@ -253,5 +253,14 @@ assert U.free_in(0, r, 900)[0] == 0                 # A beginnt erst in 16 min
 assert U.free_in(200, r, 900)[0] == 2820            # A beginnt in 13 min, B 10 min nach A -> nach B
 assert U.free_in(1800, r, 900)[0] == 1220           # nach A, aber B in 8 min -> nach B
 PY
+# laufende Aufnahme nachstellen (Prozess namens sat_pass.py, PID in data/sat_rec.pid)
+mkdir -p fake && echo "import time; time.sleep(30)" > fake/sat_pass.py
+uw_case() {   # Kanal, Restsekunden -> erstes Wort der Ausgabe
+  python3 fake/sat_pass.py --sats "$1" --until $(( $(date +%s) + $2 )) & local P=$!
+  echo $P > data/sat_rec.pid; sleep 0.3
+  python3 bin/update_window.py | cut -d' ' -f1; kill $P; wait $P 2>/dev/null; rm -f data/sat_rec.pid
+}
+[ "$(uw_case iss 120)" = STOP ] && [ "$(uw_case iss 900)" = 300 ] && [ "$(uw_case hc1px 900)" = STOP ] \
+  && ok "letzte 3 min und niedrige Priorität werden beendet, sonst warten" || bad "Abbruch laufender Aufnahme"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

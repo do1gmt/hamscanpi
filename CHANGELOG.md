@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.10 – 2026-10-25
+
+- **Updates no longer wait out the end of a pass.** If a satellite recording has at most 3 minutes left, or has
+  low priority ("when the stick is free"), `hamscanpi-update.sh` ends it cleanly – the same way as *Cancel* in
+  the dashboard: the recording stops in order and everything recorded so far is still evaluated (result
+  "cancelled"). The update then waits only for the evaluation, which is never interrupted.
+- Upcoming low-priority recordings no longer hold an update back; only full-priority passes starting within
+  15 minutes do.
+- While waiting, the update shows which channels are recording and how many minutes are left.
+- Self-test section 14: simulated running recordings (last minutes, long remainder, low priority).
+
 ## 1.7.9 – 2026-10-25
 
 - **Probe satellites (Meteor-M LRPT) measured properly.** Probe passes now record at 2.048 MS/s tuned to
