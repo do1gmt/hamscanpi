@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.6 – 2026-10-25
+
+- README: map screenshot with SNR colours.
+- `devtools/build_update.sh` and `devtools/update_head.sh`: build the self-extracting update file
+  `hamscanpi-update.sh` from the repository (until now this tool only existed outside the repo).
+
 ## 1.7.5 – 2026-10-24
 
 - **Test satellites Meteor-M N2-3 and N2-4** (137.9 MHz, transmit continuously with a ~120 kHz wide LRPT
