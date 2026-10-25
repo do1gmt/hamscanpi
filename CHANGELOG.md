@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.5 – 2026-10-24
+
+- **Test satellites Meteor-M N2-3 and N2-4** (137.9 MHz, transmit continuously with a ~120 kHz wide LRPT
+  signal that simple antennas receive): recorded like other passes, without decoding; their level is
+  measured against a free part of the same receive window ("SNR up to … dB"), plus waterfall. If they
+  show up, the satellite recording works from antenna to evaluation; if not, the chain itself is the
+  problem. Added once to an existing individual satellite selection.
+- **Memory:** spectrum and playback on hit cards read recordings as float32 and only as much as
+  needed (spectrum 20 s, playback 3 min). Before, a long recording (QSO up to 120 s) was loaded
+  completely in float64; the web server grew to ~700 MB, the Pi (906 MB) started swapping hard, and
+  satellite passes and scans were delayed or missed.
+- Hardware detection is cached for 10 s – every dashboard status request used to start several
+  `systemctl is-active` processes (seen at 20–45 % CPU each on the Pi).
+- Live: ◀/▶ use the selected step also with "FM wide". The 100-kHz step is now only preset when
+  switching to FM wide (before it was forced, so 89.000 + 5 kHz gave 89.100).
+
 ## 1.7.4 – 2026-10-24
 
 - Station map shows reception values: point colour by SNR (blue weak … red strong, with legend), label

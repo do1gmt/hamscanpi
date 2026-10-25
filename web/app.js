@@ -823,7 +823,7 @@
   let rememberTimer = null;
   function liveRememberLater(f, m) { clearTimeout(rememberTimer); rememberTimer = setTimeout(() => { if (live.active && Math.abs(lf() - f) < 100 && $('liveMode').value === m) liveRemember(f, m); }, 5000); }
   document.querySelectorAll('[data-livestep]').forEach(b => b.addEventListener('click', () => {
-    let v = Number($('liveStep').value); if ($('liveMode').value === 'wfm' && v < 100000) v = 100000;   // UKW: 100-kHz-Raster
+    const v = Number($('liveStep').value);          // gewähltes Raster gilt (beim Wechsel auf UKW/SSB wird es vorbelegt)
     const s = v === 8333 ? 25000 / 3 : v, dir = Number(b.dataset.livestep);
     const f = Math.round((Math.round(lf() / s) + dir) * s);       // auf das Raster einrasten
     $('liveFreq').value = (f / 1e6).toFixed(v % 1000 ? 5 : 4); liveRetune();
@@ -832,10 +832,12 @@
   function ssbUi() {
     const ssb = ['usb', 'lsb'].includes($('liveMode').value);
     $('liveSsbHint').hidden = !ssb;
-    if (ssb && Number($('liveStep').value) >= 5000) $('liveStep').value = '1000';      // SSB: 1-kHz-Schritte
+    if (ssb && Number($('liveStep').value) >= 5000) $('liveStep').value = '1000';      // SSB: 1-kHz-Schritte vorbelegen
+    if ($('liveMode').value === 'wfm' && liveModeChanged) $('liveStep').value = '100000';   // UKW: 100-kHz-Raster vorbelegen
     if (wfInfo) wfMarker(lf());
   }
-  $('liveMode').addEventListener('change', () => { ssbUi(); liveRetune(); });
+  let liveModeChanged = false;
+  $('liveMode').addEventListener('change', () => { liveModeChanged = true; ssbUi(); liveModeChanged = false; liveRetune(); });
   ssbUi();
   $('liveSquelch').addEventListener('change', liveRetune);
   $('liveGain').addEventListener('change', () => { try { localStorage.setItem('liveGain', $('liveGain').value); } catch (e) { } liveRetune(); });

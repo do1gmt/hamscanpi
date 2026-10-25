@@ -42,3 +42,25 @@ new_bands = [r for r in d.get("ranges", []) if r["name"] not in names]
 c.setdefault("ranges", []).extend(new_bands)
 local.write_text(json.dumps(c, indent=2, ensure_ascii=False), encoding="utf-8")
 print("config/scanner.json ergänzt" + (": " + ", ".join(added + [b["name"] for b in new_bands]) if added or new_bands else ""))
+
+# Neue Satellitenkanäle (z. B. Prüfsatelliten Meteor) in eine vorhandene Einzelauswahl übernehmen –
+# einmalig je Kanal, damit sie nicht unbemerkt fehlen; danach entscheidet der Nutzer
+ws = local.parent / "web_settings.json"
+try:
+    st = json.loads(ws.read_text(encoding="utf-8"))
+    sel = (st.get("selected_segments") or {}).get("Satelliten")
+    known = set(st.get("sat_known_ids") or [])
+    if not known:                       # erster Lauf: alles vor 1.7.5 galt als bekannt
+        known = {s["id"] for s in SAT.SATELLITES} - {"meteor23", "meteor24"}
+    new_ids = [s["id"] for s in SAT.SATELLITES if s["id"] not in known]
+    if isinstance(sel, list) and "all" not in sel and known:
+        add = [i for i in new_ids if i not in sel]
+        if add:
+            sel.extend(add)
+            print("Satelliten-Auswahl ergänzt: " + ", ".join(add))
+    st["sat_known_ids"] = sorted(known | {s["id"] for s in SAT.SATELLITES})
+    ws.write_text(json.dumps(st, indent=2, ensure_ascii=False), encoding="utf-8")
+except FileNotFoundError:
+    pass
+except Exception as e:
+    print(f"Satelliten-Auswahl nicht geprüft: {e}")

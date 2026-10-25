@@ -68,6 +68,10 @@ OBJECTS = {
     59112: "SONATE-2",
     -1: "SakhaCube (RS18S)",
     -2: "HC1PX (Galapagos)",
+    # Prüfsatelliten: senden ununterbrochen und kräftig – zeigen, ob die Satellitenaufnahme
+    # von der Antenne bis zur Auswertung funktioniert
+    57166: "Meteor-M N2-3",
+    59051: "Meteor-M N2-4",
 }
 # Namen im Bahndatenkatalog: für Satelliten ohne sichere NORAD-Nummer (negative Schlüssel) und als
 # Rückfall, falls eine Nummer nicht (mehr) passt
@@ -83,7 +87,8 @@ NAMES = {
 }
 
 # Kanäle. prio: wer bei Überschneidungen und bei der ISS-Abstimmung gewinnt.
-# kind: fm (FM-Kanal, Sprachdurchgänge, ggf. SSTV/APRS) oder linear (SSB-Transponder)
+# kind: fm (FM-Kanal, Sprachdurchgänge, ggf. SSTV/APRS), linear (SSB-Transponder) oder
+# probe (Prüfsatellit: nur Pegel und Wasserfall, keine Dekodierung)
 SATELLITES = [
     {"id": "iss_sstv70", "norad": 25544, "center_hz": 437550000, "kind": "fm", "sstv": True, "prio": 10,
      "label": "ISS 437.550 FM (SSTV-Aktionen)",
@@ -134,6 +139,12 @@ SATELLITES = [
      "label": "SSTV · HC1PX 437.050"},
     {"id": "sonate2", "norad": 59112, "center_hz": 145880000, "kind": "fm", "sstv": True, "prio": 2, "group": "sstv",
      "label": "SSTV · SONATE-2 145.880", "note": "Martin 1, nach Fahrplan der Uni Würzburg; Bahn sinkt"},
+    {"id": "meteor23", "norad": 57166, "center_hz": 137900000, "kind": "probe", "prio": 3,
+     "label": "Prüfsatellit Meteor-M N2-3 137.900",
+     "note": "sendet ununterbrochen (LRPT, ~120 kHz breit) – zeigt, ob die Satellitenaufnahme funktioniert"},
+    {"id": "meteor24", "norad": 59051, "center_hz": 137900000, "kind": "probe", "prio": 3,
+     "label": "Prüfsatellit Meteor-M N2-4 137.900",
+     "note": "sendet ununterbrochen (LRPT) – Gegenprobe zu N2-3"}
 ]
 OPPORTUNISTIC_PRIO = 2      # bis zu dieser Priorität: nur bei freiem Stick, kein Scanabbruch
 for _s in SATELLITES:

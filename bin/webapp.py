@@ -1181,12 +1181,8 @@ def demod_on_demand(peak_id, side, offset_hz, mode="ssb", nr=0):
         if key in _demod_cache:
             _demod_cache.move_to_end(key)
             return _demod_cache[key]
-    with wave.open(row["recording_path"], "rb") as w:
-        rate = w.getframerate()
-        frames = w.readframes(w.getnframes())
-    samples = np.frombuffer(frames, dtype="<i2")
-    samples = samples[: len(samples) // 2 * 2].reshape(-1, 2).astype(np.float64) / 32768.0
-    i, q = samples[:, 0], samples[:, 1]
+    rate, samples = read_iq_wav(row["recording_path"], max_seconds=180)    # höchstens 3 min anhören
+    i, q = samples[:, 0].copy(), samples[:, 1].copy()
     i -= i.mean(); q -= q.mean()
     # Aufnahmen vom RTL-SDR sind bereits konjugationsfrei; die Konjugation gilt nur fuer PMSDR-Aufnahmen
     conj = cfg.get("iq_conjugate", False) and float(row["center_hz"]) < 30e6
@@ -1224,6 +1220,19 @@ def demod_on_demand(peak_id, side, offset_hz, mode="ssb", nr=0):
 
 # ------------------------------------------------------------------ Spektrumbild auf Anfrage
 
+def read_iq_wav(path, max_seconds=None):
+    """I/Q-WAV (Stereo, 16 bit) als float32 einlesen, höchstens max_seconds Sekunden. Vorher wurde
+    alles in float64 geladen: lange Aufnahmen (QSO bis 120 s, Satelliten) brauchten dann im Webserver
+    einige 100 MB – der Pi lagerte aus, und Überflüge kamen nicht mehr zum Zug."""
+    with wave.open(str(path), "rb") as w:
+        rate = w.getframerate()
+        n = w.getnframes() if not max_seconds else min(w.getnframes(), int(max_seconds * rate))
+        frames = w.readframes(n)
+    sm = np.frombuffer(frames, dtype="<i2")
+    sm = sm[: len(sm) // 2 * 2].reshape(-1, 2).astype(np.float32) / np.float32(32768.0)
+    return rate, sm
+
+
 def spectrum_png(peak_id, lang="de"):
     """Spektrum um den Treffer aus der I/Q-Aufnahme, als PNG; wird in reports/ abgelegt."""
     db = db_connect()
@@ -1242,11 +1251,7 @@ def spectrum_png(peak_id, lang="de"):
     import matplotlib.pyplot as plt
     from scipy.signal import welch
     cfg = scanner_config()
-    with wave.open(row["recording_path"], "rb") as w:
-        rate = w.getframerate()
-        frames = w.readframes(w.getnframes())
-    sm = np.frombuffer(frames, dtype="<i2")
-    sm = sm[: len(sm) // 2 * 2].reshape(-1, 2).astype(np.float64) / 32768.0
+    rate, sm = read_iq_wav(row["recording_path"], max_seconds=20)    # 20 s reichen fürs Spektrum
     i, q = sm[:, 0] - sm[:, 0].mean(), sm[:, 1] - sm[:, 1].mean()
     hf = float(row["center_hz"]) < 30e6
     z = (i - 1j * q) if (cfg.get("iq_conjugate", False) and hf) else (i + 1j * q)

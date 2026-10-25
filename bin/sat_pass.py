@@ -229,7 +229,7 @@ class Channel:
         self.rot = 1.0 + 0j
         # lineare Satelliten: Stufe 1 breiter, damit die Bake neben dem Transponder mit hineinpasst
         self.beacon_offs = [b - self.f0 for b in sat.get("beacons", []) if abs(b - self.f0) < 40000]
-        self.lp = butter(6, 42000 if self.beacon_offs else 32000, fs=IN_RATE, output="sos")
+        self.lp = butter(6, 42000 if (self.beacon_offs or sat.get("kind") == "probe") else 32000, fs=IN_RATE, output="sos")
         self.zi = (sosfilt_zi(self.lp) * 0).astype(np.complex128)
         self.lp2 = butter(6, 21000, fs=IN_RATE // 10, output="sos")
         self.zi2 = (sosfilt_zi(self.lp2) * 0).astype(np.complex128)
@@ -247,6 +247,20 @@ class Channel:
         self.n = np.arange(BLOCK)
 
     def feed(self, z, t):
+        if self.kind == "probe":
+            # Prüfsatellit (breitbandig, z. B. Meteor-LRPT ~120 kHz): Leistung um die Kanalmitte gegen
+            # ein freies Stück desselben 960-kHz-Fensters – unabhängig davon, wie stark er am Horizont schon ist
+            n = 16384
+            S = np.abs(np.fft.fftshift(np.fft.fft(z[:n] * np.hanning(n)))) ** 2
+            fr = np.fft.fftshift(np.fft.fftfreq(n, 1.0 / IN_RATE)) - self.base_off
+            sig = float(np.mean(S[np.abs(fr) < 55000]))
+            ref_m = (np.abs(fr) > 150000) & (np.abs(fr + self.base_off) > 20000) & (np.abs(fr + self.base_off) < IN_RATE * 0.42)
+            ref = float(np.median(S[ref_m])) / 0.693 if ref_m.any() else 0.0
+            self._probe_acc = getattr(self, "_probe_acc", 0.0) + (sig / ref if ref > 0 else 1.0)
+            self._probe_n = getattr(self, "_probe_n", 0) + 1
+            if self._probe_n >= 10:                          # je Sekunde ein Wert
+                self.snr_track.append(self._probe_acc / self._probe_n)
+                self._probe_acc, self._probe_n = 0.0, 0
         y = z * (self.tab * self.rot)
         self.rot *= self.tab_step
         self.rot /= abs(self.rot)                             # Rundungsfehler nicht aufsummieren
@@ -264,6 +278,8 @@ class Channel:
         bb = y[::2]                                           # 48 kHz, Kanal bei 0 Hz
         if self.chunk_t is None:
             self.chunk_t = t
+        if self.kind == "probe":
+            return                                           # Pegel oben, Wasserfall schon erfasst
         if self.kind == "linear":
             # Pegel für die Signalprüfung: stärkste Spektrallinie (Bake, SSB-Station) gegen den Median,
             # über 1 s gemittelt; reines Rauschen ergibt dabei ~4 dB, das wird abgezogen
@@ -318,7 +334,7 @@ class Channel:
         """Je Sekunde eine Wasserfall-Zeile (dopplerkorrigiert) und die stärkste Linie im Kanal merken."""
         if not hasattr(self, "wf_rows"):
             self.wf_rows, self.lines, self._wf_acc, self._wf_n = [], [], None, 0
-            self.wf_span = 40000.0 if self.kind == "linear" else 25000.0
+            self.wf_span = 40000.0 if self.kind in ("linear", "probe") else 25000.0
         self._wf_acc = S if self._wf_acc is None or len(self._wf_acc) != len(S) else self._wf_acc + S
         self._wf_n += 1
         if self._wf_n < 10:
@@ -668,11 +684,12 @@ def main():
             hits = ch.evaluate(t0)
             n = db_save(ch.sat, hits)
             per_ch[ch.sat["id"]] = n
+            track = np.array(ch.snr_track)
             sig[ch.sat["id"]] = dict(getattr(ch, "stats", None) or signal_stats(
-                np.array(ch.snr_track), 1.0 if ch.kind == "linear" else 0.1))
+                track, 1.0 if ch.kind in ("linear", "probe") else 0.1))
             try:                                              # Wasserfall und Einordnung der stärksten Linie
                 sig[ch.sat["id"]]["waterfall"] = ch.save_waterfall(t0, ch.sat.get("name") or ch.sat["id"])
-                sig[ch.sat["id"]]["line"] = ch.classify_line()
+                sig[ch.sat["id"]]["line"] = ch.classify_line() if ch.kind != "probe" else None
                 L = sig[ch.sat["id"]]["line"]
                 if L and L.get("kind") == "local" and not a.test:
                     remember_interference(L["rf_mhz"] * 1e6, ch.sat.get("name") or ch.sat["id"])

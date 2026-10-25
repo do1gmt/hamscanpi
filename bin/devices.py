@@ -522,7 +522,21 @@ def _pmsdr_audio_cfg():
     return {tuple(x.lower().split(":")) for x in v if ":" in x}, cfg.get("alsa_name", "")
 
 
-def detect_hardware():
+_HW_CACHE = {"t": 0.0, "v": None}
+
+
+def detect_hardware(max_age=10.0):
+    """Welche Geräte stecken gerade? Ergebnis höchstens max_age Sekunden alt – sonst startete jede
+    Statusabfrage des Dashboards mehrere systemctl-Prozesse (auf dem Pi spürbar)."""
+    import time as _t
+    if _HW_CACHE["v"] is not None and _t.time() - _HW_CACHE["t"] < max_age:
+        return _HW_CACHE["v"]
+    v = _detect_hardware()
+    _HW_CACHE.update(t=_t.time(), v=v)
+    return v
+
+
+def _detect_hardware():
     """Welche Geräte stecken gerade? Erkennung über USB-Kennung, unabhängig vom Port."""
     seen = {k: [] for k in USB_IDS}
     fake = os.environ.get("PMSDR_FAKE_HW")          # nur zum Testen ohne Hardware: "rtlsdr,pmsdr"
