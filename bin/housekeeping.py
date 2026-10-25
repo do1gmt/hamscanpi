@@ -174,7 +174,7 @@ def run(settings, bulk_delete, log):
             log("WARN", "auto_cleanup_failed", error=f"{type(e).__name__}: {e}")
     # 2. liegengebliebene Satelliten-Rohdateien
     now = time.time()
-    for p in (BASE / "recordings").glob(".sat_*.raw"):
+    for p in [*(BASE / "recordings").glob(".sat_*.raw"), *(BASE / "recordings").glob(".sat_*.aud")]:
         try:
             if now - p.stat().st_mtime > RAW_MAX_AGE_S:
                 mb = round(p.stat().st_size / 1e6)

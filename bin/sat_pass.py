@@ -171,8 +171,10 @@ def stem_for(sat, t):
 class Source:
     """Rohdaten vom Stick (oder aus einer Testdatei: uint8-I/Q mit 960 kS/s)."""
 
-    def __init__(self, tune_hz, cfg, test=None):
+    def __init__(self, tune_hz, cfg, test=None, rate=None):
         self.test = test
+        self.rate = int(rate or IN_RATE)
+        self.nbytes = self.rate // 10 * 2                     # 0,1 s uint8-I/Q
         if test:
             self.f = open(test, "rb")
             return
@@ -180,7 +182,7 @@ class Source:
         import sticks as STK
         sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
         cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"], "-f", str(int(tune_hz)),
-               "-s", str(IN_RATE), "-p", str(int(sp["ppm"]))]
+               "-s", str(self.rate), "-p", str(int(sp["ppm"]))]
         if sp["gain"]:
             cmd += ["-g", str(sp["gain"])]
         cmd.append("-")
@@ -188,8 +190,8 @@ class Source:
         self.f = self.p.stdout
 
     def read(self):
-        b = self.f.read(BLOCK * 2)
-        return b if len(b) == BLOCK * 2 else None
+        b = self.f.read(self.nbytes)
+        return b if len(b) == self.nbytes else None
 
     def close(self):
         if self.test:
@@ -240,6 +242,11 @@ class Channel:
         self.kind = sat["kind"]
         self.tmp = RECDIR / f".sat_{sat['id']}_{tag}.raw"
         self.tmpf = open(self.tmp, "wb") if self.kind == "fm" else None
+        # Ton (24 kHz) während der Aufnahme auf die Karte statt in den Speicher: bei 20 min sind das
+        # ~110 MB je FM-Kanal, die sonst bis zur Auswertung im RAM liegen (zwei Kanäle -> Swap am Pi)
+        self.aud = RECDIR / f".sat_{sat['id']}_{tag}.aud"
+        self.audf = open(self.aud, "wb") if self.kind == "fm" else None
+        self.aud_n = 0
         self.chunk, self.chunk_t = [], None
         self.hits = []
         self.audio_parts, self.snr_track = [], []
@@ -311,7 +318,9 @@ class Channel:
         prev = np.concatenate(([self.fm_last], c[:-1]))
         self.fm_last = c[-1]
         d = np.angle(c * np.conj(prev)) * OUT_RATE / (2 * np.pi) / 5000.0
-        self.audio_parts.append(resample_poly(d, 1, 2).astype(np.float32))
+        a24 = resample_poly(d, 1, 2).astype(np.float32)
+        self.audf.write(a24.tobytes())
+        self.aud_n += len(a24)
         # Rauschabstand: Kanalleistung gegen das Rauschen 14–22 kHz daneben
         S_ = np.abs(np.fft.fft(bb[:4096] * np.hanning(4096))) ** 2
         fr = np.abs(np.fft.fftfreq(4096, 1.0 / OUT_RATE))
@@ -444,23 +453,24 @@ class Channel:
         if self.tmpf:
             self.tmpf.close()
             self.tmpf = None
+        if self.audf:
+            self.audf.close()
+            self.audf = None
+
+    def cleanup(self):
+        for f in (self.tmp, getattr(self, "aud", None)):
+            if f:
+                f.unlink(missing_ok=True)
 
     # ------------------------------------------------ Auswertung (nach Freigabe des Sticks)
     def evaluate(self, t0):
         sat = self.sat
-        if self.kind != "fm" or not self.audio_parts:
-            self.tmp.unlink(missing_ok=True)
+        if self.kind != "fm" or not self.aud_n:
+            self.cleanup()
             return self.hits
-        # zusammensetzen und dabei die Teilstücke freigeben (sonst liegt der Ton kurz doppelt im Speicher)
-        parts = self.audio_parts
-        self.audio_parts = []
-        audio = np.empty(sum(len(x) for x in parts), dtype=np.float32)
-        end = len(audio)
-        while parts:
-            x = parts.pop()
-            audio[end - len(x):end] = x
-            end -= len(x)
-        del parts
+        # Ton von der Karte: für APRS nur lesend eingeblendet (bleibt Seitencache, belegt keinen festen
+        # Speicher); SSTV braucht eine eigene Kopie, die es während der Tonanalyse überschreibt
+        audio = np.memmap(self.aud, dtype=np.float32, mode="r")
         raw_iq = np.memmap(self.tmp, dtype=np.float32, mode="r").reshape(-1, 2)
 
         def iq(a, b):
@@ -474,7 +484,7 @@ class Channel:
             self._aprs(audio, iq, n_iq, t0, pw_all)
         if sat.get("sstv"):
             import sstv_decode as SD
-            box = [audio]
+            box = [np.fromfile(self.aud, dtype=np.float32)]
             del audio                                            # decode_all gibt den Ton nach der Tonanalyse frei
             for k, img in enumerate(SD.decode_all(box, 24000, headless=True)):
                 s0 = int(max(0, img["start_s"] - 1) * 24000)
@@ -514,7 +524,7 @@ class Channel:
                     k = e
                 k += 1
         del raw_iq
-        self.tmp.unlink(missing_ok=True)
+        self.cleanup()
         return self.hits
 
     def _aprs(self, audio, iq, n_iq, t0, pw_all):
@@ -522,14 +532,21 @@ class Channel:
         if not mm:
             print("   APRS: multimon-ng fehlt (sudo apt install multimon-ng)")
             return
-        a = resample_poly(audio, 147, 160)                    # 24000 -> 22050 Hz
-        a = np.clip(a / (np.max(np.abs(a)) + 1e-9) * 0.9, -1, 1)
+        # blockweise 24000 -> 22050 Hz (früher der ganze Überflug auf einmal, als float64: ~200 MB bei 20 min)
+        mx = 1e-9
+        for j in range(0, len(audio), 24000 * 60):
+            mx = max(mx, float(np.max(np.abs(audio[j:j + 24000 * 60]))))
+        n_a = len(audio) * 147 // 160
         win, hop = int(12 * 22050), int(10 * 22050)
         packets, first = [], {}
         with tempfile.TemporaryDirectory() as td:
-            for i0 in range(0, max(1, len(a) - int(2 * 22050)), hop):
+            for i0 in range(0, max(1, n_a - int(2 * 22050)), hop):
                 raw = Path(td) / "a.raw"
-                (a[i0:i0 + win] * 32767).astype("<i2").tofile(raw)
+                j0 = i0 * 160 // 147
+                seg = np.asarray(audio[j0:j0 + win * 160 // 147 + 480], dtype=np.float32)
+                a = resample_poly(seg, 147, 160).astype(np.float32)[:win]
+                a = np.clip(a / mx * 0.9, -1, 1)
+                (a * 32767).astype("<i2").tofile(raw)
                 try:
                     r = subprocess.run([mm, "-t", "raw", "-a", "AFSK1200", "-q", str(raw)],
                                        capture_output=True, text=True, timeout=60)
@@ -557,6 +574,143 @@ class Channel:
                           "snr_db": float(10 * np.log10(np.mean(seg) + 1e-12)) if len(seg) else 0.0,
                           "dec_type": "APRS", "note": "\n".join(packets[:60])})
         print(f"   APRS: {len(packets)} Pakete")
+
+
+# ---------------------------------------------------------------- Prüfsatelliten (Meteor-LRPT)
+PROBE_RATE = 2048000          # 2,048 MS/s: 137,100 und 137,900 MHz passen mit Rand gemeinsam ins Fenster
+PROBE_N = 32768               # FFT je 0,1 s (62,5 Hz je Linie), nur der Anfang jedes Blocks wird umgerechnet
+PROBE_SPAN = 150000.0         # Wasserfall ±150 kHz um jede Frequenz: Kanten des LRPT-Signals sichtbar
+PROBE_CORE = 40000.0          # Leistung im Kern des Signals (LRPT ~120 kHz breit)
+LRPT_HALF = 60000.0           # Markierung der Signalbreite im Bild
+
+
+def probe_tuning(chans):
+    """Mittenfrequenz für Prüfsatelliten: zwischen allen Frequenzen (137,1 + 137,9 -> 137,5 MHz)."""
+    fs = [float(f) for c in chans for f in [c["center_hz"]] + list(c.get("alt_hz", []))]
+    return int((min(fs) + max(fs)) / 2)
+
+
+class ProbeChannel:
+    """Prüfsatellit: misst je Sekunde die Leistung auf jeder möglichen LRPT-Frequenz gegen das freie
+    Band dazwischen und zeichnet einen breiten Wasserfall (±150 kHz) plus Leistungskurve.
+    Keine Dekodierung, kein Speicher, der mit der Überflugdauer wächst (außer ein paar kB je Minute)."""
+    kind = "probe"
+    WF_BINS = 400
+
+    def __init__(self, sat, tune_hz, tracker, tag):
+        self.sat, self.tr = sat, tracker
+        self.f0 = float(sat["center_hz"])
+        self.freqs = sorted({self.f0, *[float(f) for f in sat.get("alt_hz", [])]})
+        self.offs = [f - tune_hz for f in self.freqs]
+        fr = np.fft.fftshift(np.fft.fftfreq(PROBE_N, 1.0 / PROBE_RATE))
+        self.win = np.hanning(PROBE_N).astype(np.float32)
+        self.core = [np.abs(fr - o) < PROBE_CORE for o in self.offs]
+        busy = np.zeros(PROBE_N, bool)
+        for o in self.offs:
+            busy |= np.abs(fr - o) < 100000
+        # Rauschbezug: freies Band zwischen/neben den Frequenzen, ohne Gleichanteil und Fensterränder
+        self.ref = ~busy & (np.abs(fr) > 20000) & (np.abs(fr) < PROBE_RATE * 0.4)
+        # Wasserfall: genau symmetrisch um jede Frequenz, ganze Zahl FFT-Linien je Bildspalte
+        binw = PROBE_RATE / PROBE_N
+        per = max(1, int(round(2 * PROBE_SPAN / binw / self.WF_BINS)))
+        half = per * self.WF_BINS // 2
+        self.span = half * binw
+        self.panel = [np.arange(int(np.argmin(np.abs(fr - o))) - half, int(np.argmin(np.abs(fr - o))) + half)
+                      for o in self.offs]
+        self.tracks = [[] for _ in self.freqs]
+        self.rows = [[] for _ in self.freqs]
+        self._acc, self._n = None, 0
+        self.hits, self.snr_track, self.stats = [], [], None
+        self.tmp = RECDIR / f".sat_{sat['id']}_{tag}.none"      # gibt es nie (für die Fehlerbehandlung in main)
+
+    def feed(self, z, t):
+        S = np.abs(np.fft.fftshift(np.fft.fft(z[:PROBE_N] * self.win))) ** 2
+        self._acc = S if self._acc is None else self._acc + S
+        self._n += 1
+        if self._n < 10:
+            return
+        P = self._acc / self._n
+        self._acc, self._n = None, 0
+        ref = float(np.median(P[self.ref])) / 0.967 if self.ref.any() else 1.0   # Median über 10 gemittelte Spektren
+        for k in range(len(self.freqs)):
+            self.tracks[k].append(float(np.mean(P[self.core[k]])) / max(ref, 1e-30))
+            row = P[self.panel[k]].reshape(self.WF_BINS, -1).mean(axis=1)
+            self.rows[k].append((10 * np.log10(row + 1e-20)).astype(np.float32))
+
+    def close_recording(self):
+        pass
+
+    def evaluate(self, t0):
+        per = {f"{f/1e6:.3f}": signal_stats(np.array(tr), 1.0) for f, tr in zip(self.freqs, self.tracks)}
+        valid = [k for k, v in per.items() if v["max_db"] is not None]
+        best = max(valid, key=lambda k: (per[k]["p90_db"], per[k]["max_db"])) if valid else f"{self.f0/1e6:.3f}"
+        self.stats = dict(per[best], freq_mhz=best, probe=per)
+        i = [f"{f/1e6:.3f}" for f in self.freqs].index(best)
+        self.snr_track = self.tracks[i]
+        return []
+
+    def classify_line(self):
+        return None
+
+    def save_waterfall(self, t0, name):
+        if not self.rows or len(self.rows[0]) < 5:
+            return None
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            return None
+        As = [np.array(r) for r in self.rows]
+        g = int(np.ceil(len(As[0]) / 900)) if len(As[0]) > 900 else 1
+        if g > 1:
+            As = [A[: len(A) // g * g].reshape(-1, g, A.shape[1]).mean(axis=1) for A in As]
+        lo = float(np.median(np.concatenate([A.ravel() for A in As]))) - 2
+        stops = np.array([[0, 0, 40], [0, 60, 160], [0, 170, 200], [240, 220, 40], [255, 60, 30]], float)
+        H = max(len(As[0]), 300)
+        PW, CW, gap, top, bottom = self.WF_BINS * 2, 240, 8, 50, 22
+        W = len(As) * (PW + gap) + CW
+        canvas = Image.new("RGB", (W, H + top + bottom), (12, 18, 28))
+        dr = ImageDraw.Draw(canvas)
+        colors = [(255, 160, 60), (90, 220, 240), (200, 140, 255)]
+        for k, A in enumerate(As):
+            v = np.clip((A - lo) / 12.0, 0, 1)               # 12 dB Spanne: breitbandiger Anstieg gut sichtbar
+            x = v * (len(stops) - 1)
+            i = np.minimum(x.astype(int), len(stops) - 2)
+            fr_ = (x - i)[..., None]
+            rgb = (stops[i] * (1 - fr_) + stops[i + 1] * fr_).astype(np.uint8)
+            img = Image.fromarray(rgb).resize((PW, H), Image.NEAREST)
+            x0 = k * (PW + gap)
+            canvas.paste(img, (x0, top))
+            xpos = lambda off, x0=x0: x0 + int((off + self.span) / (2 * self.span) * PW)
+            for off in (-LRPT_HALF, LRPT_HALF):                # erwartete Breite des LRPT-Signals
+                for yy in range(top, top + H, 8):
+                    dr.line([(xpos(off), yy), (xpos(off), yy + 3)], fill=(150, 160, 170))
+            dr.text((x0 + 4, top - 14), f"{self.freqs[k]/1e6:.3f} MHz", fill=colors[k % 3])
+            for off in (-100000, -50000, 0, 50000, 100000):
+                dr.text((max(x0, xpos(off) - 14), top + H + 5), f"{off/1000:+.0f}k", fill=(150, 160, 170))
+        # Leistungskurve: Zeit nach unten wie im Wasserfall, dB nach rechts
+        cx0 = len(As) * (PW + gap)
+        dbs = [10 * np.log10(np.array(tr) + 1e-12) for tr in self.tracks]
+        dmax = max(12.0, max(float(d.max()) for d in dbs if len(d)) + 1)
+        dmin = min(-1.0, min(float(d.min()) for d in dbs if len(d)))
+        cxp = lambda d: cx0 + 10 + int((d - dmin) / (dmax - dmin) * (CW - 20))
+        for d0, lab in ((0, "0 dB"), (6, "6 dB")):
+            for yy in range(top, top + H, 6):
+                dr.line([(cxp(d0), yy), (cxp(d0), yy + 2)], fill=(80, 90, 100))
+            dr.text((cxp(d0) - 10, top + H + 5), lab, fill=(150, 160, 170))
+        for k, d in enumerate(dbs):
+            if len(d) < 2:
+                continue
+            pts = [(cxp(float(v)), top + int(j / (len(d) - 1) * (H - 1))) for j, v in enumerate(d)]
+            dr.line(pts, fill=colors[k % 3], width=2)
+        dr.text((cx0 + 10, top - 14), "Leistung im Kanal", fill=(230, 230, 230))
+        dr.text((6, 4), f"{name} - LRPT auf " + " und ".join(f"{f/1e6:.3f}" for f in self.freqs) +
+                f" MHz - {time.strftime('%d.%m.%Y %H:%M UTC', time.gmtime(t0))}", fill=(230, 230, 230))
+        dr.text((6, 18), f"{len(self.rows[0])} s, oben Anfang, unten Ende; Striche = erwartete Signalbreite "
+                         f"(±60 kHz); ohne Dopplerkorrektur (±3 kHz, bei 120 kHz Breite unerheblich)",
+                fill=(150, 160, 170))
+        out = REPORTS / (stem_for(self.sat, t0) + "_waterfall.png")
+        canvas.save(out, optimize=True)
+        return out.name
 
 
 def aprs_text(head, payload):
@@ -620,8 +774,9 @@ def main():
     tr = trackers[objs[0]]
     t0 = a.start or time.time()
     until = a.until or a.los or (t0 + 900)
-    tune = SAT.tuning_for(ids)
-    labels = ", ".join(SAT.mhz(c["center_hz"]) for c in chans)
+    probe = all(c["kind"] == "probe" for c in chans)    # Prüfsatelliten: eigene Abstimmung und Abtastrate
+    tune = probe_tuning(chans) if probe else SAT.tuning_for(ids)
+    labels = ", ".join(SAT.mhz(f) for c in chans for f in [c["center_hz"]] + list(c.get("alt_hz", [])))
     applog("INFO", "satellite", "pass_start", sat=name, channels=ids, tune_hz=tune,
            freq_mhz=[f"{c['center_hz']/1e6:.3f}" for c in chans],
            until=datetime.fromtimestamp(until, timezone.utc).isoformat(timespec="seconds"))
@@ -632,8 +787,8 @@ def main():
     RECDIR.mkdir(parents=True, exist_ok=True)
     REPORTS.mkdir(parents=True, exist_ok=True)
     tag = f"{os.getpid()}"
-    channels = [Channel(c, tune, trackers[c["norad"]], tag) for c in chans]
-    src = Source(tune, cfg, a.test)
+    channels = [(ProbeChannel if probe else Channel)(c, tune, trackers[c["norad"]], tag) for c in chans]
+    src = Source(tune, cfg, a.test, PROBE_RATE if probe else IN_RATE)
     nblk, err = 0, None
     signal.signal(signal.SIGTERM, _on_term)
     try:
@@ -654,7 +809,7 @@ def main():
                 if not a.test:
                     err = "Stick liefert keine Daten mehr"
                 break
-            u = np.frombuffer(raw, dtype=np.uint8).astype(np.float32)
+            u = np.frombuffer(raw, dtype=np.uint8, count=2 * PROBE_N if probe else -1).astype(np.float32)
             z = ((u[0::2] - 127.5) + 1j * (u[1::2] - 127.5)) / 127.5
             for ch in channels:
                 ch.feed(z, t)
@@ -703,6 +858,9 @@ def main():
                seconds=round(secs), problem=err, signal=sig)
         for cid, st_ in sig.items():
             print(f"   {cid}: Signal max {st_['max_db']} dB, 90 % {st_['p90_db']} dB, {st_['above6_s']} s über 6 dB")
+            for fq, v in (st_.get("probe") or {}).items():
+                print(f"      {fq} MHz: max {v['max_db']} dB, 90 % {v['p90_db']} dB, {v['above6_s']} s über 6 dB"
+                      + ("  <- stärkste" if fq == st_.get("freq_mhz") else ""))
             if st_.get("line"):
                 print(f"   {cid}: stärkste Linie {st_['line']}")
             if st_.get("waterfall"):
@@ -724,6 +882,8 @@ def main():
             SAT.write_result(k, state="error", error=f"Auswertung: {type(e).__name__}: {e}")
         for ch in channels:
             ch.tmp.unlink(missing_ok=True)
+            if hasattr(ch, "cleanup"):
+                ch.cleanup()
         raise
 
 

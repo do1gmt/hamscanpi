@@ -40,7 +40,9 @@ def channel_from_raw(path):
     z = raw[: 2 * n].reshape(-1, 2)
     ch = SP.Channel.__new__(SP.Channel)                    # ohne __init__: keine neue Rohdatei anlegen
     ch.sat, ch.f0, ch.kind, ch.tmp, ch.hits = sat, float(sat["center_hz"]), "fm", path, []
-    audio, pw = [], []
+    ch.aud = path.with_suffix(".aud")                       # Ton auf die Karte, wie bei der Aufnahme
+    ch.aud_n, pw = 0, []
+    af = open(ch.aud, "wb")
     step = RATE // 10                                      # 0,1 s, wie bei der Aufnahme
     prev = 0j
     for a in range(0, n, RATE * 10):                       # blockweise: wenig Speicher
@@ -48,12 +50,14 @@ def channel_from_raw(path):
         c = z[a:b, 0].astype(np.float64) + 1j * z[a:b, 1].astype(np.float64)
         pr = np.concatenate(([prev], c[:-1]))
         prev = c[-1]
-        audio.append((np.angle(c * np.conj(pr)) * RATE / (2 * np.pi) / 5000.0).astype(np.float32))
+        a_ = (np.angle(c * np.conj(pr)) * RATE / (2 * np.pi) / 5000.0).astype(np.float32)
+        af.write(a_.tobytes())
+        ch.aud_n += len(a_)
         p = np.abs(c) ** 2
         pw.extend(float(np.mean(p[k:k + step])) for k in range(0, len(p) - step + 1, step))
+    af.close()
     pw = np.asarray(pw)
     floor = float(np.percentile(pw, 20)) or 1e-20          # ruhige Abschnitte als Rauschbezug
-    ch.audio_parts = audio
     ch.snr_track = list(pw / floor)
     dur = n / RATE
     t0 = path.stat().st_mtime - dur                        # Datei wurde bis zum Ende des Überflugs geschrieben

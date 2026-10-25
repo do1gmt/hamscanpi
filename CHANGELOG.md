@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.9 – 2026-10-25
+
+- **Probe satellites (Meteor-M LRPT) measured properly.** Probe passes now record at 2.048 MS/s tuned to
+  137.500 MHz, so **both LRPT frequencies (137.100 and 137.900 MHz)** are in view – Meteor-M switches between
+  them. Each second the power in the signal core (±40 kHz) is measured on both against the free band in between.
+  - The pass list shows the level per frequency and "LRPT received on …" (≥ 30 s above 6 dB) or "no LRPT".
+  - New waterfall for probes: **±150 kHz per frequency**, both side by side, with dashed marks at the expected
+    LRPT width (±60 kHz) and a **power-over-time curve** next to it. The ±9 kHz channel marks of FM channels no
+    longer appear on probe waterfalls (they looked like signal lines).
+- **Updates wait for a free window.** `hamscanpi-update.sh` no longer restarts the services in the middle of a
+  satellite pass: it waits until no recording or evaluation is running and none starts within 15 minutes
+  (new `bin/update_window.py`). Skip the wait with `HSP_SOFORT=1 bash hamscanpi-update.sh`.
+- **Less memory for long FM passes.** The demodulated audio is written to the SD card during the recording
+  instead of being kept in RAM (~110 MB per FM channel for 20 minutes), and APRS evaluation resamples in
+  blocks instead of the whole pass at once (~200 MB less). Leftover `.sat_*.aud` files are cleaned up after 48 h.
+- Self-test: new sections 13 (probe satellite on 137.900 with simulated LRPT) and 14 (update window).
+
 ## 1.7.8 – 2026-10-25
 
 - **SDR sticks are recognised and told apart** (new panel *System → Devices*). HamScanPi reads manufacturer,

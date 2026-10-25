@@ -40,6 +40,23 @@ command -v git >/dev/null || NEED="$NEED git"
 if [ -n "$NEED" ]; then sudo apt-get install -y -q $NEED >/dev/null; fi
 ok "Pakete vorhanden"
 
+# Nicht mitten in einen Überflug hinein: der Neustart der Dienste beendet auch die Aufnahme.
+# Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 15 min keine beginnt.
+# Sofort einspielen: HSP_SOFORT=1 bash hamscanpi-update.sh
+if [ -z "${HSP_SOFORT:-}" ] && [ -f "$NEW/config/web_settings.json" ] && [ -f "$TMP/repo/bin/update_window.py" ]; then
+    first=1
+    while :; do
+        W="$(HSP_BASE="$NEW" python3 "$TMP/repo/bin/update_window.py" 2>/dev/null)" || break
+        S="${W%% *}"; R="${W#* }"
+        case "$S" in ''|*[!0-9]*) break;; esac
+        [ "$S" -gt 0 ] || break
+        [ "$first" = 1 ] && bold "Warten auf ein freies Fenster" && first=0
+        echo "  $(date +%H:%M) $R – frei ab etwa $(date -d "@$(( $(date +%s) + S ))" +%H:%M) (sofort: HSP_SOFORT=1 bash $0)"
+        sleep $(( S < 300 ? S : 300 ))
+    done
+    [ "$first" = 0 ] && ok "freies Fenster – Update läuft weiter"
+fi
+
 bold "2/5 Dienste anhalten"
 OLD_UNITS=""
 for f in /etc/systemd/system/*.service /lib/systemd/system/*.service; do

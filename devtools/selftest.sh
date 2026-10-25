@@ -231,5 +231,27 @@ shutil.rmtree("fakeusb/1-1.3"); dev("1-1.3", "0bda", "2838", "Realtek", "RTL2838
 assert S.rtl_params({})["d"] == "DO1GMT2" and S.rtl_params({})["how"] == "serial"
 print("   Haupt-Stick über Seriennummer, neuer Stick wartet auf Zuordnung, HackRF erkannt, Seriennummer geschrieben")
 PY
-rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt
+echo "== 13 Prüfsatellit Meteor: beide LRPT-Frequenzen, breiter Wasserfall, Leistungskurve"
+TP="$(python3 - <<'PY'
+import sys; sys.path.insert(0, "bin")
+import satellites as S
+p = max(S.upcoming(["meteor23"], "JO62QM", fetch=False, past_s=0)["passes"], key=lambda p: p["max_el"])
+print(int(p["max_t"]) - 6)
+PY
+)"
+python3 devtools/sim_lrpt.py /tmp/hsp_lrpt.u8 12 400000 1.0          # Signal auf 137,900 (Abstimmung 137,500)
+python3 bin/sat_pass.py --sats meteor23 --test /tmp/hsp_lrpt.u8 --start $TP --until $((TP+12)) > /tmp/hsp_lrpt.txt
+grep "MHz: max" /tmp/hsp_lrpt.txt
+grep -q "137.900 MHz: .*stärkste" /tmp/hsp_lrpt.txt && ls reports/*meteor23*_waterfall.png >/dev/null 2>&1 \
+  && ok "Signal auf 137,900 erkannt, Wasserfall" || bad "Prüfsatellit"
+echo "== 14 Update wartet auf ein freies Fenster"
+python3 - <<'PY' && ok "Fenster zwischen Überflügen" || bad "Update-Fenster"
+import sys; sys.path.insert(0, "bin")
+import update_window as U
+r = [(1000, 1600, "A"), (2300, 2900, "B")]
+assert U.free_in(0, r, 900)[0] == 0                 # A beginnt erst in 16 min
+assert U.free_in(200, r, 900)[0] == 2820            # A beginnt in 13 min, B 10 min nach A -> nach B
+assert U.free_in(1800, r, 900)[0] == 1220           # nach A, aber B in 8 min -> nach B
+PY
+rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

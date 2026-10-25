@@ -1100,6 +1100,12 @@
           if (L && L.kind === 'satellite') lt = `<small class="ok">${pre}Satellit gehört${L.beacon ? ' (Bake)' : ''} – Linie steht fest bei ${(L.offset_hz / 1000).toFixed(1)} kHz</small>`;
           else if (L && L.kind === 'local') lt = `<small class="warn">${pre}örtliche Störung bei ${L.rf_mhz.toFixed(4)} MHz (wandert gegen den Doppler)</small>`;
           else if (L) lt = `<small class="muted">${pre}Linie nicht eindeutig zuzuordnen</small>`;
+          if (x && x.probe) {   // Prüfsatellit: Pegel auf jeder möglichen LRPT-Frequenz
+            const fq = Object.entries(x.probe).filter(([, v]) => v && v.max_db != null)
+              .map(([f, v]) => `${f.replace('.', ',')} MHz ${v.max_db.toFixed(0)} dB`).join(' · ');
+            const heard = x.max_db != null && x.above6_s >= 30;
+            lt = `<small class="${heard ? 'ok' : 'muted'}">${pre}${heard ? `LRPT empfangen auf ${esc(String(x.freq_mhz).replace('.', ','))} MHz` : 'kein LRPT'}${fq ? ' (' + esc(fq) + ')' : ''}</small>`;
+          }
           const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" class="lightbox" data-title="${esc(p.name)} · ${t(p.aos)}"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
           return lt || wf ? `<br>${lt}${wf}` : '';
         }).join('');

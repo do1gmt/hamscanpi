@@ -139,11 +139,12 @@ SATELLITES = [
      "label": "SSTV · HC1PX 437.050"},
     {"id": "sonate2", "norad": 59112, "center_hz": 145880000, "kind": "fm", "sstv": True, "prio": 2, "group": "sstv",
      "label": "SSTV · SONATE-2 145.880", "note": "Martin 1, nach Fahrplan der Uni Würzburg; Bahn sinkt"},
-    {"id": "meteor23", "norad": 57166, "center_hz": 137900000, "kind": "probe", "prio": 3,
-     "label": "Prüfsatellit Meteor-M N2-3 137.900",
+    # alt_hz: LRPT wechselt je nach Betrieb zwischen 137,100 und 137,900 MHz – gemessen werden beide
+    {"id": "meteor23", "norad": 57166, "center_hz": 137900000, "alt_hz": [137100000], "kind": "probe", "prio": 3,
+     "label": "Prüfsatellit Meteor-M N2-3 137.900/137.100",
      "note": "sendet ununterbrochen (LRPT, ~120 kHz breit) – zeigt, ob die Satellitenaufnahme funktioniert"},
-    {"id": "meteor24", "norad": 59051, "center_hz": 137900000, "kind": "probe", "prio": 3,
-     "label": "Prüfsatellit Meteor-M N2-4 137.900",
+    {"id": "meteor24", "norad": 59051, "center_hz": 137900000, "alt_hz": [137100000], "kind": "probe", "prio": 3,
+     "label": "Prüfsatellit Meteor-M N2-4 137.900/137.100",
      "note": "sendet ununterbrochen (LRPT) – Gegenprobe zu N2-3"}
 ]
 OPPORTUNISTIC_PRIO = 2      # bis zu dieser Priorität: nur bei freiem Stick, kein Scanabbruch
