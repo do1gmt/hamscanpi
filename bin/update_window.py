@@ -97,7 +97,7 @@ def free_in(now, recs, margin_s):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--margin", type=float, default=15, help="Minuten Abstand vor einer Aufnahme")
+    ap.add_argument("--margin", type=float, default=3, help="Minuten Abstand vor einer Aufnahme (das Update dauert ~1 min)")
     ap.add_argument("--tail", type=float, default=3, help="laufende Aufnahme abbrechen, wenn höchstens so viele Minuten übrig")
     a = ap.parse_args()
     rec = recording()

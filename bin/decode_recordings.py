@@ -220,8 +220,9 @@ def detect_ft8(z, rate):
 
         dominant = []
         quality = []
+        frame_idx = []
 
-        for frame in sub:
+        for fi, frame in enumerate(sub):
 
             median = (
                 float(
@@ -278,6 +279,7 @@ def detect_ft8(z, rate):
                     sf[k]
                 )
             )
+            frame_idx.append(fi)
 
             quality.append(
                 ratio
@@ -323,10 +325,27 @@ def detect_ft8(z, rate):
             )
         )
 
+        # Anteil der häufigsten Tonlage: ein zappelnder Träger oder CW sitzt fast immer auf einer
+        _, counts = np.unique(bins, return_counts=True)
+        top_share = float(counts.max()) / len(bins)
+
+        # Beständigkeit: ein FT8-Ton steht 0,16 s, also in zwei aufeinanderfolgenden Rahmen (Abstand
+        # 0,08 s) meist auf derselben Linie. Rauschspitzen springen zufällig (Gleichstand ~5 %).
+        fidx = np.asarray(frame_idx)
+        adj = (fidx[1:] == fidx[:-1] + 1)
+        steady = float(np.mean(bins[1:][adj] == bins[:-1][adj])) if adj.sum() >= 8 else 0.0
+
+        # FT8: 8 Töne im 6,25-Hz-Raster (Rahmen 0,16 s = genau 6,25 Hz Auflösung), also ~44 Hz breit;
+        # 10–90-%-Spanne der Töne dann um 30–44 Hz. Früher reichte „höchstens 75 Hz“ – ein Träger, der
+        # zwischen zwei Nachbarlinien wackelt (Spanne 6 Hz), galt so als „FT8 98 %“.
         if not (
-            3 <= unique_bins <= 12
+            5 <= unique_bins <= 12
             and
-            span <= 75.0
+            25.0 <= span <= 75.0
+            and
+            top_share <= 0.6
+            and
+            steady >= 0.3
             and
             changes >= 5
             and
@@ -352,6 +371,7 @@ def detect_ft8(z, rate):
                 "span": span,
                 "changes": changes,
                 "quality": q,
+                "top_share": top_share,
                 "score": score
             }
         )
@@ -367,21 +387,17 @@ def detect_ft8(z, rate):
 
     best = candidates[0]
 
+    # Sicherheit: Tonvielfalt (bis 8 Töne), Wechsel, Pegel – erst ein klares, typisches Muster kommt
+    # über 85 %, ein knapp erfülltes bleibt um 60–70 %
     confidence = int(
         np.clip(
-            65
-            +
-            min(
-                best["changes"],
-                20
-            )
-            +
-            min(
-                best["quality"],
-                15
-            ),
-            65,
-            98
+            30
+            + 3 * min(best["tones"], 8)
+            + min(best["changes"], 15)
+            + min(best["quality"], 40) * 0.6
+            - max(0.0, best["top_share"] - 0.4) * 50,
+            50,
+            95
         )
     )
 

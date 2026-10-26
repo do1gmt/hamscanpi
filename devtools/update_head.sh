@@ -41,7 +41,7 @@ if [ -n "$NEED" ]; then sudo apt-get install -y -q $NEED >/dev/null; fi
 ok "Pakete vorhanden"
 
 # Nicht mitten in einen Überflug hinein: der Neustart der Dienste beendet auch die Aufnahme.
-# Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 15 min keine beginnt
+# Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 3 min keine beginnt
 # (Aufnahmen "wenn Stick frei" zählen nicht). Eine laufende Aufnahme mit höchstens 3 min Rest wird
 # sauber beendet (wie "Abbrechen" im Dashboard), ihre Auswertung wird nie unterbrochen.
 # Sofort einspielen: HSP_SOFORT=1 bash hamscanpi-update.sh

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.7.11 – 2026-10-26
+
+- **A hanging stick no longer blocks the night.** In the night to 26 Oct the RTL stick stopped delivering
+  data at the start of an ISS pass; `rtl_sdr` stayed alive, `sat_pass.py` waited on the pipe for seven hours
+  and every following pass (including a Meteor at 86°) was skipped. Now:
+  - the satellite recording reads with a time limit: no data for 5 s → `rtl_sdr` is stopped, the stick is
+    re-registered on USB (same reset the scanner already used) and restarted; the recording continues on the
+    correct time axis (Doppler) with a short gap – up to 4 times per pass, logged as `pass_stick_restart`;
+  - the recording ends by the clock at the planned end even if blocks were lost;
+  - scheduler watchdog: a pass process still running 10 min after its planned end is terminated
+    (SIGTERM to the process group, SIGKILL after 15 s; the detached evaluation is not affected).
+- **Separate gain for satellites** (Settings → Satellite priorities). "As main stick" keeps the previous
+  behaviour; e.g. 40.2 dB for satellites while scans stay at 20 dB. The pass log shows the gain used.
+- **"SNR up to" only counts levels held for at least 10 s.** A 2-second ground burst no longer shows as
+  "SNR up to 34 dB"; the short peak is kept as `peak_db`.
+- **FT8 detection without false alarms on carriers and noise.** Requires at least 5 tones, a 10–90 % tone
+  span of 25–75 Hz, no single tone above 60 % of the time and tones that persist across adjacent frames
+  (FT8 symbols last 0.16 s; noise peaks jump randomly). A carrier wobbling between two neighbouring bins
+  (span 6 Hz) used to be reported as "FT8 98 %". The percentage now depends on level and tone variety
+  (strong ~93 %, near the threshold ~75 %).
+- Update window: margin before a planned pass reduced from 15 to 3 minutes (the update takes ~1 minute).
+- Clicking the HamScanPi logo opens the *Scan* tab.
+- Self-test section 15: stalled stick with restart, 10-s hold for "SNR up to", FT8 vs. carrier vs. noise.
+
 ## 1.7.10 – 2026-10-25
 
 - **Updates no longer wait out the end of a pass.** If a satellite recording has at most 3 minutes left, or has

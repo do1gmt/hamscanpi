@@ -236,6 +236,7 @@ def load_settings():
         "cleanup_auto_days": int(data.get("cleanup_auto_days") or 0),
         "allow_restricted": restricted_allowed(),
         "sat_prio": {k: v for k, v in (data.get("sat_prio") or {}).items() if v == "pin" or str(v).isdigit()},
+        "sat_gain": data.get("sat_gain"),
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
         "hardware": hw,
@@ -317,6 +318,15 @@ def save_settings(data):
             else:
                 raise ValueError("Priorität: 0–10 oder pin")
         out["sat_prio"] = sp
+    if "sat_gain" in data:
+        v = data["sat_gain"]
+        if v in ("", None):
+            out.pop("sat_gain", None)
+        else:
+            g = float(str(v).replace(",", "."))
+            if not 0 <= g <= 50:
+                raise ValueError("Verstärkung für Satelliten: 0–50 dB")
+            out["sat_gain"] = round(g, 1)
     if "scan_raster" in data and isinstance(data["scan_raster"], dict):
         r = dict(out.get("scan_raster") or {})
         for d, v in data["scan_raster"].items():

@@ -252,6 +252,7 @@ r = [(1000, 1600, "A"), (2300, 2900, "B")]
 assert U.free_in(0, r, 900)[0] == 0                 # A beginnt erst in 16 min
 assert U.free_in(200, r, 900)[0] == 2820            # A beginnt in 13 min, B 10 min nach A -> nach B
 assert U.free_in(1800, r, 900)[0] == 1220           # nach A, aber B in 8 min -> nach B
+assert U.free_in(200, r, 180)[0] == 0                # mit 3 min Abstand: A erst in 13 min -> jetzt frei
 PY
 # laufende Aufnahme nachstellen (Prozess namens sat_pass.py, PID in data/sat_rec.pid)
 mkdir -p fake && echo "import time; time.sleep(30)" > fake/sat_pass.py
@@ -262,5 +263,49 @@ uw_case() {   # Kanal, Restsekunden -> erstes Wort der Ausgabe
 }
 [ "$(uw_case iss 120)" = STOP ] && [ "$(uw_case iss 900)" = 300 ] && [ "$(uw_case hc1px 900)" = STOP ] \
   && ok "letzte 3 min und niedrige Priorität werden beendet, sonst warten" || bad "Abbruch laufender Aufnahme"
+echo "== 15 Stick hängt während der Aufnahme, kurze Störimpulse, FT8-Fehlalarm"
+cat > fake/rtl_haenger.py <<'PY'
+import os, sys, time
+st = sys.argv[1]
+n = int(open(st).read()) if os.path.exists(st) else 0
+open(st, "w").write(str(n + 1))
+for i in range(20 if n == 0 else 10 ** 6):
+    sys.stdout.buffer.write(b"\x80" * 192000); sys.stdout.buffer.flush(); time.sleep(0.1)
+time.sleep(3600)                      # erster Start: Stick bleibt stehen, rtl_sdr lebt weiter
+PY
+rm -f fake/rtl_state
+(cd bin && timeout 60 python3 - <<'PY') && ok "Stillstand erkannt, rtl_sdr neu gestartet, Aufnahme läuft weiter" || bad "Stillstand"
+import sat_pass as SP
+s = SP.Source.__new__(SP.Source)
+s.test, s.rate, s.nbytes, s.restarts, s.dev, s.node = None, 960000, 192000, 0, "0", "/dev/kein-stick"
+s.cmd = ["python3", "../fake/rtl_haenger.py", "../fake/rtl_state"]; s._start()
+got = stalls = 0
+while got < 40:
+    try:
+        s.read(timeout=2)
+        got += 1
+    except SP.Stall:
+        stalls += 1; s.restart()
+s.close()
+assert stalls == 1 and s.restarts == 1, (stalls, s.restarts)
+PY
+(cd bin && python3 - <<'PY') && ok "„SNR bis“ zählt erst ab 10 s, 2-s-Impuls nicht" || bad "SNR-Haltezeit"
+import numpy as np, sat_pass as SP
+pw = np.ones(7000); pw[2000:2020] = 10 ** 3.4
+st = SP.signal_stats(pw); assert st["max_db"] < 1 and st["peak_db"] > 30, st
+pw[3000:3300] = 10 ** 1.2
+assert abs(SP.signal_stats(pw)["max_db"] - 12) < 0.5
+PY
+(cd bin && python3 - <<'PY' 2>/dev/null | tail -1 | grep -q "^OK") && ok "FT8 erkannt, wackelnder Träger und Rauschen nicht" || bad "FT8-Erkennung"
+import numpy as np, decode_recordings as D
+rate = 12000; t = np.arange(int(rate * 12.64)) / rate; rng = np.random.default_rng(3)
+n = lambda a: a * (rng.standard_normal(len(t)) + 1j * rng.standard_normal(len(t)))
+sym = rng.integers(0, 8, len(t) // 1920 + 1); f = 1000 + 6.25 * sym[np.arange(len(t)) // 1920]
+ft8 = D.detect_ft8(np.exp(2j * np.pi * np.cumsum(f) / rate) * 0.5 + n(0.3), rate)
+f2 = 1000 + 6.25 * (rng.random(len(t) // 1920 + 1) < 0.3)[np.arange(len(t)) // 1920]
+car = D.detect_ft8(np.exp(2j * np.pi * np.cumsum(f2) / rate) + n(0.3), rate)
+noi = D.detect_ft8(n(1.0), rate)
+print("OK" if ft8 and ft8["confidence"] >= 85 and car is None and noi is None else f"NEIN {ft8} {car} {noi}")
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

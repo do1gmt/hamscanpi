@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import sqlite3
 import subprocess
 import time
@@ -156,6 +157,48 @@ def sat_pass_active():
         return _alive(int(SAT_PID.read_text()))
     except Exception:
         return False
+
+
+WATCHDOG_S = 600              # Überflug-Prozess so lange nach dem geplanten Ende noch da -> beenden
+
+
+def sat_watchdog():
+    """Ein Überflug-Prozess, der lange nach seinem geplanten Ende noch läuft (Stick hängt, rtl_sdr liefert
+    nichts), hält sonst den Stick für alle folgenden Überflüge und Scans fest – so geschehen mit der ISS in
+    der Nacht zum 26.10. (sieben Stunden). Erst SIGTERM an die ganze Prozessgruppe (flock, sat_pass.py,
+    rtl_sdr – die Auswertung nach dem Abkoppeln läuft in einer eigenen Sitzung und bleibt unberührt),
+    nach 15 s SIGKILL."""
+    try:
+        pid = int(SAT_PID.read_text())
+    except Exception:
+        return
+    if not _alive(pid):
+        return
+    try:
+        args = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")
+        until = float(args[args.index("--until") + 1])
+    except Exception:
+        return
+    over = time.time() - until
+    if over < WATCHDOG_S:
+        return
+    import signal as _sig
+    w = _sat.setdefault("watchdog", {})
+    if pid not in w:
+        w[pid] = time.time()
+        applog("ERROR", "scheduler", "satellite_watchdog", pid=pid, over_min=round(over / 60),
+               action="SIGTERM", hint="Überflug-Prozess lief weit über das geplante Ende – Stick hing")
+        try:
+            os.killpg(pid, _sig.SIGTERM)
+        except OSError:
+            pass
+    elif time.time() - w[pid] > 15:
+        applog("ERROR", "scheduler", "satellite_watchdog", pid=pid, action="SIGKILL")
+        try:
+            os.killpg(pid, _sig.SIGKILL)
+        except OSError:
+            pass
+        w[pid] = time.time() + 3600                          # nicht jede Runde erneut
 
 
 def next_passes():
@@ -368,6 +411,7 @@ while True:
         # Satellitenüberflug (Vorrang vor dem Scan). Wer bei Überschneidungen wann aufnimmt,
         # steht schon im Plan (satellites.make_plan).
         check_started_passes()
+        sat_watchdog()
         for key, (bp, why) in list(_sat["blocked"].items()):       # Fenster vorbei, nie gestartet
             if key in _sat["started"]:
                 del _sat["blocked"][key]

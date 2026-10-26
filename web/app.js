@@ -94,6 +94,11 @@
       sel.value = (settings.scan_raster || {})[dev] || 'normal';
     }
     $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
+    // Verstärkung für Satelliten: Stufen des R820T/R860 (rtl_sdr nimmt sonst die nächstgelegene)
+    const sg = $('satGain');
+    sg.innerHTML = '<option value="">wie Haupt-Stick</option>' +
+      [19.7, 25.4, 29.7, 33.8, 37.2, 40.2, 42.1, 43.9, 49.6].map(g => `<option value="${g}">${String(g).replace('.', ',')} dB</option>`).join('');
+    sg.value = settings.sat_gain == null ? '' : String(settings.sat_gain);
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
@@ -988,6 +993,11 @@
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
+  // Logo oben links: zurück zur Startseite (Reiter Scan), ohne die Seite neu zu laden
+  $('brandHome').addEventListener('click', e => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;   // Mittelklick/Strg: neuer Tab wie gewohnt
+    e.preventDefault(); showView('scan');
+  });
   const liveHist = [];                 // [{f, m, name}] – name: Sendername aus RDS
   function liveRemember(f, m, name) {
     f = Math.round(f / 100) * 100;
@@ -1148,6 +1158,10 @@
       });
     });
   }
+  $('satGain').addEventListener('change', async e => {
+    try { const d = await post('/api/settings', { sat_gain: e.target.value }); settings.sat_gain = d.settings.sat_gain; note($('satPrioNote'), '✓ gespeichert – gilt ab dem nächsten Überflug'); }
+    catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
+  });
   ['satShowPast', 'satShowAll'].forEach(id => { $(id).checked = localStorage.getItem(id) === '1'; $(id).addEventListener('change', e => { localStorage.setItem(id, e.target.checked ? '1' : '0'); renderSatPasses(); }); });
   function fmtSpan(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} h ${m} min` : `${m} min`; }
 

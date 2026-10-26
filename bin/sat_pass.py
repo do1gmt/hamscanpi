@@ -168,30 +168,90 @@ def stem_for(sat, t):
     return time.strftime("%Y%m%d_%H%M%S", time.gmtime(t)) + f"_Satelliten_{sat['id']}"
 
 
+STALL_S = 5.0                 # so lange ohne Daten vom Stick -> rtl_sdr neu starten (vorher: ewig gewartet)
+MAX_RESTARTS = 4              # je Überflug; danach endet die Aufnahme mit Fehler
+
+
+class Stall(Exception):
+    """Der Stick liefert seit STALL_S Sekunden keine Daten (rtl_sdr lebt, aber hängt)."""
+
+
+def sat_gain(default):
+    """Verstärkung für Satelliten (Einstellungen -> Satelliten), sonst die des Haupt-Sticks."""
+    try:
+        v = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8")).get("sat_gain")
+        if v not in (None, ""):
+            return float(v)
+    except Exception:
+        pass
+    return default
+
+
 class Source:
-    """Rohdaten vom Stick (oder aus einer Testdatei: uint8-I/Q mit 960 kS/s)."""
+    """Rohdaten vom Stick (oder aus einer Testdatei: uint8-I/Q mit 960 kS/s).
+    Liest mit Zeitgrenze: Bleiben die Daten aus (der Stick hängt nach dem Öffnen oder mittendrin, typisch
+    bei RTL-Sticks ab und zu), meldet read() einen Stall – main() startet rtl_sdr dann neu."""
 
     def __init__(self, tune_hz, cfg, test=None, rate=None):
         self.test = test
         self.rate = int(rate or IN_RATE)
         self.nbytes = self.rate // 10 * 2                     # 0,1 s uint8-I/Q
+        self.restarts = 0
         if test:
             self.f = open(test, "rb")
             return
         rtl = cfg.get("rtlsdr", {})
         import sticks as STK
         sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
-        cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"], "-f", str(int(tune_hz)),
-               "-s", str(self.rate), "-p", str(int(sp["ppm"]))]
-        if sp["gain"]:
-            cmd += ["-g", str(sp["gain"])]
-        cmd.append("-")
-        self.p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        self.f = self.p.stdout
+        self.dev, self.node = sp["d"], sp.get("node")
+        self.gain = sat_gain(sp["gain"])
+        self.cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"], "-f", str(int(tune_hz)),
+                    "-s", str(self.rate), "-p", str(int(sp["ppm"]))]
+        if self.gain:
+            self.cmd += ["-g", str(self.gain)]
+        self.cmd.append("-")
+        self._start()
 
-    def read(self):
-        b = self.f.read(self.nbytes)
-        return b if len(b) == self.nbytes else None
+    def _start(self):
+        self.p = subprocess.Popen(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.f = self.p.stdout
+        self.fd = self.f.fileno()
+        self.buf = bytearray()
+
+    def read(self, timeout=STALL_S):
+        if self.test:
+            b = self.f.read(self.nbytes)
+            return b if len(b) == self.nbytes else None
+        import select
+        deadline = time.monotonic() + timeout
+        while len(self.buf) < self.nbytes:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise Stall()
+            r, _, _ = select.select([self.fd], [], [], left)
+            if not r:
+                raise Stall()
+            chunk = os.read(self.fd, max(65536, self.nbytes - len(self.buf)))
+            if not chunk:
+                return None                                   # rtl_sdr beendet
+            self.buf += chunk
+        b = bytes(self.buf[:self.nbytes])
+        del self.buf[:self.nbytes]
+        return b
+
+    def restart(self):
+        """rtl_sdr beenden, Stick per USB neu anmelden (wie Ab-/Anstecken), rtl_sdr neu starten."""
+        self.restarts += 1
+        self.close()
+        how = ""
+        try:
+            from devices import usb_reset_rtl
+            ok, how = usb_reset_rtl(self.dev, node=self.node)
+        except Exception as e:
+            how = f"kein USB-Reset ({type(e).__name__})"
+        time.sleep(2.0)
+        self._start()
+        return how
 
     def close(self):
         if self.test:
@@ -201,21 +261,34 @@ class Source:
             self.p.send_signal(signal.SIGINT)
             self.p.wait(timeout=3)
         except Exception:
-            self.p.kill()
+            try:
+                self.p.kill()
+                self.p.wait(timeout=3)
+            except Exception:
+                pass
         try:
             self.f.close()                                    # Rohr zu rtl_sdr schließen, bevor detach() die
         except Exception:                                     # Dateinummern schließt (sonst „Bad file descriptor“)
             pass
 
 
+HOLD_S = 10.0                 # „SNR bis“: so lange muss ein Pegel mindestens anhalten
+
+
 def signal_stats(pw, step_s=0.1):
     """Kurzfassung des Kanalpegels über den Überflug (je 0,1 s gemessen, Abstand zum Rauschen):
-    höchster Wert, 90-%-Wert und Sekunden über 6 dB. Zeigt, ob der Satellit überhaupt zu hören war."""
+    max_db = höchster Pegel, der mindestens HOLD_S lang gehalten wurde (ein 2-s-Störimpuls am Boden zählt
+    so nicht mehr als „SNR bis 34 dB“), peak_db = kurzzeitiger Spitzenwert, 90-%-Wert, Sekunden über 6 dB."""
     if pw is None or not len(pw):
-        return {"max_db": None, "p90_db": None, "above6_s": 0}
+        return {"max_db": None, "p90_db": None, "above6_s": 0, "peak_db": None}
     db = 10 * np.log10(np.asarray(pw, dtype=np.float64) + 1e-12)
-    return {"max_db": round(float(db.max()), 1), "p90_db": round(float(np.percentile(db, 90)), 1),
-            "above6_s": round(float((db > 6.0).sum()) * step_s)}
+    n = max(1, int(round(HOLD_S / step_s)))
+    if len(db) >= n:
+        held = float(np.lib.stride_tricks.sliding_window_view(db, n).min(axis=1).max())
+    else:
+        held = float(db.min())
+    return {"max_db": round(held, 1), "p90_db": round(float(np.percentile(db, 90)), 1),
+            "above6_s": round(float((db > 6.0).sum()) * step_s), "peak_db": round(float(db.max()), 1)}
 
 
 class Channel:
@@ -789,7 +862,9 @@ def main():
     tag = f"{os.getpid()}"
     channels = [(ProbeChannel if probe else Channel)(c, tune, trackers[c["norad"]], tag) for c in chans]
     src = Source(tune, cfg, a.test, PROBE_RATE if probe else IN_RATE)
-    nblk, err = 0, None
+    if getattr(src, "gain", None):
+        print(f"   Verstärkung {float(src.gain):g} dB")
+    nblk, nrec, err = 0, 0, None                              # nblk: Zeitachse, nrec: wirklich aufgenommen
     signal.signal(signal.SIGTERM, _on_term)
     try:
         REC_PID.write_text(str(os.getpid()))
@@ -804,7 +879,20 @@ def main():
                 err = f"vom Benutzer abgebrochen nach {nblk / 10:.0f} s"
                 applog("WARN", "satellite", "pass_cancelled", sat=name, seconds=round(nblk / 10))
                 break
-            raw = src.read()
+            if not a.test and time.time() > until + 5:
+                break                                         # Ende nach der Uhr, auch wenn Blöcke fehlten
+            try:
+                raw = src.read()
+            except Stall:
+                if src.restarts >= MAX_RESTARTS:
+                    err = f"Stick liefert keine Daten mehr ({src.restarts} Neustarts ohne Erfolg)"
+                    break
+                how = src.restart()
+                gap = max(0, int((time.time() - t0) * 10) - nblk)
+                applog("WARN", "satellite", "pass_stick_restart", sat=name, attempt=src.restarts,
+                       after_s=round(nblk / 10), gap_s=round(gap / 10, 1), usb_reset=how)
+                nblk += gap                                   # Zeitachse an die Uhr anschließen (Doppler!)
+                continue
             if raw is None:
                 if not a.test:
                     err = "Stick liefert keine Daten mehr"
@@ -814,6 +902,7 @@ def main():
             for ch in channels:
                 ch.feed(z, t)
             nblk += 1
+            nrec += 1
             if nblk % 50 == 0:
                 els = ", ".join(f"{SAT.OBJECTS[o].split(' ')[0]} {trackers[o].look(t)[0]:.0f}°" for o in objs)
                 status("running", f"Satellit {name}: Aufnahme {labels} MHz, Elevation {els}",
@@ -826,7 +915,9 @@ def main():
             ch.close_recording()
         REC_PID.unlink(missing_ok=True)
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    secs = nblk / 10
+    secs = nrec / 10
+    if src.restarts and not err:
+        err = f"Stick {src.restarts}× neu gestartet, {max(0, nblk - nrec) / 10:.0f} s fehlen"
     if err:
         applog("WARN", "satellite", "pass_recording_problem", sat=name, error=err, seconds=round(secs))
     status("running", f"Satellit {name}: Auswertung", 99)
