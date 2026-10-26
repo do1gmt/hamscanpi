@@ -296,7 +296,7 @@ st = SP.signal_stats(pw); assert st["max_db"] < 1 and st["peak_db"] > 30, st
 pw[3000:3300] = 10 ** 1.2
 assert abs(SP.signal_stats(pw)["max_db"] - 12) < 0.5
 PY
-(cd bin && python3 - <<'PY' 2>/dev/null | tail -1 | grep -q "^OK") && ok "FT8 erkannt, wackelnder Träger und Rauschen nicht" || bad "FT8-Erkennung"
+(cd bin && python3 - <<'PY' 2>/tmp/hsp_ft8.err | tail -1 | grep -q "^OK") && ok "FT8 erkannt, wackelnder Träger und Rauschen nicht" || { tail -3 /tmp/hsp_ft8.err; bad "FT8-Erkennung"; }
 import numpy as np, decode_recordings as D
 rate = 12000; t = np.arange(int(rate * 12.64)) / rate; rng = np.random.default_rng(3)
 n = lambda a: a * (rng.standard_normal(len(t)) + 1j * rng.standard_normal(len(t)))

@@ -5,13 +5,24 @@
  * Namen) über die Muster P. Ein MutationObserver übersetzt auch alles, was app.js später einfügt.
  * Elemente mit der Klasse .mono oder .no-i18n (Dekodierungen, Rohdaten) bleiben unverändert.
  *
- * Die Wahl gilt je Browser (localStorage „lang“); ohne Wahl entscheidet die Browsersprache.
+ * Die Wahl wird auf dem Pi gespeichert (Einstellungen „ui_lang“, kommt als <meta name="hsp-lang"> mit der
+ * Seite) und gilt damit für jeden Browser – auch nachdem der Browser seine Website-Daten gelöscht hat.
+ * localStorage „lang“ ist nur noch Zwischenspeicher; ohne beides entscheidet die Browsersprache.
  * Fehlt eine Übersetzung, bleibt der deutsche Text stehen – Ergänzungen gern als Pull Request.
  */
 (function () {
   'use strict';
-  const stored = localStorage.getItem('lang');
-  const LANG = stored === 'en' || stored === 'de' ? stored : ((navigator.language || 'de').toLowerCase().startsWith('de') ? 'de' : 'en');
+  const meta = document.querySelector('meta[name="hsp-lang"]');
+  const server = meta ? meta.content : null;
+  let stored = null;
+  try { stored = localStorage.getItem('lang'); } catch (e) { /* Speicher gesperrt */ }
+  const pick = v => (v === 'en' || v === 'de') ? v : null;
+  const LANG = pick(server) || pick(stored) || ((navigator.language || 'de').toLowerCase().startsWith('de') ? 'de' : 'en');
+  try { localStorage.setItem('lang', LANG); } catch (e) { /* egal */ }
+  if (!pick(server) && pick(stored)) {                         // bisherige Browser-Wahl einmalig auf den Pi übernehmen
+    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                             credentials: 'same-origin', body: JSON.stringify({ ui_lang: stored }) }).catch(() => {});
+  }
   document.documentElement.lang = LANG;
 
   const D = {
@@ -527,6 +538,14 @@
   window.I18N = {
     lang: LANG, t,
     locale: LANG === 'en' ? 'en-GB' : 'de-DE',
-    set(l) { localStorage.setItem('lang', l === 'en' ? 'en' : 'de'); location.reload(); },
+    async set(l) {
+      l = l === 'en' ? 'en' : 'de';
+      try { localStorage.setItem('lang', l); } catch (e) { /* egal */ }
+      try {                                                    // auf dem Pi speichern: gilt für alle Browser
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        credentials: 'same-origin', body: JSON.stringify({ ui_lang: l }) });
+      } catch (e) { /* offline: bleibt wenigstens in diesem Browser */ }
+      location.reload();
+    },
   };
 })();

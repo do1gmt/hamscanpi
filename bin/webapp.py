@@ -237,6 +237,7 @@ def load_settings():
         "allow_restricted": restricted_allowed(),
         "sat_prio": {k: v for k, v in (data.get("sat_prio") or {}).items() if v == "pin" or str(v).isdigit()},
         "sat_gain": data.get("sat_gain"),
+        "ui_lang": data.get("ui_lang"),
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
         "hardware": hw,
@@ -318,6 +319,10 @@ def save_settings(data):
             else:
                 raise ValueError("Priorität: 0–10 oder pin")
         out["sat_prio"] = sp
+    if "ui_lang" in data:
+        if data["ui_lang"] not in ("de", "en"):
+            raise ValueError("Sprache: de oder en")
+        out["ui_lang"] = data["ui_lang"]
     if "sat_gain" in data:
         v = data["sat_gain"]
         if v in ("", None):
@@ -1122,11 +1127,26 @@ def deletion_log(limit=100):
 # ------------------------------------------------------------------ Demodulation auf Anfrage
 
 def _lowpass_decimate(x, rate, cutoff, target):
-    sos = butter(6, cutoff, btype="low", fs=rate, output="sos")
-    x = sosfiltfilt(sos, x)
     from math import gcd
     g = gcd(int(target), int(rate))
+    if np.iscomplexobj(x):
+        # I/Q in voller Länge: nur das Polyphasenfilter von resample_poly (eigener Tiefpass bei der neuen
+        # Nyquistfrequenz). sosfiltfilt vorab rechnete alles in complex128 – bei 3 min Aufnahme einige
+        # 100 MB im Webserver; die folgenden Kanalfilter grenzen ohnehin enger ein.
+        return resample_poly(x, int(target) // g, int(rate) // g), target
+    sos = butter(6, cutoff, btype="low", fs=rate, output="sos")
+    x = sosfiltfilt(sos, x)
     return resample_poly(x, int(target) // g, int(rate) // g), target
+
+
+def _trim_memory():
+    """Großen freigegebenen Speicher ans System zurückgeben (glibc behält ihn sonst im Prozess:
+    der Webserver stand nach dem Anhören einiger Treffer bei ~300 MB, der Pi lagerte aus)."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
 
 
 def demodulate(bb, rate, mode, side="USB"):
@@ -1162,7 +1182,11 @@ def demodulate(bb, rate, mode, side="USB"):
         y = lfilter([1 - a], [1, -a], d)
         audio, out = _lowpass_decimate(y, rate, 15000, 48000)
         return audio, out
-    # SSB
+    # SSB: erst auf 12 kHz herunter (±6 kHz reichen für 200–3000 Hz), dann die FFT – vorher lief sie über
+    # die ganze Aufnahme in voller Abtastrate
+    if rate > 12000:
+        g = __import__("math").gcd(12000, int(rate))
+        bb, rate = resample_poly(bb, 12000 // g, int(rate) // g), 12000
     Z = np.fft.fft(bb)
     f = np.fft.fftfreq(len(bb), 1.0 / rate)
     mask = ((f >= 200) & (f <= 3000)) if side == "USB" else ((f <= -200) & (f >= -3000))
@@ -1194,17 +1218,26 @@ def demod_on_demand(peak_id, side, offset_hz, mode="ssb", nr=0):
             _demod_cache.move_to_end(key)
             return _demod_cache[key]
     rate, samples = read_iq_wav(row["recording_path"], max_seconds=180)    # höchstens 3 min anhören
-    i, q = samples[:, 0].copy(), samples[:, 1].copy()
-    i -= i.mean(); q -= q.mean()
     # Aufnahmen vom RTL-SDR sind bereits konjugationsfrei; die Konjugation gilt nur fuer PMSDR-Aufnahmen
     conj = cfg.get("iq_conjugate", False) and float(row["center_hz"]) < 30e6
-    z = (i - 1j * q) if conj else (i + 1j * q)
     ppm = float(cfg.get("frequency_correction_ppm", 0.0)) if float(row["center_hz"]) < 30e6 else 0.0
     cc = float(row["center_hz"]) * (1.0 + ppm * 1e-6)
     offset = float(row["rf_hz"]) + float(offset_hz) - cc
-    n = np.arange(len(z))
-    bb = z * np.exp(-2j * np.pi * offset * n / rate)
-    audio, out_rate = demodulate(bb, rate, mode, side)
+    # Mischen stückweise in complex64 (vorher: Zeitachse int64 + exp() in complex128 über die ganze
+    # Aufnahme – bei 3 min mit 96 kHz rund 400 MB Spitze im Webserver)
+    mi, mq = float(samples[:, 0].mean()), float(samples[:, 1].mean())
+    bb = np.empty(len(samples), dtype=np.complex64)
+    w = -2.0 * np.pi * offset / rate
+    for s0 in range(0, len(samples), 1 << 19):
+        blk = samples[s0:s0 + (1 << 19)]
+        z = (blk[:, 0] - mi) + (-1j if conj else 1j) * (blk[:, 1] - mq)
+        n = np.arange(s0, s0 + len(blk), dtype=np.float64)
+        bb[s0:s0 + len(blk)] = z * np.exp(1j * np.mod(w * n, 2 * np.pi)).astype(np.complex64)
+    del samples
+    try:
+        audio, out_rate = demodulate(bb, rate, mode, side)
+    finally:
+        del bb
     if nr and mode != "wfm":
         import denoise
         audio = denoise.denoise(audio, out_rate, int(nr))
@@ -1223,10 +1256,12 @@ def demod_on_demand(peak_id, side, offset_hz, mode="ssb", nr=0):
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(int(out_rate))
         w.writeframes(pcm)
     data = buf.getvalue()
+    del audio, pcm
     with _demod_lock:
         _demod_cache[key] = data
-        while len(_demod_cache) > 12:
+        while len(_demod_cache) > 12 or sum(len(v) for v in _demod_cache.values()) > 40e6:
             _demod_cache.popitem(last=False)
+    _trim_memory()
     return data
 
 
@@ -1313,6 +1348,7 @@ def spectrum_png(peak_id, lang="de"):
         "left": pos.x0, "right": pos.x1, "top": 1 - pos.y1, "bottom": 1 - pos.y0,
         "f_lo_hz": x0 * 1e6, "f_hi_hz": x1 * 1e6, "rf_hz": float(row["rf_hz"])}))
     plt.close(fig)
+    _trim_memory()
     return out
 
 
@@ -1622,7 +1658,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(dict(st, trusted_here=AUTH.trusted(self.client_ip()),
                                            logged_in=AUTH.valid_session(self.headers.get("Cookie")), ip=self.client_ip()))
             if path in ("/", "/index.html"):
-                return self.send_file(WEB / "index.html", cache=False)
+                # Sprache der Oberfläche auf dem Pi gespeichert (gilt für jeden Browser, übersteht auch das
+                # Löschen der Browserdaten) – i18n.js liest sie aus diesem Meta-Tag, bevor es übersetzt
+                html = (WEB / "index.html").read_text(encoding="utf-8")
+                ui = load_settings().get("ui_lang")
+                if ui in ("de", "en"):
+                    html = html.replace("<head>", f'<head>\n  <meta name="hsp-lang" content="{ui}">', 1)
+                data = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if path.startswith("/static/"):
                 name = Path(path[len("/static/"):]).name
                 return self.send_file(WEB / name, cache=False)

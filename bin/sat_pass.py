@@ -282,7 +282,8 @@ def signal_stats(pw, step_s=0.1):
     if pw is None or not len(pw):
         return {"max_db": None, "p90_db": None, "above6_s": 0, "peak_db": None}
     db = 10 * np.log10(np.asarray(pw, dtype=np.float64) + 1e-12)
-    n = max(1, int(round(HOLD_S / step_s)))
+    # Haltezeit 10 s, bei sehr kurzen Aufnahmen höchstens ein Viertel davon (sonst wäre „max“ kleiner als „90 %“)
+    n = max(1, int(round(min(HOLD_S, len(db) * step_s / 4) / step_s)))
     if len(db) >= n:
         held = float(np.lib.stride_tricks.sliding_window_view(db, n).min(axis=1).max())
     else:

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.12 – 2026-10-26
+
+- **Interface language stored on the Pi.** It used to live only in the browser (`localStorage`) and was lost
+  whenever the browser deleted site data, on another address (IP vs. name) or another device – the dashboard
+  then fell back to the browser language. Now it is saved in `config/web_settings.json` (`ui_lang`), delivered
+  with the page and valid for every browser; a previous browser choice is taken over automatically.
+- **Web server memory when listening to hits.** SSB/CW demodulation ran an FFT over the whole I/Q recording at
+  full sample rate in double precision, after mixing with a full-length int64 time axis – a few 100 MB peak for
+  longer HF recordings, which glibc kept in the process (web server at ~300 MB, Pi swapping ~400 MB). Now mixing
+  runs in blocks in complex64, SSB/CW is reduced to 12 kHz before filtering (measured: 35 MB peak for 60 s
+  instead of ~350 MB), freed memory is returned to the system after each demodulation and spectrum image,
+  and the cache of played hits is limited to 40 MB.
+- "SNR up to": for very short recordings the hold time is at most a quarter of the recording, so "max" can no
+  longer be below the 90 % value (10 s hold for normal passes unchanged).
+- GitHub self-test: installs `soundfile` (needed by the FT8 test – the cause of the red v1.7.11 run), own
+  Python 3.12 via `actions/setup-python@v6`, `actions/checkout@v5`; the FT8 test now prints its error.
+
 ## 1.7.11 – 2026-10-26
 
 - **A hanging stick no longer blocks the night.** In the night to 26 Oct the RTL stick stopped delivering

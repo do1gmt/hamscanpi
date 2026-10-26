@@ -9,12 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      # eigenes Python statt des System-Pythons: ubuntu-latest wechselt ab 19.10.2026 auf Ubuntu 26,
+      # dort verweigert das System-pip Installationen (PEP 668)
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Packages
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q multimon-ng
-          pip install numpy scipy sgp4 pillow pysstv
+          python -m pip install numpy scipy sgp4 pillow pysstv soundfile
       - name: Python syntax
         run: python -m py_compile bin/*.py devtools/*.py
       - name: Self test (satellites, SSTV, APRS, memory)
