@@ -172,8 +172,9 @@ assert S.activity() == 0
 s = S.Sampler(period=1); t0 = time.time()
 s.tick(t0); time.sleep(1.1); row = s.tick()
 assert row and row[1] is not None, row
+assert row[8] and row[9] > 0, row                     # größter Prozess der Minute mit Namen und MB
 db = S._db(); now = int(time.time() // 60 * 60)
-db.executemany("INSERT OR REPLACE INTO samples VALUES (?,?,?,?,?,?,?,?)",
+db.executemany("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act) VALUES (?,?,?,?,?,?,?,?)",
                [(now - k * 60, 10.0, 20.0, 500, 0, 50.0, 0, 1 if k % 10 == 0 else 0) for k in range(1, 1500)])
 db.commit(); db.close()
 h = S.history(24)
@@ -242,6 +243,15 @@ PY
 python3 devtools/sim_lrpt.py /tmp/hsp_lrpt.u8 12 400000 1.0          # Signal auf 137,900 (Abstimmung 137,500)
 python3 bin/sat_pass.py --sats meteor23 --test /tmp/hsp_lrpt.u8 --start $TP --until $((TP+12)) > /tmp/hsp_lrpt.txt
 grep "MHz: max" /tmp/hsp_lrpt.txt
+# Pegelanzeige: die Aufnahme schreibt data/meter.json und räumt sie am Ende weg
+python3 - <<'PY' && ok "Pegelanzeige je Sekunde (meter.json), nach der Aufnahme entfernt" || bad "Pegelanzeige"
+import json, os, subprocess, sys, time
+p = subprocess.Popen([sys.executable, "-c", "import time"]); p.wait()
+assert not os.path.exists("data/meter.json")
+sys.path.insert(0, "bin"); import sat_pass as P
+P.write_meter("satellite", [{"label": "137.900", "db": 3.2, "hist": [1.0, 3.2]}])
+d = json.load(open("data/meter.json")); assert d["items"][0]["db"] == 3.2; os.remove("data/meter.json")
+PY
 grep -q "137.900 MHz: .*stärkste" /tmp/hsp_lrpt.txt && ls reports/*meteor23*_waterfall.png >/dev/null 2>&1 \
   && ok "Signal auf 137,900 erkannt, Wasserfall" || bad "Prüfsatellit"
 echo "== 14 Update wartet auf ein freies Fenster"

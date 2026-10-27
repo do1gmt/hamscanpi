@@ -120,7 +120,7 @@ Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 | Path | Content |
 |---|---|
 | `config/scanner.default.json` | default band plan and receiver settings (copied to `config/scanner.json` on first start) |
-| `config/scanner.json` | your local copy – PPM correction, gain, antenna names (`antennas`), sound card, `allow_restricted_bands` |
+| `config/scanner.json` | your local copy – PPM correction, gain, sound card, `allow_restricted_bands`; HF receiver name and antenna are set under *System → Devices* (stored here as `device_labels`/`antennas`), the antenna of each RTL stick in its device entry |
 | `config/web_settings.json` | dashboard settings, locator, mail account (**contains your SMTP password, never commit it**) |
 | `config/auth.json` | dashboard password (hashed) and trusted networks – never committed |
 | `data/`, `recordings/`, `reports/`, `log/` | database, I/Q recordings, images and decodes, logs |

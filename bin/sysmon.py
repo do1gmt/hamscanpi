@@ -158,9 +158,13 @@ def activity():
     return 1 if _lock_held(SCAN_LOCK) else 0
 
 
+_OTHER_TOP = [None, 0.0]       # größter fremder Prozess beim letzten _proc_list(): [Name, MB]
+
+
 def _proc_list():
     """{pid: (name, label, rss_mb, jiffies)} für HamScanPi-Prozesse, dazu RSS aller übrigen in MB."""
     own, other = {}, 0
+    _OTHER_TOP[0], _OTHER_TOP[1] = None, 0.0
     base = str(BASE)
     for d in os.listdir("/proc"):
         if not d.isdigit():
@@ -198,7 +202,19 @@ def _proc_list():
             own[int(d)] = (name, label, rss, jiff)
         else:
             other += rss
+            if rss > _OTHER_TOP[1]:
+                _OTHER_TOP[0], _OTHER_TOP[1] = exe, rss
     return own, round(other)
+
+
+def top_process():
+    """Größter Prozess gerade (Name, MB) – HamScanPi-Skripte mit Skriptnamen, andere mit Programmnamen."""
+    own, _ = _proc_list()
+    best = max(own.values(), key=lambda v: v[2], default=None)
+    cands = [(best[0], best[2])] if best else []
+    if _OTHER_TOP[0]:
+        cands.append((_OTHER_TOP[0], _OTHER_TOP[1]))
+    return max(cands, key=lambda c: c[1], default=(None, 0.0))
 
 
 def network():
@@ -280,6 +296,10 @@ def _db():
     db = sqlite3.connect(DB, timeout=5)
     db.execute("CREATE TABLE IF NOT EXISTS samples (t INTEGER PRIMARY KEY, cpu REAL, cpu_peak REAL, mem_avail INTEGER, "
                "swap INTEGER, temp REAL, throttled INTEGER, act INTEGER)")
+    cols = {r[1] for r in db.execute("PRAGMA table_info(samples)")}
+    if "top_name" not in cols:                                          # ab 1.7.15: größter Prozess je Minute
+        db.execute("ALTER TABLE samples ADD COLUMN top_name TEXT")
+        db.execute("ALTER TABLE samples ADD COLUMN top_mb INTEGER")
     return db
 
 
@@ -295,6 +315,7 @@ class Sampler:
         self.t0, self.cpu0 = now, cpu_times()
         self.last = self.cpu0
         self.peak, self.act = 0.0, 0
+        self.top = (None, 0.0)                                          # größter Prozess in dieser Minute
 
     def tick(self, now=None):
         now = now or time.time()
@@ -304,6 +325,12 @@ class Sampler:
             self.peak = max(self.peak, u[0])
         self.last = cur
         self.act = max(self.act, activity())
+        try:                                                            # bei jedem Durchlauf (~10 s) nachsehen
+            tp = top_process()
+            if tp[0] and tp[1] > self.top[1]:
+                self.top = tp
+        except Exception:
+            pass
         if now - self.t0 < self.period:
             return None
         if now - self.t0 > 5 * self.period:                             # Schleife hing oder Uhr sprang
@@ -313,10 +340,12 @@ class Sampler:
         mem = meminfo() or {}
         thr = throttled_now()
         row = (int(now // 60 * 60), avg[0] if avg else None, self.peak, mem.get("available"), mem.get("swap_used"),
-               cpu_temp(), None if thr is None else int(thr), self.act)
+               cpu_temp(), None if thr is None else int(thr), self.act,
+               self.top[0], int(round(self.top[1])) if self.top[0] else None)
         db = _db()
         try:
-            db.execute("INSERT OR REPLACE INTO samples VALUES (?,?,?,?,?,?,?,?)", row)
+            db.execute("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act, "
+                       "top_name, top_mb) VALUES (?,?,?,?,?,?,?,?,?,?)", row)
             if now - self.pruned > 3600:
                 db.execute("DELETE FROM samples WHERE t < ?", (int(now - KEEP_S),))
                 self.pruned = now
@@ -340,11 +369,22 @@ def history(hours=24, now=None):
                           "MAX(temp), MAX(throttled), MAX(act) FROM samples WHERE t >= ? GROUP BY tb ORDER BY tb",
                           (b, b, since)).fetchall()
         total = db.execute("SELECT COUNT(*), MIN(t) FROM samples").fetchone()
+        # größter Prozess je Raster: der Eintrag mit dem meisten Speicher
+        tops = {}
+        for tb, name, mb in db.execute("SELECT (t / ?) * ?, top_name, top_mb FROM samples WHERE t >= ? AND top_mb IS NOT NULL",
+                                       (b, b, since)):
+            if mb > tops.get(tb, (None, -1))[1]:
+                tops[tb] = (name, mb)
     finally:
         db.close()
     keys = ("t", "cpu", "cpu_peak", "mem_avail", "swap", "temp", "throttled", "act")
-    return {"bucket_s": b, "from": since, "to": int(now), "oldest": total[1], "samples": total[0],
-            "points": [dict(zip(keys, r)) for r in rows]}
+    pts = []
+    for r in rows:
+        p = dict(zip(keys, r))
+        if r[0] in tops:
+            p["top_name"], p["top_mb"] = tops[r[0]]
+        pts.append(p)
+    return {"bucket_s": b, "from": since, "to": int(now), "oldest": total[1], "samples": total[0], "points": pts}
 
 
 if __name__ == "__main__":

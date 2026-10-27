@@ -449,7 +449,9 @@ def passes(tracker, t_start, hours=24.0, min_el=10.0, step=30.0):
                 tt += 10.0
             if best_el >= min_el:
                 out.append({"aos": aos, "los": los, "max_el": round(best_el, 1), "max_t": best_t,
-                            "aos_az": round(tracker.look(aos)[1]), "los_az": round(tracker.look(los)[1])})
+                            "aos_az": round(tracker.look(aos)[1]), "los_az": round(tracker.look(los)[1]),
+                            # kürzeste Entfernung = Entfernung am höchsten Punkt (Schrägentfernung)
+                            "min_km": round(tracker.look(best_t)[2])})
             up = False
         t = t2
     return out

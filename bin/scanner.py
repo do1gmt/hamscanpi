@@ -309,6 +309,28 @@ def analyse(i, q, cfg):
     }
 
 
+_METER_HIST = []
+METER_FILE = Path(__file__).resolve().parent.parent / "data" / "meter.json"
+
+
+def scan_meter(band, center, result):
+    """Pegelanzeige im Dashboard: stärkster Treffer des gerade abgesuchten Fensters (dB über Rauschen)."""
+    try:
+        peaks = result.get("peaks") or []
+        top = max(peaks, key=lambda p: p.get("snr_db", -99), default=None)
+        db = round(float(top["snr_db"]), 1) if top else 0.0
+        _METER_HIST.append(db)
+        del _METER_HIST[:-60]
+        rf = (center + top["offset_hz"]) if top and top.get("offset_hz") is not None else None
+        lab = f"{band} · stärkstes Signal {rf/1e6:.4f} MHz" if rf else f"{band} {center/1e6:.3f} MHz · nichts über der Schwelle"
+        tmp = METER_FILE.with_suffix(f".tmp{os.getpid()}")
+        tmp.write_text(json.dumps({"t": time.time(), "src": "scan",
+                                   "items": [{"label": lab, "db": db, "hist": list(_METER_HIST)}]}), encoding="utf-8")
+        os.replace(tmp, METER_FILE)
+    except Exception:
+        pass
+
+
 def frequencies(r):
     f = int(r["start_hz"])
     stop = int(r["stop_hz"])
@@ -1639,6 +1661,7 @@ def main():
                     f"{center/1e6:9.3f} MHz  "
                     f"Noise {result['noise_db']:7.1f} dB"
                 )
+                scan_meter(name, center, result)
 
             birdies = detect_birdies(
                 band_results,

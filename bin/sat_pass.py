@@ -45,6 +45,17 @@ DB = BASE / "data" / "scanner.db"
 RECDIR = BASE / "recordings"
 REPORTS = BASE / "reports"
 STATUS = BASE / "data" / "runtime_status.json"
+METER = BASE / "data" / "meter.json"          # Pegel für die Anzeige im Scan-Kasten (jede Sekunde)
+
+
+def write_meter(src, items):
+    """[{label, db, hist}] -> data/meter.json (atomar). Für die Pegelanzeige im Dashboard."""
+    try:
+        tmp = METER.with_suffix(f".tmp{os.getpid()}")
+        tmp.write_text(json.dumps({"t": time.time(), "src": src, "items": items}), encoding="utf-8")
+        os.replace(tmp, METER)
+    except OSError:
+        pass
 IN_RATE, OUT_RATE = 960000, 48000
 BLOCK = IN_RATE // 10                                     # 0,1 s
 START_ISO = None
@@ -669,6 +680,20 @@ def probe_tuning(chans):
     return int((min(fs) + max(fs)) / 2)
 
 
+def _db(x):
+    return round(10 * float(np.log10(max(float(x), 1e-6))), 1)
+
+
+def channel_meter(ch):
+    """[(label, dB)] je Kanal: Pegel über dem Rauschen in der letzten Sekunde."""
+    if isinstance(ch, ProbeChannel):
+        return [(f"{f/1e6:.3f}", _db(tr[-1])) for f, tr in zip(ch.freqs, ch.tracks) if tr]
+    tr = ch.snr_track[-10:]
+    if not tr:
+        return []
+    return [(f"{ch.sat['id']} {ch.sat['center_hz']/1e6:.3f}", _db(np.mean(tr)))]
+
+
 class ProbeChannel:
     """Prüfsatellit: misst je Sekunde die Leistung auf jeder möglichen LRPT-Frequenz gegen das freie
     Band dazwischen und zeichnet einen breiten Wasserfall (±150 kHz) plus Leistungskurve.
@@ -899,6 +924,7 @@ def main():
     if getattr(src, "antenna", None):
         print(f"   Antenne {src.antenna}")
     nblk, nrec, err = 0, 0, None                              # nblk: Zeitachse, nrec: wirklich aufgenommen
+    meter_hist = {}
     signal.signal(signal.SIGTERM, _on_term)
     try:
         REC_PID.write_text(str(os.getpid()))
@@ -937,6 +963,15 @@ def main():
                 ch.feed(z, t)
             nblk += 1
             nrec += 1
+            if nblk % 10 == 0:                                # jede Sekunde: Pegel fürs Dashboard
+                items = []
+                for ch in channels:
+                    for lab, db in channel_meter(ch):
+                        h = meter_hist.setdefault(lab, [])
+                        h.append(db)
+                        del h[:-180]                          # 3 min Verlauf
+                        items.append({"label": lab, "db": db, "hist": h})
+                write_meter("satellite", items)
             if nblk % 50 == 0:
                 els = ", ".join(f"{SAT.OBJECTS[o].split(' ')[0]} {trackers[o].look(t)[0]:.0f}°" for o in objs)
                 status("running", f"Satellit {name}: Aufnahme {labels} MHz, Elevation {els}",
@@ -948,6 +983,7 @@ def main():
         for ch in channels:
             ch.close_recording()
         REC_PID.unlink(missing_ok=True)
+        METER.unlink(missing_ok=True)
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
     secs = nrec / 10
     if src.restarts and not err:

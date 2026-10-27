@@ -125,11 +125,32 @@ def scanner_config():
     return read_json(SCANNER_CONFIG, {"ranges": []})
 
 
+def antennas_effective():
+    """Antennen für die Anzeige: Kurzwelle aus config/scanner.json (System → Geräte → Kurzwellen-Empfänger),
+    VHF/UHF aus dem Eintrag des Haupt-Sticks (System → Geräte), sonst aus config/scanner.json."""
+    ant = dict(scanner_config().get("antennas") or {})
+    main = _main_stick()
+    if main and (main.get("antenna") or "").strip():
+        ant["rtlsdr"] = main["antenna"].strip()
+    return {k: ant.get(k, "") for k in ("pmsdr", "rtlsdr")}
+
+
+def _main_stick():
+    try:
+        return next((r for r in STK.overview().get("sticks", []) if r.get("role") == "main"), None)
+    except Exception:
+        return None
+
+
 def device_labels():
-    """Gerätenamen für die Oberfläche; in config/scanner.json unter device_labels/antennas änderbar."""
+    """Gerätenamen für die Oberfläche (Bezeichnung und Antenne unter System → Geräte änderbar)."""
     cfg = scanner_config()
     lab = {"pmsdr": "PMSDR", "rtlsdr": "RTL-SDR", **(cfg.get("device_labels") or {})}
-    ant = cfg.get("antennas") or {}
+    if lab.get("rtlsdr") in ("", "RTL-SDR"):                  # ohne eigene Bezeichnung: Name des Haupt-Sticks
+        main = _main_stick()
+        if main and main.get("label"):
+            lab["rtlsdr"] = main["label"]
+    ant = antennas_effective()
     rng = {"pmsdr": "Kurzwelle", "rtlsdr": "VHF/UHF"}
     return {k: f"{lab[k]} ({rng[k]}{', ' + ant[k] if ant.get(k) else ''})" for k in ("pmsdr", "rtlsdr")}
 
@@ -244,7 +265,9 @@ def load_settings():
         "notify": {k: ("••••" if k in ("smtp_pass", "ntfy_token", "tg_token") and v else v)
                    for k, v in (data.get("notify") or {}).items()},
         "devices": device_labels(),
-        "antennas": (scanner_config().get("antennas") or {}),
+        "antennas": antennas_effective(),
+        "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
+                      "antenna": (scanner_config().get("antennas") or {}).get("pmsdr", "")},
     }
 
 
@@ -441,6 +464,10 @@ def load_status():
             st["phase"] = "error"
             st["message"] = ("Scan angefordert, Scheduler läuft, aber run_cycle.sh ist nicht gestartet – siehe Protokoll (scheduler)"
                              if alive else "Scan angefordert, aber der Scheduler-Dienst läuft nicht (pmsdr-scheduler.service prüfen)")
+    # Pegelanzeige: stärkstes Signal im aktuellen Scanfenster bzw. Kanalpegel des laufenden Überflugs
+    m = read_json(BASE / "data" / "meter.json", {})
+    if m and st.get("state") == "running" and time.time() - float(m.get("t", 0)) < 10:
+        st["meter"] = m
     settings = load_settings()
     st["scan_interval_minutes"] = settings["scan_interval_minutes"]
     st["scan_running"] = scan_running()
@@ -1971,6 +1998,17 @@ class Handler(BaseHTTPRequestHandler):
                 DEV._HW_CACHE["v"] = None                          # Geräteanzeige sofort neu
                 APPLOG.log("INFO", "webapp", "stick_updated", stick=r.get("product"), serial=r.get("serial"), **f)
                 return self.send_json({"ok": True, **STK.overview()})
+            if path == "/api/hf-device":
+                # Kurzwellen-Empfänger: Bezeichnung und Antenne (stehen in config/scanner.json)
+                cfg = read_json(SCANNER_CONFIG, {"ranges": []})
+                lab = str(data.get("label") or "").strip()[:40]
+                ant = str(data.get("antenna") or "").strip()[:60]
+                cfg.setdefault("device_labels", {})["pmsdr"] = lab or "PMSDR"
+                cfg.setdefault("antennas", {})["pmsdr"] = ant
+                write_json(SCANNER_CONFIG, cfg)
+                DEV._HW_CACHE["v"] = None
+                APPLOG.log("INFO", "webapp", "hf_device_updated", label=lab or "PMSDR", antenna=ant)
+                return self.send_json({"ok": True, "label": lab or "PMSDR", "antenna": ant})
             if path == "/api/sticks/forget":
                 STK.forget(str(data.get("key", "")))
                 return self.send_json({"ok": True, **STK.overview()})

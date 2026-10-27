@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.7.16 – 2026-10-28
+
+- **Signal level display** (dB above noise – no S-meter, the RTL stick is not calibrated in dBm): bar 0–40 dB
+  with scale, value, peak mark (highest value of the last 10 s) and trend line.
+  - Scan box during a **satellite pass**: channel level every second with 3 minutes of history; Meteor shows
+    one bar each for 137.100 and 137.900 MHz.
+  - Scan box during a **band scan**: strongest signal of each receive window with its frequency, history of
+    the last 60 windows.
+  - **Live**: full display with own demodulation (history restarts on retuning); the simple player keeps
+    the plain bar.
+  The pass writes `data/meter.json` every second and removes it at the end; the scanner writes it per window.
+- **Shortest distance per pass** in the satellite list (elevation column: slant range at the highest point),
+  e.g. Meteor at 52° ≈ 1,000 km, at 10° ≈ 2,400 km.
+- **Heard stations:** the band filter only offers bands that can contain callsigns (HF, 6 m, 2 m, 70 cm,
+  satellites) – broadcast, PMR446, ISM etc. had always shown an empty list with "no stations heard yet".
+  An empty result due to a filter now says so.
+- Self-test: level file written and removed after the pass.
+
+## 1.7.15 – 2026-10-28
+
+- **Antennas configurable in the interface** (System → Devices). The antenna of the main RTL stick (its
+  device entry) now applies everywhere – scan display and satellite passes; a new card *HF receiver* sets name
+  and antenna of the PMSDR (stored in `config/scanner.json`). Without an own name the RTL receiver is shown
+  with the name of the main stick (e.g. "Nooelec NESDR SMArt v5") instead of "RTL-SDR". A note explains that
+  the antenna is only a label – with an antenna switch, update it when switching.
+- **System history records the largest process per minute** (sampled every ~10 s, HamScanPi scripts by
+  script name, others by program name). Tapping a point shows e.g. "largest process scanner.py 620 MB" –
+  to find the cause of swap peaks like the one on 27 Oct (swap full at 905 MB for a few minutes). Existing
+  history databases are extended automatically.
+- New README screenshot of the scan page.
+- Self-test: history row with largest process.
+
 ## 1.7.14 – 2026-10-28
 
 - **Meteor/LRPT rated in steps.** First real reception on 27 Oct (N2-4, 60°, discone): a clearly visible

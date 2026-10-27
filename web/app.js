@@ -94,6 +94,7 @@
       sel.value = (settings.scan_raster || {})[dev] || 'normal';
     }
     $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
+    renderHfDevice();
     // Verstärkung für Satelliten: Stufen des R820T/R860 (rtl_sdr nimmt sonst die nächstgelegene)
     const sg = $('satGain');
     sg.innerHTML = '<option value="">wie Haupt-Stick</option>' +
@@ -282,6 +283,25 @@
     if (st === 'cancelled') return 'Scan abgebrochen';
     return 'Bereit';
   }
+  // Pegelanzeige: dB über dem Rauschen (kein S-Meter – der RTL-Stick ist nicht in dBm kalibriert).
+  // Balken 0–40 dB mit Skala, Zahl, Spitzenmarke (höchster Wert der letzten 10 s) und Verlauf.
+  const METER_MAX = 40;
+  function meterHTML(items) {
+    const pct = v => Math.max(0, Math.min(100, v / METER_MAX * 100));
+    return items.map(it => {
+      const h = (it.hist || []).filter(v => v != null), db = Number(it.db) || 0;
+      const peak = h.length ? Math.max(...h.slice(-10)) : db;
+      const cls = db >= 10 ? 'm-good' : db >= 3 ? 'm-mid' : 'm-low';
+      let spark = '';
+      if (h.length > 1) {
+        const n = h.length, pts = h.map((v, k) => `${(k / (n - 1) * 200).toFixed(1)},${(30 - Math.max(0, Math.min(METER_MAX, v)) / METER_MAX * 30).toFixed(1)}`).join(' ');
+        spark = `<svg class="meter-spark" viewBox="0 0 200 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`;
+      }
+      return `<div class="meter-row"><div class="meter-head"><span class="meter-label">${esc(it.label || '')}</span><b class="meter-val ${cls}">${db.toFixed(0)} dB</b></div>
+        <div class="meter-bar"><div class="meter-fill ${cls}" style="width:${pct(db)}%"></div><div class="meter-peak" style="left:${pct(peak)}%"></div></div>
+        <div class="meter-scale"><span>0</span><span>10</span><span>20</span><span>30</span><span>40 dB</span></div>${spark}</div>`;
+    }).join('');
+  }
   async function pollStatus() {
     let s;
     try { s = await api('/api/status'); } catch (e) { setPill('Server nicht erreichbar', 'error'); return; }
@@ -291,6 +311,9 @@
     $('scanTitle').textContent = humanState(s);
     $('scanMsg').textContent = s.message || '';
     $('progressBar').style.width = (busy ? s.progress : (s.state === 'done' ? 100 : 0)) + '%';
+    const sm = $('scanMeter'), mi = busy && s.meter && s.meter.items && s.meter.items.length ? s.meter.items : null;
+    sm.hidden = !mi;
+    if (mi) sm.innerHTML = meterHTML(mi);
     if (!(s.live_active && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
     const btn = $('scanNow'); btn.disabled = busy; btn.textContent = busy ? 'Scan läuft …' : 'Jetzt scannen';
     lastStatus = s;
@@ -739,6 +762,15 @@
     if (on && st.mode && Date.now() - liveTouched > 2000 && document.activeElement !== $('liveMode') && $('liveMode').value !== st.mode) $('liveMode').value = st.mode;
     const lvl = Math.max(0, Math.min(100, (Number(st.level_db ?? -120) + 60) * 2));
     $('liveLevel').style.width = (on ? lvl : 0) + '%';
+    // mit eigener Demodulation gibt es den echten Abstand zum Rauschen: dann die volle Pegelanzeige
+    const hasSnr = on && st.snr_db != null;
+    if (hasSnr) {
+      if (live.meterF !== st.active_hz) { live.meterHist = []; live.meterF = st.active_hz; }   // neue Frequenz: Verlauf neu
+      live.meterHist = (live.meterHist || []).concat([Number(st.snr_db)]).slice(-180);
+      $('liveMeter').innerHTML = meterHTML([{ label: st.active_hz ? (st.active_hz / 1e6).toFixed(4) + ' MHz' : '', db: st.snr_db, hist: live.meterHist }]);
+    }
+    $('liveMeter').hidden = !hasSnr;
+    $('liveSmeter').hidden = hasSnr;
     renderRds(on ? st.rds : null);
   }
   function liveEnsureCtx() {
@@ -1043,7 +1075,11 @@
   // ---------- Bereiche (Tabs) ----------
   function fillStationBands() {
     const sel = $('stBand'); if (sel.options.length > 1) return;
-    (bandplan || []).forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
+    // nur Bänder, in denen Rufzeichen vorkommen können (FT8/FT4, APRS, CW, RTTY, Digital; Satelliten wegen
+    // ISS-APRS) – Rundfunk, PMR446, ISM usw. haben keine; die UKW-Sender stehen weiter unten
+    const CALL_MODES = ['ft8', 'ft4', 'aprs', 'cw', 'rtty', 'digital'];
+    (bandplan || []).filter(b => b.name === 'Satelliten' || (b.legal === 'amateur' && (b.segments || []).some(sg => CALL_MODES.includes(sg.mode))))
+      .forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
   }
   function showView(name) {
     if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); loadInterf(); }, 0);   // nach dem Start des Skripts
@@ -1201,7 +1237,7 @@
       return `<tr class="${live ? 'sat-now' : ''}${past ? ' sat-past' : ''}">
         <td><b>${esc(p.name)}</b><br><small>${ch} MHz</small>${dropped}</td>
         <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
-        <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°</small></td><td>${plan}</td></tr>`;
+        <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}</small></td><td>${plan}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">keine Überflüge</td></tr>';
     const foot = [];
     if (d.tle_age_h != null) foot.push(`Bahndaten vor ${d.tle_age_h < 1 ? 'weniger als 1 h' : Math.round(d.tle_age_h) + ' h'} geholt${d.tle_source ? ' (' + esc(d.tle_source) + ')' : ''}`);
@@ -1314,7 +1350,9 @@
         <td>${r.distance_km != null ? `${r.distance_km} km <small class="muted">${r.bearing}° ${dir(r.bearing)}</small>` : '–'}</td>
         <td>${esc((r.bands || '').split(',').join(', '))}</td><td>${esc((r.modes || '').split(',').join(', '))}</td>
         <td>${fmtTime(r.last)}</td><td>${r.n}</td><td>${r.best_snr != null ? Math.round(r.best_snr) + ' dB' : '–'}</td></tr>`).join('')
-      || '<tr><td colspan="8" class="muted">Noch keine Stationen gehört – Rufzeichen kommen aus FT8/FT4, APRS, CW und RTTY.</td></tr>';
+      || (($('stQuery').value.trim() || $('stBand').value)
+        ? '<tr><td colspan="8" class="muted">Keine Stationen für diese Auswahl – Rufzeichen, Band oder Zeitraum ändern.</td></tr>'
+        : '<tr><td colspan="8" class="muted">Noch keine Stationen gehört – Rufzeichen kommen aus FT8/FT4, APRS, CW und RTTY.</td></tr>');
     const a = d.total ? stPage.offset + 1 : 0, b = Math.min(d.total, stPage.offset + stPage.per);
     $('stPos').textContent = `${a}–${b} von ${d.total}`;
     $('stPrev').disabled = stPage.offset === 0; $('stNext').disabled = b >= d.total;
@@ -1587,6 +1625,22 @@
       el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
     });
   }
+  // Kurzwellen-Empfänger: Bezeichnung und Antenne (config/scanner.json)
+  function renderHfDevice() {
+    const hf = (settings && settings.hf_device) || {};
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#hfDevice')) return;
+    $('hfLabel').value = hf.label && hf.label !== 'PMSDR' ? hf.label : '';
+    $('hfAntenna').value = hf.antenna || '';
+  }
+  $('hfSave').addEventListener('click', async () => {
+    try {
+      const d = await post('/api/hf-device', { label: $('hfLabel').value, antenna: $('hfAntenna').value });
+      settings.hf_device = { label: d.label, antenna: d.antenna };
+      settings.antennas = Object.assign({}, settings.antennas, { pmsdr: d.antenna });
+      note($('hfNote'), '✓ gespeichert');
+      try { await loadSettings(); } catch (e) { /* Anzeige beim nächsten Laden */ }
+    } catch (e) { note($('hfNote'), 'Fehler: ' + e.message, true); }
+  });
   async function stickAction(b) {
     const box = b.closest('[data-key]'), key = box.dataset.key, a = b.dataset.a;
     try {
@@ -1677,7 +1731,7 @@
       if (Math.abs(best.t - t) > GAP) { $('histRead').textContent = histTime(t) + ' · keine Daten'; return; }
       box.querySelectorAll('.cursor').forEach(l => { l.setAttribute('x1', x(best.t)); l.setAttribute('x2', x(best.t)); });
       const f = (v, u, k = 0) => v == null ? '–' : v.toFixed(k) + u;
-      $('histRead').textContent = `${histTime(best.t)} · CPU ${f(best.cpu, ' %')} (Spitze ${f(best.cpu_peak, ' %')}) · verfügbar ${f(best.mem_avail, ' MB')} · Swap ${f(best.swap, ' MB')} · ${f(best.temp, ' °C', 1)} · ${ACT_NAME[best.act || 0]}${best.throttled ? ' · gedrosselt' : ''}`;
+      $('histRead').textContent = `${histTime(best.t)} · CPU ${f(best.cpu, ' %')} (Spitze ${f(best.cpu_peak, ' %')}) · verfügbar ${f(best.mem_avail, ' MB')} · Swap ${f(best.swap, ' MB')} · ${f(best.temp, ' °C', 1)} · ${ACT_NAME[best.act || 0]}${best.throttled ? ' · gedrosselt' : ''}${best.top_name ? ` · größter Prozess ${best.top_name} ${best.top_mb} MB` : ''}`;
     };
     box.onpointermove = pick; box.onpointerdown = pick;
     const maxSwap = Math.max(...pts.map(p => p.swap || 0));
