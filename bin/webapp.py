@@ -465,8 +465,10 @@ def load_status():
             st["message"] = ("Scan angefordert, Scheduler läuft, aber run_cycle.sh ist nicht gestartet – siehe Protokoll (scheduler)"
                              if alive else "Scan angefordert, aber der Scheduler-Dienst läuft nicht (pmsdr-scheduler.service prüfen)")
     # Pegelanzeige: stärkstes Signal im aktuellen Scanfenster bzw. Kanalpegel des laufenden Überflugs
+    # (auch etwas ältere Werte: zwischen zwei Fenstern bzw. Bändern bleibt die Anzeige stehen statt zu verschwinden)
     m = read_json(BASE / "data" / "meter.json", {})
-    if m and st.get("state") == "running" and time.time() - float(m.get("t", 0)) < 10:
+    if m and st.get("state") == "running" and time.time() - float(m.get("t", 0)) < 180:
+        m["age_s"] = round(time.time() - float(m.get("t", 0)), 1)
         st["meter"] = m
     settings = load_settings()
     st["scan_interval_minutes"] = settings["scan_interval_minutes"]

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.17 – 2026-10-28
+
+- **Level display no longer jumps in and out.** It disappeared whenever no fresh value was available (between
+  receive windows and bands, during evaluation, outside scans), which made the scan box jump. Now it always
+  stays in place: without a measurement an empty, dimmed bar ("Level – no scan running"), older values
+  (up to 3 min, e.g. between bands) are shown dimmed instead of vanishing; the trend line keeps its space.
+
 ## 1.7.16 – 2026-10-28
 
 - **Signal level display** (dB above noise – no S-meter, the RTL stick is not calibrated in dBm): bar 0–40 dB

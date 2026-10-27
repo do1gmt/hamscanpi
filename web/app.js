@@ -286,18 +286,18 @@
   // Pegelanzeige: dB über dem Rauschen (kein S-Meter – der RTL-Stick ist nicht in dBm kalibriert).
   // Balken 0–40 dB mit Skala, Zahl, Spitzenmarke (höchster Wert der letzten 10 s) und Verlauf.
   const METER_MAX = 40;
-  function meterHTML(items) {
+  function meterHTML(items, stale) {
     const pct = v => Math.max(0, Math.min(100, v / METER_MAX * 100));
     return items.map(it => {
       const h = (it.hist || []).filter(v => v != null), db = Number(it.db) || 0;
       const peak = h.length ? Math.max(...h.slice(-10)) : db;
       const cls = db >= 10 ? 'm-good' : db >= 3 ? 'm-mid' : 'm-low';
-      let spark = '';
+      let spark = '<svg class="meter-spark" viewBox="0 0 200 30" aria-hidden="true"></svg>';   // Platz immer reservieren
       if (h.length > 1) {
         const n = h.length, pts = h.map((v, k) => `${(k / (n - 1) * 200).toFixed(1)},${(30 - Math.max(0, Math.min(METER_MAX, v)) / METER_MAX * 30).toFixed(1)}`).join(' ');
         spark = `<svg class="meter-spark" viewBox="0 0 200 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`;
       }
-      return `<div class="meter-row"><div class="meter-head"><span class="meter-label">${esc(it.label || '')}</span><b class="meter-val ${cls}">${db.toFixed(0)} dB</b></div>
+      return `<div class="meter-row${stale ? ' stale' : ''}"><div class="meter-head"><span class="meter-label">${esc(it.label || '')}</span><b class="meter-val ${cls}">${db.toFixed(0)} dB</b></div>
         <div class="meter-bar"><div class="meter-fill ${cls}" style="width:${pct(db)}%"></div><div class="meter-peak" style="left:${pct(peak)}%"></div></div>
         <div class="meter-scale"><span>0</span><span>10</span><span>20</span><span>30</span><span>40 dB</span></div>${spark}</div>`;
     }).join('');
@@ -311,9 +311,11 @@
     $('scanTitle').textContent = humanState(s);
     $('scanMsg').textContent = s.message || '';
     $('progressBar').style.width = (busy ? s.progress : (s.state === 'done' ? 100 : 0)) + '%';
+    // Pegelanzeige bleibt immer stehen (kein Ein- und Ausblenden, das Layout springt sonst):
+    // ohne Messung leerer Balken, ältere Werte (zwischen Fenstern/Bändern) abgeblendet
     const sm = $('scanMeter'), mi = busy && s.meter && s.meter.items && s.meter.items.length ? s.meter.items : null;
-    sm.hidden = !mi;
-    if (mi) sm.innerHTML = meterHTML(mi);
+    sm.innerHTML = mi ? meterHTML(mi, (s.meter.age_s || 0) > 10)
+      : meterHTML([{ label: busy ? 'Pegel – noch keine Messung' : 'Pegel – kein Scan aktiv', db: 0, hist: [] }], true);
     if (!(s.live_active && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
     const btn = $('scanNow'); btn.disabled = busy; btn.textContent = busy ? 'Scan läuft …' : 'Jetzt scannen';
     lastStatus = s;
