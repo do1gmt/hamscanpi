@@ -570,3 +570,4 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .track-sky .dot { fill: var(--amber); stroke: #000; stroke-width: 1; }
 .track-sky .dot.below { fill: none; stroke: var(--amber); stroke-dasharray: 2 2; }
 #trackLeaflet { height: 360px; border-radius: 8px; }
+.track-tabs { align-items: center; flex-wrap: wrap; } .track-follow { margin-left: auto; font-size: .85rem; }

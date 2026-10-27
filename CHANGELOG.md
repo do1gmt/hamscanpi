@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.25 – 2026-10-29
+
+- **Track panel follows the next pass.** Left open, it stayed on a finished pass. New option *follow the next
+  pass*: one minute after set the panel switches to the next planned pass by itself (sky view, map and live
+  values). On when opened from the pass tile at the top, off when opened from a row of the pass list (that pass
+  stays) – can be switched in the panel.
+
 ## 1.7.24 – 2026-10-29
 
 - **Watch a pass live** (🛰 in every row of the pass list and in the pass tile at the top): a panel slides in

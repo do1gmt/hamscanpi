@@ -332,8 +332,19 @@
     g += `<circle id="trackDot" class="dot" r="7" cx="-20" cy="-20"/></svg>`;
     $('trackSky').innerHTML = g;
   }
+  // nächster geplanter Überflug wie in der Kachel oben (laufend oder kommend, nicht übersprungen)
+  function trkNextSpec() {
+    const now = Date.now() / 1000;
+    const p = (satData?.passes || []).find(x => x.los > now && x.status !== 'skipped' && x.status !== 'joined');
+    return p ? `${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${p.name}` : null;
+  }
   function trkLive() {
     const d = trk.d, now = Date.now() / 1000, p = trkAt(now), tiles = [];
+    // Folgen: eine Minute nach dem Untergang zum nächsten Überflug wechseln
+    if ($('trackFollow').checked && now > d.los + 60 && !trk.switching) {
+      const nx = trkNextSpec();
+      if (nx && nx !== trk.spec) { trk.switching = true; openTrack(nx, true).finally(() => { trk.switching = false; }); return; }
+    }
     const tile = (v, l) => tiles.push(`<div class="stat"><b>${v}</b><span>${l}</span></div>`);
     if (now < d.aos) { tile(mmss(d.aos - now), 'bis Aufgang ' + hm(d.aos)); const a = trkAt(d.aos); if (a) tile(`${Math.round(a.az)}° ${compass(a.az)}`, 'geht auf in Richtung'); }
     else if (now <= d.los) tile(mmss(d.los - now), 'bis Untergang ' + hm(d.los));
@@ -377,8 +388,10 @@
     $('trackSky').hidden = v !== 'sky'; $('trackMap').hidden = v !== 'map';
     if (v === 'map') trkMap();
   }
-  async function openTrack(spec) {
+  async function openTrack(spec, follow) {
     const [norad, aos, los, hz, ...nm] = spec.split('|');
+    trk.spec = spec;
+    if (follow !== undefined) $('trackFollow').checked = !!follow;
     trk.hz = Number(hz) || null;
     $('trackTitle').textContent = nm.join('|') || 'Satellit';
     $('trackSub').textContent = `${hm(Number(aos))}–${hm(Number(los))}${trk.hz ? ' · ' + (trk.hz / 1e6).toFixed(3) + ' MHz' : ''}`;
@@ -393,7 +406,8 @@
   function closeTrack() { $('trackPanel').hidden = true; clearInterval(trk.timer); trk.timer = null; }
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-track]'); if (!b || !b.dataset.track) return;
-    e.preventDefault(); e.stopPropagation(); openTrack(b.dataset.track);
+    // aus der Kachel oben: immer dem nächsten Überflug folgen; aus der Liste: bei diesem bleiben
+    e.preventDefault(); e.stopPropagation(); openTrack(b.dataset.track, b.id === 'ssNextTrack');
   });
   $('trackClose').addEventListener('click', closeTrack);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('trackPanel').hidden) closeTrack(); });

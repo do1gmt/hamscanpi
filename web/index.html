@@ -500,7 +500,8 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <aside class="track-panel" id="trackPanel" hidden aria-label="Flugbahn des Satelliten">
   <div class="track-head"><div><b id="trackTitle">–</b><div class="hint" id="trackSub"></div></div><button type="button" class="btn btn-small" id="trackClose" aria-label="Schließen">✕</button></div>
-  <div class="track-tabs"><button type="button" class="chip on" data-tv="sky">Himmel</button><button type="button" class="chip" data-tv="map">Karte</button></div>
+  <div class="track-tabs"><button type="button" class="chip on" data-tv="sky">Himmel</button><button type="button" class="chip" data-tv="map">Karte</button>
+    <label class="check track-follow" title="Ist der Überflug vorbei, wechselt die Ansicht von selbst zum nächsten geplanten Überflug."><input type="checkbox" id="trackFollow"> nächsten Überflug folgen</label></div>
   <div class="track-live" id="trackLive"></div>
   <div class="track-view" id="trackSky"></div>
   <div class="track-view" id="trackMap" hidden><div id="trackLeaflet"></div><p class="hint" id="trackMapNote">Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Der Kreis um den Satelliten zeigt, wo man ihn gerade hören kann.</p></div>
