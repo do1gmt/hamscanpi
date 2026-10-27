@@ -447,6 +447,8 @@
         <h2>Satelliten-Prioritäten</h2>
         <p class="hint">Überschneiden sich zwei Überflüge, gewinnt die höhere Punktzahl: Priorität × 10, dazu bis 15 Punkte für die Höhe des Überflugs und bis 15 Punkte für die Wartezeit seit der letzten Aufnahme (1 Punkt je 4 Stunden). Abgezogen werden bis 15 Punkte, wenn ein Satellit in den letzten 14 Tagen mehrmals ohne jedes Signal aufgenommen wurde – ein einziger Treffer hebt das wieder auf. Passen die Frequenzen in ein Empfangsfenster, werden beide gemeinsam aufgenommen. 0 = nie aufnehmen, „immer zuerst“ schlägt alles.</p>
         <label class="field"><span>Verstärkung für Satelliten</span><select id="satGain"></select></label>
+        <label class="check"><input type="checkbox" id="satBeamPrefer"> Überflüge im Strahl der Richtantenne bevorzugen</label>
+        <p class="hint">Gilt nur, wenn beim Haupt-Stick unter System → Geräte eine Richtung eingetragen ist: Überflüge, die mindestens 1 min durch die Keule laufen, bekommen bis zu 15 Punkte dazu, die übrigen und Frequenzen außerhalb des Antennenbereichs 20 Punkte weniger. „Immer zuerst“ bleibt davon unberührt.</p>
         <p class="hint">Satelliten sind viel schwächer als Ortssender: 35–45 dB sind üblich. „Wie Haupt-Stick“ nimmt den Wert aus System → Geräte, der auch für Scan und Live gilt – so kann der Scan niedrig bleiben (weniger Übersteuerung) und die Satelliten trotzdem empfindlich aufgenommen werden.</p>
         <div class="table-wrap"><table class="table satprio-table"><thead><tr><th>Kanal</th><th>Priorität</th><th>Zuletzt (14 Tage)</th></tr></thead><tbody id="satPrio"></tbody></table></div>
         <div class="save-note" id="satPrioNote" aria-live="polite"></div>

@@ -326,7 +326,34 @@ assert R(noise)["level"] is None
 assert R(noise + (10 ** 0.4 - 1) * bump * (0.6 + 0.4 * np.abs(np.sin(t / 7))))["level"] == "schwach"
 assert R(noise + (10 ** 1.2 - 1) * bump)["level"] == "stark"
 PY
-python3 bin/funktest.py | grep -q "MHz" && python3 bin/funktest.py 1 | grep -q "einstellen" \
+python3 bin/funktest.py > /tmp/hsp_ft.txt && python3 bin/funktest.py 1 >> /tmp/hsp_ft.txt \
+  && grep -q "MHz" /tmp/hsp_ft.txt && grep -q "einstellen" /tmp/hsp_ft.txt \
   && ok "Handfunken-Test: Überflugliste und Dopplertabelle" || bad "funktest.py"
-rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt
+echo "== 16 Richtantenne: Überflüge durch die Keule, Antenne je Treffer"
+python3 - <<'PY' && ok "Strahl je Überflug, Bewertung, falsches Band" || bad "Richtantenne"
+import json, os, shutil, sys
+sys.path.insert(0, "bin")
+bak = None
+if os.path.exists("data/sticks.json"):
+    bak = open("data/sticks.json").read()
+json.dump({"sticks": {"x": {"role": "main", "kind": "rtl", "antenna": "Yagi", "ant_az": 245, "ant_bw": 70,
+                            "ant_fmin": 137, "ant_fmax": 150}}}, open("data/sticks.json", "w"))
+try:
+    import satellites as S
+    r = S.upcoming(["ao73", "so50"], "JN59HH", fetch=False, past_s=0, hours=48)
+    ps = r["passes"]
+    assert ps and all("beam" in p for p in ps)
+    so = [p for p in ps if p["id"] == "so50"]
+    assert so and all(not p["beam"]["band"] and p["score_parts"].get("Antenne") == -20 for p in so)
+    hit = [p for p in ps if p["id"] == "ao73" and p["beam"]["secs"] >= 60]
+    miss = [p for p in ps if p["id"] == "ao73" and p["beam"]["secs"] < 60]
+    assert hit and all(p["score_parts"]["Antenne"] > 0 for p in hit)
+    assert all(p["score_parts"].get("Antenne") == -20 for p in miss)
+finally:
+    if bak is None:
+        os.remove("data/sticks.json")
+    else:
+        open("data/sticks.json", "w").write(bak)
+PY
+rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

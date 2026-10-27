@@ -258,6 +258,7 @@ def load_settings():
         "allow_restricted": restricted_allowed(),
         "sat_prio": {k: v for k, v in (data.get("sat_prio") or {}).items() if v == "pin" or str(v).isdigit()},
         "sat_gain": data.get("sat_gain"),
+        "sat_beam_prefer": data.get("sat_beam_prefer", True),
         "ui_lang": data.get("ui_lang"),
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
@@ -342,6 +343,8 @@ def save_settings(data):
             else:
                 raise ValueError("Priorität: 0–10 oder pin")
         out["sat_prio"] = sp
+    if "sat_beam_prefer" in data:
+        out["sat_beam_prefer"] = bool(data["sat_beam_prefer"])
     if "ui_lang" in data:
         if data["ui_lang"] not in ("de", "en"):
             raise ValueError("Sprache: de oder en")
@@ -597,7 +600,8 @@ def list_hits(params):
                     COALESCE(p.protected,0) AS protected, p.segment_id, p.mode, p.sideband,
                     p.carrier_delta_hz, p.note, s.time, s.band, s.center_hz, s.noise_db, p.rec_center_hz,
                     p.audio, p.audio_score, COALESCE(p.interference, 0) AS interference,
-                    (SELECT group_concat(w.label, ' · ') FROM watch_hit w WHERE w.peak_id = p.id) AS watch
+                    (SELECT group_concat(w.label, ' · ') FROM watch_hit w WHERE w.peak_id = p.id) AS watch,
+                    {ant} AS antenna
              FROM peak p JOIN scan s ON s.id = p.scan_id WHERE 1=1"""
     args = []
     if band and band != "all":
@@ -632,6 +636,9 @@ def list_hits(params):
     args.append(limit)
 
     db = db_connect()
+    # Antenne je Scanfenster gibt es erst ab 1.7.18 (Spalte legt der Scanner an) – ältere Treffer: leer
+    has_ant = "antenna" in {c[1] for c in db.execute("PRAGMA table_info(scan)")}
+    sql = sql.replace("{ant}", "s.antenna" if has_ant else "NULL")
     rows = db.execute(sql, args).fetchall()
     db.close()
     out = []
@@ -658,6 +665,7 @@ def list_hits(params):
             "rec": Path(r["recording_path"]).stem if r["recording_path"] else "",
             "audio": r["audio"], "audio_score": r["audio_score"],
             "watch": r["watch"] or "",
+            "antenna": r["antenna"] or "",
         })
     return out
 
@@ -1995,7 +2003,8 @@ class Handler(BaseHTTPRequestHandler):
                 delete_hit(int(data["peak_id"]))
                 return self.send_json({"ok": True})
             if path == "/api/sticks/update":
-                f = {k: data[k] for k in ("role", "ppm", "gain", "antenna") if k in data}
+                f = {k: data[k] for k in ("role", "ppm", "gain", "antenna", "ant_az", "ant_bw", "ant_el", "ant_fmin", "ant_fmax")
+                     if k in data}
                 r = STK.update(str(data.get("key", "")), **f)
                 DEV._HW_CACHE["v"] = None                          # Geräteanzeige sofort neu
                 APPLOG.log("INFO", "webapp", "stick_updated", stick=r.get("product"), serial=r.get("serial"), **f)

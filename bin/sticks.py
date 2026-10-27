@@ -258,6 +258,22 @@ def update(key, **fields):
                 r["gain"] = v
         if "antenna" in fields:
             r["antenna"] = str(fields["antenna"] or "")[:60]
+        # Richtantenne: Azimut, Öffnungswinkel, Frequenzbereich (MHz) – leer = Rundstrahler
+        def num(k, lo, hi, what):
+            v = fields[k]
+            if v in (None, ""):
+                return None
+            v = float(str(v).replace(",", "."))
+            if not lo <= v <= hi:
+                raise ValueError(f"{what} zwischen {lo:g} und {hi:g}")
+            return v
+        for k, lo, hi, what in (("ant_az", 0, 360, "Richtung (°)"), ("ant_bw", 10, 360, "Öffnungswinkel (°)"),
+                                ("ant_el", 0, 90, "Erhebung (°)"),
+                                ("ant_fmin", 1, 6000, "Frequenz von (MHz)"), ("ant_fmax", 1, 6000, "Frequenz bis (MHz)")):
+            if k in fields:
+                r[k] = num(k, lo, hi, what)
+        if r.get("ant_fmin") and r.get("ant_fmax") and r["ant_fmin"] > r["ant_fmax"]:
+            r["ant_fmin"], r["ant_fmax"] = r["ant_fmax"], r["ant_fmin"]
         _save(reg)
         return r
 

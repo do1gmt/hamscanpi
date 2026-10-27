@@ -100,6 +100,7 @@
     sg.innerHTML = '<option value="">wie Haupt-Stick</option>' +
       [19.7, 25.4, 29.7, 33.8, 37.2, 40.2, 42.1, 43.9, 49.6].map(g => `<option value="${g}">${String(g).replace('.', ',')} dB</option>`).join('');
     sg.value = settings.sat_gain == null ? '' : String(settings.sat_gain);
+    $('satBeamPrefer').checked = settings.sat_beam_prefer !== false;
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
@@ -283,6 +284,14 @@
     if (st === 'cancelled') return 'Scan abgebrochen';
     return 'Bereit';
   }
+  // Richtantenne: welcher Teil des Überflugs läuft durch die Keule (satellites.beam_window)
+  function beamTxt(p) {
+    const b = p.beam; if (!b) return '';
+    if (!b.band) return '<br><span class="bad">Antenne: falsches Band</span>';
+    if (!b.secs || b.secs < 60) return '<br><span>nicht im Strahl</span>';
+    const hm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+    return `<br><span class="ok">im Strahl ${hm(b.start)}–${hm(b.end)}, bis ${Math.round(b.max_el)}°</span>`;
+  }
   // Pegelanzeige: dB über dem Rauschen (kein S-Meter – der RTL-Stick ist nicht in dBm kalibriert).
   // Balken 0–40 dB mit Skala, Zahl, Spitzenmarke (höchster Wert der letzten 10 s) und Verlauf.
   const METER_MAX = 40;
@@ -459,7 +468,7 @@
     el.querySelector('.hit-freq').innerHTML = `${fmtMHz(h.rf_hz)} <small>MHz</small>`;
     el.querySelector('.hit-badges').innerHTML = badges(h);
     const dec = decodeSummary(h);
-    el.querySelector('.hit-sub').innerHTML = `${h.snr_db.toFixed(0)} dB SNR · ${esc(fmtTime(h.time))}${h.note ? ' · ' + esc(h.note) : ''}${dec ? `<span class="px"> · ${esc(dec)}</span>` : ''}`;
+    el.querySelector('.hit-sub').innerHTML = `${h.snr_db.toFixed(0)} dB SNR · ${esc(fmtTime(h.time))}${h.antenna ? ` · <span title="Antenne">📡 ${esc(h.antenna)}</span>` : ''}${h.note ? ' · ' + esc(h.note) : ''}${dec ? `<span class="px"> · ${esc(dec)}</span>` : ''}`;
     // Detailbereich nur neu füllen, wenn offen und nichts spielt
     const body = el.querySelector('.hit-body');
     if (el.classList.contains('open') && body.childElementCount && !anyPlaying(body) && document.activeElement?.closest?.('.hit-body') !== body) {
@@ -1239,7 +1248,7 @@
       return `<tr class="${live ? 'sat-now' : ''}${past ? ' sat-past' : ''}">
         <td><b>${esc(p.name)}</b><br><small>${ch} MHz</small>${dropped}</td>
         <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
-        <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}</small></td><td>${plan}</td></tr>`;
+        <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}${beamTxt(p)}</small></td><td>${plan}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">keine Überflüge</td></tr>';
     const foot = [];
     if (d.tle_age_h != null) foot.push(`Bahndaten vor ${d.tle_age_h < 1 ? 'weniger als 1 h' : Math.round(d.tle_age_h) + ' h'} geholt${d.tle_source ? ' (' + esc(d.tle_source) + ')' : ''}`);
@@ -1266,6 +1275,10 @@
       });
     });
   }
+  $('satBeamPrefer').addEventListener('change', async e => {
+    try { const d = await post('/api/settings', { sat_beam_prefer: e.target.checked }); settings.sat_beam_prefer = d.settings.sat_beam_prefer; note($('satPrioNote'), '✓ gespeichert – der Plan wird neu berechnet'); setTimeout(loadSatPasses, 800); }
+    catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
+  });
   $('satGain').addEventListener('change', async e => {
     try { const d = await post('/api/settings', { sat_gain: e.target.value }); settings.sat_gain = d.settings.sat_gain; note($('satPrioNote'), '✓ gespeichert – gilt ab dem nächsten Überflug'); }
     catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
@@ -1609,6 +1622,12 @@
           <label class="field"><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
           <label class="field"><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
           <label class="field"><span>Antenne</span><input data-f="antenna" type="text" maxlength="60" placeholder="z. B. Discone" value="${esc(r.antenna || '')}"></label>
+          <label class="field"><span>Richtung (°)</span><input data-f="ant_az" type="number" step="1" min="0" max="360" placeholder="Rundstrahler" value="${r.ant_az ?? ''}"></label>
+          <label class="field"><span>Öffnungswinkel (°)</span><input data-f="ant_bw" type="number" step="1" min="10" max="360" placeholder="70" value="${r.ant_bw ?? ''}"></label>
+          <label class="field"><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
+          <label class="field"><span>gilt für MHz von</span><input data-f="ant_fmin" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmin ?? ''}"></label>
+          <label class="field"><span>bis</span><input data-f="ant_fmax" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmax ?? ''}"></label>
+          <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
           <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}</div>
         </div>`;
       } else if (!r.present) {

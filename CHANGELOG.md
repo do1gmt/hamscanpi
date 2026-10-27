@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.18 – 2026-10-28
+
+- **Directional antennas.** System → Devices: for the main stick, direction (azimuth), beamwidth (default 70°),
+  elevation (tilt) and the frequency range of the antenna can be entered (empty direction = omni). The pass
+  list then shows for each pass which part runs through the beam ("in the beam 16:18–16:22, up to 18°",
+  "not in the beam", "antenna: wrong band"). With *Prefer passes through the beam* (Settings → satellite
+  priorities, on by default) passes with at least 1 min in the beam get up to 15 extra points, the others and
+  frequencies outside the antenna range 20 points less; "always first" is not affected.
+- **Antenna per hit.** Each scan window and satellite recording stores the antenna that was entered at the
+  time; the hit list shows it ("📡 Yagi 4 el. 2 m, 245°"). Hits from before this version have no entry.
+- Self-test: no longer produces a "Broken pipe" traceback in the funktest check (it made the GitHub run red
+  because the workflow fails on any traceback); new section 16 for directional antennas.
+
 ## 1.7.17 – 2026-10-28
 
 - **Level display no longer jumps in and out.** It disappeared whenever no fresh value was available (between

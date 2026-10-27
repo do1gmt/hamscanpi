@@ -141,7 +141,7 @@ def remember_interference(rf_hz, sat_name):
         pass
 
 
-def db_save(sat, hits):
+def db_save(sat, hits, antenna=None):
     if not hits:
         return 0
     db = sqlite3.connect(DB)
@@ -154,8 +154,10 @@ def db_save(sat, hits):
         recording_path TEXT, protected INTEGER NOT NULL DEFAULT 0, segment_id TEXT, mode TEXT, sideband TEXT,
         carrier_delta_hz REAL, note TEXT, rec_center_hz REAL, audio TEXT, audio_score REAL)""")
     now = datetime.now(timezone.utc).isoformat()
-    cur = db.execute("INSERT INTO scan (time, band, center_hz, noise_db, rms_i, rms_q) VALUES (?,?,?,?,?,?)",
-                     (now, "Satelliten", int(sat["center_hz"]), 0.0, 0.0, 0.0))
+    if "antenna" not in {r[1] for r in db.execute("PRAGMA table_info(scan)")}:
+        db.execute("ALTER TABLE scan ADD COLUMN antenna TEXT")
+    cur = db.execute("INSERT INTO scan (time, band, center_hz, noise_db, rms_i, rms_q, antenna) VALUES (?,?,?,?,?,?,?)",
+                     (now, "Satelliten", int(sat["center_hz"]), 0.0, 0.0, 0.0, antenna))
     sid = cur.lastrowid
     cols = {r[1] for r in db.execute("PRAGMA table_info(peak)")}
     for h in hits:
@@ -1000,7 +1002,7 @@ def main():
     try:
         for ch in channels:
             hits = ch.evaluate(t0)
-            n = db_save(ch.sat, hits)
+            n = db_save(ch.sat, hits, getattr(src, "antenna", None))
             per_ch[ch.sat["id"]] = n
             track = np.array(ch.snr_track)
             sig[ch.sat["id"]] = dict(getattr(ch, "stats", None) or signal_stats(

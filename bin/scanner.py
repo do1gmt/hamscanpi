@@ -1347,6 +1347,12 @@ def open_database():
         )
     """)
 
+    try:                                                   # ab 1.7.18: Antenne je Scanfenster (Trefferliste)
+        db.execute("ALTER TABLE scan ADD COLUMN antenna TEXT")
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
+
     for col, typ in (
         ("recording_path", "TEXT"),
         ("protected", "INTEGER NOT NULL DEFAULT 0"),
@@ -1401,6 +1407,23 @@ def listened_summary(band, cfg, centers, selected, plan_entry):
     return out
 
 
+CUR_ANTENNA = [None]          # Antenne des gerade benutzten Empfängers (System → Geräte)
+
+
+def antenna_label(device):
+    """Beschriftung der Antenne: RTL = Eintrag des Haupt-Sticks, sonst config antennas.<gerät>."""
+    try:
+        if device == "rtlsdr":
+            import sticks as STK
+            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            if main and (main.get("antenna") or "").strip():
+                return main["antenna"].strip()
+        cfgf = Path(__file__).resolve().parent.parent / "config" / "scanner.json"
+        return (json.loads(cfgf.read_text(encoding="utf-8")).get("antennas") or {}).get(device) or None
+    except Exception:
+        return None
+
+
 def save_scan(db, band, center, result, peaks):
     cur = db.execute("""
         INSERT INTO scan
@@ -1410,16 +1433,18 @@ def save_scan(db, band, center, result, peaks):
             center_hz,
             noise_db,
             rms_i,
-            rms_q
+            rms_q,
+            antenna
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         timestamp(),
         band,
         int(center),
         result["noise_db"],
         result["rms_i"],
-        result["rms_q"]
+        result["rms_q"],
+        CUR_ANTENNA[0]
     ))
 
     scan_id = cur.lastrowid
@@ -1562,6 +1587,7 @@ def main():
                 continue
             scanned_bands += 1
             dev_obj = get_device(cfg["device"], cfg)
+            CUR_ANTENNA[0] = antenna_label(cfg["device"])
             applog("DEBUG", "scanner", "band_start", band=name, device=cfg["device"], tunes=len(plan_by_band[name]))
             _band_t0, _band_p0, _band_r0 = time.time(), total_peaks, total_rejected
 

@@ -538,6 +538,53 @@ def record_stats(norad, t, hits, seconds):
         os.replace(tmp, STATS_FILE)
 
 
+BEAM_DEFAULT_BW = 70.0        # Öffnungswinkel, wenn bei der Richtantenne keiner eingetragen ist
+
+
+def antenna_beam():
+    """Richtantenne des Haupt-Sticks (System → Geräte): dict(az, bw, fmin, fmax, prefer) oder None
+    (keine Richtung eingetragen = Rundstrahler). prefer aus den Einstellungen (sat_beam_prefer)."""
+    try:
+        import sticks as STK
+        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+    except Exception:
+        return None
+    if not main or main.get("ant_az") is None:
+        return None
+    prefer = True
+    try:
+        prefer = bool(json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+                      .get("sat_beam_prefer", True))
+    except Exception:
+        pass
+    return {"az": float(main["ant_az"]) % 360, "bw": float(main.get("ant_bw") or BEAM_DEFAULT_BW),
+            "el": float(main.get("ant_el") or 0.0),
+            "fmin": main.get("ant_fmin"), "fmax": main.get("ant_fmax"), "prefer": prefer,
+            "name": main.get("antenna") or ""}
+
+
+def beam_window(tr, p, beam, center_hz, step=10.0):
+    """Welcher Teil des Überflugs liegt in der Keule der Richtantenne? Alle step Sekunden Azimut
+    prüfen (Abweichung höchstens halber Öffnungswinkel, in der Höhe ebenso um die Erhebung der Antenne –
+    eine waagrechte Yagi hört über ~35° kaum noch). Rückgabe dict(start, end, max_el, secs, band)."""
+    f = center_hz / 1e6
+    band_ok = not ((beam.get("fmin") and f < beam["fmin"]) or (beam.get("fmax") and f > beam["fmax"]))
+    first = last = None
+    best = 0.0
+    n = 0
+    t = p["aos"]
+    while t <= p["los"]:
+        el, az = tr.look(t)[:2]
+        if (el >= 0 and abs((az - beam["az"] + 180) % 360 - 180) <= beam["bw"] / 2
+                and abs(el - beam.get("el", 0.0)) <= beam["bw"] / 2):
+            first = t if first is None else first
+            last = t
+            best = max(best, el)
+            n += 1
+        t += step
+    return {"start": first, "end": last, "max_el": round(best, 1), "secs": int(n * step), "band": band_ok}
+
+
 def score_pass(p, stats, now):
     """Punkte eines Überflugs und ihre Herleitung.
       Grundpriorität × 10  – entscheidet weiterhin über große Unterschiede (ISS-SSTV bleibt oben)
@@ -558,8 +605,25 @@ def score_pass(p, stats, now):
     hits_recent = sum(x[1] for x in recent)
     silent = len(recent) if hits_recent == 0 else 0
     quiet = round(min(15.0, 1.5 * silent), 1) if silent >= 3 else 0.0
-    total = round(base + quality + waiting - quiet, 1)
+    # Richtantenne (System → Geräte): Überflüge durch die Keule bevorzugen, andere zurückstellen
+    beam_pts = 0.0
+    b = p.get("beam")
+    if b and b.get("prefer"):
+        if not b["band"]:
+            beam_pts = -20.0
+        elif b["secs"] >= 60:
+            beam_pts = round(min(15.0, 8 + b["max_el"] / 6), 1)
+        else:
+            beam_pts = -20.0
+    total = round(base + quality + waiting - quiet + beam_pts, 1)
     why = []
+    if b:
+        if not b["band"]:
+            why.append("Antenne nicht für diese Frequenz")
+        elif b["secs"] >= 60:
+            why.append(f"im Strahl der Antenne {b['secs'] // 60} min, bis {b['max_el']:.0f}°")
+        else:
+            why.append("nicht im Strahl der Antenne")
     if waiting >= 6:
         why.append("noch nie aufgenommen" if not last_rec else
                    (f"{wait_days:.0f} Tage nicht aufgenommen" if wait_days >= 1.5 else f"{wait_days * 24:.0f} h nicht aufgenommen"))
@@ -567,7 +631,10 @@ def score_pass(p, stats, now):
         why.append(f"herabgestuft: {silent} Aufnahmen ohne Signal")
     if hits_recent:
         why.append(f"aktiv: {hits_recent} Treffer in 14 Tagen")
-    return total, {"Grund": base, "Höhe": quality, "Wartezeit": waiting, "Ruhe": -quiet}, why
+    parts = {"Grund": base, "Höhe": quality, "Wartezeit": waiting, "Ruhe": -quiet}
+    if beam_pts:
+        parts["Antenne"] = beam_pts
+    return total, parts, why
 
 
 def make_plan(raw_passes, now=None, stats=None):
@@ -685,6 +752,7 @@ def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=
         if sid in BY_ID and eff_prio(sid, prio) > 0:      # Priorität 0 = nie aufnehmen
             by_norad.setdefault(BY_ID[sid]["norad"], []).append(sid)
     raw, warnings, no_data = [], [], []
+    beam = antenna_beam()
     for norad, ids in by_norad.items():
         name = OBJECTS[norad]
         if norad not in tles:
@@ -701,6 +769,9 @@ def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=
                             base_prio=max(BY_ID[c]["prio"] for c in chosen),
                             labels=[BY_ID[c]["label"] for c in chosen], kind=BY_ID[chosen[0]]["kind"],
                             center_hz=BY_ID[chosen[0]]["center_hz"], id=chosen[0]))
+            if beam:
+                raw[-1]["beam"] = dict(beam_window(tr, p, beam, BY_ID[chosen[0]]["center_hz"]),
+                                       prefer=beam["prefer"], az=beam["az"], bw=beam["bw"])
     plan, recs = make_plan(raw, now)
     problem = None
     if no_data:
