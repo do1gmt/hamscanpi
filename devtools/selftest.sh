@@ -397,5 +397,45 @@ except ValueError:
     pass
 PY
 rm -f /tmp/hsp_bk_*.tgz
+echo "== 18 Weiter aufnehmen: Datenpakete, CW/RTTY"
+cat > fake_rtl_burst.py <<'PY'
+import sys, numpy as np
+rate = 240000
+rng = np.random.default_rng(1)
+for sec in range(80):
+    n = np.arange(rate) + sec * rate
+    z = 0.02 * (rng.standard_normal(rate) + 1j * rng.standard_normal(rate))
+    if sec < 25 and sec % 5 == 0:
+        z[:rate // 2] += 0.3 * np.exp(2j * np.pi * 50000 * n[:rate // 2] / rate)
+    u = np.empty(2 * rate, np.uint8)
+    u[0::2] = np.clip(z.real * 127.5 + 127.5, 0, 255); u[1::2] = np.clip(z.imag * 127.5 + 127.5, 0, 255)
+    try:
+        sys.stdout.buffer.write(u.tobytes()); sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        break
+PY
+printf '#!/bin/sh\nexec python3 "%s/fake_rtl_burst.py"\n' "$PWD" > fake_rtl_burst.sh; chmod +x fake_rtl_burst.sh
+(cd bin && timeout 200 python3 - <<'PY') && ok "APRS bleibt dran, solange Pakete kommen; CW bis zur Sendepause" || bad "Weiter aufnehmen"
+import os, numpy as np, channel_watch as CW
+class D: pass
+d = D(); d.rate = 240000; d.binary = os.path.abspath("../fake_rtl_burst.sh"); d.index = 0; d.ppm = 0; d.gain = None; d.bias_t = False
+out = CW.follow_qso(d, 144.75e6, [{"rf": 144.80e6, "mode": "aprs", "level": 15}],
+                    {"data_follow_hang_seconds": 8, "data_follow_max_seconds": 60}, log=lambda m: None)
+secs = len(out[144.80e6][0]) / CW.AUDIO_RATE
+assert 19 <= secs <= 24, secs                      # 5 Pakete bis 20 s, Ruhe am Ende auf 1 s gekürzt
+class H:
+    rate = 48000.0
+    def __init__(s): s.k = 0
+    def capture(s, sec):
+        n = int(s.rate * sec); t = np.arange(n) / s.rate; s.k += 1
+        z = 0.01 * (np.random.default_rng(s.k).standard_normal(n) + 1j * np.random.default_rng(s.k + 99).standard_normal(n))
+        if s.k <= 5:
+            z = z + 0.2 * np.exp(2j * np.pi * 7000 * t)
+        return z.real.astype(np.float32), z.imag.astype(np.float32)
+_, sec = CW.hf_continue(H(), {}, [7000.0], 200.0, max_s=60, hang_s=6, chunk_s=4)
+assert sec == 28, sec
+_, sec = CW.hf_continue(H(), {}, [7000.0], 200.0, max_s=12, hang_s=6, chunk_s=4)
+assert sec == 12, sec                              # Höchstdauer greift
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

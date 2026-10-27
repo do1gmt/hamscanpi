@@ -95,6 +95,7 @@
     }
     $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
     renderHfDevice();
+    document.querySelectorAll('[data-follow]').forEach(el => { const v = (settings.follow || {})[el.dataset.follow]; el.value = v == null ? '' : v; });
     // Verstärkung für Satelliten: Stufen des R820T/R860 (rtl_sdr nimmt sonst die nächstgelegene)
     const sg = $('satGain');
     sg.innerHTML = '<option value="">wie Haupt-Stick</option>' +
@@ -1846,6 +1847,11 @@
       el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
     });
   }
+  $('followSave').addEventListener('click', async () => {
+    const body = {}; document.querySelectorAll('[data-follow]').forEach(el => { body[el.dataset.follow] = el.value.trim(); });
+    try { const d = await post('/api/follow', body); settings.follow = d.follow; note($('followNote'), '✓ gespeichert – gilt ab dem nächsten Scan'); }
+    catch (e) { note($('followNote'), 'Fehler: ' + e.message, true); }
+  });
   // Kurzwellen-Empfänger: Bezeichnung und Antenne (config/scanner.json)
   function renderHfDevice() {
     const hf = (settings && settings.hf_device) || {};

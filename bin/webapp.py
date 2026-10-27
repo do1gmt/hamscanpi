@@ -126,6 +126,12 @@ def scanner_config():
     return read_json(SCANNER_CONFIG, {"ranges": []})
 
 
+# Weiter aufnehmen (Einstellungen → „Weiter aufnehmen“): Schlüssel in config/scanner.json, Grenzen
+FOLLOW_KEYS = {"qso_hang_seconds": (1, 30), "qso_max_seconds": (0, 600), "data_follow_hang_seconds": (2, 120),
+               "data_follow_max_seconds": (0, 600), "hf_follow_hang_seconds": (2, 60), "hf_follow_max_seconds": (0, 600),
+               "hf_voice_max_seconds": (10, 600), "ft8_extra_cycles": (0, 4), "ft8_extra_min_msgs": (1, 50)}
+
+
 def antennas_effective():
     """Antennen für die Anzeige: Kurzwelle aus config/scanner.json (System → Geräte → Kurzwellen-Empfänger),
     VHF/UHF aus dem Eintrag des Haupt-Sticks (System → Geräte), sonst aus config/scanner.json."""
@@ -268,6 +274,7 @@ def load_settings():
                    for k, v in (data.get("notify") or {}).items()},
         "devices": device_labels(),
         "antennas": antennas_effective(),
+        "follow": {k: scanner_config().get(k) for k in FOLLOW_KEYS},
         "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
                       "antenna": (scanner_config().get("antennas") or {}).get("pmsdr", "")},
     }
@@ -2074,6 +2081,22 @@ class Handler(BaseHTTPRequestHandler):
                 DEV._HW_CACHE["v"] = None                          # Geräteanzeige sofort neu
                 APPLOG.log("INFO", "webapp", "stick_updated", stick=r.get("product"), serial=r.get("serial"), **f)
                 return self.send_json({"ok": True, **STK.overview()})
+            if path == "/api/follow":
+                cfg = read_json(SCANNER_CONFIG, {"ranges": []})
+                for k, (lo, hi) in FOLLOW_KEYS.items():
+                    if k not in data:
+                        continue
+                    v = data[k]
+                    if v in (None, ""):
+                        cfg.pop(k, None)                   # Vorgabe im Programm
+                        continue
+                    v = float(str(v).replace(",", "."))
+                    if not lo <= v <= hi:
+                        raise ValueError(f"{k}: {lo}–{hi}")
+                    cfg[k] = int(v) if v == int(v) else v
+                write_json(SCANNER_CONFIG, cfg)
+                APPLOG.log("INFO", "webapp", "follow_updated", **{k: cfg.get(k) for k in FOLLOW_KEYS})
+                return self.send_json({"ok": True, "follow": {k: cfg.get(k) for k in FOLLOW_KEYS}})
             if path == "/api/hf-device":
                 # Kurzwellen-Empfänger: Bezeichnung und Antenne (stehen in config/scanner.json)
                 cfg = read_json(SCANNER_CONFIG, {"ranges": []})

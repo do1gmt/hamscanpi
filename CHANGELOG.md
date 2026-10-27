@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.28 – 2026-10-29
+
+- **Stay on signals to decode more.** Until now data packets only got the short listening window plus at most
+  6 s, CW/RTTY a fixed 10 s.
+  - **Data packets (APRS, POCSAG):** the scan stays on the channel as long as a new packet arrives within 20 s,
+    at most 60 s (continuous `rtl_sdr` stream, packet detection against the noise floor).
+  - **HF CW/RTTY:** recording continues in 4 s pieces while the station still transmits (6 dB above noise in
+    ±100/±300 Hz), until 6 s of silence, at most 60 s; appended to the hit recording.
+  - **HF SSB voice:** at least the normal recording time, then on while someone speaks (overs alternate,
+    pauses up to 6 s), at most 90 s.
+  - **FT8/FT4:** after a cycle with at least 3 messages one more cycle right after (separate hit) – answers
+    come along, more callsigns and QSOs.
+  - VHF voice unchanged (until 4 s pause, at most 120 s).
+- **Settings → Keep recording:** all limits adjustable (0 = off); stored in `config/scanner.json`.
+- Self-test section 18: APRS follow with a simulated packet stream, CW continuation and limit.
+
 ## 1.7.27 – 2026-10-29
 
 - **Backup and restore** (System → Backup, `bin/backup.py`). One file `hamscanpi-backup-<date>-<scope>.tar.gz`:

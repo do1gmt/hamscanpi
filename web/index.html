@@ -463,6 +463,23 @@
         </div>
         <div class="save-note" id="rasterNote" aria-live="polite"></div>
       </section>
+      <section class="panel" id="panel-follow">
+        <h2>Weiter aufnehmen</h2>
+        <p class="hint">Wie lange der Scan an einem Signal dranbleibt, um möglichst viel davon aufzunehmen und zu dekodieren. Längere Werte bringen mehr Text, Pakete und Rufzeichen – der Scan dauert dafür länger, wenn viel los ist. Auf einem ruhigen Band ändert sich nichts. Leer = Vorgabe (grau).</p>
+        <div class="filter-grid">
+          <label class="field" title="So lange Stille, dann gilt ein Gespräch auf UKW (FM, Relais, AM, Digitalfunk) als beendet."><span>UKW-Sprache: Pause bis Ende (s)</span><input type="number" data-follow="qso_hang_seconds" min="1" max="30" step="1" placeholder="4"></label>
+          <label class="field" title="Obergrenze je Gespräch. 0 = nicht verfolgen."><span>UKW-Sprache: höchstens (s)</span><input type="number" data-follow="qso_max_seconds" min="0" max="600" step="1" placeholder="120"></label>
+          <label class="field" title="APRS und POCSAG: Kommt innerhalb dieser Zeit ein neues Paket, bleibt der Scan dran."><span>Datenpakete: warten auf nächstes (s)</span><input type="number" data-follow="data_follow_hang_seconds" min="2" max="120" step="1" placeholder="20"></label>
+          <label class="field" title="Obergrenze je Paketkanal. 0 = aus (nur das kurze Hörfenster)."><span>Datenpakete: höchstens (s)</span><input type="number" data-follow="data_follow_max_seconds" min="0" max="600" step="1" placeholder="60"></label>
+          <label class="field" title="CW, RTTY und SSB-Sprache: so lange nichts mehr gesendet, dann Schluss."><span>Kurzwelle: Pause bis Ende (s)</span><input type="number" data-follow="hf_follow_hang_seconds" min="2" max="60" step="1" placeholder="6"></label>
+          <label class="field" title="Obergrenze je CW-/RTTY-Treffer. 0 = aus (fest wie früher)."><span>Kurzwelle CW/RTTY: höchstens (s)</span><input type="number" data-follow="hf_follow_max_seconds" min="0" max="600" step="1" placeholder="60"></label>
+          <label class="field" title="Obergrenze je SSB-Treffer (mindestens die normale Aufnahmezeit)."><span>Kurzwelle SSB-Sprache: höchstens (s)</span><input type="number" data-follow="hf_voice_max_seconds" min="10" max="600" step="1" placeholder="90"></label>
+          <label class="field" title="Weitere 15-s-Takte (FT4 7,5 s) direkt hinterher, wenn viel los ist. 0 = nur einer."><span>FT8/FT4: weitere Takte</span><input type="number" data-follow="ft8_extra_cycles" min="0" max="4" step="1" placeholder="1"></label>
+          <label class="field" title="So viele Nachrichten muss ein Takt haben, damit der nächste mitgenommen wird."><span>FT8/FT4: weiter ab Nachrichten</span><input type="number" data-follow="ft8_extra_min_msgs" min="1" max="50" step="1" placeholder="3"></label>
+        </div>
+        <div class="actions"><button class="btn" id="followSave" type="button">Speichern</button></div>
+        <div class="save-note" id="followNote" aria-live="polite"></div>
+      </section>
       <section class="panel" id="panel-satprio">
         <h2>Satelliten-Prioritäten</h2>
         <p class="hint">Überschneiden sich zwei Überflüge, gewinnt die höhere Punktzahl: Priorität × 10, dazu bis 15 Punkte für die Höhe des Überflugs und bis 15 Punkte für die Wartezeit seit der letzten Aufnahme (1 Punkt je 4 Stunden). Abgezogen werden bis 15 Punkte, wenn ein Satellit in den letzten 14 Tagen mehrmals ohne jedes Signal aufgenommen wurde – ein einziger Treffer hebt das wieder auf. Passen die Frequenzen in ein Empfangsfenster, werden beide gemeinsam aufgenommen. 0 = nie aufnehmen, „immer zuerst“ schlägt alles.</p>

@@ -622,6 +622,9 @@ def is_near_configured_ft8(band, rf_hz, tolerance_hz=3500.0):
     return False
 
 
+HF_FOLLOW_BW = {"cw": 200.0, "rtty": 600.0, "digital": 600.0}   # Messbreite (Hz) beim Weiter-Aufnehmen
+
+
 def read_recorded_iq(path, cfg):
     with wave.open(str(path), "rb") as w:
         channels = w.getnchannels()
@@ -1958,6 +1961,28 @@ def main():
                         recording_path, rec_center = recording_path
                         p["recording_path"] = recording_path
                         p["rec_center_hz"] = rec_center
+
+                        # CW/RTTY/Digital: weiter aufnehmen, solange auf der Frequenz noch gesendet wird
+                        # (statt fest record_seconds) – mehr Text für den Dekoder
+                        seg_mode = (classify_segment(band, p["rf_hz"]) or {}).get("mode")
+                        if (cfg.get("device") == "pmsdr" and seg_mode in HF_FOLLOW_BW
+                                and float(cfg.get("hf_follow_max_seconds", 60)) > 0):
+                            try:
+                                (xi, xq), extra_s = CW.hf_continue(
+                                    dev_obj, cfg, [float(p["offset_hz"])], HF_FOLLOW_BW[seg_mode],
+                                    max_s=float(cfg.get("hf_follow_max_seconds", 60)),
+                                    hang_s=float(cfg.get("hf_follow_hang_seconds", 6)))
+                                if extra_s >= 4:
+                                    with wave.open(str(recording_path), "rb") as w:
+                                        raw16 = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+                                    raw16 = raw16[: len(raw16) // 2 * 2].reshape(-1, 2).astype(np.float32) / 32768.0
+                                    ri, rq = raw16[:, 0], raw16[:, 1]
+                                    from devices import wav_write_iq
+                                    wav_write_iq(recording_path, np.concatenate([ri, xi]), np.concatenate([rq, xq]),
+                                                 dev_obj.rate)
+                                    print(f"      {seg_mode.upper()} sendet weiter – {extra_s:.0f} s angehängt")
+                            except Exception as e:
+                                print(f"      weiter aufnehmen nicht möglich: {e}")
 
                         # -------------------------
                         # SSB-Traegerfrequenz schaetzen

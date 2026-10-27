@@ -222,6 +222,7 @@ def watch_fm(dev, band, center, cfg, selected, allowed=lambda rf: True, log=prin
 
 
 FOLLOW_MODES = {"fm", "relais", "am", "dv"}         # Sprache: ganzes QSO aufnehmen
+DATA_FOLLOW_MODES = {"aprs", "pocsag"}              # Pakete: dranbleiben, solange neue kommen
 
 
 def follow_qso(dev, center, chans, cfg, log=print):
@@ -234,8 +235,16 @@ def follow_qso(dev, center, chans, cfg, log=print):
     import subprocess
     from scipy.signal import resample_poly
     rate = int(dev.rate)
-    max_s = float(cfg.get("qso_max_seconds", 120))
-    hang_s = float(cfg.get("qso_hang_seconds", 4))
+    # je Kanal: Sprache bis 4 s Pause (höchstens 120 s), Datenkanäle (APRS, POCSAG) solange innerhalb
+    # von 20 s ein neues Paket kommt (höchstens 60 s) – Pakete kommen in Abständen, Pausen sind normal
+    def lim(c):
+        if c.get("mode") in DATA_FOLLOW_MODES:
+            return (float(cfg.get("data_follow_hang_seconds", 20)), float(cfg.get("data_follow_max_seconds", 60)))
+        return (float(cfg.get("qso_hang_seconds", 4)), float(cfg.get("qso_max_seconds", 120)))
+    limits = {c["rf"]: lim(c) for c in chans}
+    max_s = max(m for _, m in limits.values()) if limits else 0.0
+    done = set()                                   # Kanäle, die fertig sind (still oder Höchstdauer)
+    noise = {}                                     # Datenkanäle: Rauschleistung (kleinster 30-%-Wert)
     g = math.gcd(AUDIO_RATE, rate)
     up, down = AUDIO_RATE // g, rate // g
     pad = 20 * down
@@ -268,6 +277,9 @@ def follow_qso(dev, center, chans, cfg, log=print):
             all_quiet = True
             for c in chans:
                 rf = c["rf"]
+                if rf in done:
+                    continue
+                hang_s, cmax = limits[rf]
                 z = (i + 1j * q).astype(np.complex64) * np.exp(-2j * np.pi * (rf - center) * n_idx / rate).astype(np.complex64)
                 tail = tails[rf]
                 zz = z if tail is None else np.concatenate([tail, z])
@@ -284,16 +296,24 @@ def follow_qso(dev, center, chans, cfg, log=print):
                 Y = np.fft.fft(y[: nfr * fr].reshape(nfr, fr), axis=1)
                 f = np.fft.fftfreq(fr, 1.0 / AUDIO_RATE)
                 pw = (np.abs(Y[:, np.abs(f) <= 6000]) ** 2).sum(axis=1)
-                if rf not in ref:
-                    ref[rf] = float(np.percentile(pw, 90)) / (10 ** (max(6.0, c.get("level", 20.0)) / 20.0))
-                on = pw > ref[rf]
+                if c.get("mode") in DATA_FOLLOW_MODES:
+                    # Paketkanal: die erste Sekunde ist oft still – Bezug ist das Rauschen (+6 dB)
+                    nz = float(np.percentile(pw, 30))
+                    noise[rf] = min(noise.get(rf, nz), nz)
+                    on = pw > noise[rf] * 4.0
+                else:
+                    if rf not in ref:
+                        ref[rf] = float(np.percentile(pw, 90)) / (10 ** (max(6.0, c.get("level", 20.0)) / 20.0))
+                    on = pw > ref[rf]
                 # Stille am Ende dieses Abschnitts hochzählen, bei Signal zurücksetzen
                 if on.any():
                     last_on = int(np.flatnonzero(on)[-1])
                     silent[rf] = (nfr - 1 - last_on) * 0.1
                 else:
                     silent[rf] += nfr * 0.1
-                if silent[rf] < hang_s:
+                if silent[rf] >= hang_s or (n_done + len(i)) / rate >= cmax:
+                    done.add(rf)
+                else:
                     all_quiet = False
             n_done += len(i)
             if all_quiet:
@@ -313,7 +333,8 @@ def follow_qso(dev, center, chans, cfg, log=print):
             y = y[: len(y) - cut]
         res[c["rf"]] = (y.real.astype(np.float64), y.imag.astype(np.float64))
     freqs = ", ".join(f"{c['rf'] / 1e6:.4f}" for c in chans)
-    log(f"      QSO verfolgt: {freqs} MHz, {secs:.0f} s" + (" (Höchstdauer)" if secs >= max_s - 0.5 else ""))
+    what = "Pakete verfolgt" if all(c.get("mode") in DATA_FOLLOW_MODES for c in chans) else "QSO verfolgt"
+    log(f"      {what}: {freqs} MHz, {secs:.0f} s" + (" (Höchstdauer)" if secs >= max_s - 0.5 else ""))
     return res
 
 
@@ -385,8 +406,10 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
     follow = None                                    # verfolgte Durchgänge (Relais-/FM-QSOs), je Kanal
     del P
     end_frames = frames - int(0.25 / frame_s)
-    to_follow = [c for c in picked if c["mode"] in FOLLOW_MODES and np.flatnonzero(c["active"]).size
-                 and np.flatnonzero(c["active"])[-1] >= end_frames]
+    data_on = float(cfg.get("data_follow_max_seconds", 60)) > 0
+    to_follow = [c for c in picked if np.flatnonzero(c["active"]).size and (
+                 (c["mode"] in FOLLOW_MODES and np.flatnonzero(c["active"])[-1] >= end_frames)
+                 or (data_on and c["mode"] in DATA_FOLLOW_MODES))]
     for c in picked:
         # Störlinie: eine einzelne FFT-Linie (≤ 2 kHz) die ganze Zeit an
         # (AM nicht: ATIS/VOLMET senden dauernd mit schmalem Träger – dort entscheidet die Tonprüfung)
@@ -402,9 +425,9 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
         ca = (act[0] * NFFT - a) * AUDIO_RATE // int(rate)
         cb = (act[-1] * NFFT - a) * AUDIO_RATE // int(rate)
         core = (zi[ca:cb], zq[ca:cb])
-        # Läuft der Durchgang bis zum Ende der Aufnahme: weiterhören
-        if act[-1] >= end_frames:
-            if c in to_follow and float(cfg.get("qso_max_seconds", 120)) > 0:
+        # Läuft der Durchgang bis zum Ende der Aufnahme (oder ist es ein Paketkanal): weiterhören
+        if act[-1] >= end_frames or c in to_follow:
+            if c in to_follow and (float(cfg.get("qso_max_seconds", 120)) > 0 or c["mode"] in DATA_FOLLOW_MODES):
                 # Sprache/Relais: dranbleiben, bis der Durchgang (das Gespräch) endet
                 if follow is None:
                     follow = follow_qso(dev, center, to_follow, cfg, log)
@@ -453,6 +476,47 @@ def watch_window(dev, band, center, cfg, selected, owner_half_width, log=print):
 # über die Zeit gemessen – das, was ein Ohr am Empfänger auch tut.
 
 VOICE_BW = 2400.0
+
+
+def hf_continue(dev, cfg, offs, bw_hz, min_s=0.0, max_s=60.0, hang_s=6.0, chunk_s=4.0, log=print):
+    """Kurzwelle (PMSDR): weiter aufnehmen, solange auf einer der Ablagen offs (Hz, Fensterbezug wie in
+    watch_voice/analyse) noch gesendet wird – erst min_s Sekunden fest, dann in chunk_s-Stücken, bis
+    hang_s Sekunden lang nichts mehr kam oder max_s erreicht ist. „Gesendet“ = Leistung im Kanal
+    (±bw_hz/2) mindestens 6 dB über dem mittleren Rauschen des Fensters.
+    Rückgabe (i, q) der zusätzlichen Sekunden (float32; leer, wenn nichts dazukam) und die Dauer in s."""
+    conj = bool(cfg.get("iq_conjugate", False))
+    rate = float(dev.rate)
+    pi, pq = [], []
+    total, quiet = 0.0, 0.0
+    nfft = 4096 if rate <= 50000 else int(2 ** np.ceil(np.log2(rate / 12.0)))
+    f = np.fft.fftshift(np.fft.fftfreq(nfft, 1.0 / rate))
+    win = np.hanning(nfft).astype(np.float32)
+    while total < max_s:
+        step = min_s if (total == 0 and min_s > 0) else chunk_s
+        step = min(step, max_s - total)
+        try:
+            i, q = dev.capture(step)
+        except Exception as e:
+            log(f"      weiter aufnehmen abgebrochen: {e}")
+            break
+        if not len(i):
+            break
+        pi.append(np.asarray(i, dtype=np.float32)); pq.append(np.asarray(q, dtype=np.float32))
+        total += step
+        if total >= min_s:
+            z = (i - 1j * q) if conj else (i + 1j * q)
+            n = len(z) // nfft
+            if n:
+                P = (np.abs(np.fft.fftshift(np.fft.fft(z[: n * nfft].reshape(n, nfft) * win, axis=1), axes=1)) ** 2).mean(axis=0)
+                floor = float(np.median(P))
+                active = any(float(P[np.abs(f - o) <= bw_hz / 2].mean() if (np.abs(f - o) <= bw_hz / 2).any() else 0.0)
+                             > floor * 4.0 for o in offs)
+                quiet = 0.0 if active else quiet + step
+                if quiet >= hang_s:
+                    break
+    if not pi:
+        return (np.zeros(0, np.float32), np.zeros(0, np.float32)), 0.0
+    return (np.concatenate(pi), np.concatenate(pq)), total
 VOICE_HOP = 500.0
 
 
@@ -637,9 +701,17 @@ def watch_voice(dev, band, center, cfg, selected, owner_half_width, corrected_rf
         if rec is None:
             # an die gerade belauschten Sekunden direkt weiter aufnehmen (record_seconds),
             # damit die Trefferaufnahme lang genug zum Zuhören ist
+            # SSB-Sprache: mindestens record_seconds, dann weiter, solange gesprochen wird (Durchgänge
+            # wechseln, kurze Pausen bis 6 s sind normal), höchstens hf_voice_max_seconds
             try:
-                xi, xq = dev.capture(float(cfg.get("record_seconds", 10.0)))
+                (xi, xq), extra_s = hf_continue(
+                    dev, cfg, [p["off"] for p in picked], VOICE_BW,
+                    min_s=float(cfg.get("record_seconds", 10.0)),
+                    max_s=float(cfg.get("hf_voice_max_seconds", 90.0)),
+                    hang_s=float(cfg.get("hf_follow_hang_seconds", 6.0)), log=log)
                 rec = (np.concatenate([i, xi]), np.concatenate([q, xq]))
+                if extra_s > float(cfg.get("record_seconds", 10.0)) + 1:
+                    log(f"      Sprache weiter aufgenommen: {extra_s:.0f} s")
             except Exception:
                 rec = (i, q)
         RECDIR.mkdir(parents=True, exist_ok=True)

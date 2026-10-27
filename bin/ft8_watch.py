@@ -100,39 +100,50 @@ def watch_ft8(dev, band, seg, cfg, log=print):
     slot = SLOT_S[protocol]
 
     dev.tune(center)
-    i, q, t_slot = dev.capture_slot(slot)
-    audio = usb_audio_12k(i, q, dev.rate, bool(cfg.get("iq_conjugate", False)), shift, "USB")
-    msgs = decode(audio, protocol, decoder)
-    stamp = time.strftime("%H:%M:%S", time.gmtime(t_slot))
-    if not msgs:
-        log(f"   {protocol.upper()} {dial/1e6:.3f} MHz, Takt {stamp} UTC: keine Dekodierung")
-        return []
-
-    RECDIR.mkdir(parents=True, exist_ok=True)
-    best = max(msgs, key=lambda m: m["snr"])
-    rf = dial + best["audio_hz"]
-    path = RECDIR / recording_name(band["name"], rf)
-    wav_write_iq(path, i, q, dev.rate)
-    REPORTS.mkdir(parents=True, exist_ok=True)
+    # Erster Takt; waren viele Stationen zu hören, weitere Takte direkt hinterher (ft8_extra_cycles,
+    # ab ft8_extra_min_msgs Nachrichten): dann kommen auch die Antworten mit – mehr Rufzeichen und QSOs
+    extra = int(cfg.get("ft8_extra_cycles", 1))
+    min_msgs = int(cfg.get("ft8_extra_min_msgs", 3))
     label = protocol.upper()
-    data = {
-        "band": band["name"], "frequency_hz": rf, "ft8_tested": True, "slot_utc": stamp,
-        "decoders": [{
-            "type": label, "confidence": 100, "validated": True, "decoder": "ft8_lib",
-            "text": "\n".join(m["text"] for m in msgs),
-            "detail": f"{len(msgs)} {label}-Nachrichten · Takt {stamp} UTC · Dial {dial/1e6:.6f} MHz USB",
-            "messages": msgs,
-        }],
-    }
-    (REPORTS / f"{path.stem}_decode.json").write_text(json.dumps(data, ensure_ascii=False, indent=2),
-                                                      encoding="utf-8")
-    log(f"   {label} {dial/1e6:.3f} MHz, Takt {stamp} UTC: {len(msgs)} Nachrichten")
-    for m in msgs[:8]:
-        log(f"      {m['snr']:+5.0f} dB  {m['audio_hz']:5d} Hz  {m['text']}")
-    return [{
-        "rf_hz": float(rf), "offset_hz": float(rf - center * (1.0 + ppm * 1e-6)),
-        "level_db": best["snr"], "snr_db": best["snr"],
-        "recording_path": str(path), "rec_center_hz": float(center),
-        "segment_id": seg.get("id"), "mode": protocol, "sideband": "USB",
-        "note": f"{len(msgs)} {label}-Nachrichten",
-    }]
+    hits = []
+    for cycle in range(1 + max(0, extra)):
+        i, q, t_slot = dev.capture_slot(slot)
+        audio = usb_audio_12k(i, q, dev.rate, bool(cfg.get("iq_conjugate", False)), shift, "USB")
+        msgs = decode(audio, protocol, decoder)
+        stamp = time.strftime("%H:%M:%S", time.gmtime(t_slot))
+        if not msgs:
+            log(f"   {protocol.upper()} {dial/1e6:.3f} MHz, Takt {stamp} UTC: keine Dekodierung")
+            break
+        RECDIR.mkdir(parents=True, exist_ok=True)
+        best = max(msgs, key=lambda m: m["snr"])
+        rf = dial + best["audio_hz"]
+        path = RECDIR / recording_name(band["name"], rf)
+        if path.exists():                                     # gleicher Name im selben Takt-Sekundenraster
+            path = path.with_name(path.stem + f"_t{cycle + 1}" + path.suffix)
+        wav_write_iq(path, i, q, dev.rate)
+        REPORTS.mkdir(parents=True, exist_ok=True)
+        data = {
+            "band": band["name"], "frequency_hz": rf, "ft8_tested": True, "slot_utc": stamp,
+            "decoders": [{
+                "type": label, "confidence": 100, "validated": True, "decoder": "ft8_lib",
+                "text": "\n".join(m["text"] for m in msgs),
+                "detail": f"{len(msgs)} {label}-Nachrichten · Takt {stamp} UTC · Dial {dial/1e6:.6f} MHz USB",
+                "messages": msgs,
+            }],
+        }
+        (REPORTS / f"{path.stem}_decode.json").write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                                          encoding="utf-8")
+        log(f"   {label} {dial/1e6:.3f} MHz, Takt {stamp} UTC: {len(msgs)} Nachrichten"
+            + (f" (Takt {cycle + 1})" if cycle else ""))
+        for m in msgs[:8]:
+            log(f"      {m['snr']:+5.0f} dB  {m['audio_hz']:5d} Hz  {m['text']}")
+        hits.append({
+            "rf_hz": float(rf), "offset_hz": float(rf - center * (1.0 + ppm * 1e-6)),
+            "level_db": best["snr"], "snr_db": best["snr"],
+            "recording_path": str(path), "rec_center_hz": float(center),
+            "segment_id": seg.get("id"), "mode": protocol, "sideband": "USB",
+            "note": f"{len(msgs)} {label}-Nachrichten",
+        })
+        if len(msgs) < min_msgs:
+            break                                              # wenig los: kein weiterer Takt
+    return hits
