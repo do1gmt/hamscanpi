@@ -368,7 +368,7 @@
     [/ Kürzestes sinnvolles Intervall: jede Stunde\./, ' Shortest sensible interval: every hour.'],
     [/^Scans 24 h · (\d+) Fehler$/, 'Scans 24 h · $1 errors'], [/^(\d+) Fehler$/, '$1 errors'],
     [/^Überflüge 24 h · (\d+) Treffer$/, 'Passes 24 h · $1 hits'],
-    [/^Überflug (.+) · (\d+)°$/, 'Pass $1 · $2°'],
+    [/^Überflug (.+) · (\d+)°( · ↓ [\d.,]+ km)?$/, (m, n, e, d) => `Pass ${n} · ${e}°${d || ''}`],
     [/^in (\d+):(\d\d) h$/, 'in $1:$2 h'],
     [/^(\d+)–(\d+) von (\d+)$/, '$1–$2 of $3'], [/^Einträge (\d+)–(\d+)$/, 'Entries $1–$2'],
     [/^24 h · (\d+) Einträge$/, '24 h · $1 entries'], [/^(\d+)× seit (.+)$/, '$1× since $2'],

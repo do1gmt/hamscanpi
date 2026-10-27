@@ -1307,7 +1307,7 @@
     const live = p.aos <= now;
     const dt = Math.max(0, Math.round((p.aos - now) / 60));
     $('ssNext').textContent = live ? 'läuft' : dt < 60 ? `in ${dt} min` : `in ${Math.floor(dt / 60)}:${String(dt % 60).padStart(2, '0')} h`;
-    $('ssNextLbl').textContent = `Überflug ${p.name.split(' (')[0]} · ${Math.round(p.max_el)}°`;
+    $('ssNextLbl').textContent = `Überflug ${p.name.split(' (')[0]} · ${Math.round(p.max_el)}°${p.min_km ? ` · ↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km` : ''}`;
   }
   document.querySelectorAll('#scanStats [data-go]').forEach(b => b.addEventListener('click', () => {
     const go = b.dataset.go;

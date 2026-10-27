@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.22 – 2026-10-29
+
+- **Shortest distance in the pass tile** at the top of the scan page ("Pass RS-44 · 72° · ↓ 1,050 km"), for the
+  running and the next pass.
+- **Current distance during a recording** in the scan status line ("elevation RS-44 21° (1,840 km)"), updated
+  every 5 s together with the elevation.
+
 ## 1.7.21 – 2026-10-29
 
 - README: new section **SD card or SSD** – comparison (wear, speed, power loss, power draw, USB 3 interference

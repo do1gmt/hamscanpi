@@ -975,7 +975,10 @@ def main():
                         items.append({"label": lab, "db": db, "hist": h})
                 write_meter("satellite", items)
             if nblk % 50 == 0:
-                els = ", ".join(f"{SAT.OBJECTS[o].split(' ')[0]} {trackers[o].look(t)[0]:.0f}°" for o in objs)
+                def _el_km(o):                                # Höhe und aktuelle Entfernung je Satellit
+                    lk = trackers[o].look(t)
+                    return f"{SAT.OBJECTS[o].split(' ')[0]} {lk[0]:.0f}° ({lk[2]:,.0f} km)".replace(",", ".")
+                els = ", ".join(_el_km(o) for o in objs)
                 status("running", f"Satellit {name}: Aufnahme {labels} MHz, Elevation {els}",
                        min(99, 100 * (t - t0) / max(1, until - t0)))
     except Exception as e:
