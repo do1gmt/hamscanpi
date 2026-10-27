@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.19 – 2026-10-28
+
+- **System → Devices no longer overwrites unsaved input.** The device list reloaded every 15 s and only held
+  back while a field had focus – entering direction, beamwidth and frequency range took longer than that and
+  values were lost between fields. Now any change locks the list until *Save* (note "Change not saved yet",
+  discarded after 10 min), and the list is only redrawn when the data actually changed (no flicker).
+- **Tooltips** (mouse-over) on all device fields (role, ppm, gain, antenna, direction, beamwidth, elevation,
+  frequency range), the HF receiver fields and the satellite gain / beam settings; also in English.
+
 ## 1.7.18 – 2026-10-28
 
 - **Directional antennas.** System → Devices: for the main stick, direction (azimuth), beamwidth (default 70°),

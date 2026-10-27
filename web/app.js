@@ -1597,9 +1597,12 @@
 
   // ---------- System: Geräte (SDR-Sticks) ----------
   const ROLE_TEXT = { main: 'Haupt-Stick', spare: 'Reserve', ignore: 'ignoriert', '': 'neu – noch nicht festgelegt' };
-  let sticksEditing = false;
+  let sticksEditing = false, sticksDirty = false, sticksLast = '';
   function fmtSeen(t) { return new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   function renderSticks(d) {
+    const js = JSON.stringify(d);
+    if (js === sticksLast) return;                         // nichts geändert: nicht neu zeichnen (kein Flackern)
+    sticksLast = js;
     const list = d.sticks || [];
     $('sticksNew').hidden = !d.pending;
     $('sticksNew').textContent = d.pending ? 'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt HamScanPi ihn nicht.' : '';
@@ -1618,15 +1621,15 @@
       let body = '';
       if (r.kind === 'rtl') {
         body = `<div class="stick-form" data-key="${esc(r.key)}">
-          <label class="field"><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
-          <label class="field"><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
-          <label class="field"><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
-          <label class="field"><span>Antenne</span><input data-f="antenna" type="text" maxlength="60" placeholder="z. B. Discone" value="${esc(r.antenna || '')}"></label>
-          <label class="field"><span>Richtung (°)</span><input data-f="ant_az" type="number" step="1" min="0" max="360" placeholder="Rundstrahler" value="${r.ant_az ?? ''}"></label>
-          <label class="field"><span>Öffnungswinkel (°)</span><input data-f="ant_bw" type="number" step="1" min="10" max="360" placeholder="70" value="${r.ant_bw ?? ''}"></label>
-          <label class="field"><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
-          <label class="field"><span>gilt für MHz von</span><input data-f="ant_fmin" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmin ?? ''}"></label>
-          <label class="field"><span>bis</span><input data-f="ant_fmax" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmax ?? ''}"></label>
+          <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = bleibt unbenutzt, bis du ihn zum Haupt-Stick machst. Ignoriert = HamScanPi fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
+          <label class="field" title="Frequenzkorrektur des Sticks in ppm (Quarzfehler). Leer = Wert aus dem Bandplan. Sticks mit TCXO wie der NESDR SMArt brauchen meist 0."><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
+          <label class="field" title="Verstärkung in dB für Scan und Live. Leer = Wert aus dem Bandplan. Zu hoch übersteuert bei starken Ortssendern, zu niedrig verliert schwache Signale. Für Satelliten gibt es eine eigene Einstellung."><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
+          <label class="field" title="Name der angeschlossenen Antenne – nur eine Beschriftung. Erscheint in der Scan-Anzeige, bei jedem Überflug und bei jedem Treffer."><span>Antenne</span><input data-f="antenna" type="text" maxlength="60" placeholder="z. B. Discone" value="${esc(r.antenna || '')}"></label>
+          <label class="field" title="Richtung, in die eine Richtantenne zeigt: 0° Nord, 90° Ost, 180° Süd, 270° West. Leer lassen bei Rundstrahlern (Discone, X30)."><span>Richtung (°)</span><input data-f="ant_az" type="number" step="1" min="0" max="360" placeholder="Rundstrahler" value="${r.ant_az ?? ''}"></label>
+          <label class="field" title="Öffnungswinkel der Hauptkeule in Grad. 4-Element-Yagi etwa 60–70°, 10 Elemente etwa 35°. Leer = 70°."><span>Öffnungswinkel (°)</span><input data-f="ant_bw" type="number" step="1" min="10" max="360" placeholder="70" value="${r.ant_bw ?? ''}"></label>
+          <label class="field" title="Neigung der Antenne nach oben: 0 = waagrecht. Bei 0° und 70° Öffnungswinkel zählt alles bis 35° Höhe als „im Strahl“."><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
+          <label class="field" title="Frequenzbereich der Antenne, untere Grenze in MHz. Satelliten außerhalb des Bereichs gelten als „falsches Band“. Für eine 2-m-Yagi mit Meteor: 137."><span>gilt für MHz von</span><input data-f="ant_fmin" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmin ?? ''}"></label>
+          <label class="field" title="Frequenzbereich der Antenne, obere Grenze in MHz. Für eine 2-m-Yagi: 150."><span>bis</span><input data-f="ant_fmax" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmax ?? ''}"></label>
           <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
           <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}</div>
         </div>`;
@@ -1643,6 +1646,8 @@
     $('sticksList').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => stickAction(b)));
     $('sticksList').querySelectorAll('input, select').forEach(el => {
       el.addEventListener('focus', () => { sticksEditing = true; });
+      el.addEventListener('input', () => { if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
+      el.addEventListener('change', () => { if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
       el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
     });
   }
@@ -1681,11 +1686,12 @@
         d = await post('/api/sticks/serial', { key, serial: sn });
         alert(`Seriennummer ${d.serial} geschrieben. Jetzt den Stick ab- und wieder anstecken – erst danach meldet er sich mit der neuen Nummer.`);
       }
-      sticksEditing = false; renderSticks(d); pollStatus();
+      sticksEditing = false; sticksDirty = false; sticksLast = ''; renderSticks(d); pollStatus();
     } catch (e) { note($('sticksNote'), e.message, true); }
   }
   async function loadSticks() {
-    if (sticksEditing) return;                       // keine Eingabe überschreiben
+    if (sticksDirty && Date.now() - sticksDirty > 600000) sticksDirty = false;   // nach 10 min verworfen
+    if (sticksEditing || sticksDirty) return;        // keine (ungespeicherte) Eingabe überschreiben
     try { renderSticks(await api('/api/sticks')); } catch (e) { /* nächste Runde */ }
   }
   setInterval(() => { if (sysVisible()) loadSticks(); }, 15000);
