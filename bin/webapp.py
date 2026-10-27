@@ -2008,7 +2008,7 @@ class Handler(BaseHTTPRequestHandler):
                 delete_hit(int(data["peak_id"]))
                 return self.send_json({"ok": True})
             if path == "/api/sticks/update":
-                f = {k: data[k] for k in ("role", "ppm", "gain", "antenna", "ant_az", "ant_bw", "ant_el", "ant_fmin", "ant_fmax")
+                f = {k: data[k] for k in ("role", "ppm", "gain", "antenna", "ant_az", "ant_bw", "ant_el", "ant_fmin", "ant_fmax", "ant_range")
                      if k in data}
                 r = STK.update(str(data.get("key", "")), **f)
                 DEV._HW_CACHE["v"] = None                          # Geräteanzeige sofort neu

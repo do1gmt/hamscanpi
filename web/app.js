@@ -1636,7 +1636,7 @@
       if (r.note) warn.push(r.note + ' – dieser Eintrag kann vergessen werden.');
       let body = '';
       if (r.kind === 'rtl') {
-        body = `<div class="stick-form" data-key="${esc(r.key)}">
+        body = `<div class="stick-form" data-key="${esc(r.key)}" data-role="${esc(role)}">
           <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = bleibt unbenutzt, bis du ihn zum Haupt-Stick machst. Ignoriert = HamScanPi fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
           <label class="field" title="Frequenzkorrektur des Sticks in ppm (Quarzfehler). Leer = Wert aus dem Bandplan. Sticks mit TCXO wie der NESDR SMArt brauchen meist 0."><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
           <label class="field" title="Verstärkung in dB für Scan und Live. Leer = Wert aus dem Bandplan. Zu hoch übersteuert bei starken Ortssendern, zu niedrig verliert schwache Signale. Für Satelliten gibt es eine eigene Einstellung."><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
@@ -1644,8 +1644,7 @@
           <label class="field" title="Richtung, in die eine Richtantenne zeigt: 0° Nord, 90° Ost, 180° Süd, 270° West. Leer lassen bei Rundstrahlern (Discone, X30)."><span>Richtung (°)</span><input data-f="ant_az" type="number" step="1" min="0" max="360" placeholder="Rundstrahler" value="${r.ant_az ?? ''}"></label>
           <label class="field" title="Öffnungswinkel der Hauptkeule in Grad. 4-Element-Yagi etwa 60–70°, 10 Elemente etwa 35°. Leer = 70°."><span>Öffnungswinkel (°)</span><input data-f="ant_bw" type="number" step="1" min="10" max="360" placeholder="70" value="${r.ant_bw ?? ''}"></label>
           <label class="field" title="Neigung der Antenne nach oben: 0 = waagrecht. Bei 0° und 70° Öffnungswinkel zählt alles bis 35° Höhe als „im Strahl“."><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
-          <label class="field" title="Frequenzbereich der Antenne, untere Grenze in MHz. Satelliten außerhalb des Bereichs gelten als „falsches Band“. Für eine 2-m-Yagi mit Meteor: 137."><span>gilt für MHz von</span><input data-f="ant_fmin" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmin ?? ''}"></label>
-          <label class="field" title="Frequenzbereich der Antenne, obere Grenze in MHz. Für eine 2-m-Yagi: 150."><span>bis</span><input data-f="ant_fmax" type="number" step="0.1" min="1" max="6000" placeholder="–" value="${r.ant_fmax ?? ''}"></label>
+          <label class="field" title="Frequenzbereich der Antenne in MHz, z. B. 137–150 (mit Bindestrich). Satelliten außerhalb gelten als „falsches Band“. Leer = alle Frequenzen."><span>gilt für (MHz)</span><input data-f="ant_range" type="text" inputmode="decimal" maxlength="20" placeholder="z. B. 137–150" value="${r.ant_fmin != null || r.ant_fmax != null ? `${r.ant_fmin ?? ''}–${r.ant_fmax ?? ''}` : ''}"></label>
           <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
           <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}</div>
         </div>`;
@@ -1689,7 +1688,8 @@
       let d;
       if (a === 'save') {
         const f = {}; box.querySelectorAll('[data-f]').forEach(el => { f[el.dataset.f] = el.value; });
-        if (f.role === 'main' && !confirm('Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.')) return;
+        const wasMain = (box.dataset.role || '') === 'main';
+        if (f.role === 'main' && !wasMain && !confirm('Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.')) return;
         d = await post('/api/sticks/update', Object.assign({ key }, f));
         note($('sticksNote'), '✓ gespeichert');
       } else if (a === 'forget') {

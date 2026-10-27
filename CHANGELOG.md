@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.23 – 2026-10-29
+
+- **Antenna frequency range as one field** (System → Devices): "valid for (MHz)" takes `137–150`, `137-150`
+  or `137,5 - 146`; empty = all frequencies. The two separate number fields rejected a typed range, so nothing
+  was saved.
+- Saving the main stick no longer asks "Use this stick as the main stick?" every time – only when the role
+  actually changes to main stick.
+
 ## 1.7.22 – 2026-10-29
 
 - **Shortest distance in the pass tile** at the top of the scan page ("Pass RS-44 · 72° · ↓ 1,050 km"), for the

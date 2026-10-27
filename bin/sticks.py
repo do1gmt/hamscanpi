@@ -267,6 +267,15 @@ def update(key, **fields):
             if not lo <= v <= hi:
                 raise ValueError(f"{what} zwischen {lo:g} und {hi:g}")
             return v
+        if "ant_range" in fields:                      # „137–150“, „137-150“, „137,5 - 146“; leer = alle Frequenzen
+            txt = str(fields.pop("ant_range") or "").strip()
+            if not txt:
+                fields["ant_fmin"] = fields["ant_fmax"] = None
+            else:
+                parts = [x for x in re.split(r"\s*[-–—]\s*|\s+bis\s+|\s*\.\.\s*", txt) if x.strip()]
+                if len(parts) != 2:
+                    raise ValueError("Frequenzbereich als „von–bis“ in MHz eingeben, z. B. 137–150")
+                fields["ant_fmin"], fields["ant_fmax"] = parts[0].replace(",", "."), parts[1].replace(",", ".")
         for k, lo, hi, what in (("ant_az", 0, 360, "Richtung (°)"), ("ant_bw", 10, 360, "Öffnungswinkel (°)"),
                                 ("ant_el", 0, 90, "Erhebung (°)"),
                                 ("ant_fmin", 1, 6000, "Frequenz von (MHz)"), ("ant_fmax", 1, 6000, "Frequenz bis (MHz)")):
