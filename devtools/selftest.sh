@@ -307,6 +307,15 @@ car = D.detect_ft8(np.exp(2j * np.pi * np.cumsum(f2) / rate) + n(0.3), rate)
 noi = D.detect_ft8(n(1.0), rate)
 print("OK" if ft8 and ft8["confidence"] >= 85 and car is None and noi is None else f"NEIN {ft8} {car} {noi}")
 PY
+(cd bin && python3 - <<'PY') && ok "LRPT-Stufen: Rauschen nichts, 2–4 dB mit Schwund schwach, 12 dB stark" || bad "LRPT-Bewertung"
+import numpy as np, sat_pass as SP
+rng = np.random.default_rng(0); n = 925; t = np.arange(n)
+noise = 1 + 0.02 * rng.standard_normal(n); bump = np.exp(-((t - 470) / 140) ** 2)
+R = SP.ProbeChannel.lrpt_rating
+assert R(noise)["level"] is None
+assert R(noise + (10 ** 0.4 - 1) * bump * (0.6 + 0.4 * np.abs(np.sin(t / 7))))["level"] == "schwach"
+assert R(noise + (10 ** 1.2 - 1) * bump)["level"] == "stark"
+PY
 python3 bin/funktest.py | grep -q "MHz" && python3 bin/funktest.py 1 | grep -q "einstellen" \
   && ok "Handfunken-Test: Überflugliste und Dopplertabelle" || bad "funktest.py"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt

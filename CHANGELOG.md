@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.14 – 2026-10-28
+
+- **Meteor/LRPT rated in steps.** First real reception on 27 Oct (N2-4, 60°, discone): a clearly visible
+  120 kHz block on 137.900 MHz at 2–4 dB with fading – but the list said "no LRPT" and "no signal", because
+  "heard" required 30 s above 6 dB. Now the power curve is smoothed over 10 s and rated: **weak** (≥ 60 s above
+  1.5 dB), **good** (above 4 dB), **strong** (above 8 dB). Noise alone stays within tenths of a dB. Probe
+  satellites no longer get the red "no signal" line; the list shows e.g. "LRPT weak reception on 137.900 MHz
+  (5 min above 1.5 dB)", also in English.
+- **Hits: spectrum only on request.** The spectrum is hidden behind "Show spectrum" and only loaded then
+  (less rendering on the Pi); listening and tuning work without it.
+- **Practice mode** (Hits, checkbox): mode badge, decodes, band plan notes, segment and spectrum stay hidden
+  until "Reveal" – to learn signals by ear first.
+- **Info buttons (ⓘ)** with short explanations next to demodulator, DNR, tuning, audio download, spectrum and
+  the hit actions; tap to open, tap elsewhere or Esc to close.
+- Self-test: LRPT rating (noise, weak with fading, strong).
+
 ## 1.7.13 – 2026-10-27
 
 - **FT8 "Error [n] while unpacking!"** (output of ft8_lib for a frame received correctly but of a type it

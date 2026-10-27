@@ -406,7 +406,7 @@
   }
 
   function badges(h) {
-    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}${h.interference ? '<span class="badge badge-interf" title="Gelernte Störlinie – siehe Stationen → Störlinien">⚡ Störlinie</span>' : ''}`;
+    return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode px ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch px" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds px" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}${h.interference ? '<span class="badge badge-interf" title="Gelernte Störlinie – siehe Stationen → Störlinien">⚡ Störlinie</span>' : ''}`;
   }
   function buildCard(h) {
     const el = document.createElement('article'); el.className = 'hit'; el.dataset.id = h.id;
@@ -434,7 +434,7 @@
     el.querySelector('.hit-freq').innerHTML = `${fmtMHz(h.rf_hz)} <small>MHz</small>`;
     el.querySelector('.hit-badges').innerHTML = badges(h);
     const dec = decodeSummary(h);
-    el.querySelector('.hit-sub').textContent = `${h.snr_db.toFixed(0)} dB SNR · ${fmtTime(h.time)}${h.note ? ' · ' + h.note : ''}${dec ? ' · ' + dec : ''}`;
+    el.querySelector('.hit-sub').innerHTML = `${h.snr_db.toFixed(0)} dB SNR · ${esc(fmtTime(h.time))}${h.note ? ' · ' + esc(h.note) : ''}${dec ? `<span class="px"> · ${esc(dec)}</span>` : ''}`;
     // Detailbereich nur neu füllen, wenn offen und nichts spielt
     const body = el.querySelector('.hit-body');
     if (el.classList.contains('open') && body.childElementCount && !anyPlaying(body) && document.activeElement?.closest?.('.hit-body') !== body) {
@@ -457,12 +457,19 @@
       html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">
         <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a></div>`;
     }
-    if (f.iq) html += `<div class="spec-box"><img class="spec-img" src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy" onerror="this.parentElement.remove()" title="Antippen: dorthin abstimmen · Mausrad: feinstimmen"><div class="wf-pass spec-pass" hidden></div><div class="wf-mark spec-mark" hidden></div></div>`;
-    else if (f.spectrum) html += `<img src="${f.spectrum}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" loading="lazy">`;
-    if (h.offset_hz) html += `<p class="hint"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
-    if (h.segment_note) html += `<p class="hint">${esc(h.segment_note)}</p>`;
+    // Spektrum zunächst verdeckt: erst hören und überlegen, dann aufdecken (Übungsgelände zum Signale lernen).
+    // Das Bild wird erst beim Aufdecken geladen; Abhören und Abstimmen funktionieren auch verdeckt.
+    if (f.iq || f.spectrum) {
+      html += `<div class="spec-toggle px"><button type="button" class="btn btn-small" data-act="spec">Spektrum zeigen</button><button type="button" class="info-btn" data-info="Spektrum: Pegel über der Frequenz rund um den Treffer, gemittelt über die Aufnahme. Der gelbe Strich ist die aktuelle Abstimmung, die Fläche daneben das, was der Demodulator durchlässt. Antippen stimmt dorthin ab, das Mausrad stimmt fein.">ⓘ</button></div><div class="spec-hide" hidden>`;
+      if (f.iq) html += `<div class="spec-box"><img class="spec-img" data-src="/api/spectrum?peak_id=${h.id}&lang=${I18N.lang}&v=${encodeURIComponent(h.rec || '')}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz" onerror="this.parentElement.remove()" title="Antippen: dorthin abstimmen · Mausrad: feinstimmen"><div class="wf-pass spec-pass" hidden></div><div class="wf-mark spec-mark" hidden></div></div>`;
+      else html += `<img data-src="${f.spectrum}" alt="Spektrum um ${fmtMHz(h.rf_hz)} MHz">`;
+      html += `</div>`;
+    }
+    if (h.offset_hz) html += `<p class="hint px"><b>Relais</b>: Ausgabe ${fmtMHz(h.rf_hz)} MHz, Eingabe ${fmtMHz(h.rf_hz + h.offset_hz)} MHz (Ablage ${(h.offset_hz / 1e6).toFixed(1)} MHz)</p>`;
+    if (h.segment_note) html += `<p class="hint px">${esc(h.segment_note)}</p>`;
     const sat = h.band === 'Satelliten';
-    html += `<p class="hint">${sat ? `SNR ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `SNR ${(h.snr_db != null ? h.snr_db : h.level_db - h.noise_db).toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
+    html += `<div class="practice-bar"><button type="button" class="btn btn-small" data-act="reveal">Auflösen</button> <span class="hint">Übungsmodus: erst hören, dann auflösen</span></div>`;
+    html += `<p class="hint px">${sat ? `SNR ${h.snr_db.toFixed(0)} dB · Doppler-korrigiert aufgenommen` : `SNR ${(h.snr_db != null ? h.snr_db : h.level_db - h.noise_db).toFixed(0)} dB`} · ${h.segment_id ? 'Segment ' + h.segment_id : 'kein Segment'}${h.carrier_delta_hz ? ` · Trägerkorrektur ${h.carrier_delta_hz > 0 ? '+' : ''}${h.carrier_delta_hz.toFixed(0)} Hz` : ''}</p>`;
     // Audio: FM zuerst, sonst SSB je nach Betriebsart
     if (f.fm && !f.iq) html += player('FM', f.fm);   // sonst übernimmt „Empfang“ (abstimmbar)
     if (f.iq) {
@@ -483,31 +490,32 @@
             <option value="ssb-USB">SSB USB</option><option value="ssb-LSB">SSB LSB</option><option value="am">AM</option><option value="nfm">FM schmal</option><option value="wfm">FM breit</option>
           </select> <select class="nr" aria-label="Rauschminderung" title="Rauschminderung (wie DNR am Transceiver)">
             <option value="0">ohne DNR</option><option value="1">DNR mittel</option><option value="2">DNR stark</option>
-          </select></span></div>
+          </select><button type="button" class="info-btn" data-info="Demodulator: wie das Signal hörbar gemacht wird. SSB USB/LSB für Sprache auf Kurzwelle (unter 10 MHz meist LSB, darüber USB) und für Digitalmodi (immer USB). AM für Flugfunk und CB. FM schmal für Relais, Simplex, PMR und Pager. FM breit für UKW-Rundfunk. Falsch gewählt klingt es verzerrt, als Pfeifen oder nur als Rauschen.">ⓘ</button><button type="button" class="info-btn" data-info="DNR (digitale Rauschminderung) wie am Transceiver: „mittel“ nimmt hörbar Rauschen weg, „stark“ macht Sprache dumpfer und kann schwache Signale mit wegfiltern. Zum Lernen und für Digitalmodi besser „ohne DNR“.">ⓘ</button></span></div>
         <audio controls preload="none"></audio>
         <div class="tune"><span class="hint">Abstimmung:</span>
           ${vhf ? '<button type="button" class="btn btn-small" data-tune="-12500">−12.5k</button>' : ''}<button type="button" class="btn btn-small" data-tune="-500">−500</button><button type="button" class="btn btn-small" data-tune="-100">−100</button><button type="button" class="btn btn-small" data-tune="-10">−10</button>
           <span class="val">0 Hz</span>
           <button type="button" class="btn btn-small" data-tune="10">+10</button><button type="button" class="btn btn-small" data-tune="100">+100</button><button type="button" class="btn btn-small" data-tune="500">+500</button>${vhf ? '<button type="button" class="btn btn-small" data-tune="12500">+12.5k</button>' : ''}
           <button type="button" class="btn btn-small" data-tune="0">0</button>
+          <button type="button" class="info-btn" data-info="Abstimmung: verschiebt die Empfangsfrequenz gegenüber dem Treffer – grob ±500 und ±100 Hz, fein ±10 Hz, auf UKW auch ±12,5 kHz (ein Kanal). Bei SSB ändert sich dabei die Tonhöhe: richtig ist es, wenn die Stimme natürlich klingt; bei Digitalmodi sollte der Ton zwischen 300 und 3000 Hz liegen. „0“ setzt zurück.">ⓘ</button>
         </div>
-        <p class="hint dmod-hint">${hints[dmod]}</p>
-        <a class="btn btn-small audio-dl" href="#" download>↓ Audio so speichern, wie es gerade klingt</a>
+        <p class="hint dmod-hint px">${hints[dmod]}</p>
+        <a class="btn btn-small audio-dl" href="#" download>↓ Audio so speichern, wie es gerade klingt</a><button type="button" class="info-btn" data-info="Lädt genau das herunter, was du gerade hörst – mit Demodulator, Abstimmung und DNR – als WAV-Datei, z. B. zum Weitergeben oder für fldigi/WSJT-X.">ⓘ</button>
       </div>`;
       body.__hints = hints;
     } else if (f.usb || f.lsb) {
       if (f.usb) html += player('USB (fertige Datei)', f.usb);
       if (f.lsb) html += player('LSB (fertige Datei)', f.lsb);
     }
-    if (h.decodes.length) html += renderDecodes(h);
-    else if (['ft8', 'ft4', 'cw', 'rtty', 'digital', 'wspr', 'aprs', 'pocsag'].includes(h.mode)) html += `<p class="hint">Noch nichts dekodiert${h.mode === 'wspr' ? ' – für WSPR gibt es keinen Dekoder auf dem Pi' : ' (läuft nach dem Scan, oder das Signal war zu kurz/zu schwach)'}.</p>`;
+    if (h.decodes.length) html += `<div class="px">${renderDecodes(h)}</div>`;
+    else if (['ft8', 'ft4', 'cw', 'rtty', 'digital', 'wspr', 'aprs', 'pocsag'].includes(h.mode)) html += `<p class="hint px">Noch nichts dekodiert${h.mode === 'wspr' ? ' – für WSPR gibt es keinen Dekoder auf dem Pi' : ' (läuft nach dem Scan, oder das Signal war zu kurz/zu schwach)'}.</p>`;
     html += `<div class="note-row"><input type="text" class="note" placeholder="Notiz / Rufzeichen" value="${esc(h.note)}" maxlength="200"><button type="button" class="btn btn-small" data-act="note">Speichern</button></div>`;
     html += `<div class="hit-actions">
       <button type="button" class="btn btn-small btn-live" data-act="live">▶ Jetzt live hören</button>
       <button type="button" class="btn btn-small" data-act="protect">${h.protected ? '☆ Schutz aufheben' : '★ Behalten'}</button>
       ${f.iq ? `<a class="btn btn-small" href="${f.iq}" title="Rohdaten, Stereo I/Q – für SDR-Software, nicht zum Anhören">↓ I/Q-Rohdaten (für SDR-Software)</a>` : ''}
       ${f.usb ? `<a class="btn btn-small" href="${f.usb}" download>↓ USB</a>` : ''}${f.lsb ? `<a class="btn btn-small" href="${f.lsb}" download>↓ LSB</a>` : ''}
-      <button type="button" class="btn btn-small btn-danger" data-act="delete">Löschen</button></div>`;
+      <button type="button" class="btn btn-small btn-danger" data-act="delete">Löschen</button><button type="button" class="info-btn" data-info="Jetzt live hören: stimmt den Reiter Live auf diese Frequenz ab. Behalten: schützt den Treffer vor dem automatischen Löschen. I/Q-Rohdaten: die Originalaufnahme für SDR-Software wie SDR++, SDR# oder GQRX – dort kannst du selbst demodulieren. USB/LSB: fertig demodulierte Dateien aus dem Scan.">ⓘ</button></div>`;
     body.innerHTML = html;
 
     const ssb = body.querySelector('.player-ssb');
@@ -553,6 +561,18 @@
       sel.addEventListener('change', () => { const v = sel.value; if (v.startsWith('ssb-')) { ssb.dataset.dmod = 'ssb'; ssb.dataset.side = v.slice(4); } else ssb.dataset.dmod = v; apply(); });
       ssb.querySelectorAll('[data-tune]').forEach(b => b.addEventListener('click', () => { const v = Number(b.dataset.tune); ssb.dataset.off = v === 0 ? 0 : Math.max(-100000, Math.min(100000, Number(ssb.dataset.off) + v)); ssb.querySelector('.val').textContent = (Number(ssb.dataset.off) > 0 ? '+' : '') + ssb.dataset.off + ' Hz'; drawMark(); clearTimeout(ssb.__t); ssb.__t = setTimeout(apply, 350); }));
     }
+    body.querySelector('[data-act=reveal]').addEventListener('click', () => {
+      el.classList.add('revealed');
+      const sb = body.querySelector('[data-act=spec]'), wrap = body.querySelector('.spec-hide');
+      if (sb && wrap && wrap.hidden) sb.click();                       // Auflösen zeigt auch das Spektrum
+    });
+    const specBtn = body.querySelector('[data-act=spec]');
+    if (specBtn) specBtn.addEventListener('click', () => {
+      const wrap = body.querySelector('.spec-hide');
+      wrap.hidden = !wrap.hidden;
+      wrap.querySelectorAll('img[data-src]').forEach(im => { im.src = im.dataset.src; im.removeAttribute('data-src'); });
+      specBtn.textContent = wrap.hidden ? 'Spektrum zeigen' : 'Spektrum verbergen';
+    });
     body.querySelector('[data-act=live]').addEventListener('click', () => window.__liveFromHit(h));
     body.querySelector('[data-act=protect]').addEventListener('click', async () => { try { await post('/api/protect-hit', { peak_id: h.id, protected: !h.protected }); toast(h.protected ? 'Schutz aufgehoben' : 'Treffer wird behalten'); loadHits(); loadStats(); } catch (e) { toast('Fehler: ' + e.message); } });
     body.querySelector('[data-act=delete]').addEventListener('click', async () => { if (!confirm(`Treffer ${fmtMHz(h.rf_hz)} MHz löschen?`)) return; try { await post('/api/delete-hit', { peak_id: h.id }); toast('Gelöscht'); loadHits(); loadStats(); loadDeletionLog(); } catch (e) { toast('Fehler: ' + e.message); } });
@@ -662,6 +682,35 @@
   $('search').addEventListener('input', e => { filter.q = e.target.value.trim(); clearTimeout(hitsTimer); hitsTimer = setTimeout(loadHits, 300); });
   $('filterProtected').addEventListener('change', e => { filter.protected = e.target.checked; loadHits(); });
   $('filterAudio').checked = filter.audio;
+  // Übungsmodus: Lösung (Betriebsart, Dekodierungen, Bandplan, Spektrum) verdeckt bis „Auflösen“
+  const practice = $('practiceMode');
+  practice.checked = localStorage.getItem('practice') === '1';
+  document.body.classList.toggle('practice', practice.checked);
+  practice.addEventListener('change', () => {
+    localStorage.setItem('practice', practice.checked ? '1' : '0');
+    document.body.classList.toggle('practice', practice.checked);
+    document.querySelectorAll('.hit.revealed').forEach(x => x.classList.remove('revealed'));
+  });
+  // Info-Knöpfe (ⓘ): kurze Erklärung als Blase, Klick daneben oder Esc schließt
+  let infoPop = null;
+  const closeInfo = () => { if (infoPop) { infoPop.remove(); infoPop = null; } };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.info-btn');
+    if (!b) { if (infoPop && !e.target.closest('.info-pop')) closeInfo(); return; }
+    e.preventDefault(); e.stopPropagation();
+    const same = infoPop && infoPop.__btn === b;
+    closeInfo();
+    if (same) return;
+    infoPop = document.createElement('div'); infoPop.className = 'info-pop'; infoPop.__btn = b;
+    infoPop.textContent = I18N.t ? I18N.t(b.dataset.info) : b.dataset.info;
+    document.body.appendChild(infoPop);
+    const r = b.getBoundingClientRect(), w = Math.min(360, window.innerWidth - 16);
+    infoPop.style.width = w + 'px';
+    infoPop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + window.scrollX + 'px';
+    infoPop.style.top = r.bottom + 6 + window.scrollY + 'px';
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeInfo(); });
+  window.addEventListener('resize', closeInfo);
   $('filterInterf').checked = filter.interf;
   $('filterInterf').addEventListener('change', e => { filter.interf = e.target.checked; localStorage.setItem('f.interf', filter.interf ? '1' : '0'); loadHits(); });
   $('filterAudio').addEventListener('change', e => { filter.audio = e.target.checked; localStorage.setItem('f.audio', filter.audio ? '1' : '0'); loadHits(); });
@@ -1114,7 +1163,8 @@
         // Signal: höchster Kanalpegel über dem Rauschen – zeigt, ob der Satellit überhaupt zu hören war
         const sig = Object.values(r.signal || {}).filter(x => x && x.max_db != null);
         const smax = sig.length ? Math.max(...sig.map(x => x.max_db)) : null, s6 = sig.reduce((a, x) => a + (x.above6_s || 0), 0);
-        const sigTxt = smax == null ? '' : smax < 6 ? `<br><small class="bad">kein Signal (SNR höchstens ${smax.toFixed(0)} dB)</small>`
+        const onlyProbe = sig.length && sig.every(x => x.probe);   // Meteor: Bewertung steht in der LRPT-Zeile
+        const sigTxt = smax == null || onlyProbe ? '' : smax < 6 ? `<br><small class="bad">kein Signal (SNR höchstens ${smax.toFixed(0)} dB)</small>`
           : `<br><small class="muted">SNR bis ${smax.toFixed(0)} dB, ${s6} s über 6 dB</small>`;
         // je Kanal: Einordnung der stärksten Linie und Wasserfallbild
         const multi = Object.keys(r.signal || {}).length > 1;
@@ -1125,10 +1175,14 @@
           else if (L && L.kind === 'local') lt = `<small class="warn">${pre}örtliche Störung bei ${L.rf_mhz.toFixed(4)} MHz (wandert gegen den Doppler)</small>`;
           else if (L) lt = `<small class="muted">${pre}Linie nicht eindeutig zuzuordnen</small>`;
           if (x && x.probe) {   // Prüfsatellit: Pegel auf jeder möglichen LRPT-Frequenz
+            // Stufen aus der geglätteten Leistungskurve (sat_pass.py lrpt_rating): schwach / gut / stark
+            const lv = (f) => (x.probe[f] && x.probe[f].lrpt) || {};
             const fq = Object.entries(x.probe).filter(([, v]) => v && v.max_db != null)
-              .map(([f, v]) => `${f.replace('.', ',')} MHz ${v.max_db.toFixed(0)} dB`).join(' · ');
-            const heard = x.max_db != null && x.above6_s >= 30;
-            lt = `<small class="${heard ? 'ok' : 'muted'}">${pre}${heard ? `LRPT empfangen auf ${esc(String(x.freq_mhz).replace('.', ','))} MHz` : 'kein LRPT'}${fq ? ' (' + esc(fq) + ')' : ''}</small>`;
+              .map(([f, v]) => `${f.replace('.', ',')} MHz ${((v.lrpt && v.lrpt.peak_db != null) ? v.lrpt.peak_db : v.max_db).toFixed(0)} dB`).join(' · ');
+            const best = lv(x.freq_mhz), level = best.level || (x.above6_s >= 30 ? 'gut' : null);
+            const cls = level === 'stark' || level === 'gut' ? 'ok' : level === 'schwach' ? 'run' : 'muted';
+            const what = level ? `LRPT ${level} empfangen auf ${esc(String(x.freq_mhz).replace('.', ','))} MHz${best.secs ? ` (${Math.round(best.secs / 60)} min über 1,5 dB)` : ''}` : 'kein LRPT';
+            lt = `<small class="${cls}">${pre}${what}${fq ? ' · ' + esc(fq) : ''}</small>`;
           }
           const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" class="lightbox" data-title="${esc(p.name)} · ${t(p.aos)}"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
           return lt || wf ? `<br>${lt}${wf}` : '';

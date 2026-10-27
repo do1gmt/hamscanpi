@@ -719,10 +719,36 @@ class ProbeChannel:
     def close_recording(self):
         pass
 
+    LRPT_LEVELS = (("stark", 8.0), ("gut", 4.0), ("schwach", 1.5))   # dB über dem Rauschen, je 60 s
+
+    @staticmethod
+    def lrpt_rating(track, smooth_s=10, need_s=60):
+        """Bewertung des LRPT-Empfangs aus der Leistungskurve (1 Wert je Sekunde, Verhältnis zum Rauschen):
+        über smooth_s geglättet (Schwund mitteln), dann: mindestens need_s Sekunden über 8 / 4 / 1,5 dB ->
+        stark / gut / schwach. Rauschen allein schwankt bei 80 kHz Messbreite und 10 s Mittel nur um
+        Zehntel-dB. Vorher galt „30 s über 6 dB“ – ein im Wasserfall klar sichtbares Signal mit 2–4 dB
+        hieß so „kein LRPT“."""
+        tr = np.asarray(track, dtype=np.float64)
+        if len(tr) < need_s:
+            return {"level": None, "peak_db": None, "secs": 0}
+        k = min(smooth_s, len(tr))
+        sm = np.convolve(tr, np.ones(k) / k, mode="valid")
+        db = 10 * np.log10(np.maximum(sm, 1e-12))
+        level = None
+        for name, thr in ProbeChannel.LRPT_LEVELS:
+            if int((db >= thr).sum()) >= need_s:
+                level = name
+                break
+        return {"level": level, "peak_db": round(float(db.max()), 1), "secs": int((db >= 1.5).sum())}
+
     def evaluate(self, t0):
         per = {f"{f/1e6:.3f}": signal_stats(np.array(tr), 1.0) for f, tr in zip(self.freqs, self.tracks)}
+        for (f, tr) in zip(self.freqs, self.tracks):
+            per[f"{f/1e6:.3f}"]["lrpt"] = self.lrpt_rating(tr)
         valid = [k for k, v in per.items() if v["max_db"] is not None]
-        best = max(valid, key=lambda k: (per[k]["p90_db"], per[k]["max_db"])) if valid else f"{self.f0/1e6:.3f}"
+        order = {"stark": 3, "gut": 2, "schwach": 1, None: 0}
+        best = max(valid, key=lambda k: (order[per[k]["lrpt"]["level"]], per[k]["lrpt"]["peak_db"] or -99,
+                                         per[k]["p90_db"])) if valid else f"{self.f0/1e6:.3f}"
         self.stats = dict(per[best], freq_mhz=best, probe=per)
         i = [f"{f/1e6:.3f}" for f in self.freqs].index(best)
         self.snr_track = self.tracks[i]
@@ -958,7 +984,9 @@ def main():
         for cid, st_ in sig.items():
             print(f"   {cid}: Signal max {st_['max_db']} dB, 90 % {st_['p90_db']} dB, {st_['above6_s']} s über 6 dB")
             for fq, v in (st_.get("probe") or {}).items():
+                lr = v.get("lrpt") or {}
                 print(f"      {fq} MHz: max {v['max_db']} dB, 90 % {v['p90_db']} dB, {v['above6_s']} s über 6 dB"
+                      + (f", LRPT {lr['level']} (bis {lr['peak_db']} dB, {lr['secs']} s)" if lr.get("level") else "")
                       + ("  <- stärkste" if fq == st_.get("freq_mhz") else ""))
             if st_.get("line"):
                 print(f"   {cid}: stärkste Linie {st_['line']}")

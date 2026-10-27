@@ -517,3 +517,15 @@ table.heat td.h0 { background: var(--panel-2); }
   .tabs-main button { position: relative; }
   .tabs-main button .n { position: absolute; top: 3px; right: 4px; margin: 0; font-size: .6rem; line-height: 1; }
 }
+
+/* Treffer: Spektrum erst auf Knopfdruck (Übungsgelände) */
+.spec-toggle { margin: .4rem 0; }
+
+/* Übungsmodus: Lösungsteile verdeckt bis „Auflösen“ */
+.practice-bar { display: none; align-items: center; gap: .5rem; margin: .3rem 0 .5rem; }
+body.practice .hit:not(.revealed) .practice-bar { display: flex; }
+body.practice .hit:not(.revealed) .px { display: none !important; }
+/* Info-Knöpfe und Erklärblase */
+.info-btn { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: .95rem; padding: 0 .3rem; line-height: 1; vertical-align: middle; }
+.info-btn:hover, .info-btn:focus-visible { color: var(--accent); }
+.info-pop { position: absolute; z-index: 1000; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; font-size: .85rem; line-height: 1.4; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
