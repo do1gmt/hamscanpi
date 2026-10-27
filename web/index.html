@@ -71,7 +71,7 @@
       <div class="stat"><b id="ssBusy">–</b><span>Scanzeit 24 h</span></div>
       <button type="button" class="stat" data-go="sat" title="Zur Überflugliste"><b id="ssSat">–</b><span id="ssSatLbl">Überflüge aufgenommen</span></button>
       <button type="button" class="stat" data-go="sstv" title="SSTV-Bilder anzeigen"><b id="ssSstv">–</b><span>SSTV-Bilder 24 h</span></button>
-      <button type="button" class="stat stat-next" data-go="sat" title="Zur Überflugliste"><b id="ssNext">–</b><span id="ssNextLbl">nächster Überflug</span></button>
+      <div class="stat-wrap" id="ssNextWrap"><button type="button" class="stat stat-next" data-go="sat" title="Zur Überflugliste"><b id="ssNext">–</b><span id="ssNextLbl">nächster Überflug</span></button><button type="button" class="track-btn" id="ssNextTrack" title="Flugbahn ansehen" aria-label="Flugbahn ansehen" hidden>🛰</button></div>
     </div>
   </section>
   <div class="two-col">
@@ -498,6 +498,14 @@
 
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<aside class="track-panel" id="trackPanel" hidden aria-label="Flugbahn des Satelliten">
+  <div class="track-head"><div><b id="trackTitle">–</b><div class="hint" id="trackSub"></div></div><button type="button" class="btn btn-small" id="trackClose" aria-label="Schließen">✕</button></div>
+  <div class="track-tabs"><button type="button" class="chip on" data-tv="sky">Himmel</button><button type="button" class="chip" data-tv="map">Karte</button></div>
+  <div class="track-live" id="trackLive"></div>
+  <div class="track-view" id="trackSky"></div>
+  <div class="track-view" id="trackMap" hidden><div id="trackLeaflet"></div><p class="hint" id="trackMapNote">Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Der Kreis um den Satelliten zeigt, wo man ihn gerade hören kann.</p></div>
+  <p class="hint">Himmel: Mitte = senkrecht über dir, Rand = Horizont, Ringe bei 30° und 60°. Die Linie ist der Weg über den Himmel, der Punkt die aktuelle Stelle.</p>
+</aside>
 <script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>

@@ -418,6 +418,56 @@ class Tracker:
     def doppler_hz(self, f_hz, t):
         return -f_hz * self.look(t)[3] * 1000.0 / C
 
+    def subpoint(self, t):
+        """Punkt unter dem Satelliten: (Breite°, Länge°, Höhe km) – WGS84, für die Karte."""
+        from sgp4.api import jday
+        d = datetime.fromtimestamp(t, timezone.utc)
+        jd, fr = jday(d.year, d.month, d.day, d.hour, d.minute, d.second + d.microsecond / 1e6)
+        err, r, _ = self.sat.sgp4(jd, fr)
+        if err:
+            raise RuntimeError(f"SGP4-Fehler {err}")
+        T = (jd + fr - 2451545.0) / 36525.0
+        gmst = math.radians((280.46061837 + 360.98564736629 * (jd + fr - 2451545.0)
+                             + 0.000387933 * T * T - T ** 3 / 38710000.0) % 360.0)
+        cg, sg = math.cos(gmst), math.sin(gmst)
+        x, y, z = cg * r[0] + sg * r[1], -sg * r[0] + cg * r[1], r[2]
+        a_, f_ = 6378.137, 1 / 298.257223563
+        e2 = f_ * (2 - f_)
+        lon = math.atan2(y, x)
+        p_ = math.hypot(x, y)
+        lat = math.atan2(z, p_ * (1 - e2))
+        for _ in range(5):
+            N = a_ / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+            h = p_ / math.cos(lat) - N
+            lat = math.atan2(z, p_ * (1 - e2 * N / (N + h)))
+        N = a_ / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+        h = p_ / math.cos(lat) - N
+        return math.degrees(lat), (math.degrees(lon) + 540) % 360 - 180, h
+
+
+def track(norad, aos, los, locator, step=10.0, pad=300.0):
+    """Bahn eines Überflugs für die Ansicht im Dashboard: alle step Sekunden von aos-pad bis los+pad
+    Höhe, Richtung, Entfernung, Radialgeschwindigkeit (für den Doppler) und der Punkt unter dem
+    Satelliten. Rechnet ~100–200 Punkte, wenige Millisekunden."""
+    lat, lon = locator_to_latlon(locator)
+    tles, _ = load_tles(fetch=False)
+    if norad not in tles:
+        raise ValueError("keine Bahndaten für diesen Satelliten")
+    tr = Tracker(tles[norad], lat, lon)
+    pts = []
+    t = aos - pad
+    while t <= los + pad:
+        el, az, rng, rr = tr.look(t)
+        la, lo, alt = tr.subpoint(t)
+        pts.append({"t": round(t, 1), "el": round(el, 2), "az": round(az, 2), "km": round(rng, 1),
+                    "rr": round(rr, 4), "lat": round(la, 3), "lon": round(lo, 3), "alt": round(alt, 1)})
+        t += step
+    beam = antenna_beam()
+    return {"norad": norad, "name": OBJECTS.get(norad, str(norad)), "aos": aos, "los": los,
+            "qth": {"lat": round(lat, 4), "lon": round(lon, 4), "locator": locator},
+            "beam": ({k: beam[k] for k in ("az", "bw", "el", "fmin", "fmax", "name")} if beam else None),
+            "points": pts}
+
 
 def passes(tracker, t_start, hours=24.0, min_el=10.0, step=30.0):
     """Überflüge mit Höchstelevation >= min_el. Rückgabe Liste dict(aos, los, max_el, max_t, aos_az, los_az)."""

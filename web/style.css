@@ -545,3 +545,28 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .meter-spark polyline { fill: none; stroke: var(--teal); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .meter-row.stale { opacity: .45; }
 .meter-row.stale .meter-spark { visibility: hidden; }
+
+/* Flugbahn: 🛰 in Überflugliste und Kachel, Ebene von rechts */
+.stat-wrap { position: relative; display: grid; }
+.stat-wrap > .stat { width: 100%; }
+.track-btn { background: none; border: 0; cursor: pointer; font-size: 1rem; line-height: 1; padding: .15rem .25rem; border-radius: 6px; }
+.stat-wrap > .track-btn { position: absolute; top: .2rem; right: .2rem; }
+.track-btn:hover, .track-btn:focus-visible { background: var(--panel-2); outline: 1px solid var(--accent); }
+.track-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 900; background: var(--panel);
+  border-left: 1px solid var(--line); box-shadow: -8px 0 32px rgba(0,0,0,.4); overflow-y: auto; padding: .9rem 1rem 1.2rem; }
+.track-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.track-head b { font-size: 1.1rem; }
+.track-tabs { display: flex; gap: .4rem; margin: .7rem 0 .5rem; }
+.track-live { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin-bottom: .6rem; }
+.track-live .stat b { font-size: 1.15rem; }
+.track-sky { width: 100%; max-width: 380px; display: block; margin: 0 auto; }
+.track-sky .ring { fill: none; stroke: var(--line); }
+.track-sky .axis { stroke: var(--line); stroke-dasharray: 2 4; }
+.track-sky .lab { fill: var(--muted); font-size: 11px; }
+.track-sky .card { fill: var(--text); font-size: 13px; font-weight: 600; }
+.track-sky .path { fill: none; stroke: var(--teal); stroke-width: 2.5; stroke-linecap: round; }
+.track-sky .beam { fill: rgba(245, 185, 66, .16); stroke: var(--amber); stroke-dasharray: 4 3; }
+.track-sky .tm { fill: var(--text); font-size: 10.5px; }
+.track-sky .dot { fill: var(--amber); stroke: #000; stroke-width: 1; }
+.track-sky .dot.below { fill: none; stroke: var(--amber); stroke-dasharray: 2 2; }
+#trackLeaflet { height: 360px; border-radius: 8px; }

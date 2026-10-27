@@ -351,6 +351,12 @@ try:
     miss = [p for p in ps if p["id"] == "ao73" and p["beam"]["secs"] < 60]
     assert hit and all(p["score_parts"]["Antenne"] > 0 for p in hit)
     assert all(p["score_parts"].get("Antenne") == -20 for p in miss)
+    # Flugbahn für die Himmelsansicht/Karte: Punkte, höchster Punkt passt zur Planung, Bodenspur plausibel
+    p = max(ps, key=lambda x: x["max_el"])
+    d = S.track(p["norad"], p["aos"], p["los"], "JN59HH")
+    top = max(d["points"], key=lambda x: x["el"])
+    assert len(d["points"]) > 60 and abs(top["el"] - p["max_el"]) < 1.5 and 200 < top["alt"] < 2000, (top, p["max_el"])
+    assert d["beam"] and d["beam"]["az"] == 245
 finally:
     if bak is None:
         os.remove("data/sticks.json")

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.24 – 2026-10-29
+
+- **Watch a pass live** (🛰 in every row of the pass list and in the pass tile at the top): a panel slides in
+  from the right with
+  - **Sky view** (polar plot: centre = zenith, edge = horizon, rings at 30°/60°, N/E/S/W): the path across the
+    sky with rise, highest point and set times, the satellite as a moving dot, and the **beam of a directional
+    antenna** shaded (System → Devices) – so you see when it crosses your Yagi;
+  - **Map** (OpenStreetMap in the browser): ground track, the part above your horizon highlighted, your
+    location, the satellite live with its **footprint** (where it can be heard right now);
+  - live values: countdown to rise/set, elevation, direction (with compass point), distance, **Doppler** on the
+    receive frequency with the frequency to set.
+  The Pi computes the track once when the panel opens (`/api/sat/track`, ~120 points, a few ms); the browser
+  moves the dot every second by itself. Esc or ✕ closes the panel.
+- Self-test: track computation (points, highest point matches the plan, plausible altitude, beam included).
+
 ## 1.7.23 – 2026-10-29
 
 - **Antenna frequency range as one field** (System → Devices): "valid for (MHz)" takes `137–150`, `137-150`

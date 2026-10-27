@@ -284,6 +284,121 @@
     if (st === 'cancelled') return 'Scan abgebrochen';
     return 'Bereit';
   }
+  // ---------- Flugbahn: Himmelsansicht und Karte (Ebene von rechts) ----------
+  // Die Bahn rechnet der Pi einmal beim Öffnen (~120 Punkte, wenige ms); den Punkt bewegt der Browser
+  // jede Sekunde selbst zwischen den Bahnpunkten weiter.
+  const trk = { d: null, timer: null, map: null, sat: null, foot: null, hz: null, view: 'sky' };
+  const C_KM_S = 299792.458, R_EARTH = 6371.0;
+  const COMPASS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  const compass = az => COMPASS[Math.round(az / 22.5) % 16];
+  const hm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+  const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} h` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`; };
+  function trkAt(t) {                                   // zwischen zwei Bahnpunkten linear (Azimut/Länge über 360° hinweg)
+    const P = trk.d.points; if (!P.length || t < P[0].t || t > P[P.length - 1].t) return null;
+    let i = Math.min(P.length - 2, Math.max(0, Math.floor((t - P[0].t) / (P[1].t - P[0].t))));
+    const a = P[i], b = P[i + 1], f = (t - a.t) / (b.t - a.t);
+    const ang = (x, y) => { let d = y - x; if (d > 180) d -= 360; if (d < -180) d += 360; return (x + d * f + 360) % 360; };
+    const lon = (x, y) => { let d = y - x; if (d > 180) d -= 360; if (d < -180) d += 360; return ((x + d * f + 540) % 360) - 180; };
+    return { el: a.el + (b.el - a.el) * f, az: ang(a.az, b.az), km: a.km + (b.km - a.km) * f, rr: a.rr + (b.rr - a.rr) * f,
+             lat: a.lat + (b.lat - a.lat) * f, lon: lon(a.lon, b.lon), alt: a.alt + (b.alt - a.alt) * f };
+  }
+  const CX = 170, CY = 170, RR = 140;
+  const skyXY = (el, az) => { const r = (90 - Math.max(0, el)) / 90 * RR, a = az * Math.PI / 180; return [CX + r * Math.sin(a), CY - r * Math.cos(a)]; };
+  function beamPath(b) {                                 // Keule der Richtantenne als Ringsektor
+    const e1 = Math.max(0, (b.el || 0) - b.bw / 2), e2 = Math.min(90, (b.el || 0) + b.bw / 2);
+    const ro = (90 - e1) / 90 * RR, ri = (90 - e2) / 90 * RR, a1 = b.az - b.bw / 2, a2 = b.az + b.bw / 2;
+    if (b.bw >= 359) return `M ${CX - ro} ${CY} a ${ro} ${ro} 0 1 0 ${2 * ro} 0 a ${ro} ${ro} 0 1 0 ${-2 * ro} 0`;
+    const P = (r, a) => [CX + r * Math.sin(a * Math.PI / 180), CY - r * Math.cos(a * Math.PI / 180)].map(v => v.toFixed(1)).join(' ');
+    const large = a2 - a1 > 180 ? 1 : 0;
+    return `M ${P(ro, a1)} A ${ro} ${ro} 0 ${large} 1 ${P(ro, a2)} L ${P(ri, a2)} ${ri > 0.5 ? `A ${ri} ${ri} 0 ${large} 0 ${P(ri, a1)}` : ''} Z`;
+  }
+  function skySVG() {
+    const d = trk.d, vis = d.points.filter(p => p.el >= 0);
+    let g = `<svg class="track-sky" viewBox="0 0 340 340" role="img" aria-label="Himmelsansicht">`;
+    if (d.beam && trk.hz && !((d.beam.fmin && trk.hz / 1e6 < d.beam.fmin) || (d.beam.fmax && trk.hz / 1e6 > d.beam.fmax)))
+      g += `<path class="beam" d="${beamPath(d.beam)}"><title>Keule der Antenne${d.beam.name ? ' (' + esc(d.beam.name) + ')' : ''}</title></path>`;
+    for (const e of [0, 30, 60]) g += `<circle class="ring" cx="${CX}" cy="${CY}" r="${(90 - e) / 90 * RR}"/>`;
+    g += `<line class="axis" x1="${CX - RR}" y1="${CY}" x2="${CX + RR}" y2="${CY}"/><line class="axis" x1="${CX}" y1="${CY - RR}" x2="${CX}" y2="${CY + RR}"/>`;
+    g += `<text class="lab" x="${CX + 3}" y="${CY - RR / 3 * 2 - 3}">30°</text><text class="lab" x="${CX + 3}" y="${CY - RR / 3 - 3}">60°</text>`;
+    g += `<text class="card" x="${CX}" y="${CY - RR - 8}" text-anchor="middle">N</text><text class="card" x="${CX + RR + 9}" y="${CY + 4}" text-anchor="middle">O</text>`
+       + `<text class="card" x="${CX}" y="${CY + RR + 19}" text-anchor="middle">S</text><text class="card" x="${CX - RR - 9}" y="${CY + 4}" text-anchor="middle">W</text>`;
+    if (vis.length > 1) {
+      g += `<polyline class="path" points="${vis.map(p => skyXY(p.el, p.az).map(v => v.toFixed(1)).join(',')).join(' ')}"/>`;
+      const top = vis.reduce((m, p) => p.el > m.el ? p : m, vis[0]);
+      const lab = (p, txt, anchor) => { const [x, y] = skyXY(p.el, p.az); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="var(--teal)"/><text class="tm" x="${(x + (anchor === 'end' ? -5 : 5)).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="${anchor}">${txt}</text>`; };
+      const side = p => skyXY(p.el, p.az)[0] > CX ? 'end' : 'start';
+      g += lab(vis[0], 'Aufgang ' + hm(vis[0].t), side(vis[0])) + lab(top, `${Math.round(top.el)}° ${hm(top.t)}`, 'start') + lab(vis[vis.length - 1], 'Untergang ' + hm(vis[vis.length - 1].t), side(vis[vis.length - 1]));
+    }
+    g += `<circle id="trackDot" class="dot" r="7" cx="-20" cy="-20"/></svg>`;
+    $('trackSky').innerHTML = g;
+  }
+  function trkLive() {
+    const d = trk.d, now = Date.now() / 1000, p = trkAt(now), tiles = [];
+    const tile = (v, l) => tiles.push(`<div class="stat"><b>${v}</b><span>${l}</span></div>`);
+    if (now < d.aos) { tile(mmss(d.aos - now), 'bis Aufgang ' + hm(d.aos)); const a = trkAt(d.aos); if (a) tile(`${Math.round(a.az)}° ${compass(a.az)}`, 'geht auf in Richtung'); }
+    else if (now <= d.los) tile(mmss(d.los - now), 'bis Untergang ' + hm(d.los));
+    else tile('vorbei', 'Untergang ' + hm(d.los));
+    if (p) {
+      tile(`${p.el.toFixed(0)}°`, 'Höhe'); tile(`${Math.round(p.az)}° ${compass(p.az)}`, 'Richtung');
+      tile(`${Math.round(p.km).toLocaleString(I18N.locale)} km`, 'Entfernung');
+      if (trk.hz) { const df = -trk.hz * p.rr / C_KM_S; tile(`${df >= 0 ? '+' : '−'}${Math.abs(df / 1000).toFixed(1).replace('.', ',')} kHz`, `Doppler · ${((trk.hz + df) / 1e6).toFixed(4)} MHz`); }
+    }
+    $('trackLive').innerHTML = tiles.join('');
+    const dot = $('trackDot');
+    if (dot) {
+      if (p) { const [x, y] = skyXY(p.el, p.az); dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1)); dot.classList.toggle('below', p.el < 0); }
+      else { dot.setAttribute('cx', -20); dot.setAttribute('cy', -20); }
+    }
+    if (trk.map && p) {
+      trk.sat.setLatLng([p.lat, p.lon]);
+      trk.foot.setLatLng([p.lat, p.lon]).setRadius(R_EARTH * Math.acos(R_EARTH / (R_EARTH + p.alt)) * 1000);
+    }
+  }
+  async function trkMap() {
+    if (trk.map) { setTimeout(() => trk.map.invalidateSize(), 50); return; }
+    try { await loadLeaflet(); } catch (e) { $('trackMapNote').textContent = 'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.'; return; }
+    const d = trk.d;
+    trk.map = L.map('trackLeaflet', { worldCopyJump: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 10, attribution: '© OpenStreetMap' }).addTo(trk.map);
+    const segs = [[]];                                      // Spur an der Datumsgrenze teilen
+    d.points.forEach((p, i) => { if (i && Math.abs(p.lon - d.points[i - 1].lon) > 180) segs.push([]); segs[segs.length - 1].push([p.lat, p.lon]); });
+    const line = L.polyline(segs, { color: '#2dd4bf', weight: 3 }).addTo(trk.map);
+    const vis = d.points.filter(p => p.el >= 0);
+    if (vis.length > 1) L.polyline(vis.map(p => [p.lat, p.lon]), { color: '#f5b942', weight: 5, opacity: .9 }).addTo(trk.map).bindTooltip('über deinem Horizont');
+    L.circleMarker([d.qth.lat, d.qth.lon], { radius: 6, color: '#38bdf8', fillOpacity: 1 }).addTo(trk.map).bindTooltip(d.qth.locator || 'QTH');
+    trk.foot = L.circle([d.qth.lat, d.qth.lon], { radius: 1, color: '#f5b942', weight: 1, fillOpacity: .06 }).addTo(trk.map);
+    trk.sat = L.circleMarker([d.qth.lat, d.qth.lon], { radius: 7, color: '#000', weight: 1, fillColor: '#f5b942', fillOpacity: 1 }).addTo(trk.map).bindTooltip(d.name);
+    trk.map.fitBounds(line.getBounds().extend([d.qth.lat, d.qth.lon]), { padding: [20, 20] });
+    trkLive();
+  }
+  function trkView(v) {
+    trk.view = v;
+    document.querySelectorAll('#trackPanel [data-tv]').forEach(b => b.classList.toggle('on', b.dataset.tv === v));
+    $('trackSky').hidden = v !== 'sky'; $('trackMap').hidden = v !== 'map';
+    if (v === 'map') trkMap();
+  }
+  async function openTrack(spec) {
+    const [norad, aos, los, hz, ...nm] = spec.split('|');
+    trk.hz = Number(hz) || null;
+    $('trackTitle').textContent = nm.join('|') || 'Satellit';
+    $('trackSub').textContent = `${hm(Number(aos))}–${hm(Number(los))}${trk.hz ? ' · ' + (trk.hz / 1e6).toFixed(3) + ' MHz' : ''}`;
+    $('trackSky').innerHTML = '<p class="hint">Bahn wird berechnet …</p>'; $('trackLive').innerHTML = '';
+    $('trackPanel').hidden = false;
+    try { trk.d = await api(`/api/sat/track?norad=${norad}&aos=${aos}&los=${los}`); }
+    catch (e) { $('trackSky').innerHTML = `<p class="hint warn-text">${esc(e.message)}</p>`; return; }
+    if (trk.map) { trk.map.remove(); trk.map = null; }
+    skySVG(); trkView(trk.view); trkLive();
+    clearInterval(trk.timer); trk.timer = setInterval(trkLive, 1000);
+  }
+  function closeTrack() { $('trackPanel').hidden = true; clearInterval(trk.timer); trk.timer = null; }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-track]'); if (!b || !b.dataset.track) return;
+    e.preventDefault(); e.stopPropagation(); openTrack(b.dataset.track);
+  });
+  $('trackClose').addEventListener('click', closeTrack);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('trackPanel').hidden) closeTrack(); });
+  document.querySelectorAll('#trackPanel [data-tv]').forEach(b => b.addEventListener('click', () => trkView(b.dataset.tv)));
+
   // Richtantenne: welcher Teil des Überflugs läuft durch die Keule (satellites.beam_window)
   function beamTxt(p) {
     const b = p.beam; if (!b) return '';
@@ -1246,7 +1361,7 @@
         plan += `<br><small class="muted score" title="${esc(parts)}">${Math.round(p.score)} P${(p.why || []).length ? ' · ' + esc(p.why.join(' · ')) : ''}</small>`;
       }
       return `<tr class="${live ? 'sat-now' : ''}${past ? ' sat-past' : ''}">
-        <td><b>${esc(p.name)}</b><br><small>${ch} MHz</small>${dropped}</td>
+        <td><b>${esc(p.name)}</b> <button type="button" class="track-btn" data-track="${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${esc(p.name)}" title="Flugbahn ansehen" aria-label="Flugbahn ansehen">🛰</button><br><small>${ch} MHz</small>${dropped}</td>
         <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
         <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}${beamTxt(p)}</small></td><td>${plan}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">keine Überflüge</td></tr>';
@@ -1301,8 +1416,10 @@
   function renderNextPass() {
     const now = Date.now() / 1000;
     const p = (satData?.passes || []).find(x => x.los > now && x.status !== 'skipped' && x.status !== 'joined');
-    const card = document.querySelector('#scanStats .stat-next');
+    const card = $('ssNextWrap');
     card.hidden = !(satData && satData.enabled);
+    $('ssNextTrack').hidden = !p;
+    if (p) $('ssNextTrack').dataset.track = `${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${p.name}`;
     if (!p) { $('ssNext').textContent = '–'; $('ssNextLbl').textContent = 'kein Überflug geplant'; return; }
     const live = p.aos <= now;
     const dt = Math.max(0, Math.round((p.aos - now) / 60));

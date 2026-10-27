@@ -1719,6 +1719,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(load_status())
             if path == "/api/sat/passes":
                 return self.send_json(sat_passes())
+            if path == "/api/sat/track":
+                # Bahn eines Überflugs für die Himmelsansicht und die Karte (🛰 in der Überflugliste)
+                import satellites as SAT
+                norad, aos, los = int(qs.get("norad", 0)), float(qs.get("aos", 0)), float(qs.get("los", 0))
+                if not norad or not aos or los <= aos or los - aos > 3 * 3600:
+                    raise ValueError("norad, aos und los angeben")
+                return self.send_json(SAT.track(norad, aos, los, load_settings().get("my_locator", "")))
             if path == "/api/settings":
                 return self.send_json(load_settings())
             if path == "/api/bandplan":
