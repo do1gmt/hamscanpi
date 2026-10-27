@@ -173,6 +173,8 @@ s = S.Sampler(period=1); t0 = time.time()
 s.tick(t0); time.sleep(1.1); row = s.tick()
 assert row and row[1] is not None, row
 assert row[8] and row[9] > 0, row                     # größter Prozess der Minute mit Namen und MB
+st = S.storage_info()                                  # Systemlaufwerk, Swap, Schreiblast
+assert "kind" in st and "swap" in st and (st["disk"] is None or row[10] is not None), (st, row)
 db = S._db(); now = int(time.time() // 60 * 60)
 db.executemany("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act) VALUES (?,?,?,?,?,?,?,?)",
                [(now - k * 60, 10.0, 20.0, 500, 0, 50.0, 0, 1 if k % 10 == 0 else 0) for k in range(1, 1500)])

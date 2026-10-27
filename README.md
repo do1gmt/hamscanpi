@@ -125,6 +125,69 @@ Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 | `config/auth.json` | dashboard password (hashed) and trusted networks – never committed |
 | `data/`, `recordings/`, `reports/`, `log/` | database, I/Q recordings, images and decodes, logs |
 
+## SD card or SSD
+
+HamScanPi itself runs the same on both – same paths, same behaviour. The difference is wear, speed and power.
+
+HamScanPi runs around the clock and writes recordings, its database, the system history and logs.
+*System → Status* shows how much was written to the system drive in the last 24 hours (and the daily
+average), whether it is an SD card, USB drive or NVMe SSD, and where the swap lives.
+
+| | SD card | SSD (USB) |
+|---|---|---|
+| Wear from continuous writing | the weak point – a normal card lasts roughly 1–3 years of 24/7 use, *endurance* cards (dashcam grade) much longer | many times more durable |
+| Speed (database, evaluation, hit list, boot) | adequate | noticeably faster |
+| Power loss | often loses its file system | usually survives better |
+| Power draw | none extra | extra from the Pi's USB – with RTL stick, PMSDR and sound card use the official 5.1 V/3 A supply or a powered adapter/hub; *System → Status* reports undervoltage |
+| Radio interference | none | USB 3 radiates broadband noise: SSD on a blue USB 3 port with a short, well-shielded cable, RTL stick on a black USB 2 port with an extension, as far away as possible – then check the noise floor in *Live* |
+
+A few hundred MB written per day is fine for a good card for years; several GB per day make an SSD
+worthwhile.
+
+### Swap
+
+Raspberry Pi OS Trixie already uses **zram** (swap compressed in RAM) – nothing is swapped to the card:
+
+```
+swapon --show            # /dev/zram0 only? Then zram is active – nothing to do.
+```
+
+On older systems with a swap file on the card, install zram with the swap file kept as a low-priority reserve
+(only written when zram is full):
+
+```
+sudo apt install -y zram-tools
+printf 'ALGO=zstd\nPERCENT=50\nPRIORITY=100\n' | sudo tee /etc/default/zramswap
+sudo systemctl restart zramswap
+swapon --show            # /dev/zram0 with priority 100, the swap file below it
+```
+
+If zram is full and there is no reserve, the kernel has to end a process – the system history shows the
+largest process per minute to find the cause.
+
+### Moving to an SSD
+
+Boot the **whole system** from the SSD (Raspberry Pi 4 and 5 can do this directly) rather than putting only
+HamScanPi on it – then logs and everything else live on the SSD too, and the services never start before
+their drive is mounted.
+
+1. Write Raspberry Pi OS to the SSD with the Raspberry Pi Imager (same user name as before, e.g. `gmt`).
+2. Shut the Pi down, remove the SD card, connect the SSD to a blue USB 3 port and boot.
+3. Install HamScanPi as described under *Installation* (`install.sh`).
+4. Stop the services and copy your data from the old card (in a USB card reader, here mounted at `/media/$USER/rootfs`):
+   ```
+   sudo systemctl stop hamscanpi-scheduler hamscanpi-web
+   OLD=/media/$USER/rootfs/home/$USER/hamscanpi
+   cp -a $OLD/config/. ~/hamscanpi/config/       # settings, band plan, passwords, Telegram
+   cp -a $OLD/data/. ~/hamscanpi/data/           # database, stick register, history, satellite results
+   cp -a $OLD/recordings $OLD/reports ~/hamscanpi/   # only if you want to keep the old hits
+   sudo systemctl start hamscanpi-scheduler hamscanpi-web
+   ```
+5. Check *System → Devices* (main stick still recognised by its serial number) and *System → Status*
+   (drive now "USB drive").
+
+Keep the old card as an emergency spare – put it back in and the Pi starts as before.
+
 ## Access protection
 
 By default the dashboard is open to everyone who can reach it. Set a password under

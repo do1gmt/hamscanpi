@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.21 – 2026-10-29
+
+- README: new section **SD card or SSD** – comparison (wear, speed, power loss, power draw, USB 3 interference
+  with the RTL stick), swap/zram (Raspberry Pi OS Trixie already uses zram – check with `swapon --show`), and
+  **moving to an SSD** step by step (boot the whole system from the SSD, install, copy `config/`, `data/` and
+  optionally `recordings/`/`reports/` from the old card).
+- System → Now: with zram the memory warning no longer claims the Pi is swapping to the SD card; it explains
+  that zram compresses in RAM and that a full zram makes the kernel end a process.
+
+## 1.7.20 – 2026-10-28
+
+- **SD card wear visible.** *System → Status* shows how much was written to the system drive in the last
+  24 hours (with the daily average over up to 7 days) and whether it is an SD card, USB drive or NVMe SSD,
+  plus where the swap lives (zram, file, or zram with the file as reserve). Swap on an SD card without zram
+  gives a warning. The history records the MB written per minute (`/proc/diskstats`, no extra packages).
+- README: new section *Protecting the SD card* – zram via `zram-tools` with the swap file kept as a
+  low-priority reserve, boot from USB SSD, endurance cards.
+- Self-test: storage info and write counter.
+
 ## 1.7.19 – 2026-10-28
 
 - **System → Devices no longer overwrites unsaved input.** The device list reloaded every 15 s and only held

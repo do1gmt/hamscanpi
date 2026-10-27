@@ -1532,6 +1532,20 @@
     if (s.time_sync != null) { tile(s.time_sync ? 'ja' : 'nein', 'Uhr synchron (NTP)', s.time_sync ? '' : 'bad'); if (!s.time_sync) warn.push('Die Uhr des Pi ist nicht synchron – Satellitenzeiten und Doppler werden ungenau.'); }
     const svc = s.services || {};
     for (const [u, st] of Object.entries(svc)) { if (u === 'pmsdr-control' && st !== 'active' && st !== 'activating') continue; tile(st === 'active' ? 'läuft' : st, u, st === 'active' ? '' : 'warn'); }
+    // Systemlaufwerk: Schreiblast (verschleißt SD-Karten) und wo der Swap liegt
+    const sto = s.storage;
+    if (sto && sto.disk) {
+      const gb = mb => mb == null ? '–' : mb >= 1024 ? (mb / 1024).toFixed(1).replace('.', ',') + ' GB' : Math.round(mb) + ' MB';
+      const days = sto.written_since ? Math.max(1, Math.min(7, (Date.now() / 1000 - sto.written_since) / 86400)) : null;
+      const perDay = sto.written_7d_mb != null && days ? sto.written_7d_mb / days : null;
+      const sd = sto.kind === 'SD-Karte';
+      tile(gb(sto.written_24h_mb), `geschrieben in 24 h · ${sto.kind}${perDay != null && days >= 2 ? ` (Ø ${gb(perDay)}/Tag)` : ''}`,
+           sd && sto.written_24h_mb > 20480 ? 'warn' : '');
+      const swOn = (sto.swap || []).filter(x => !x.zram).map(x => x.name);
+      const swZ = (sto.swap || []).some(x => x.zram);
+      tile(swZ && swOn.length ? 'zram + Datei' : swZ ? 'zram' : swOn.length ? (sd ? 'SD-Karte' : 'Laufwerk') : 'keiner', swZ && swOn.length ? 'Swap: zuerst im RAM, Datei nur als Reserve' : 'Swap liegt in', sd && swOn.length && !swZ ? 'warn' : '');
+      if (sd && swOn.length && !swZ) warn.push('Der Swap liegt auf der SD-Karte – jedes Auslagern schreibt auf die Karte und verschleißt sie. zram (komprimierter Swap im Arbeitsspeicher) schont sie; Anleitung im README unter „SD card or SSD“.');
+    }
     const v = s.version || {};
     tile(`${v.version}${v.commit ? ' <small class="muted">' + v.commit + '</small>' : ''}`, v.newer ? `Version – neu: ${v.latest}` : 'Version', v.newer ? 'warn' : '');
     if (v.newer) warn.push(`Neue Version ${v.latest} verfügbar – auf dem Pi: bin/update.sh`);
@@ -1562,7 +1576,9 @@
       tile(`${m.available} MB`, `Arbeitsspeicher verfügbar von ${m.total} MB`, m.available < 120 ? 'bad' : m.available < 200 ? 'warn' : '');
       tile(m.swap_total ? `${m.swap_used} MB` : 'aus', m.swap_total ? `Swap belegt von ${m.swap_total} MB` : 'Swap', lvl(m.swap_used, 100, 300));
       if (m.available < 200) warn.push('Wenig freier Arbeitsspeicher – Überflüge und Scans können sich verzögern.');
-      if (m.swap_used >= 100) warn.push('Der Pi lagert auf die Speicherkarte aus (Swap) – das bremst alles. In der Prozessliste steht, wer den Speicher belegt.');
+      if (m.swap_used >= 100) warn.push(m.swap_zram_only
+        ? 'Arbeitsspeicher knapp – der Pi komprimiert ausgelagerte Daten im RAM (zram; schont die Speicherkarte, kostet etwas Rechenzeit). Ist zram voll, muss der Kernel einen Prozess beenden – in der Prozessliste steht, wer den Speicher belegt.'
+        : 'Der Pi lagert auf die Speicherkarte aus (Swap) – das bremst alles. In der Prozessliste steht, wer den Speicher belegt.');
     }
     if (s.temp_c >= 80) warn.push('CPU sehr heiß – ab etwa 80 °C drosselt der Pi den Takt.');
     $('sysNow').innerHTML = tiles.join('');

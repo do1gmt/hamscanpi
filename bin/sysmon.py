@@ -284,10 +284,77 @@ def live():
     except OSError:
         load = None
     up = _read("/proc/uptime")
+    sw = swap_info()
+    mem = meminfo() or {}
+    if sw:                                                             # zram: komprimiert im RAM, nicht auf der Karte
+        mem["swap_zram_only"] = all(x["zram"] for x in sw)
     return {"t": now, "cpu": {"total": usage[0] if usage else None, "cores": usage[1:], "freq_mhz": fcur, "freq_max_mhz": fmax},
-            "load": load, "temp_c": cpu_temp(), "mem": meminfo(), "activity": ACT[activity()],
+            "load": load, "temp_c": cpu_temp(), "mem": mem, "activity": ACT[activity()],
             "procs": procs, "other_rss_mb": other, "net": network(), "pi": pi_info(),
             "uptime_h": round(float(up.split()[0]) / 3600, 1) if up else None}
+
+
+# ---------------------------------------------------------------- Speicherkarte / Schreiblast
+def root_disk():
+    """Gerät, auf dem / liegt (z. B. mmcblk0 = SD-Karte, sda = USB-SSD) – über /sys, ohne Zusatzpakete."""
+    try:
+        st = os.stat("/")
+        path = os.path.realpath(f"/sys/dev/block/{os.major(st.st_dev)}:{os.minor(st.st_dev)}")
+        part, parent = os.path.basename(path), os.path.basename(os.path.dirname(path))
+        return parent if os.path.exists(f"/sys/block/{parent}") else part
+    except Exception:
+        return None
+
+
+def disk_written_mb(disk):
+    """Seit dem Start auf das Gerät geschriebene MB (/proc/diskstats, Feld „Sektoren geschrieben“)."""
+    if not disk:
+        return None
+    try:
+        for line in Path("/proc/diskstats").read_text().splitlines():
+            f = line.split()
+            if len(f) > 9 and f[2] == disk:
+                return int(f[9]) * 512 / 1048576
+    except Exception:
+        pass
+    return None
+
+
+def swap_info():
+    """[{name, type, size_mb, used_mb, zram}] aus /proc/swaps."""
+    out = []
+    try:
+        for line in Path("/proc/swaps").read_text().splitlines()[1:]:
+            f = line.split()
+            if len(f) >= 4:
+                out.append({"name": f[0], "type": f[1], "size_mb": round(int(f[2]) / 1024),
+                            "used_mb": round(int(f[3]) / 1024), "zram": "/zram" in f[0]})
+    except Exception:
+        pass
+    return out
+
+
+def storage_info(now=None):
+    """Systemlaufwerk, Swap-Arten und Schreiblast (24 h / 7 Tage aus dem Verlauf)."""
+    disk = root_disk()
+    kind = ("SD-Karte" if disk and disk.startswith("mmcblk") else "NVMe-SSD" if disk and disk.startswith("nvme")
+            else "USB-Laufwerk" if disk and disk.startswith("sd") else "unbekannt")
+    now = now or time.time()
+    w24 = w7 = None
+    if DB.exists():
+        db = _db()
+        try:
+            w24 = db.execute("SELECT SUM(wr_mb) FROM samples WHERE t >= ?", (int(now - 86400),)).fetchone()[0]
+            w7 = db.execute("SELECT SUM(wr_mb), MIN(t) FROM samples WHERE t >= ? AND wr_mb IS NOT NULL",
+                            (int(now - 7 * 86400),)).fetchone()
+        finally:
+            db.close()
+    sw = swap_info()
+    return {"disk": disk, "kind": kind, "swap": sw,
+            "swap_on_disk": any(not s["zram"] for s in sw),
+            "written_24h_mb": round(w24) if w24 is not None else None,
+            "written_7d_mb": round(w7[0]) if w7 and w7[0] is not None else None,
+            "written_since": w7[1] if w7 else None}
 
 
 # ---------------------------------------------------------------- Verlauf
@@ -300,6 +367,8 @@ def _db():
     if "top_name" not in cols:                                          # ab 1.7.15: größter Prozess je Minute
         db.execute("ALTER TABLE samples ADD COLUMN top_name TEXT")
         db.execute("ALTER TABLE samples ADD COLUMN top_mb INTEGER")
+    if "wr_mb" not in cols:                                             # ab 1.7.20: auf das Systemlaufwerk geschrieben
+        db.execute("ALTER TABLE samples ADD COLUMN wr_mb REAL")
     return db
 
 
@@ -308,8 +377,20 @@ class Sampler:
 
     def __init__(self, period=60):
         self.period = period
+        self.disk = root_disk()
+        self.wr0 = disk_written_mb(self.disk)
         self.reset(time.time())
         self.pruned = 0.0
+
+    def _written(self):
+        """In dieser Minute auf das Systemlaufwerk geschriebene MB (Zähler läuft seit dem Start)."""
+        cur = disk_written_mb(self.disk)
+        if cur is None:
+            return None
+        prev, self.wr0 = self.wr0, cur
+        if prev is None:
+            return None
+        return round(cur - prev if cur >= prev else cur, 2)          # kleiner: Neustart, Zähler von vorn
 
     def reset(self, now):
         self.t0, self.cpu0 = now, cpu_times()
@@ -341,11 +422,11 @@ class Sampler:
         thr = throttled_now()
         row = (int(now // 60 * 60), avg[0] if avg else None, self.peak, mem.get("available"), mem.get("swap_used"),
                cpu_temp(), None if thr is None else int(thr), self.act,
-               self.top[0], int(round(self.top[1])) if self.top[0] else None)
+               self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written())
         db = _db()
         try:
             db.execute("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act, "
-                       "top_name, top_mb) VALUES (?,?,?,?,?,?,?,?,?,?)", row)
+                       "top_name, top_mb, wr_mb) VALUES (?,?,?,?,?,?,?,?,?,?,?)", row)
             if now - self.pruned > 3600:
                 db.execute("DELETE FROM samples WHERE t < ?", (int(now - KEEP_S),))
                 self.pruned = now

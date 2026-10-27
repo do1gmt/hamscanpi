@@ -1751,7 +1751,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             if path == "/api/system":
-                return self.send_json(HK.system_status())
+                st = HK.system_status()
+                try:
+                    st["storage"] = SYSMON.storage_info()
+                except Exception:
+                    pass
+                return self.send_json(st)
             if path == "/api/system/live":
                 return self.send_json(SYSMON.live())
             if path == "/api/sticks":
