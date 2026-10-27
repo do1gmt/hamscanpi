@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.26 – 2026-10-29
+
+Checked on phone (390 px) and tablet (820 px) widths:
+- 🛰 in the pass tile moved to the bottom right – on phones it covered the countdown.
+- Sky view: a time label at the top edge (e.g. set near north) is placed below its point instead of running
+  into the "N".
+- English interface: east is "E" (was "O") in the sky view and in the direction values.
+
 ## 1.7.25 – 2026-10-29
 
 - **Track panel follows the next pass.** Left open, it stayed on a finished pass. New option *follow the next

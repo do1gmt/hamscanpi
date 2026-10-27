@@ -290,7 +290,7 @@
   const trk = { d: null, timer: null, map: null, sat: null, foot: null, hz: null, view: 'sky' };
   const C_KM_S = 299792.458, R_EARTH = 6371.0;
   const COMPASS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-  const compass = az => COMPASS[Math.round(az / 22.5) % 16];
+  const compass = az => { const c = COMPASS[Math.round(az / 22.5) % 16]; return I18N.lang === 'en' ? c.replace(/O/g, 'E') : c; };
   const hm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
   const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} h` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`; };
   function trkAt(t) {                                   // zwischen zwei Bahnpunkten linear (Azimut/Länge über 360° hinweg)
@@ -320,12 +320,13 @@
     for (const e of [0, 30, 60]) g += `<circle class="ring" cx="${CX}" cy="${CY}" r="${(90 - e) / 90 * RR}"/>`;
     g += `<line class="axis" x1="${CX - RR}" y1="${CY}" x2="${CX + RR}" y2="${CY}"/><line class="axis" x1="${CX}" y1="${CY - RR}" x2="${CX}" y2="${CY + RR}"/>`;
     g += `<text class="lab" x="${CX + 3}" y="${CY - RR / 3 * 2 - 3}">30°</text><text class="lab" x="${CX + 3}" y="${CY - RR / 3 - 3}">60°</text>`;
-    g += `<text class="card" x="${CX}" y="${CY - RR - 8}" text-anchor="middle">N</text><text class="card" x="${CX + RR + 9}" y="${CY + 4}" text-anchor="middle">O</text>`
+    g += `<text class="card" x="${CX}" y="${CY - RR - 8}" text-anchor="middle">N</text><text class="card no-i18n" x="${CX + RR + 9}" y="${CY + 4}" text-anchor="middle">${I18N.lang === 'en' ? 'E' : 'O'}</text>`
        + `<text class="card" x="${CX}" y="${CY + RR + 19}" text-anchor="middle">S</text><text class="card" x="${CX - RR - 9}" y="${CY + 4}" text-anchor="middle">W</text>`;
     if (vis.length > 1) {
       g += `<polyline class="path" points="${vis.map(p => skyXY(p.el, p.az).map(v => v.toFixed(1)).join(',')).join(' ')}"/>`;
       const top = vis.reduce((m, p) => p.el > m.el ? p : m, vis[0]);
-      const lab = (p, txt, anchor) => { const [x, y] = skyXY(p.el, p.az); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="var(--teal)"/><text class="tm" x="${(x + (anchor === 'end' ? -5 : 5)).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="${anchor}">${txt}</text>`; };
+      // Beschriftung neben den Punkt; am oberen Rand darunter, damit sie nicht in „N“ läuft
+      const lab = (p, txt, anchor) => { const [x, y] = skyXY(p.el, p.az); const ty = y < CY - RR + 25 ? y + 15 : y - 5; return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="var(--teal)"/><text class="tm" x="${(x + (anchor === 'end' ? -6 : 6)).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${anchor}">${txt}</text>`; };
       const side = p => skyXY(p.el, p.az)[0] > CX ? 'end' : 'start';
       g += lab(vis[0], 'Aufgang ' + hm(vis[0].t), side(vis[0])) + lab(top, `${Math.round(top.el)}° ${hm(top.t)}`, 'start') + lab(vis[vis.length - 1], 'Untergang ' + hm(vis[vis.length - 1].t), side(vis[vis.length - 1]));
     }

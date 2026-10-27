@@ -571,3 +571,5 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .track-sky .dot.below { fill: none; stroke: var(--amber); stroke-dasharray: 2 2; }
 #trackLeaflet { height: 360px; border-radius: 8px; }
 .track-tabs { align-items: center; flex-wrap: wrap; } .track-follow { margin-left: auto; font-size: .85rem; }
+.stat-wrap > .track-btn { top: auto; bottom: .1rem; }
+.stat-wrap > .stat.stat-next span { padding-right: 1.5rem; }
