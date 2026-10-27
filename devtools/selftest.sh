@@ -363,5 +363,39 @@ finally:
     else:
         open("data/sticks.json", "w").write(bak)
 PY
+echo "== 17 Sicherung und Wiederherstellung"
+python3 - <<'PY' && ok "sichern (3 Umfänge, ohne Zugangsdaten), einspielen, manipulierte Datei abgelehnt" || bad "Sicherung"
+import io, json, os, sqlite3, sys, tarfile
+sys.path.insert(0, "bin")
+import backup as B
+os.makedirs("recordings", exist_ok=True)
+db = sqlite3.connect("data/scanner.db"); db.execute("create table if not exists bk_t(x)"); db.execute("insert into bk_t values (7)"); db.commit()
+open("recordings/bk_test.wav", "wb").write(b"x" * 100)
+ws = json.load(open("config/web_settings.json")); ws.setdefault("notify", {})["tg_token"] = "GEHEIM"; json.dump(ws, open("config/web_settings.json", "w"))
+for sc in B.SCOPES:
+    with open(f"/tmp/hsp_bk_{sc}.tgz", "wb") as f:
+        B.write(f, sc, True)
+names = tarfile.open("/tmp/hsp_bk_all.tgz").getnames()
+assert "data/scanner.db" in names and "recordings/bk_test.wav" in names and "manifest.json" in names
+assert "data/scanner.db" not in tarfile.open("/tmp/hsp_bk_settings.tgz").getnames()
+with open("/tmp/hsp_bk_ns.tgz", "wb") as f:
+    B.write(f, "settings", False)
+w = json.loads(tarfile.open("/tmp/hsp_bk_ns.tgz").extractfile("config/web_settings.json").read())
+assert "tg_token" not in w.get("notify", {})
+db.execute("delete from bk_t"); db.commit(); db.close(); os.remove("recordings/bk_test.wav")
+B.restore("/tmp/hsp_bk_all.tgz", wait=False, log=lambda m: None)
+assert sqlite3.connect("data/scanner.db").execute("select x from bk_t").fetchall() == [(7,)]
+assert os.path.exists("recordings/bk_test.wav") and os.listdir("restore-previous")
+bad = io.BytesIO(); t = tarfile.open(fileobj=bad, mode="w:gz")
+m = json.dumps({"app": "HamScanPi", "version": "x", "created": "x", "scope": "settings", "files": 1}).encode()
+ti = tarfile.TarInfo("manifest.json"); ti.size = len(m); t.addfile(ti, io.BytesIO(m))
+ti = tarfile.TarInfo("config/../../boese.txt"); ti.size = 1; t.addfile(ti, io.BytesIO(b"x")); t.close()
+open("/tmp/hsp_bk_bad.tgz", "wb").write(bad.getvalue())
+try:
+    B.restore("/tmp/hsp_bk_bad.tgz", wait=False, log=lambda m: None); raise SystemExit("manipulierte Datei angenommen")
+except ValueError:
+    pass
+PY
+rm -f /tmp/hsp_bk_*.tgz
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

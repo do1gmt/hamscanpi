@@ -1229,7 +1229,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1685,6 +1685,54 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- System: Sicherung (bin/backup.py) ----------
+  const fmtSize = b => b >= 1e9 ? (b / 1e9).toFixed(1).replace('.', ',') + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
+  function bkLink() {
+    const scope = (document.querySelector('input[name=bkScope]:checked') || {}).value || 'data';
+    $('bkDownload').href = `/api/backup/download?scope=${scope}&secrets=${$('bkSecrets').checked ? 1 : 0}`;
+  }
+  function bkShowUpload(m) {
+    $('bkUploaded').hidden = !m;
+    if (!m) return;
+    const scope = { settings: 'Einstellungen', data: 'Einstellungen + Datenbestände', all: 'Einstellungen + Datenbestände + Aufnahmen' }[m.scope] || m.scope;
+    $('bkInfo').innerHTML = `<b>Sicherung vom ${esc(new Date(m.created).toLocaleString(I18N.locale))}</b> · Version ${esc(m.version)} · ${esc(m.call || '–')} ${esc(m.locator || '')}<br>`
+      + `<small class="muted">${esc(scope)} · ${m.files} Dateien · ${fmtSize(m.size)} · ${m.secrets ? 'mit' : 'ohne'} Zugangsdaten · Rechner ${esc(m.host || '?')}</small>`;
+  }
+  let bkWaiting = null;
+  async function loadBackup() {
+    let d; try { d = await api('/api/backup/info'); } catch (e) { return; }
+    for (const [k, v] of Object.entries(d.sizes || {})) { const el = document.querySelector(`[data-bs=${k}]`); if (el) el.textContent = '≈ ' + fmtSize(v); }
+    bkShowUpload(d.upload);
+    if (d.pending) note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …');
+    if (bkWaiting && !d.pending && !d.upload) { clearInterval(bkWaiting); bkWaiting = null; note($('bkNote'), '✓ eingespielt – die Seite lädt neu'); setTimeout(() => location.reload(), 4000); }
+  }
+  document.querySelectorAll('input[name=bkScope]').forEach(r => r.addEventListener('change', bkLink));
+  $('bkSecrets').addEventListener('change', bkLink);
+  bkLink();
+  $('bkUpload').addEventListener('click', () => {
+    const f = $('bkFile').files[0];
+    if (!f) { note($('bkNote'), 'Erst eine Sicherungsdatei wählen', true); return; }
+    const xhr = new XMLHttpRequest();                    // XHR statt fetch: Fortschritt beim Hochladen großer Dateien
+    xhr.open('POST', '/api/backup/upload');
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = e => { if (e.lengthComputable) note($('bkNote'), `Hochladen … ${Math.round(e.loaded / e.total * 100)} %`); };
+    xhr.onload = () => {
+      let d = {}; try { d = JSON.parse(xhr.responseText); } catch (e) { }
+      if (xhr.status >= 200 && xhr.status < 300 && d.ok) { note($('bkNote'), '✓ Datei geprüft – Inhalt unten'); bkShowUpload(d.upload); }
+      else note($('bkNote'), 'Fehler: ' + (d.error || xhr.status), true);
+    };
+    xhr.onerror = () => note($('bkNote'), 'Fehler beim Hochladen', true);
+    xhr.send(f);
+  });
+  $('bkRestore').addEventListener('click', async () => {
+    if (!confirm('Diese Sicherung einspielen? Einstellungen und Datenbestände werden ersetzt (der bisherige Stand wird zur Seite gelegt). Danach starten die Dienste neu.')) return;
+    try { await post('/api/backup/restore', {}); note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …'); clearInterval(bkWaiting); bkWaiting = setInterval(loadBackup, 3000); }
+    catch (e) { note($('bkNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('bkDiscard').addEventListener('click', async () => {
+    try { await post('/api/backup/restore', { cancel: true }); bkShowUpload(null); note($('bkNote'), 'verworfen'); } catch (e) { note($('bkNote'), 'Fehler: ' + e.message, true); }
+  });
+
   const sysVisible = () => document.visibilityState === 'visible' && !$('panel-system').closest('[hidden]');
   loadSystem(); setInterval(() => { if (sysVisible()) loadSystem(); }, 60000);
 

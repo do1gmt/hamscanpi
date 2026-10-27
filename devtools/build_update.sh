@@ -11,7 +11,7 @@ OUT="${OUT:-$PWD/hamscanpi-update.sh}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 tar czf "$TMP/payload.tgz" --exclude='./.git' --exclude='./data' --exclude='./log' --exclude='./recordings' \
-    --exclude='./reports' --exclude='./hamscanpi-update.sh' --exclude='./config/auth.json' \
+    --exclude='./reports' --exclude='./restore-previous' --exclude='./backup' --exclude='./hamscanpi-update.sh' --exclude='./config/auth.json' \
     --exclude='./config/scanner.json' --exclude='./config/web_settings.json' .
 sed "0,/^set -e\$/s//set -e\nHSP_MSG=\"${MSG//\//\\/}\"/" devtools/update_head.sh > "$OUT"
 base64 "$TMP/payload.tgz" >> "$OUT"

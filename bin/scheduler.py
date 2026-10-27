@@ -159,6 +159,35 @@ def sat_pass_active():
         return False
 
 
+def restore_if_pending():
+    """Im Dashboard bestätigte Wiederherstellung einspielen, sobald der Stick frei ist; danach Webserver und
+    Scheduler neu starten (systemd startet beide wieder: Restart=always), damit alles mit dem neuen Stand läuft."""
+    try:
+        import backup as BK
+        if not BK.PENDING.exists():
+            return
+        lines = []
+        if not BK.apply_pending(log=lines.append):
+            return
+        applog("WARN", "scheduler", "restore_done", detail=" · ".join(lines)[:400])
+    except Exception as e:
+        applog("ERROR", "scheduler", "restore_failed", error=f"{type(e).__name__}: {e}")
+        try:
+            BK.PENDING.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return
+    import signal as _sig
+    for d in Path("/proc").iterdir():                        # Webserver beenden – systemd startet ihn neu
+        if d.name.isdigit():
+            try:
+                if any(a.endswith("webapp.py") for a in (d / "cmdline").read_bytes().decode(errors="replace").split("\0")):
+                    os.kill(int(d.name), _sig.SIGTERM)
+            except Exception:
+                pass
+    os._exit(0)                                              # Scheduler neu (systemd)
+
+
 WATCHDOG_S = 600              # Überflug-Prozess so lange nach dem geplanten Ende noch da -> beenden
 
 
@@ -412,6 +441,7 @@ while True:
         # steht schon im Plan (satellites.make_plan).
         check_started_passes()
         sat_watchdog()
+        restore_if_pending()
         for key, (bp, why) in list(_sat["blocked"].items()):       # Fenster vorbei, nie gestartet
             if key in _sat["started"]:
                 del _sat["blocked"][key]

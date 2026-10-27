@@ -38,6 +38,7 @@ import housekeeping as HK
 import sysmon as SYSMON
 import sticks as STK
 import stations as ST
+import backup as BK
 
 BASE = Path(__file__).resolve().parent.parent
 REPORTS = BASE / "reports"
@@ -1768,6 +1769,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(SYSMON.live())
             if path == "/api/sticks":
                 return self.send_json(STK.overview())
+            if path == "/api/backup/info":
+                up = None
+                if BK.UPLOAD.exists():
+                    try:
+                        up = BK.info(BK.UPLOAD)
+                    except ValueError:
+                        up = None
+                return self.send_json({"sizes": BK.sizes(), "pending": BK.PENDING.exists(), "upload": up,
+                                       "free_gb": round(__import__("shutil").disk_usage(str(BASE)).free / 1e9, 1)})
+            if path == "/api/backup/download":
+                # Sicherung direkt in die Antwort schreiben (kein Zwischenstand auf der Karte, auch bei GB)
+                scope = qs.get("scope", "data")
+                secrets = qs.get("secrets", "1") != "0"
+                if scope not in BK.SCOPES:
+                    raise ValueError("Umfang: settings, data oder all")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Disposition", f'attachment; filename="{BK.filename(scope)}"')
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+                man = BK.write(self.wfile, scope, secrets, stream=True)
+                APPLOG.log("INFO", "webapp", "backup_downloaded", scope=scope, secrets=secrets, files=man["files"])
+                return
             if path == "/api/system/history":
                 return self.send_json(SYSMON.history(int(qs.get("hours", 24) or 24)))
             if path == "/api/scan-summary":
@@ -1874,6 +1900,33 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.gate(path):
                 return
+            if path == "/api/backup/upload":
+                # Sicherungsdatei stückweise auf die Karte (kann groß sein), dann prüfen
+                length = int(self.headers.get("Content-Length") or 0)
+                if length <= 0:
+                    raise ValueError("leere Datei")
+                tmp = BK.UPLOAD.with_suffix(".part")
+                BK.PENDING.unlink(missing_ok=True)
+                with open(tmp, "wb") as f:
+                    left = length
+                    while left > 0:
+                        chunk = self.rfile.read(min(1 << 20, left))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        left -= len(chunk)
+                if left:
+                    tmp.unlink(missing_ok=True)
+                    raise ValueError("Übertragung abgebrochen")
+                os.replace(tmp, BK.UPLOAD)
+                try:
+                    man = BK.info(BK.UPLOAD)
+                except ValueError:
+                    BK.UPLOAD.unlink(missing_ok=True)
+                    raise
+                APPLOG.log("INFO", "webapp", "backup_uploaded", created=man.get("created"), scope=man.get("scope"),
+                           version=man.get("version"), size_mb=round(length / 1e6, 1))
+                return self.send_json({"ok": True, "upload": man})
             data = self.read_body()
             ip = self.client_ip()
             if path == "/api/login":
@@ -2032,6 +2085,17 @@ class Handler(BaseHTTPRequestHandler):
                 DEV._HW_CACHE["v"] = None
                 APPLOG.log("INFO", "webapp", "hf_device_updated", label=lab or "PMSDR", antenna=ant)
                 return self.send_json({"ok": True, "label": lab or "PMSDR", "antenna": ant})
+            if path == "/api/backup/restore":
+                if not BK.UPLOAD.exists():
+                    raise ValueError("Keine Sicherung hochgeladen")
+                if data.get("cancel"):
+                    BK.PENDING.unlink(missing_ok=True)
+                    BK.UPLOAD.unlink(missing_ok=True)
+                    return self.send_json({"ok": True})
+                BK.info(BK.UPLOAD)
+                BK.PENDING.write_text(str(time.time()))
+                APPLOG.log("WARN", "webapp", "restore_requested", ip=self.client_ip())
+                return self.send_json({"ok": True, "pending": True})
             if path == "/api/sticks/forget":
                 STK.forget(str(data.get("key", "")))
                 return self.send_json({"ok": True, **STK.overview()})

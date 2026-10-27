@@ -102,7 +102,7 @@ cd "$NEW"
 mkdir -p backup data log recordings reports
 # alten Programmstand sichern (ohne Daten und Aufnahmen)
 tar czf "backup/programm_vor_hamscanpi_$STAMP.tgz" --exclude='./data' --exclude='./recordings' --exclude='./reports' \
-    --exclude='./log' --exclude='./backup' --exclude='*/__pycache__' . 2>/dev/null || true
+    --exclude='./log' --exclude='./backup' --exclude='./restore-previous' --exclude='*/__pycache__' . 2>/dev/null || true
 ok "alter Stand gesichert: backup/programm_vor_hamscanpi_$STAMP.tgz"
 # Altlasten
 rm -f bin/*.bak* bin/*.pre_* bin/build_report.py UPDATE.md config/*.bak_* 2>/dev/null || true
@@ -128,15 +128,15 @@ for r in c.get("ranges", []):
         r["start_hz"], r["stop_hz"] = min(fs), max(fs)
 for k, v in (("sstv_record_seconds", 120), ("sstv_probe_seconds", 4), ("sstv_threshold_db", 6.0)):
     c.setdefault(k, v)
-# bisherige Anzeige beibehalten: Gerätenamen und Antennen standen fest im Programm
-c.setdefault("device_labels", {"pmsdr": "PMSDR", "rtlsdr": "NESDR SMArt v5"})
-c.setdefault("antennas", {"pmsdr": "HF-360", "rtlsdr": "Discone"})
+# Gerätenamen und Antennen: neutrale Vorgabe (einstellbar unter System → Geräte); vorhandene bleiben
+c.setdefault("device_labels", {"pmsdr": "PMSDR", "rtlsdr": "RTL-SDR"})
+c.setdefault("antennas", {"pmsdr": "", "rtlsdr": ""})
 # Bänder, deren Mithören verboten ist (Flugfunk): ausgeblendet und gesperrt, solange nicht freigeschaltet
 c.setdefault("allow_restricted_bands", False)
 d = json.loads((base / "config" / "scanner.default.json").read_text(encoding="utf-8"))
 c["legal_note"] = d.get("legal_note", c.get("legal_note", ""))
 p.write_text(json.dumps(c, indent=2, ensure_ascii=False), encoding="utf-8")
-print("  \033[32m✓\033[0m Bandplan übernommen (Gerätenamen und Antennen wie bisher)")
+print("  \033[32m✓\033[0m Bandplan übernommen (Gerätenamen und Antennen bleiben, wie eingestellt)")
 if not c["allow_restricted_bands"]:
     print("  \033[32m✓\033[0m gesperrte Bänder (Flugfunk) ausgeblendet – allow_restricted_bands: false")
 PY

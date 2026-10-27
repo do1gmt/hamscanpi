@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.27 – 2026-10-29
+
+- **Backup and restore** (System → Backup, `bin/backup.py`). One file `hamscanpi-backup-<date>-<scope>.tar.gz`:
+  *settings* (config, device register, satellite statistics), *+ data* (databases: hits, stations, FM
+  stations, interference lines, system history – copied with SQLite's backup function, consistent while a scan
+  writes) or *+ recordings* (recordings/ and reports/, streamed directly, no temporary copy on the card).
+  *Include credentials* (default on) – without it mail password, tokens and access protection are left out.
+  Restore: upload in the same card → contents shown (date, version, callsign, scope) → *Restore*; applied by
+  the scheduler as soon as no scan or pass runs, current config/ and data/ moved to `restore-previous/<time>/`
+  first, recordings added (never deleted), configuration migrated, services restarted, page reloads.
+  Archives are checked (manifest, only config/, data/, recordings/, reports/, no `..` or links).
+  Command line: `backup.py create|info|restore`. README: *Backup and restore*.
+- Update script: new installations no longer get "NESDR SMArt v5" / "HF-360" / "Discone" as default device
+  names and antennas (neutral defaults; existing entries stay).
+- Self-test section 17: backup in three scopes, without credentials, restore, manipulated archive rejected.
+
 ## 1.7.26 – 2026-10-29
 
 Checked on phone (390 px) and tablet (820 px) widths:

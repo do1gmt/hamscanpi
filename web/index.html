@@ -375,6 +375,26 @@
         <p class="hint">Geschützte Treffer (★) werden nie automatisch gelöscht.</p>
         <details><summary>Löschprotokoll</summary><ul class="plain" id="deletionLog"></ul></details>
       </section>
+      <section class="panel" id="panel-backup">
+        <h2>Sicherung</h2>
+        <p class="hint">Alles Wichtige in einer Datei – zum Aufbewahren auf dem PC, einem USB-Stick oder in der Cloud. Nach einem Kartenverlust: neu installieren, Sicherung hier einspielen, fertig.</p>
+        <div class="backup-scopes" id="backupScopes">
+          <label class="check"><input type="radio" name="bkScope" value="settings"> Einstellungen <small class="muted" data-bs="settings"></small></label>
+          <label class="check"><input type="radio" name="bkScope" value="data" checked> + Datenbestände (Treffer, Stationen, Verlauf) <small class="muted" data-bs="data"></small></label>
+          <label class="check"><input type="radio" name="bkScope" value="all"> + Aufnahmen (Ton, I/Q, Wasserfälle, Bilder) <small class="muted" data-bs="all"></small></label>
+        </div>
+        <label class="check" title="Mail-Passwort, Telegram-/ntfy-Token und Zugangsschutz. Ohne sie ist die Wiederherstellung unvollständig – mit ihnen die Datei sorgsam aufbewahren."><input type="checkbox" id="bkSecrets" checked> Zugangsdaten mitsichern</label>
+        <div class="actions"><a class="btn" id="bkDownload" href="#" download>↓ Sicherung herunterladen</a></div>
+        <p class="hint">Die Datei enthält mit Zugangsdaten das Mail-Passwort und den Telegram-Token im Klartext – nicht weitergeben.</p>
+        <h3>Wiederherstellen</h3>
+        <div class="row"><input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"><button class="btn" id="bkUpload" type="button">Hochladen und prüfen</button></div>
+        <div class="save-note" id="bkNote" aria-live="polite"></div>
+        <div id="bkUploaded" hidden>
+          <p id="bkInfo"></p>
+          <div class="actions"><button class="btn btn-danger" id="bkRestore" type="button">Einspielen</button><button class="btn" id="bkDiscard" type="button">Verwerfen</button></div>
+          <p class="hint">Eingespielt wird, sobald kein Scan und kein Überflug läuft. Der bisherige Stand von Einstellungen und Datenbeständen wird vorher nach <code>restore-previous/</code> gelegt; Aufnahmen werden ergänzt, nicht gelöscht. Danach starten die Dienste neu und die Seite lädt sich neu.</p>
+        </div>
+      </section>
     </div>
   </div>
 </section>

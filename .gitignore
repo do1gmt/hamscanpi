@@ -4,6 +4,7 @@ log/
 recordings/
 reports/
 backup/
+restore-previous/
 config/web_settings.json
 config/scanner.json
 config/*.bak*

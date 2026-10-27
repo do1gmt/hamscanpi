@@ -165,6 +165,25 @@ swapon --show            # /dev/zram0 with priority 100, the swap file below it
 If zram is full and there is no reserve, the kernel has to end a process – the system history shows the
 largest process per minute to find the cause.
 
+### Backup and restore
+
+*System → Backup* downloads everything important as one file – settings; optionally with the data (hits,
+stations, FM stations, interference lines, system history) and the recordings (audio, I/Q, waterfalls,
+images, can be large). The databases are copied consistently even while a scan is writing. *Include
+credentials* (on by default) also stores the mail password and Telegram/ntfy token in plain text – keep the
+file safe. To restore, upload the file in the same card: HamScanPi shows what is in it, restores as soon as
+no scan or pass is running, moves the current settings and data to `restore-previous/<time>/` first, adds
+recordings (never deletes them) and restarts its services.
+
+From the command line, e.g. after losing the card (fresh install, then):
+
+```
+python3 bin/backup.py create --scope data          # settings | data | all, --no-secrets, -o file
+python3 bin/backup.py info hamscanpi-backup-….tar.gz
+python3 bin/backup.py restore hamscanpi-backup-….tar.gz
+sudo systemctl restart hamscanpi-scheduler hamscanpi-web
+```
+
 ### Moving to an SSD
 
 Boot the **whole system** from the SSD (Raspberry Pi 4 and 5 can do this directly) rather than putting only
