@@ -307,5 +307,7 @@ car = D.detect_ft8(np.exp(2j * np.pi * np.cumsum(f2) / rate) + n(0.3), rate)
 noi = D.detect_ft8(n(1.0), rate)
 print("OK" if ft8 and ft8["confidence"] >= 85 and car is None and noi is None else f"NEIN {ft8} {car} {noi}")
 PY
+python3 bin/funktest.py | grep -q "MHz" && python3 bin/funktest.py 1 | grep -q "einstellen" \
+  && ok "Handfunken-Test: Überflugliste und Dopplertabelle" || bad "funktest.py"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

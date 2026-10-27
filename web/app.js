@@ -577,7 +577,20 @@
     const y = Math.sin(dLon) * Math.cos(b.lat * r), x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos(dLon);
     return { km: Math.round(d), deg: Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360) };
   }
+  // ft8_lib meldet Nachrichten, die es empfangen, aber nicht auspacken kann, als „Error [n] while unpacking!“
+  // (Fehlercodes aus ft8_lib/ft8/message.h). Typ 5: Nachrichtenart, die ft8_lib nicht kennt –
+  // DXpedition (Fox/Hound), EU-VHF-Contest, ARRL Field Day, Contest-Kurzform, RTTY Roundup.
+  const UNPACK_WHY = {
+    1: 'erstes Rufzeichen nicht lesbar (nur als Kurzcode übertragen)',
+    2: 'zweites Rufzeichen nicht lesbar (nur als Kurzcode übertragen)',
+    3: 'Rufzeichenzusatz nicht lesbar',
+    4: 'Locator bzw. Rapport nicht lesbar',
+    5: 'Nachrichtenart, die der Dekoder nicht auspacken kann – z. B. DXpedition (Fox/Hound) oder Contest-Format',
+  };
   function interpret(text) {
+    const ue = /^ERROR \[(\d+)\] WHILE UNPACKING!?$/.exec(text.trim().toUpperCase());
+    if (ue) return { text, kind: 'undecodable', calls: [], grid: null, unpack: +ue[1],
+                     desc: 'empfangen, aber nicht lesbar: ' + (UNPACK_WHY[+ue[1]] || `Dekoder-Fehler ${ue[1]}`) };
     const t = text.trim().toUpperCase().replace(/\s+/g, ' ').split(' ');
     const out = { text, kind: 'other', calls: [], grid: null, desc: '' };
     if (t[0] === 'CQ') {
@@ -620,7 +633,8 @@
         const rows = d.messages.map(m => {
           const i = interpret(m.text);
           i.calls.forEach((c, k) => { const st = stations.get(c) || { call: c, grid: null, n: 0 }; st.n++; if (k === 0 && i.grid) st.grid = i.grid; stations.set(c, st); });
-          return `<tr><td>${m.snr > 0 ? '+' : ''}${Math.round(m.snr)}</td><td>${m.audio_hz}</td><td class="mono">${esc(m.text)}</td><td>${esc(i.desc)}</td></tr>`;
+          const msg = i.kind === 'undecodable' ? `<span class="muted">— (Typ ${i.unpack})</span>` : `<span class="mono">${esc(m.text)}</span>`;
+          return `<tr><td>${m.snr > 0 ? '+' : ''}${Math.round(m.snr)}</td><td>${m.audio_hz}</td><td>${msg}</td><td${i.kind === 'undecodable' ? ' class="muted"' : ''}>${esc(i.desc)}</td></tr>`;
         });
         html += `<div class="decode-block"><div class="decode-title"><b>${d.type}</b> · ${d.messages.length} Nachrichten${d.detail ? ' · ' + esc(d.detail) : ''}</div>
           <div class="table-wrap"><table class="table"><thead><tr><th>SNR dB</th><th>Hz</th><th>Nachricht</th><th>Bedeutung</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
@@ -1119,7 +1133,9 @@
           const wf = x && x.waterfall ? ` <a href="/files/${encodeURIComponent(x.waterfall)}" class="lightbox" data-title="${esc(p.name)} · ${t(p.aos)}"><small>📊 Wasserfall${multi ? ' ' + esc(cid) : ''}</small></a>` : '';
           return lt || wf ? `<br>${lt}${wf}` : '';
         }).join('');
-        plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}`;
+        const rig = (r.antenna || r.gain != null) && r.state !== 'running'
+          ? `<br><small class="muted">${[r.antenna ? 'Antenne ' + esc(r.antenna) : '', r.gain != null && r.gain !== '' ? String(r.gain).replace('.', ',') + ' dB' : ''].filter(Boolean).join(' · ')}</small>` : '';
+        plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}${rig}`;
       } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';

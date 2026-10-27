@@ -250,6 +250,8 @@ class LiveSession:
             cmd += ["-g", str(gain)]
         if self.squelch_db > 0 and m in ("fm", "am"):
             cmd += ["-l", str(int(self.squelch_db * 10))]   # rtl_fm-Squelch ist eine Rohzahl, grob skaliert
+        if rtl.get("bias_t"):
+            cmd += ["-T"]                               # Speisung für Vorverstärker an der Antenne
         cmd.append("-")
         return cmd
 
@@ -296,6 +298,8 @@ class LiveSession:
                    "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(sp["ppm"]))]
             if g:
                 cmd += ["-g", str(g)]
+            if rtl.get("bias_t"):
+                cmd += ["-T"]                           # Speisung für Vorverstärker an der Antenne
             cmd.append("-")
             return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.proc = spawn(gain)

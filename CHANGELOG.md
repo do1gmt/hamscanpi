@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.13 – 2026-10-27
+
+- **FT8 "Error [n] while unpacking!"** (output of ft8_lib for a frame received correctly but of a type it
+  cannot unpack) is shown as "received but not readable" with the reason from ft8_lib's error code – type 5:
+  DXpedition (Fox/Hound) or contest formats; 1–4: callsign, suffix or locator only sent as a hash.
+- **Bias-T for satellite recordings and Live.** `rtlsdr.bias_t` (power for an LNA at the antenna) was only
+  applied by the scanner; satellite passes and Live started `rtl_sdr`/`rtl_fm` without `-T`, which would leave
+  an LNA unpowered (and attenuating).
+- **Antenna and gain per pass.** The pass list and the pass log show the antenna (System → Devices, otherwise
+  `antennas.rtlsdr`) and the gain used for each recording. HamScanPi cannot see the position of an antenna
+  switch – the entry makes it easier to match recordings to antennas afterwards.
+- **`bin/funktest.py`**: next FM satellite and Meteor passes (24 h, from 20°) with a per-minute table of
+  direction, elevation and the frequency to set on a handheld (Doppler rounded to 5 kHz).
+  `python3 bin/funktest.py` / `python3 bin/funktest.py <no>`.
+- Self-test: funktest.py.
+
 ## 1.7.12 – 2026-10-26
 
 - **Interface language stored on the Pi.** It used to live only in the browser (`localStorage`) and was lost

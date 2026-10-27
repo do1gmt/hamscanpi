@@ -204,11 +204,16 @@ class Source:
         import sticks as STK
         sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
         self.dev, self.node = sp["d"], sp.get("node")
+        # Antenne laut System → Geräte (sonst config antennas.rtlsdr) – HamScanPi kann die Stellung eines
+        # Antennenumschalters nicht selbst sehen, steht aber so bei jeder Aufnahme dabei
+        self.antenna = sp.get("antenna") or (cfg.get("antennas") or {}).get("rtlsdr") or None
         self.gain = sat_gain(sp["gain"])
         self.cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"], "-f", str(int(tune_hz)),
                     "-s", str(self.rate), "-p", str(int(sp["ppm"]))]
         if self.gain:
             self.cmd += ["-g", str(self.gain)]
+        if rtl.get("bias_t"):
+            self.cmd += ["-T"]                                # Speisung für Vorverstärker an der Antenne
         self.cmd.append("-")
         self._start()
 
@@ -865,6 +870,8 @@ def main():
     src = Source(tune, cfg, a.test, PROBE_RATE if probe else IN_RATE)
     if getattr(src, "gain", None):
         print(f"   Verstärkung {float(src.gain):g} dB")
+    if getattr(src, "antenna", None):
+        print(f"   Antenne {src.antenna}")
     nblk, nrec, err = 0, 0, None                              # nblk: Zeitachse, nrec: wirklich aufgenommen
     signal.signal(signal.SIGTERM, _on_term)
     try:
@@ -962,7 +969,8 @@ def main():
             o = next((x for x in objs if k.startswith(f"{x}_")), objs[0])
             SAT.write_result(k, state=state, hits=per_obj.get(o, 0), per_channel=per_ch,
                              seconds=round(secs), error=err, shared=len(objs) > 1,
-                             signal={c: v for c, v in sig.items() if SAT.BY_ID[c]["norad"] == o})
+                             signal={c: v for c, v in sig.items() if SAT.BY_ID[c]["norad"] == o},
+                             antenna=getattr(src, "antenna", None), gain=getattr(src, "gain", None))
         if not a.test:
             for o in objs:
                 SAT.record_stats(o, t0, per_obj[o], secs)

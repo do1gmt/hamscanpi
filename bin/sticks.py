@@ -317,7 +317,7 @@ def rtl_params(rtl_cfg=None):
         base["ppm"] = int(r["ppm"])
     if r.get("gain") is not None:
         base["gain"] = r["gain"]
-    base.update(node=d["node"], label=_label(r))
+    base.update(node=d["node"], label=_label(r), antenna=(r.get("antenna") or "").strip() or None)
     return base
 
 
