@@ -36,7 +36,7 @@ BASE = Path(__file__).resolve().parent.parent
 FORMAT = 1
 SCOPES = ("settings", "data", "all")
 SECRET_KEYS = ("smtp_pass", "tg_token", "ntfy_token")
-DATA_SMALL = ("sticks.json", "sat_stats.json", "sat_results.json", "fm_gain.json", "pskreporter_state.json",
+DATA_SMALL = ("sticks.json", "sat_stats.json", "sat_results.json", "fm_gain.json", "pskreporter_state.json", "live_state.json",
               "notify_state.json", "tle.json")
 DATABASES = ("scanner.db", "sysmon.db")
 SKIP_SUFFIX = (".lock", ".pid", ".tmp", ".trigger")

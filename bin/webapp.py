@@ -281,6 +281,7 @@ def load_settings():
         "devices": device_labels(),
         "antennas": antennas_effective(),
         "rtl_caps": (_main_stick() or {}).get("caps"),
+        "live_state": live_state(),
         "follow": {k: scanner_config().get(k) for k in FOLLOW_KEYS},
         "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
                       "antenna": (scanner_config().get("antennas") or {}).get("pmsdr", "")},
@@ -1630,6 +1631,8 @@ def live_start(data):
             _live.gain = _gain_value(data.get("gain"))
         _live.start()
         APPLOG.log("INFO", "live", "start", device=device, freq_hz=freq, mode=mode, scan=scan["name"] if scan else None)
+        if not scan:
+            live_state_update({"freq_hz": freq, "mode": mode, "step_hz": data.get("step_hz")}, force=True)
         time.sleep(0.8)
         st = _live.status()
         if not _live.running or st["text"].startswith("Fehler") or "beendet" in st["text"]:
@@ -1645,10 +1648,60 @@ def live_stop():
     global _live
     with _live_lock:
         if _live:
+            live_state_update({"freq_hz": int(_live.active_hz or _live.freq_hz), "mode": _live.mode}, force=True)
             _live.stop()
             _live = None
             APPLOG.log("INFO", "live", "stop")
     return {"active": False}
+
+
+# Letzte Live-Frequenz, Betriebsart, Raster und „Zuletzt gehört“ auf dem Pi – gilt für jeden Browser.
+# Geschrieben höchstens alle 10 s (Abstimmen schickt viele kleine Änderungen; die SD-Karte soll es nicht merken)
+LIVE_STATE = BASE / "data" / "live_state.json"
+_live_state = {"data": None, "dirty": False, "written": 0.0}
+
+
+def live_state():
+    if _live_state["data"] is None:
+        _live_state["data"] = read_json(LIVE_STATE, {}) or {}
+    return _live_state["data"]
+
+
+def live_state_update(upd, force=False):
+    d = live_state()
+    clean = {}
+    if upd.get("freq_hz"):
+        clean["freq_hz"] = int(float(upd["freq_hz"]))
+    if upd.get("mode") in ("nfm", "wfm", "am", "usb", "lsb"):
+        clean["mode"] = upd["mode"]
+    if upd.get("step_hz"):
+        clean["step_hz"] = int(float(upd["step_hz"]))
+    if isinstance(upd.get("history"), list):
+        clean["history"] = [{"f": int(x.get("f", 0)), "m": str(x.get("m", ""))[:4], "name": str(x.get("name") or "")[:40]}
+                            for x in upd["history"][:8] if isinstance(x, dict) and x.get("f")]
+    if not clean:
+        return d
+    d.update(clean)
+    _live_state["dirty"] = True
+    if force or time.time() - _live_state["written"] >= 10:
+        _live_state_write()
+    elif not _live_state.get("timer"):                     # spätestens nach 10 s schreiben
+        t = threading.Timer(10.0, _live_state_write)
+        t.daemon = True
+        _live_state["timer"] = t
+        t.start()
+    return d
+
+
+def _live_state_write():
+    _live_state["timer"] = None
+    if not _live_state["dirty"]:
+        return
+    try:
+        write_json(LIVE_STATE, live_state())
+        _live_state.update(dirty=False, written=time.time())
+    except Exception:
+        pass
 
 
 # ------------------------------------------------------------------ HTTP
@@ -2124,7 +2177,11 @@ class Handler(BaseHTTPRequestHandler):
                         check_not_restricted(float(data["freq_hz"]))
                     _live.tune(data.get("freq_hz"), data.get("mode"), data.get("squelch_db"),
                                _gain_value(data["gain"]) if data.get("gain") not in (None, "") else None)
+                    live_state_update({"freq_hz": data.get("freq_hz"), "mode": data.get("mode")})
                     return self.send_json({"ok": True, "live": _live.status()})
+            if path == "/api/live/state":
+                # Frequenz/Betriebsart/Raster und „Zuletzt gehört“ merken (auch ohne laufenden Empfang)
+                return self.send_json({"ok": True, "state": live_state_update(data, force=bool(data.get("history")))})
             if path == "/api/protect-hit":
                 set_protected(int(data["peak_id"]), bool(data.get("protected", True)))
                 return self.send_json({"ok": True})

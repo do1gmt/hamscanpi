@@ -86,7 +86,7 @@
 
   async function loadSettings() {
     settings = await api('/api/settings');
-    setTimeout(() => { try { renderCountry(); } catch (e) { } }, 0);
+    setTimeout(() => { try { renderCountry(); } catch (e) { } try { applyLiveState(); } catch (e) { } }, 0);
     const iv = $('interval');
     iv.innerHTML = settings.allowed_intervals.map(m => `<option value="${m}">${intervalLabel(m)}</option>`).join('');
     iv.value = settings.scan_interval_minutes;
@@ -1075,7 +1075,13 @@
     const f = Math.round((lf() + (e.deltaY < 0 ? st : -st)) / st) * st;
     $('liveFreq').value = (f / 1e6).toFixed(ssb ? 5 : 4); wfMarker(f); liveRetune();
   }, { passive: false });
-  const liveRetune = () => { liveTouched = Date.now(); if (!live.active) return; clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 80); };
+  let stateTimer = null;
+  const liveRetune = () => { liveTouched = Date.now();
+    if (!live.active) {                                    // auch ohne Empfang merken (für jeden Browser)
+      clearTimeout(stateTimer);
+      stateTimer = setTimeout(() => { const f = lf(); if (f > 0) post('/api/live/state', { freq_hz: f, mode: $('liveMode').value }).catch(() => { }); }, 1500);
+      return;
+    } clearTimeout(tuneTimer); tuneTimer = setTimeout(() => post('/api/live/tune', { freq_hz: lf(), mode: $('liveMode').value, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value }).then(() => liveRememberLater(lf(), $('liveMode').value)).catch(e => toast(e.message)), 80); };
   // „Zuletzt gehört“ erst nach 5 s auf derselben Frequenz (kein Eintrag für jeden Zwischenschritt)
   let rememberTimer = null;
   function liveRememberLater(f, m) { clearTimeout(rememberTimer); rememberTimer = setTimeout(() => { if (live.active && Math.abs(lf() - f) < 100 && $('liveMode').value === m) liveRemember(f, m); }, 5000); }
@@ -1086,6 +1092,7 @@
     $('liveFreq').value = (f / 1e6).toFixed(v % 1000 ? 5 : 4); liveRetune();
   }));
   $('liveFreq').addEventListener('change', liveRetune);
+  $('liveStep').addEventListener('change', () => post('/api/live/state', { step_hz: Number($('liveStep').value) }).catch(() => { }));
   function ssbUi() {
     const ssb = ['usb', 'lsb'].includes($('liveMode').value);
     $('liveSsbHint').hidden = !ssb;
@@ -1305,6 +1312,19 @@
     const old = liveHist.findIndex(x => x.f === f && x.m === m);
     if (old >= 0) { name = name || liveHist[old].name; liveHist.splice(old, 1); }
     liveHist.unshift({ f, m, name: name || '' }); liveHist.splice(8); renderLiveHist();
+    post('/api/live/state', { history: liveHist }).catch(() => { });     // „Zuletzt gehört“ auf dem Pi
+  }
+  // Letzte Live-Einstellung vom Pi übernehmen (gilt für jeden Browser), einmal beim ersten Laden
+  let liveStateApplied = false;
+  function applyLiveState() {
+    const ls = settings && settings.live_state;
+    if (liveStateApplied || !ls) return;
+    liveStateApplied = true;
+    if (live.active) return;                               // läuft schon: die Statusabfrage zeigt die Frequenz
+    if (ls.mode && [...$('liveMode').options].some(o => o.value === ls.mode)) $('liveMode').value = ls.mode;
+    if (ls.freq_hz) $('liveFreq').value = (ls.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(ls.mode) ? 5 : 4);
+    if (ls.step_hz && [...$('liveStep').options].some(o => Number(o.value) === ls.step_hz)) $('liveStep').value = String(ls.step_hz);
+    if (Array.isArray(ls.history) && !liveHist.length) { liveHist.push(...ls.history); renderLiveHist(); }
   }
   function renderLiveHist() {
     $('liveHistory').innerHTML = liveHist.map((x, i) => `<li><button type="button" class="linklike" data-hi="${i}">${(x.f / 1e6).toFixed(4)} MHz · ${x.m.toUpperCase()}${x.name ? ' · <b>' + esc(x.name) + '</b>' : ''}</button></li>`).join('');
@@ -2140,7 +2160,7 @@
     const sel = $('country'); if (!settings || !settings.countries) return;
     sel.innerHTML = settings.countries.map(c => `<option value="${c.code}">${esc(c.name)} (IARU Region ${c.region})</option>`).join('');
     sel.value = settings.country || 'DE';
-    if (sel.value === 'US' && $('liveFreq').value === '145.500') $('liveFreq').value = '146.520';   // US-Anruffrequenz
+    if (sel.value === 'US' && $('liveFreq').value === '145.500' && !(settings.live_state || {}).freq_hz) $('liveFreq').value = '146.520';   // US-Anruffrequenz
     const sug = settings.country_suggest;
     $('countryHint').textContent = sug && sug !== sel.value
       ? `Dein Locator liegt vermutlich in: ${(settings.countries.find(c => c.code === sug) || {}).name || sug}.`

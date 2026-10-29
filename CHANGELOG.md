@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.39 – 2026-10-30
+
+- **Live remembers the last frequency on the Pi** – for every browser and device: frequency, demodulator, tuning
+  step and "Recently heard" are stored in `data/live_state.json` (on start, tuning, stop and when changed without
+  reception; written at most every 10 s and at the latest 10 s after the last change, to spare the SD card).
+  Opening Live anywhere shows the last settings. Included in the backup.
+
 ## 1.7.38 – 2026-10-30
 
 - Live: the decodes moved into their own card "Decodes" in the right column (on phones below the controls and
