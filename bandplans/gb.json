@@ -1,0 +1,159 @@
+{
+ "country": "GB",
+ "name": "Großbritannien",
+ "region": 1,
+ "source": "RSGB band plans https://rsgb.org/main/operating/band-plans/ (70 MHz 70.000–70.500, 432 MHz 430–440 with 1.6/7.6/9 MHz repeater shifts); IARU Region 1; retrieved 2026-10-30",
+ "note": "RSGB-Bandplan: 4 m 70,0–70,5 MHz, 60 m mit den britischen Zuteilungen, 70-cm-Relais 430–431 und 438,6–440 MHz (Ablage 1,6/7,6/9 MHz je nach Relais), CB 27/81. Ohne Freenet.",
+ "remove": [
+  "Freenet"
+ ],
+ "replace": [
+  {
+   "name": "4m",
+   "device": "rtlsdr",
+   "start_hz": 70000000,
+   "stop_hz": 70500000,
+   "step_hz": 900000,
+   "legal": "amateur",
+   "segments": [
+    {
+     "id": "beacon",
+     "label": "Beacons 70.000–70.030",
+     "mode": "beacon",
+     "legal": "amateur",
+     "ranges": [
+      [
+       70000000,
+       70030000
+      ]
+     ]
+    },
+    {
+     "id": "ssb",
+     "label": "CW/SSB 70.030–70.250 (call 70.200)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       70030000,
+       70250000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 70.154",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      70154000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "fm",
+     "label": "FM 70.250–70.500 (calling 70.450, GB2RS 70.425)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       70250000,
+       70500000
+      ]
+     ],
+     "frequencies_hz": [
+      70450000,
+      70425000
+     ]
+    }
+   ]
+  },
+  {
+   "name": "60m",
+   "start_hz": 5258500,
+   "stop_hz": 5406500,
+   "step_hz": 10000,
+   "legal": "amateur",
+   "segments": [
+    {
+     "id": "uk",
+     "label": "UK 60 m allocations 5258.5–5406.5 kHz (Ofcom, USB)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       5258500,
+       5406500
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "wrc",
+     "label": "WRC-15 band 5351.5–5366.5 kHz",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       5351500,
+       5366500
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 5.357",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      5357000
+     ],
+     "sideband": "USB"
+    }
+   ]
+  }
+ ],
+ "add": [
+  {
+   "name": "CB 27/81",
+   "start_hz": 27601250,
+   "stop_hz": 27991250,
+   "step_hz": 10000,
+   "legal": "jedermann",
+   "segments": [
+    {
+     "id": "uk_cb",
+     "label": "UK CB 27/81 channels 1–40 (FM)",
+     "mode": "voice",
+     "legal": "jedermann",
+     "ranges": [
+      [
+       27600000,
+       27995000
+      ]
+     ],
+     "sideband": "USB"
+    }
+   ]
+  }
+ ],
+ "patch": {
+  "70cm": {
+   "relais": {
+    "label": "Repeater outputs 430–431 and 438.6–440 MHz (shift 1.6 / 7.6 / 9 MHz – local)",
+    "ranges": [
+     [
+      430000000,
+      431000000
+     ],
+     [
+      438600000,
+      440000000
+     ]
+    ]
+   }
+  }
+ }
+}

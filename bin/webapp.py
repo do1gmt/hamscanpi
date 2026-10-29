@@ -272,7 +272,9 @@ def load_settings():
         "sat_beam_prefer": data.get("sat_beam_prefer", True),
         "ui_lang": data.get("ui_lang"),
         "country": BPL.country(data), "country_suggest": BPL.suggest(data.get("my_locator")),
-        "countries": [{"code": k, "name": v["name"], "region": v["region"]} for k, v in BPL.COUNTRIES.items()],
+        "countries": [{"code": k, "name": v["name"], "region": v["region"],
+                       "note": ((BPL.profile(k) or {}).get("note") or ""),
+                       "source": ((BPL.profile(k) or {}).get("source") or "")} for k, v in BPL.COUNTRIES.items()],
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
         "hardware": hw,
@@ -1875,6 +1877,8 @@ class Handler(BaseHTTPRequestHandler):
                     except ValueError:
                         up = None
                 return self.send_json({"sizes": BK.sizes(), "pending": BK.PENDING.exists(), "upload": up,
+                                       "auto": BK.auto_cfg(read_json(SETTINGS, {})), "auto_state": BK.auto_state(),
+                                       "candidates": BK.candidates(),
                                        "free_gb": round(__import__("shutil").disk_usage(str(BASE)).free / 1e9, 1)})
             if path == "/api/backup/download":
                 # Sicherung direkt in die Antwort schreiben (kein Zwischenstand auf der Karte, auch bei GB)
@@ -2234,6 +2238,34 @@ class Handler(BaseHTTPRequestHandler):
                 lv = [x for x in (data.get("levels") or []) if x in ("ERROR", "WARN", "INFO", "DEBUG")] or None
                 n = N.send_log_now(lv, int(data.get("hours") or 24))
                 return self.send_json({"ok": True, "lines": n})
+            if path == "/api/backup/auto":
+                # automatische Sicherung einstellen (und auf Wunsch gleich einmal ausführen)
+                st = read_json(SETTINGS, {})
+                c = BK.auto_cfg(st)
+                for k in ("enabled", "secrets"):
+                    if k in data:
+                        c[k] = bool(data[k])
+                if data.get("interval") in ("daily", "weekly"):
+                    c["interval"] = data["interval"]
+                if "hour" in data:
+                    c["hour"] = max(0, min(23, int(data["hour"] or 0)))
+                if "keep" in data:
+                    c["keep"] = max(1, min(60, int(data["keep"] or 7)))
+                if data.get("scope") in ("settings", "data", "all"):
+                    c["scope"] = data["scope"]
+                if "dir" in data:
+                    c["dir"] = str(data["dir"] or "").strip()
+                if c["enabled"] or data.get("run_now"):
+                    err = BK.check_dir(c["dir"])
+                    if err:
+                        raise ValueError(err)
+                st["auto_backup"] = c
+                write_json(SETTINGS, st)
+                res = None
+                if data.get("run_now"):
+                    res = BK.run_auto(c, log=lambda m: APPLOG.log("INFO", "backup", "backup_now", detail=m))
+                APPLOG.log("INFO", "webapp", "auto_backup_set", **{k: c[k] for k in ("enabled", "interval", "hour", "dir", "scope", "keep")})
+                return self.send_json({"ok": True, "auto": c, "auto_state": BK.auto_state(), "result": res})
             if path == "/api/backup/restore":
                 if not BK.UPLOAD.exists():
                     raise ValueError("Keine Sicherung hochgeladen")

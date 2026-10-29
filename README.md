@@ -105,7 +105,10 @@ also covers HF via direct sampling.
 | PMSDR (optional) | shortwave 160–10 m, needs a USB sound card for I/Q and its control program – see [docs/pmsdr.md](docs/pmsdr.md) |
 
 **Band plan by country:** *Settings → Station → Country / band plan* selects the band plan used for scanning and
-classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **USA (IARU Region 2)** follows the
+classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **Austria**, **Switzerland** and the **United Kingdom** (Region 1) and **Canada** (Region 2) are
+available as well (Freenet only in Germany, no 4 m in Austria, UK 4 m 70.0–70.5 MHz, UK 60 m allocations and CB
+27/81, Canada like the US without MURS and with 70 cm 430–450 MHz). For the US and Canada FM broadcast uses
+**RBDS** (North American programme types, station call sign from the PI code). **USA (IARU Region 2)** follows the
 ARRL band plan: 160–10 m with US edges (80 m to 4.0, 40 m to 7.3 MHz), the 60 m channels and the 5351.5–5366.5 kHz
 segment, 6 m to 54 MHz, 2 m to 148 MHz with APRS on 144.390, simplex 146.520 and repeaters with −600/+600 kHz,
 1.25 m, 70 cm 420–450 MHz with ±5 MHz repeaters, 33 cm, 23 cm repeaters, FRS/GMRS, MURS, NOAA Weather Radio,
@@ -195,6 +198,11 @@ credentials* (on by default) also stores the mail password and Telegram/ntfy tok
 file safe. To restore, upload the file in the same card: HamScanPi shows what is in it, restores as soon as
 no scan or pass is running, moves the current settings and data to `restore-previous/<time>/` first, adds
 recordings (never deletes them) and restarts its services.
+
+**Automatic backup:** in the same card, a backup can be written daily or weekly at a chosen hour to a USB stick
+(appears under `/media/<user>/…`) or a mounted network share (e.g. `/mnt/nas`, mounting example in the card),
+keeping the last N files. A target on the SD card itself is refused – it would not help if the card fails.
+A failed backup becomes a notice.
 
 From the command line, e.g. after losing the card (fresh install, then):
 

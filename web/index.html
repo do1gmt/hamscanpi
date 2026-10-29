@@ -413,6 +413,25 @@
         <label class="check" title="Mail-Passwort, Telegram-/ntfy-Token und Zugangsschutz. Ohne sie ist die Wiederherstellung unvollständig – mit ihnen die Datei sorgsam aufbewahren."><input type="checkbox" id="bkSecrets" checked> Zugangsdaten mitsichern</label>
         <div class="actions"><a class="btn" id="bkDownload" href="#" download>↓ Sicherung herunterladen</a></div>
         <p class="hint">Die Datei enthält mit Zugangsdaten das Mail-Passwort und den Telegram-Token im Klartext – nicht weitergeben.</p>
+        <h3>Automatisch sichern</h3>
+        <label class="check"><input type="checkbox" id="abOn"> regelmäßig sichern</label>
+        <div class="filter-grid">
+          <label class="field"><span>Wann</span><select id="abInterval"><option value="daily">täglich</option><option value="weekly">wöchentlich (sonntags)</option></select></label>
+          <label class="field"><span>um (Uhr)</span><input id="abHour" type="number" min="0" max="23" value="3" inputmode="numeric"></label>
+          <label class="field"><span>Umfang</span><select id="abScope"><option value="settings">Einstellungen</option><option value="data" selected>+ Datenbestände</option><option value="all">+ Aufnahmen</option></select></label>
+          <label class="field"><span>behalten (Anzahl)</span><input id="abKeep" type="number" min="1" max="60" value="7" inputmode="numeric"></label>
+        </div>
+        <label class="field" title="Ein USB-Stick (z. B. /media/gmt/USBSTICK) oder eine eingehängte Netzwerkfreigabe (z. B. /mnt/nas). Nicht die Speicherkarte selbst – bei einem Kartenausfall wäre die Sicherung mit weg."><span>Zielordner</span><input id="abDir" type="text" list="abDirs" placeholder="/media/gmt/USBSTICK oder /mnt/nas" autocomplete="off"><datalist id="abDirs"></datalist></label>
+        <label class="check"><input type="checkbox" id="abSecrets" checked> Zugangsdaten mitsichern</label>
+        <div class="actions"><button class="btn" id="abSave" type="button">Speichern</button><button class="btn" id="abNow" type="button">Jetzt sichern</button></div>
+        <div class="save-note" id="abNote" aria-live="polite"></div>
+        <p class="hint" id="abState"></p>
+        <details><summary>Netzwerkfreigabe einhängen</summary><p class="hint">Einmalig auf dem Pi (Beispiel NAS mit SMB-Freigabe „backup“):</p>
+        <pre class="log">sudo apt install -y cifs-utils
+sudo mkdir -p /mnt/nas
+echo "//nas.local/backup /mnt/nas cifs credentials=/home/gmt/.nascred,uid=gmt,gid=gmt,nofail,x-systemd.automount 0 0" | sudo tee -a /etc/fstab
+printf 'username=BENUTZER\npassword=PASSWORT\n' > ~/.nascred && chmod 600 ~/.nascred
+sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> eintragen. USB-Sticks erscheinen von selbst unter /media.</p></details>
         <h3>Wiederherstellen</h3>
         <div class="row"><input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"><button class="btn" id="bkUpload" type="button">Hochladen und prüfen</button></div>
         <div class="save-note" id="bkNote" aria-live="polite"></div>

@@ -1,0 +1,929 @@
+{
+ "country": "CA",
+ "name": "Kanada",
+ "region": 2,
+ "source": "RAC band plans https://www.rac.ca/ (0–30 MHz, VHF/UHF), ISED RBR-4 (60 m: 5351.5–5366.5 kHz + 4 channels since 2022), otherwise like the ARRL band plan; retrieved 2026-10-30",
+ "note": "Wie USA (ARRL/RAC), aber 70 cm 430–450 MHz, FRS ohne GMRS-Relais, ohne MURS; Wetterfunk 162,400–162,550 MHz. Relais regional verschieden.",
+ "remove": [
+  "4m",
+  "Freenet",
+  "PMR446",
+  "LPD",
+  "ISM868"
+ ],
+ "replace": [
+  {
+   "name": "160m",
+   "start_hz": 1800000,
+   "stop_hz": 2000000,
+   "step_hz": 20000,
+   "segments": [
+    {
+     "id": "digital",
+     "label": "Digital 1.800–1.810",
+     "mode": "digital",
+     "legal": "amateur",
+     "ranges": [
+      [
+       1800000,
+       1810000
+      ]
+     ]
+    },
+    {
+     "id": "cw",
+     "label": "CW 1.810–1.843",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       1810000,
+       1843000
+      ]
+     ]
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 1.840",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      1840000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "wspr",
+     "label": "WSPR 1.8366",
+     "mode": "wspr",
+     "legal": "amateur",
+     "frequencies_hz": [
+      1836600
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "voice",
+     "label": "Voice LSB 1.843–2.000",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       1843000,
+       2000000
+      ]
+     ],
+     "sideband": "LSB"
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "80m",
+   "start_hz": 3500000,
+   "stop_hz": 4000000,
+   "step_hz": 20000,
+   "segments": [
+    {
+     "id": "cw",
+     "label": "CW 3.500–3.570",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       3500000,
+       3570000
+      ]
+     ]
+    },
+    {
+     "id": "digital",
+     "label": "RTTY/Data 3.570–3.600",
+     "mode": "digital",
+     "legal": "amateur",
+     "ranges": [
+      [
+       3570000,
+       3600000
+      ]
+     ]
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 3.573",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      3573000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft4",
+     "label": "FT4 3.575",
+     "mode": "ft4",
+     "legal": "amateur",
+     "frequencies_hz": [
+      3575000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "wspr",
+     "label": "WSPR 3.5686",
+     "mode": "wspr",
+     "legal": "amateur",
+     "frequencies_hz": [
+      3568600
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "voice",
+     "label": "Voice LSB 3.600–4.000 (AM call 3.885)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       3600000,
+       4000000
+      ]
+     ],
+     "sideband": "LSB"
+    },
+    {
+     "id": "sstv",
+     "label": "SSTV 3.845",
+     "mode": "sstv",
+     "legal": "amateur",
+     "frequencies_hz": [
+      3845000
+     ],
+     "sideband": "LSB"
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "60m",
+   "start_hz": 5330500,
+   "stop_hz": 5406300,
+   "step_hz": 10000,
+   "segments": [
+    {
+     "id": "channels",
+     "label": "Channels 5330.5, 5346.5, 5371.5, 5403.5 (USB)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       5330500,
+       5333300
+      ],
+      [
+       5346500,
+       5349300
+      ],
+      [
+       5371500,
+       5374300
+      ],
+      [
+       5403500,
+       5406300
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "segment",
+     "label": "Segment 5351.5–5366.5 (USB, QRP)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       5351500,
+       5366500
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 5.357",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      5357000
+     ],
+     "sideband": "USB"
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "40m",
+   "start_hz": 7000000,
+   "stop_hz": 7300000,
+   "step_hz": 20000,
+   "segments": [
+    {
+     "id": "cw",
+     "label": "CW 7.000–7.080",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       7000000,
+       7080000
+      ]
+     ]
+    },
+    {
+     "id": "digital",
+     "label": "RTTY/Data 7.080–7.125",
+     "mode": "digital",
+     "legal": "amateur",
+     "ranges": [
+      [
+       7080000,
+       7125000
+      ]
+     ]
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 7.074",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      7074000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft4",
+     "label": "FT4 7.0475",
+     "mode": "ft4",
+     "legal": "amateur",
+     "frequencies_hz": [
+      7047500
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "wspr",
+     "label": "WSPR 7.0386",
+     "mode": "wspr",
+     "legal": "amateur",
+     "frequencies_hz": [
+      7038600
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "voice",
+     "label": "Voice LSB 7.125–7.300 (AM call 7.290)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       7125000,
+       7300000
+      ]
+     ],
+     "sideband": "LSB"
+    },
+    {
+     "id": "sstv",
+     "label": "SSTV 7.171",
+     "mode": "sstv",
+     "legal": "amateur",
+     "frequencies_hz": [
+      7171000
+     ],
+     "sideband": "LSB"
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "11m",
+   "start_hz": 26965000,
+   "stop_hz": 27405000,
+   "step_hz": 10000,
+   "segments": [
+    {
+     "id": "cb",
+     "label": "CB channels 1–40 (AM, SSB on 36–40)",
+     "mode": "voice",
+     "sideband": "USB",
+     "ranges": [
+      [
+       26960000,
+       27410000
+      ]
+     ],
+     "legal": "jedermann"
+    }
+   ],
+   "legal": "jedermann"
+  },
+  {
+   "name": "6m",
+   "device": "rtlsdr",
+   "start_hz": 50000000,
+   "stop_hz": 54000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "cw",
+     "label": "CW/beacons 50.000–50.100",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       50000000,
+       50100000
+      ]
+     ]
+    },
+    {
+     "id": "ssb",
+     "label": "SSB 50.100–50.300 (call 50.125)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       50100000,
+       50300000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 50.313",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      50313000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex (call 52.525)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       51500000,
+       51600000
+      ]
+     ],
+     "frequencies_hz": [
+      52525000,
+      52540000,
+      52020000,
+      52040000
+     ]
+    },
+    {
+     "id": "relais",
+     "label": "Repeater outputs 51.62–51.98, 52.50–52.98, 53.50–53.98 (input −500 kHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       51620000,
+       51980000
+      ],
+      [
+       52500000,
+       52980000
+      ],
+      [
+       53500000,
+       53980000
+      ]
+     ],
+     "offset_hz": -500000
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "2m",
+   "device": "rtlsdr",
+   "start_hz": 144000000,
+   "stop_hz": 148000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "cw",
+     "label": "CW/EME 144.000–144.100",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       144000000,
+       144100000
+      ]
+     ]
+    },
+    {
+     "id": "ssb",
+     "label": "SSB 144.100–144.275 (call 144.200)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       144100000,
+       144275000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 144.174",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      144174000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "beacon",
+     "label": "Beacons 144.275–144.300",
+     "mode": "beacon",
+     "legal": "amateur",
+     "ranges": [
+      [
+       144275000,
+       144300000
+      ]
+     ]
+    },
+    {
+     "id": "aprs",
+     "label": "APRS 144.390",
+     "mode": "aprs",
+     "legal": "amateur",
+     "frequencies_hz": [
+      144390000
+     ],
+     "note": "AX.25 AFSK 1200 Bd – multimon-ng"
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex 146.40–146.58, 147.42–147.57 (call 146.520)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       146400000,
+       146580000
+      ],
+      [
+       147420000,
+       147570000
+      ]
+     ],
+     "frequencies_hz": [
+      146520000
+     ]
+    },
+    {
+     "id": "relais",
+     "label": "Repeater outputs 145.20–145.50, 146.61–146.97 (input −600 kHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       145200000,
+       145500000
+      ],
+      [
+       146610000,
+       146970000
+      ]
+     ],
+     "offset_hz": -600000
+    },
+    {
+     "id": "relais_plus",
+     "label": "Repeater outputs 147.00–147.39 (input +600 kHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       147000000,
+       147390000
+      ]
+     ],
+     "offset_hz": 600000
+    },
+    {
+     "id": "sat",
+     "label": "Satellites/ISS 145.800–146.000 (ISS voice 145.800, APRS 145.825)",
+     "mode": "sat",
+     "legal": "amateur",
+     "ranges": [
+      [
+       145800000,
+       146000000
+      ]
+     ],
+     "frequencies_hz": [
+      145800000,
+      145825000
+     ]
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "Rundfunk",
+   "device": "rtlsdr",
+   "start_hz": 87900000,
+   "stop_hz": 107900000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "wfm",
+     "label": "FM broadcast (wide FM, RBDS)",
+     "mode": "wfm",
+     "legal": "public",
+     "ranges": [
+      [
+       87800000,
+       108000000
+      ]
+     ]
+    }
+   ],
+   "legal": "public"
+  },
+  {
+   "name": "70cm",
+   "device": "rtlsdr",
+   "start_hz": 430000000,
+   "stop_hz": 450000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "cw",
+     "label": "CW/EME 432.000–432.100",
+     "mode": "cw",
+     "legal": "amateur",
+     "ranges": [
+      [
+       432000000,
+       432100000
+      ]
+     ]
+    },
+    {
+     "id": "ssb",
+     "label": "SSB 432.100–432.300 (call 432.100)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       432100000,
+       432300000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "ft8",
+     "label": "FT8 432.174",
+     "mode": "ft8",
+     "legal": "amateur",
+     "frequencies_hz": [
+      432174000
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "beacon",
+     "label": "Beacons 432.300–432.400",
+     "mode": "beacon",
+     "legal": "amateur",
+     "ranges": [
+      [
+       432300000,
+       432400000
+      ]
+     ]
+    },
+    {
+     "id": "ism",
+     "label": "ISM 433.92 (remote sensors)",
+     "mode": "data",
+     "legal": "telemetrie",
+     "ranges": [
+      [
+       433050000,
+       434790000
+      ]
+     ]
+    },
+    {
+     "id": "sat",
+     "label": "Satellites 435.000–438.000",
+     "mode": "sat",
+     "legal": "amateur",
+     "ranges": [
+      [
+       435000000,
+       438000000
+      ]
+     ]
+    },
+    {
+     "id": "relais",
+     "label": "Repeater outputs 442.000–445.000 (input +5 MHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       442000000,
+       445000000
+      ]
+     ],
+     "offset_hz": 5000000
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex 446.000–446.100 (national 446.000)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       446000000,
+       446100000
+      ]
+     ],
+     "frequencies_hz": [
+      446000000
+     ]
+    },
+    {
+     "id": "relais_minus",
+     "label": "Repeater outputs 447.000–450.000 (input −5 MHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       447000000,
+       450000000
+      ]
+     ],
+     "offset_hz": -5000000
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "23cm",
+   "device": "rtlsdr",
+   "start_hz": 1282000000,
+   "stop_hz": 1295000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "relais",
+     "label": "Repeater outputs 1282.000–1288.000 (input −12 MHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       1282000000,
+       1288000000
+      ]
+     ],
+     "offset_hz": -12000000
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex 1294.000–1295.000 (call 1294.500)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       1294000000,
+       1295000000
+      ]
+     ],
+     "frequencies_hz": [
+      1294500000
+     ]
+    }
+   ],
+   "legal": "amateur"
+  }
+ ],
+ "add": [
+  {
+   "name": "1.25m",
+   "device": "rtlsdr",
+   "start_hz": 222000000,
+   "stop_hz": 225000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "ssb",
+     "label": "Weak signal 222.050–222.150 (call 222.100)",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       222050000,
+       222150000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex 223.40–223.52 (call 223.500)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       223400000,
+       223520000
+      ]
+     ],
+     "frequencies_hz": [
+      223500000
+     ]
+    },
+    {
+     "id": "relais",
+     "label": "Repeater outputs 223.85–224.98 (input −1.6 MHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       223850000,
+       224980000
+      ]
+     ],
+     "offset_hz": -1600000
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "33cm",
+   "device": "rtlsdr",
+   "start_hz": 902000000,
+   "stop_hz": 928000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "ssb",
+     "label": "Weak signal 902.075–902.125, 903.000–903.400",
+     "mode": "voice",
+     "legal": "amateur",
+     "ranges": [
+      [
+       902075000,
+       902125000
+      ],
+      [
+       903000000,
+       903400000
+      ]
+     ],
+     "sideband": "USB"
+    },
+    {
+     "id": "fm",
+     "label": "FM simplex 927.075–927.125 (call 927.500)",
+     "mode": "fm",
+     "legal": "amateur",
+     "ranges": [
+      [
+       927075000,
+       927125000
+      ]
+     ],
+     "frequencies_hz": [
+      927500000
+     ]
+    },
+    {
+     "id": "relais",
+     "label": "Repeater outputs 927.125–928.000 (input −25 MHz)",
+     "mode": "relais",
+     "legal": "amateur",
+     "ranges": [
+      [
+       927125000,
+       928000000
+      ]
+     ],
+     "offset_hz": -25000000
+    }
+   ],
+   "legal": "amateur"
+  },
+  {
+   "name": "FRS/GMRS",
+   "device": "rtlsdr",
+   "start_hz": 462550000,
+   "stop_hz": 467712500,
+   "step_hz": 250000,
+   "segments": [
+    {
+     "id": "frs",
+     "label": "FRS channels 1–22 (GMRS 462/467 MHz)",
+     "mode": "fm",
+     "legal": "jedermann",
+     "frequencies_hz": [
+      462562500,
+      462587500,
+      462612500,
+      462637500,
+      462662500,
+      462687500,
+      462712500,
+      467562500,
+      467587500,
+      467612500,
+      467637500,
+      467662500,
+      467687500,
+      467712500,
+      462550000,
+      462575000,
+      462600000,
+      462625000,
+      462650000,
+      462675000,
+      462700000,
+      462725000
+     ]
+    }
+   ],
+   "legal": "jedermann"
+  },
+  {
+   "name": "NOAA WX",
+   "device": "rtlsdr",
+   "start_hz": 162400000,
+   "stop_hz": 162550000,
+   "step_hz": 250000,
+   "segments": [
+    {
+     "id": "wx",
+     "label": "Weather radio 162.400–162.550 (Environment Canada / NOAA, 7 channels)",
+     "mode": "fm",
+     "legal": "public",
+     "frequencies_hz": [
+      162400000,
+      162425000,
+      162450000,
+      162475000,
+      162500000,
+      162525000,
+      162550000
+     ]
+    }
+   ],
+   "legal": "public"
+  },
+  {
+   "name": "ISM915",
+   "device": "rtlsdr",
+   "start_hz": 902000000,
+   "stop_hz": 928000000,
+   "step_hz": 900000,
+   "segments": [
+    {
+     "id": "ism915",
+     "label": "ISM 915 (LoRa, meters, sensors)",
+     "mode": "data",
+     "legal": "telemetrie",
+     "ranges": [
+      [
+       902000000,
+       928000000
+      ]
+     ]
+    }
+   ],
+   "legal": "telemetrie"
+  }
+ ],
+ "legal": {
+  "Flugfunk": "public"
+ }
+}

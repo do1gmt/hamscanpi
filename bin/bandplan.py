@@ -18,7 +18,9 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 PROFILES = BASE / "bandplans"
 SETTINGS = BASE / "config" / "web_settings.json"
-COUNTRIES = {"DE": {"name": "Deutschland", "region": 1}, "US": {"name": "USA", "region": 2}}
+COUNTRIES = {"DE": {"name": "Deutschland", "region": 1}, "AT": {"name": "Österreich", "region": 1},
+             "CH": {"name": "Schweiz", "region": 1}, "GB": {"name": "Großbritannien", "region": 1},
+             "US": {"name": "USA", "region": 2}, "CA": {"name": "Kanada", "region": 2}}
 _cache = {}
 
 
@@ -71,6 +73,12 @@ def apply(cfg, settings=None, code=None):
         if b["name"] not in names:
             merged.append(copy.deepcopy(b))
             names.add(b["name"])
+    for name, segs in (p.get("patch") or {}).items():         # einzelne Segmente eines Bandes ändern
+        for b in merged:
+            if b["name"] == name:
+                for s in b.get("segments", []):
+                    if s.get("id") in segs:
+                        s.update(copy.deepcopy(segs[s["id"]]))
     for name, legal in (p.get("legal") or {}).items():       # z. B. Flugfunk in den USA frei hörbar
         for b in merged:
             if b["name"] == name:
@@ -91,8 +99,17 @@ def load(path=None, settings=None):
 
 def suggest(locator):
     """Land zum Locator vorschlagen (grob: Großfelder der USA ohne Alaska/Hawaii) – nur ein Vorschlag."""
-    loc = str(locator or "").upper()[:2]
-    us = {"CM", "CN", "DM", "DN", "DL", "EL", "EM", "EN", "FM", "FN", "DO", "EO", "CO"}
+    loc4 = str(locator or "").upper()[:4]
+    loc = loc4[:2]
+    if loc4 in {"JN36", "JN37", "JN45", "JN46", "JN47", "JN56", "JN57"}:
+        return "CH"
+    if loc4 in {"JN66", "JN67", "JN68", "JN76", "JN77", "JN78", "JN86", "JN87", "JN88"}:
+        return "AT"
+    if loc in {"IO"}:
+        return "GB"
+    if loc in {"CO", "DO", "EO", "FO", "FN"} and loc4 not in {"FN20", "FN21", "FN30", "FN31", "FN32", "FN41", "FN42", "FN43", "FN44", "FN54"}:
+        return "CA" if loc in {"CO", "DO", "EO", "FO"} else None
+    us = {"CM", "CN", "DM", "DN", "DL", "EL", "EM", "EN", "FM", "FN"}
     return "US" if loc in us else ("DE" if loc in {"JO", "JN"} else None)
 
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.40 – 2026-10-30
+
+- **RBDS** for the US and Canada: North American programme types (Rock, Top 40, Country, …) instead of the
+  European RDS list, and the station call sign from the PI code (e.g. WABC) in Live and the FM station list.
+- **More countries:** Austria (no Freenet, no 4 m), Switzerland (no Freenet, 4 m since 2023), United Kingdom
+  (RSGB: 4 m 70.0–70.5 MHz, UK 60 m allocations, 70 cm repeater ranges with 1.6/7.6/9 MHz shifts, CB 27/81) and
+  Canada (like the US; 70 cm 430–450 MHz, FRS without GMRS repeaters, no MURS; 60 m band + 4 channels). Profiles
+  can now also patch single segments. The locator suggests the country (also AT, CH, GB). Sources and notes in
+  each profile; national details marked where only derived – corrections welcome.
+- **Automatic backup** (System → Backup): daily or weekly at a chosen hour to a USB stick or a mounted network
+  share, keeping the last N files (by name, the new file is never pruned); "Back up now"; target on the SD card
+  itself refused; failure becomes a notice ("Automatic backup failed"), cleared on the next success. Mount example
+  for an SMB share in the card.
+- **Notices in English:** every notice also gets an English title, text and advice (shown in the English
+  interface, used for mail/push when the interface is English).
+- Self-test section 25.
+
 ## 1.7.39 – 2026-10-30
 
 - **Live remembers the last frequency on the Pi** – for every browser and device: frequency, demodulator, tuning

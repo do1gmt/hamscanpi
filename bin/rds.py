@@ -30,6 +30,49 @@ PTY_DE = ["–", "Nachrichten", "Aktuelles", "Information", "Sport", "Bildung", 
           "Ernste Klassik", "Sonstige Musik", "Wetter", "Wirtschaft", "Kinder", "Soziales", "Religion",
           "Anrufsendung", "Reise", "Freizeit", "Jazz", "Country", "Landesmusik", "Oldies", "Folk",
           "Dokumentation", "Alarmtest", "Alarm"]
+# RBDS (Nordamerika, NRSC-4): andere Bedeutung der Programmarten
+PTY_RBDS = ["–", "News", "Information", "Sports", "Talk", "Rock", "Classic Rock", "Adult Hits", "Soft Rock",
+            "Top 40", "Country", "Oldies", "Soft", "Nostalgia", "Jazz", "Classical", "Rhythm and Blues",
+            "Soft Rhythm and Blues", "Foreign Language", "Religious Music", "Religious Talk", "Personality",
+            "Public", "College", "Spanish Talk", "Spanish Music", "Hip Hop", "–", "–", "Weather",
+            "Emergency Test", "Emergency"]
+_pty_cache = {"t": 0.0, "rbds": False}
+
+
+def rbds():
+    """RBDS statt RDS (USA, Kanada) – nach dem gewählten Land (bandplan.py), alle 60 s neu gelesen."""
+    import time as _t
+    if _t.time() - _pty_cache["t"] > 60:
+        try:
+            import bandplan as BP
+            _pty_cache["rbds"] = BP.country() in ("US", "CA")
+        except Exception:
+            _pty_cache["rbds"] = False
+        _pty_cache["t"] = _t.time()
+    return _pty_cache["rbds"]
+
+
+def pty_name(pty):
+    return (PTY_RBDS if rbds() else PTY_DE)[pty]
+
+
+def pi_call(pi):
+    """RBDS: PI-Code -> Rufzeichen des Senders (USA: K/W + 3 Buchstaben, NRSC-4 Anhang D) oder None."""
+    try:
+        pi = int(pi, 16) if isinstance(pi, str) else int(pi)
+    except (TypeError, ValueError):
+        return None
+    if 0x1000 <= pi <= 0x54A7:
+        n, first = pi - 0x1000, "K"
+    elif 0x54A8 <= pi <= 0x994F:
+        n, first = pi - 0x54A8, "W"
+    else:
+        return None
+    a, rest = divmod(n, 676)
+    b, c = divmod(rest, 26)
+    return first + chr(65 + a) + chr(65 + b) + chr(65 + c)
+
+
 ODA = {0x4BD7: "RT+", 0xCD46: "TMC", 0xCD47: "TMC", 0x0D45: "TMC (Test)", 0x6552: "eRT", 0xC737: "UMC",
        0x4BD8: "eRT+", 0xE1C1: "Action code", 0x1BDA: "iTunes tagging"}
 RTPLUS = {1: "title", 2: "album", 4: "artist", 7: "composer", 12: "programme", 31: "station"}
@@ -71,7 +114,7 @@ def block_ok(w, offset):
 
 
 def _empty_info():
-    return {"pi": None, "ps": None, "pty": None, "pty_name": None, "tp": None, "ta": None, "ms": None,
+    return {"pi": None, "call": None, "ps": None, "pty": None, "pty_name": None, "tp": None, "ta": None, "ms": None,
             "rt": None, "rtplus": {}, "ps_partial": None, "rt_complete": False, "ct": None, "af": [], "ecc": None, "ptyn": None, "oda": [],
             "groups": 0, "blocks_ok": 0, "blocks": 0}
 
@@ -196,10 +239,12 @@ class RdsDecoder:
         inf = self.info
         inf["groups"] += 1
         inf["pi"] = f"{A:04X}"
+        if rbds():                                         # USA/Kanada: Rufzeichen aus dem PI-Code (z. B. WABC)
+            inf["call"] = pi_call(A)
         gtype, ver = B >> 12, (B >> 11) & 1
         inf["tp"] = bool(B >> 10 & 1)
         pty = B >> 5 & 0x1F
-        inf["pty"], inf["pty_name"] = pty, PTY_DE[pty]
+        inf["pty"], inf["pty_name"] = pty, pty_name(pty)
         g = f"{gtype}{'B' if ver else 'A'}"
         if gtype == 0:                                       # 0A/0B: Sendername, TA, MS, AF
             inf["ta"], inf["ms"] = bool(B >> 4 & 1), ("Musik" if B >> 3 & 1 else "Sprache")

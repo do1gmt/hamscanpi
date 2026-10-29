@@ -677,5 +677,37 @@ d._heard([("DL1ABC", "JO31", -10.0, "CQ DL1ABC JO31", "FT8", 14_075_000), ("OE3X
 rows = sqlite3.connect(LD.DB).execute("SELECT call, mode, grid, peak_id < 0, info FROM heard").fetchall()
 assert {r[0] for r in rows} == {"DL1ABC", "OE3XYZ"} and all(r[3] for r in rows) and rows[0][4].startswith("Live:"), rows
 PY
+echo "== 25 RBDS, weitere Länder, automatische Sicherung, englische Hinweise"
+(cd bin && python3 - <<'PY') && ok "RBDS (Programmart, Rufzeichen), AT/CH/GB/CA, Sicherung in Zielordner mit Aufräumen, Hinweise englisch" || bad "RBDS/Länder/Sicherung/Hinweise"
+import json, os, tempfile, time
+from pathlib import Path
+import rds as R, bandplan as BP, backup as BK, notices as NT
+assert R.pi_call(0x54A8) == "WAAA" and R.pi_call(0x1000) == "KAAA" and R.pi_call(0xC000) is None
+BP.country = lambda settings=None: "US"; R._pty_cache["t"] = 0
+assert R.pty_name(5) == "Rock" and R.pty_name(29) == "Weather"
+BP.country = lambda settings=None: "DE"; R._pty_cache["t"] = 0
+assert R.pty_name(1) == "Nachrichten"
+raw = json.load(open("../config/scanner.json"))
+names = lambda c: {b["name"] for b in BP.apply(raw, code=c)["ranges"]}
+assert "Freenet" not in names("AT") and "4m" not in names("AT") and "4m" in names("CH")
+gb = {b["name"]: b for b in BP.apply(raw, code="GB")["ranges"]}
+assert gb["4m"]["start_hz"] == 70_000_000 and gb["4m"]["stop_hz"] == 70_500_000 and "CB 27/81" in gb
+assert [s for s in gb["70cm"]["segments"] if s["id"] == "relais"][0]["ranges"][1] == [438_600_000, 440_000_000]
+ca = names("CA"); assert "MURS" not in ca and "FRS/GMRS" in ca and "PMR446" not in ca
+assert BP.suggest("IO91WM") == "GB" and BP.suggest("JN47AB") == "CH" and BP.suggest("JN78AA") == "AT"
+d = Path(tempfile.mkdtemp())
+assert BK.check_dir(str(Path("..").resolve())) is not None              # gleiches Laufwerk: abgelehnt
+BK.check_dir = lambda x: None                                            # Testordner liegt auf derselben Platte
+BK.AUTO_STATE = d / "state.json"
+for i in range(4):
+    BK.filename = (lambda i: (lambda scope: f"hamscanpi-backup-2026010{i}-0300-{scope}.tar.gz"))(i)
+    st = BK.run_auto({"dir": str(d), "scope": "settings", "secrets": False, "keep": 2}, log=lambda m: None)
+left = sorted(p.name for p in d.glob("hamscanpi-backup-*.tar.gz"))
+assert left == ["hamscanpi-backup-20260102-0300-settings.tar.gz", "hamscanpi-backup-20260103-0300-settings.tar.gz"], left
+assert BK.info(d / left[-1])["scope"] == "settings"
+NT.FILE = d / "n.json"; NT.LOCK = d / "n.lock"
+r = NT.raise_("t", "warn", "hardware", "Haupt-Stick fehlt", "Noch 5.0 GB frei.", fix="Stick anstecken oder USB-Verbindung prüfen.", notify=False)
+assert r["en"] == {"title": "Main stick missing", "detail": "5.0 GB free.", "fix": "Plug in the stick or check the USB connection."}, r["en"]
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

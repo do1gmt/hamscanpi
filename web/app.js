@@ -1260,14 +1260,15 @@
     const items = d.items.filter(r => showOld || (r.active && !r.acked) || (r.active && r.kind === 'state'));
     const tm = x => new Date(x * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     $('noticeSummary').textContent = d.open ? `${d.open} offen` : 'alles in Ordnung';
-    $('noticeList').innerHTML = items.length ? items.map(r => `<div class="notice ${r.level}${r.active ? '' : ' done'}${r.acked ? ' acked' : ''}">
-      <div class="notice-head"><span>${NOTICE_ICON[r.level] || ''}</span><b>${esc(r.title)}</b>
+    const en = I18N.lang === 'en';
+    $('noticeList').innerHTML = items.length ? items.map(r => { const T = en && r.en ? r.en : r; return `<div class="notice ${r.level}${r.active ? '' : ' done'}${r.acked ? ' acked' : ''}">
+      <div class="notice-head"><span>${NOTICE_ICON[r.level] || ''}</span><b class="${en && r.en ? 'no-i18n' : ''}">${esc(T.title)}</b>
         <small class="muted">${esc((d.areas || {})[r.area] || r.area)} · ${r.kind === 'event' ? tm(r.first) : 'seit ' + tm(r.first)}${r.count > 1 ? ` · ${r.count}×` : ''}${r.active ? '' : ' · behoben ' + tm(r.resolved || r.last)}</small>
         ${r.active && !r.acked ? `<button type="button" class="btn btn-small" data-ack="${esc(r.id)}">Quittieren</button>` : ''}</div>
-      ${r.detail ? `<div class="notice-detail">${esc(r.detail)}</div>` : ''}
-      ${r.fix ? `<div class="notice-fix">→ ${esc(r.fix)}</div>` : ''}
+      ${T.detail ? `<div class="notice-detail${en && r.en ? ' no-i18n' : ''}">${esc(T.detail)}</div>` : ''}
+      ${T.fix ? `<div class="notice-fix${en && r.en ? ' no-i18n' : ''}">→ ${esc(T.fix)}</div>` : ''}
       ${r.cmd ? `<div class="notice-cmd"><code>${esc(r.cmd)}</code> <button type="button" class="btn btn-small" data-copy="${esc(r.cmd)}">Kopieren</button></div>` : ''}
-    </div>`).join('') : '<div class="muted">Keine Hinweise – alles in Ordnung.</div>';
+    </div>`; }).join('') : '<div class="muted">Keine Hinweise – alles in Ordnung.</div>';
   }
   async function loadNotices() { try { noticeData = await api('/api/notices'); renderNotices(); } catch (e) { /* nächste Runde */ } }
   $('noticeList').addEventListener('click', async e => {
@@ -1344,7 +1345,7 @@
       ['Verkehrsfunk', r.tp ? (r.ta ? 'TP · Durchsage läuft' : 'TP') : 'nein'],
       ['Uhrzeit Sender', r.ct ? `${r.ct.local} (UTC${r.ct.local_offset_min >= 0 ? '+' : ''}${r.ct.local_offset_min / 60})` : null],
       ['Alternativfrequenzen', r.af && r.af.length ? r.af.map(f => f.toFixed(1)).join(' · ') + ' MHz' : null],
-      ['Kennung', `PI ${r.pi}${r.ecc ? ' · ECC ' + r.ecc : ''}${r.ms ? ' · ' + r.ms : ''}`],
+      ['Kennung', `PI ${r.pi}${r.call ? ' · ' + r.call : ''}${r.ecc ? ' · ECC ' + r.ecc : ''}${r.ms ? ' · ' + r.ms : ''}`],
       ['Datendienste', r.oda && r.oda.length ? r.oda.join(', ') : null],
       ['Empfang', `${r.groups} Gruppen, ${r.blocks ? Math.round(100 * r.blocks_ok / r.blocks) : 0} % fehlerfrei`],
     ].filter(x => x[1]);
@@ -1360,7 +1361,7 @@
     const tr = x => (window.I18N ? I18N.t(x) : x);
     const rp = r.rtplus || {};
     const ps = (r.ps || r.ps_partial || '').trim();
-    return [ps ? `„${ps}“` : null, r.pi ? `PI ${r.pi}` : null, r.pty ? tr(r.pty_name) : null,
+    return [ps ? `„${ps}“` : null, r.call ? r.call : null, r.pi ? `PI ${r.pi}` : null, r.pty ? tr(r.pty_name) : null,
             rp.artist || rp.title ? [rp.artist, rp.title].filter(Boolean).join(' – ') : (r.rt_complete ? r.rt : null)]
       .filter(Boolean).join(' · ');
   }
@@ -1818,11 +1819,34 @@
     $('bkInfo').innerHTML = `<b>Sicherung vom ${esc(new Date(m.created).toLocaleString(I18N.locale))}</b> · Version ${esc(m.version)} · ${esc(m.call || '–')} ${esc(m.locator || '')}<br>`
       + `<small class="muted">${esc(scope)} · ${m.files} Dateien · ${fmtSize(m.size)} · ${m.secrets ? 'mit' : 'ohne'} Zugangsdaten · Rechner ${esc(m.host || '?')}</small>`;
   }
+  function renderAutoBackup(d) {
+    const c = d.auto || {}, st = d.auto_state || {};
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#panel-backup .filter-grid, #abDir')) return;
+    $('abOn').checked = !!c.enabled; $('abInterval').value = c.interval || 'daily'; $('abHour').value = c.hour ?? 3;
+    $('abScope').value = c.scope || 'data'; $('abKeep').value = c.keep || 7; $('abDir').value = c.dir || ''; $('abSecrets').checked = c.secrets !== false;
+    $('abDirs').innerHTML = (d.candidates || []).map(x => `<option value="${esc(x.dir)}">${esc(x.dir)} – ${x.free_gb} GB frei</option>`).join('');
+    $('abState').textContent = st.last ? `Letzte Sicherung: ${new Date(st.last * 1000).toLocaleString(I18N.locale)} · ${esc(String(st.file || '').split('/').pop())} · ${fmtSize(st.size || 0)}`
+      + (st.error ? ` · zuletzt fehlgeschlagen: ${st.error}` : '') : (st.error ? 'Fehlgeschlagen: ' + st.error : (d.candidates || []).length ? '' : 'Kein USB-Stick erkannt – einstecken oder eine Netzwerkfreigabe einhängen.');
+  }
+  async function abPost(extra) {
+    const body = Object.assign({ enabled: $('abOn').checked, interval: $('abInterval').value, hour: Number($('abHour').value), scope: $('abScope').value,
+                                 keep: Number($('abKeep').value), dir: $('abDir').value.trim(), secrets: $('abSecrets').checked }, extra || {});
+    const d = await post('/api/backup/auto', body);
+    renderAutoBackup(Object.assign({}, d, { candidates: [...$('abDirs').options].map(o => ({ dir: o.value, free_gb: '' })) }));
+    return d;
+  }
+  $('abSave').addEventListener('click', async () => { try { await abPost(); note($('abNote'), '✓ gespeichert'); } catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); } });
+  $('abNow').addEventListener('click', async () => {
+    note($('abNote'), 'sichere …');
+    try { const d = await abPost({ run_now: true }); note($('abNote'), `✓ gesichert: ${String(d.result.file).split('/').pop()} (${fmtSize(d.result.size)})`); }
+    catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); }
+  });
   let bkWaiting = null;
   async function loadBackup() {
     let d; try { d = await api('/api/backup/info'); } catch (e) { return; }
     for (const [k, v] of Object.entries(d.sizes || {})) { const el = document.querySelector(`[data-bs=${k}]`); if (el) el.textContent = '≈ ' + fmtSize(v); }
     bkShowUpload(d.upload);
+    renderAutoBackup(d);
     if (d.pending) note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …');
     if (bkWaiting && !d.pending && !d.upload) { clearInterval(bkWaiting); bkWaiting = null; note($('bkNote'), '✓ eingespielt – die Seite lädt neu'); setTimeout(() => location.reload(), 4000); }
   }
@@ -2164,7 +2188,8 @@
     const sug = settings.country_suggest;
     $('countryHint').textContent = sug && sug !== sel.value
       ? `Dein Locator liegt vermutlich in: ${(settings.countries.find(c => c.code === sug) || {}).name || sug}.`
-      : (sel.value === 'US' ? 'US-Bandplan nach ARRL: 1.25 m, 33 cm, FRS/GMRS, MURS, NOAA Weather Radio, APRS 144.390, Relais mit US-Ablagen.' : '');
+      : (sel.value === 'US' ? 'US-Bandplan nach ARRL: 1.25 m, 33 cm, FRS/GMRS, MURS, NOAA Weather Radio, APRS 144.390, Relais mit US-Ablagen.'
+         : (((settings.countries.find(c => c.code === sel.value) || {}).note) || ''));
   }
   $('country').addEventListener('change', async e => {
     try {

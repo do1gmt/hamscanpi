@@ -1,0 +1,12 @@
+{
+ "country": "CH",
+ "name": "Schweiz",
+ "region": 1,
+ "source": "IARU Region 1 band plan; USKA/BAKOM: 4 m released 1 January 2023; retrieved 2026-10-30",
+ "note": "Wie Deutschland, aber ohne Freenet (nur Deutschland); 4 m seit 2023 freigegeben – Segment wie in Deutschland, bitte mit dem USKA-Bandplan vergleichen.",
+ "remove": [
+  "Freenet"
+ ],
+ "replace": [],
+ "add": []
+}

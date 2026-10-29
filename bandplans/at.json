@@ -1,0 +1,13 @@
+{
+ "country": "AT",
+ "name": "Österreich",
+ "region": 1,
+ "source": "IARU Region 1 band plan; ÖVSV (no general 70 MHz allocation as of 2025); retrieved 2026-10-30",
+ "note": "Wie Deutschland, aber ohne Freenet (nur Deutschland) und ohne 4 m (in Österreich nicht allgemein freigegeben).",
+ "remove": [
+  "Freenet",
+  "4m"
+ ],
+ "replace": [],
+ "add": []
+}

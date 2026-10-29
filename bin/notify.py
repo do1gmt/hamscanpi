@@ -171,14 +171,33 @@ def notice_rules(c=None):
 def _notice_text(rec):
     t = rec.get("detail") or ""
     if rec.get("fix"):
-        t += ("\n\n" if t else "") + "Was tun: " + rec["fix"]
+        t += ("\n\n" if t else "") + ("What to do: " if _is_en() else "Was tun: ") + rec["fix"]
     if rec.get("cmd"):
         t += "\n" + rec["cmd"]
     return t
 
 
+def _is_en():
+    try:
+        return json.loads(SETTINGS.read_text(encoding="utf-8")).get("ui_lang") == "en"
+    except Exception:
+        return False
+
+
+def _lang_rec(rec):
+    """In der Sprache der Oberfläche (Einstellungen → Sprache): englische Fassung, wenn vorhanden."""
+    try:
+        lang = json.loads(SETTINGS.read_text(encoding="utf-8")).get("ui_lang")
+    except Exception:
+        lang = None
+    if lang == "en" and rec.get("en"):
+        return dict(rec, **{k: v for k, v in rec["en"].items() if v})
+    return rec
+
+
 def notify_notice(rec):
     """Hinweis melden – nach Stufe, Bereich und Ereignisart (Einstellungen → Benachrichtigungen)."""
+    rec = _lang_rec(rec)
     c = cfg()
     if not (c.get("enabled") or push_on(c)):
         return

@@ -257,6 +257,120 @@ def apply_pending(log=print):
     return True
 
 
+# ---------------------------------------------------------------- automatische Sicherung
+AUTO_STATE = BASE / "data" / "backup_state.json"
+
+
+def auto_cfg(settings=None):
+    if settings is None:
+        try:
+            settings = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+        except Exception:
+            settings = {}
+    c = dict(settings.get("auto_backup") or {})
+    c.setdefault("enabled", False)
+    c.setdefault("interval", "daily")                 # daily | weekly (sonntags)
+    c.setdefault("hour", 3)
+    c.setdefault("dir", "")
+    c.setdefault("scope", "data")
+    c.setdefault("secrets", True)
+    c.setdefault("keep", 7)
+    return c
+
+
+def auto_state():
+    try:
+        return json.loads(AUTO_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def candidates():
+    """Mögliche Ziele: eingehängte USB-Sticks/Laufwerke unter /media und /mnt (beschreibbar)."""
+    out = []
+    for root in (Path("/media"), Path("/mnt")):
+        try:
+            for p in sorted(root.rglob("*")):
+                if len(p.relative_to(root).parts) > 2 or not p.is_dir():
+                    continue
+                if os.path.ismount(p) and os.access(p, os.W_OK):
+                    du = shutil.disk_usage(p)
+                    out.append({"dir": str(p), "free_gb": round(du.free / 1e9, 1)})
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def check_dir(d):
+    """Ziel prüfen: vorhanden, eingehängt (nicht die SD-Karte selbst), beschreibbar. Rückgabe Fehlertext oder None."""
+    if not d:
+        return "kein Zielordner eingetragen"
+    p = Path(d)
+    if not p.is_dir():
+        return f"Zielordner {d} gibt es nicht (USB-Stick nicht eingesteckt oder Freigabe nicht eingehängt?)"
+    if not os.access(p, os.W_OK):
+        return f"Zielordner {d} ist nicht beschreibbar"
+    try:
+        if os.stat(p).st_dev == os.stat(BASE).st_dev:
+            return f"{d} liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht"
+    except OSError:
+        pass
+    return None
+
+
+def run_auto(cfg=None, log=print):
+    """Sicherung in den Zielordner schreiben (erst .part, dann umbenennen), alte über „keep“ hinaus löschen."""
+    cfg = cfg or auto_cfg()
+    err = check_dir(cfg.get("dir"))
+    if err:
+        raise RuntimeError(err)
+    d = Path(cfg["dir"])
+    scope = cfg.get("scope") if cfg.get("scope") in SCOPES else "data"
+    out = d / filename(scope)
+    tmp = out.with_suffix(".part")
+    with open(tmp, "wb") as f:
+        man = write(f, scope, bool(cfg.get("secrets", True)))
+    os.replace(tmp, out)
+    st = {"last": time.time(), "file": str(out), "size": out.stat().st_size, "files": man["files"], "error": None}
+    keep = max(1, int(cfg.get("keep", 7)))
+    # nach dem Namen (Datum und Uhrzeit stehen darin) – die gerade geschriebene Datei bleibt immer
+    others = sorted((p for p in d.glob("hamscanpi-backup-*.tar.gz") if p != out), key=lambda p: p.name, reverse=True)
+    old = others[max(0, keep - 1):]
+    for p in old:
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    AUTO_STATE.write_text(json.dumps(st), encoding="utf-8")
+    log(f"Sicherung: {out} ({out.stat().st_size / 1e6:.1f} MB, {man['files']} Dateien, {len(old)} alte gelöscht)")
+    return st
+
+
+def auto_tick(log=None):
+    """Vom Scheduler einmal je Minute: fällig? (zur eingestellten Stunde, täglich bzw. sonntags, einmal)"""
+    cfg = auto_cfg()
+    if not cfg.get("enabled"):
+        return
+    lt = time.localtime()
+    if lt.tm_hour != int(cfg.get("hour", 3)) or (cfg.get("interval") == "weekly" and lt.tm_wday != 6):
+        return
+    st = auto_state()
+    if st.get("last") and time.strftime("%Y-%m-%d", time.localtime(st["last"])) == time.strftime("%Y-%m-%d", lt):
+        return
+    if st.get("tried_day") == time.strftime("%Y-%m-%d", lt) and st.get("error"):
+        return                                                 # heute schon gescheitert: nicht jede Minute neu
+    import notices as NT
+    try:
+        res = run_auto(cfg, log=(lambda m: log("INFO", "backup", "auto_backup", detail=m)) if log else print)
+        NT.clear("auto_backup", f"Sicherung {Path(res['file']).name}")
+    except Exception as e:
+        st.update(error=str(e), tried_day=time.strftime("%Y-%m-%d", lt))
+        AUTO_STATE.write_text(json.dumps(st), encoding="utf-8")
+        NT.raise_("auto_backup", "warn", "storage", "Automatische Sicherung fehlgeschlagen", str(e),
+                  fix="USB-Stick einstecken bzw. Netzwerkfreigabe einhängen, Zielordner unter System → Sicherung prüfen.",
+                  key="storage")
+
+
 def main():
     ap = argparse.ArgumentParser(description="HamScanPi sichern und wiederherstellen")
     sub = ap.add_subparsers(dest="cmd", required=True)

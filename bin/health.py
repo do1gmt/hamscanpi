@@ -353,6 +353,12 @@ def run_all():
         N.log_send_due()
     except Exception:
         pass
+    try:                                                       # automatische Sicherung (System → Sicherung)
+        import backup as BK
+        from applog import log as _log
+        BK.auto_tick(log=_log)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
