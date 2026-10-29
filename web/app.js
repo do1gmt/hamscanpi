@@ -487,6 +487,16 @@
     if (busy && s.phase !== 'scan' && lastState === 'running') { /* Zwischenstände während der Auswertung */ }
     lastState = s.state;
   }
+  // Zu einer Karte springen, ohne dass sie unter der klebenden Kopfzeile und den Reitern verschwindet
+  // (scrollIntoView setzte die Karte ganz nach oben – der Anfang lag dann unter der Kopfzeile)
+  function scrollToPanel(el) {
+    if (!el) return;
+    const sticky = [...document.querySelectorAll('.topbar, .tabs-main')]
+      .filter(x => getComputedStyle(x).position === 'sticky' && x.offsetParent !== null)
+      .reduce((h, x) => Math.max(h, x.getBoundingClientRect().bottom), 0);
+    const y = window.scrollY + el.getBoundingClientRect().top - sticky - 10;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
   function setPill(text, cls) { const p = $('statusPill'); p.className = 'status-pill ' + (cls || ''); $('statusPillText').textContent = text; }
   $('scanStop').addEventListener('click', async () => {
     const sat = lastStatus && lastStatus.phase === 'satellite';
@@ -1290,7 +1300,7 @@
   });
   $('noticeAckAll').addEventListener('click', async () => { try { await post('/api/notices/ack', {}); loadNotices(); } catch (err) { toast(err.message); } });
   $('noticeShowOld').addEventListener('change', renderNotices);
-  $('noticePill').addEventListener('click', () => { showView('system'); setTimeout(() => $('panel-notices').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); });
+  $('noticePill').addEventListener('click', () => { showView('system'); setTimeout(() => scrollToPanel($('panel-notices')), 100); });
   loadNotices(); setInterval(loadNotices, 30000);
   $('notifyTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/notify-test'); note($('notifyNote'), '✓ Testmail verschickt'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); } });
 
@@ -1582,7 +1592,7 @@
   }
   document.querySelectorAll('#scanStats [data-go]').forEach(b => b.addEventListener('click', () => {
     const go = b.dataset.go;
-    if (go === 'sat') { $('panel-sat').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (go === 'sat') { scrollToPanel($('panel-sat')); return; }
     if (go === 'sstv') { filter.mode = 'sstv'; localStorage.setItem('f.mode', 'sstv'); $('filterMode').value = 'sstv'; }
     showView('hits'); loadHits();
   }));

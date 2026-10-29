@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.45 – 2026-10-30
+
+- The ⚠ notice counter (and the pass tile) jumped too far: the target card ended up under the sticky header
+  and tabs. Jumps now stop just below them.
+
 ## 1.7.44 – 2026-10-30
 
 - **System → PSK Reporter – last report:** below the Raspberry Pi card, the newest 15 spots of the last report
