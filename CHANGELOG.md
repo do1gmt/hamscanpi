@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.30 – 2026-10-30
+
+- **Saving a stick now shows it.** "✓ saved" appears right next to the button of that stick (the common note
+  line below the list was often out of view) and the card is briefly outlined green; the scan box (antenna,
+  device name, range) is refreshed at the same time instead of only after reloading the page.
+
 ## 1.7.29 – 2026-10-30
 
 - **Satellite passes independent of the band chip.** The pass list is always computed for the selected

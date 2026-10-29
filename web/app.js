@@ -1895,7 +1895,7 @@
           <label class="field" title="Neigung der Antenne nach oben: 0 = waagrecht. Bei 0° und 70° Öffnungswinkel zählt alles bis 35° Höhe als „im Strahl“."><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
           <label class="field" title="Frequenzbereich der Antenne in MHz, z. B. 137–150 (mit Bindestrich). Satelliten außerhalb gelten als „falsches Band“. Leer = alle Frequenzen."><span>gilt für (MHz)</span><input data-f="ant_range" type="text" inputmode="decimal" maxlength="20" placeholder="z. B. 137–150" value="${r.ant_fmin != null || r.ant_fmax != null ? `${r.ant_fmin ?? ''}–${r.ant_fmax ?? ''}` : ''}"></label>
           <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
-          <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}</div>
+          <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}<span class="save-note stick-note" aria-live="polite"></span></div>
         </div>`;
       } else if (!r.present) {
         body = `<div class="stick-actions" data-key="${esc(r.key)}"><button class="btn btn-danger" data-a="forget">Vergessen</button></div>`;
@@ -1957,7 +1957,18 @@
         alert(`Seriennummer ${d.serial} geschrieben. Jetzt den Stick ab- und wieder anstecken – erst danach meldet er sich mit der neuen Nummer.`);
       }
       sticksEditing = false; sticksDirty = false; sticksLast = ''; renderSticks(d); pollStatus();
-    } catch (e) { note($('sticksNote'), e.message, true); }
+      // Rückmeldung direkt an der Karte (die Sammelzeile unter der Liste war oft außer Sicht) und kurz
+      // grün umranden; Anzeige im Scan-Kasten (Antenne, Gerätename, Bereich) gleich mit auffrischen
+      const card = document.querySelector(`#sticksList [data-key="${CSS.escape(key)}"]`);
+      if (card) {
+        const n = card.querySelector('.stick-note'); if (n) note(n, a === 'save' ? '✓ gespeichert' : '✓ erledigt');
+        const c = card.closest('.stick-card') || card; c.classList.add('flash-ok'); setTimeout(() => c.classList.remove('flash-ok'), 1500);
+      }
+      try { await loadSettings(); } catch (e) { /* Anzeige beim nächsten Laden */ }
+    } catch (e) {
+      note($('sticksNote'), e.message, true);
+      const n = box.querySelector('.stick-note'); if (n) note(n, 'Fehler: ' + e.message, true);
+    }
   }
   async function loadSticks() {
     if (sticksDirty && Date.now() - sticksDirty > 600000) sticksDirty = false;   // nach 10 min verworfen

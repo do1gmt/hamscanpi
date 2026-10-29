@@ -593,3 +593,5 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .collapsible { display: flex; align-items: baseline; gap: .35rem; }
 .collapse-btn { background: none; border: 0; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 0 .2rem; }
 .collapse-btn:hover { color: var(--accent); }
+.stick-note { margin-left: .5rem; align-self: center; }
+.flash-ok { outline: 2px solid var(--green); outline-offset: 2px; transition: outline-color .4s; }
