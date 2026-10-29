@@ -50,6 +50,8 @@ class LiveSession:
         self.pmsdr = None
         self._pm_center = None                 # Mitte des aktuellen PMSDR-Fensters (für schnelles Abstimmen)
         self.restart_wanted = threading.Event()
+        import live_decode
+        self.dec = live_decode.LiveDecoders()          # FT8/FT4, APRS/Packet, POCSAG, Mitschnitt
 
     # ---------------- Abonnenten (HTTP-Streams)
     def subscribe(self):
@@ -72,6 +74,10 @@ class LiveSession:
                 os.utime(LIVE_LOCK)
             except Exception:
                 pass
+        try:
+            self.dec.feed(pcm_bytes, getattr(self, "active_hz", None) or self.freq_hz, self.mode)
+        except Exception:
+            pass
         with self.lock:
             subs = list(self.subscribers)
         for q in subs:
@@ -119,6 +125,10 @@ class LiveSession:
             self.thread.join(timeout=5)
         if self.pmsdr:
             self.pmsdr.close()
+        try:
+            self.dec.stop()
+        except Exception:
+            pass
         LIVE_LOCK.unlink(missing_ok=True)
 
     def _pm_in_window(self, f):
@@ -187,6 +197,7 @@ class LiveSession:
             "gain": self._rtl_gain() if self.device == "rtlsdr" else None,
             "direct": bool(getattr(self, "direct", False)),           # Kurzwelle per Direktabtastung
             "text": self.status_text, "listeners": len(self.subscribers), "rate": OUT_RATE,
+            "decode": self.dec.status() if getattr(self, "dec", None) else None,
         }
 
     # ---------------- Hauptschleife

@@ -571,5 +571,44 @@ assert "⟲ RS0ISS (Satellit)" in a and "⟲" not in b, (a, b)
 snd = ST.aprs_senders(a)
 assert snd and snd[0][0].startswith("DL1ABC") and snd[0][1], snd
 PY
+echo "== 23 Live-Dekoder (APRS als Datenstrom, FT8-Takt)"
+(cd bin && timeout 120 python3 - <<'PY') && ok "APRS-Pakete aus dem Live-Ton, FT8-Takt auf der UTC-Grenze" || bad "Live-Dekoder"
+import ast, shutil, time
+from pathlib import Path
+import numpy as np
+from scipy.signal import resample_poly
+import live_decode as LD, ft8_watch as FW
+if shutil.which("multimon-ng"):
+    src = open("../devtools/sim_pass.py").read()
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "ax25_afsk")
+    ns = {"np": np, "A_RATE": 48000}
+    exec(compile(ast.Module([fn], []), "sim", "exec"), ns)
+    LD.auto_kind = lambda f, m: "packet"
+    d = LD.LiveDecoders()
+    a = ns["ax25_afsk"]([("DL1ABC", "APRS", "!5030.00N/01135.00E-Hallo"), ("OE3XYZ", "APRS", "=4800.00N/01600.00E-x")])
+    x = np.concatenate([np.zeros(12000), resample_poly(a.astype(np.float64), 1, 2), np.zeros(24000)])
+    pcm = (x * 0.6 * 32767).astype("<i2")
+    for i in range(0, len(pcm), 480):
+        d.feed(pcm[i:i + 480].tobytes(), 144_390_000, "nfm")
+        time.sleep(0.001)
+    for _ in range(40):
+        if len(d.status()["events"]) >= 2:
+            break
+        time.sleep(0.2)
+    txt = " | ".join(e["text"] for e in d.status()["events"])
+    d.stop()
+    assert "DL1ABC" in txt and "OE3XYZ" in txt, txt
+got = []
+FW.decode = lambda audio, proto, dec: (got.append(len(audio)), [{"snr": -12.0, "dt": 0.1, "audio_hz": 1234, "text": "CQ DL1ABC JN59"}])[1]
+d = LD.LiveDecoders(); d.running = False
+d.active, d._decoder, d.freq_hz = "ft8", Path("/bin/true"), 7_074_000
+t = 1_800_000_003.0
+for _ in range(2000):
+    t += 0.02
+    d._ft8_feed(t, np.zeros(480, np.float32))
+time.sleep(1)
+ev = d.status()["events"]
+assert len(got) == 1 and abs(got[0] - 180000) < 50 and ev[0]["slot"].endswith(":15") and ev[0]["rf_hz"] == 7_075_234, (got, ev)
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

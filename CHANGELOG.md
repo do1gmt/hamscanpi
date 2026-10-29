@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.36 – 2026-10-30
+
+- **Decoders in Live** (`bin/live_decode.py`): the demodulated audio that the browser hears also goes to
+  decoders – *FT8/FT4* (audio collected on the UTC cycle, ft8_lib after every cycle; listen in USB on the dial
+  frequency), *APRS/packet* and *POCSAG* (multimon-ng running continuously, APRS mode with the "⟲" mark for
+  repeated packets). New row under the Live controls: decoder *automatic* (by the band-plan segment of the
+  frequency: FT8/FT4 in USB, APRS and POCSAG in FM) or fixed, and a live list of the decodes (time, type, SNR and
+  audio offset for FT8, text). The decoders run in their own threads only while Live is on; the audio to the
+  browser never waits for them.
+- **Record in Live:** "● Record" saves the audio as WAV under `recordings/live/` (at most 10 min), with a download
+  link; deleted automatically after 30 days.
+- Self-test section 23: APRS packets decoded from a live audio stream, FT8 cycle cut on the UTC boundary.
+
 ## 1.7.35 – 2026-10-30
 
 - **ISS APRS on 437.825 MHz (RS0ISS, Zvezda).** According to the ARISS status page (October 2026) the Columbus

@@ -1429,6 +1429,7 @@ def spectrum_meta(peak_id, lang="de"):
 # ------------------------------------------------------------------ Live-Empfang
 
 _live = None
+_live_dec_kind = ["auto"]
 _live_lock = threading.Lock()
 
 
@@ -1624,6 +1625,7 @@ def live_start(data):
         # beim Suchlauf keine rtl_fm-Rauschsperre: der Regler dient dort als Suchlauf-Schwelle
         sq = 0.0 if (scan and scan.get("kind") == "seek") else float(data.get("squelch_db", 0))
         _live = LIVE.LiveSession(scanner_config(), device, freq, mode, sq, scan)
+        _live.dec.set_kind(_live_dec_kind[0])                 # gewählter Live-Dekoder bleibt über Neustarts
         if data.get("gain") not in (None, ""):
             _live.gain = _gain_value(data.get("gain"))
         _live.start()
@@ -1894,6 +1896,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(dict(w, active_hz=getattr(_live, "active_hz", 0) if _live else 0))
             if path == "/api/live/status":
                 return self.send_json(live_status())
+            if path.startswith("/api/live/recording/"):
+                # Mitschnitt aus Live herunterladen (nur Dateinamen aus recordings/live/)
+                import live_decode as LD
+                from urllib.parse import unquote
+                name = Path(unquote(path.rsplit("/", 1)[1])).name
+                f = LD.LIVE_DIR / name
+                if not name.endswith(".wav") or not f.is_file():
+                    raise FileNotFoundError("Mitschnitt nicht gefunden")
+                return self.send_file(f, download_name=name, cache=False)
             if path == "/api/live/presets":
                 return self.send_json({"presets": live_presets()})
             if path in ("/api/live/audio", "/api/live/stream.wav"):
@@ -2090,6 +2101,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if path == "/api/live/start":
                 return self.send_json({"ok": True, "live": live_start(data)})
+            if path == "/api/live/decoder":
+                kind = str(data.get("kind", "auto"))
+                with _live_lock:
+                    _live_dec_kind[0] = kind if kind in ("auto", "ft8", "ft4", "packet", "pocsag", "off") else "auto"
+                    if _live and _live.running:
+                        _live.dec.set_kind(_live_dec_kind[0])
+                return self.send_json({"ok": True, "kind": _live_dec_kind[0]})
+            if path == "/api/live/record":
+                with _live_lock:
+                    if not (_live and _live.running):
+                        raise ValueError("Kein Live-Empfang aktiv")
+                    _live.dec.record(bool(data.get("on")))
+                    return self.send_json({"ok": True, "decode": _live.dec.status()})
             if path == "/api/live/stop":
                 return self.send_json({"ok": True, "live": live_stop()})
             if path == "/api/live/tune":

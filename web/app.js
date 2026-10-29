@@ -923,6 +923,7 @@
     $('liveDirectNote').hidden = !(on && st.direct);
     $('liveGainField').hidden = !!(on && st.direct);
     renderRds(on ? st.rds : null);
+    renderLiveDec(on ? st.decode : null);
   }
   function liveEnsureCtx() {
     // muss synchron im Klick passieren, sonst bleibt der Browser stumm
@@ -1344,6 +1345,30 @@
       .filter(Boolean).join(' · ');
   }
   // RDS-Anzeige (UKW, „FM breit“)
+  // ---------- Live-Dekoder (FT8/FT4, APRS/Packet, POCSAG) und Mitschnitt ----------
+  let liveDecSeq = -1;
+  function renderLiveDec(d) {
+    $('liveRec').disabled = !d;
+    if (!d) { $('liveDecNote').textContent = ''; return; }
+    if (document.activeElement !== $('liveDecKind')) $('liveDecKind').value = d.kind;
+    const act = { ft8: 'FT8', ft4: 'FT4', packet: 'APRS/Packet', pocsag: 'POCSAG' }[d.active];
+    $('liveDecNote').textContent = d.note || (act ? act + ' läuft' : (d.kind === 'auto' ? 'kein Dekoder für diese Frequenz/Betriebsart' : ''));
+    $('liveRec').textContent = d.recording ? `■ Mitschnitt beenden (${d.rec_s} s)` : '● Mitschneiden';
+    $('liveRec').classList.toggle('btn-danger', !!d.recording);
+    $('liveRecList').innerHTML = (d.recordings || []).length ? 'Mitschnitte: ' + d.recordings.map(r =>
+      `<a href="/api/live/recording/${encodeURIComponent(r.name)}" download>${esc(r.name)}</a> <small class="muted">(${r.seconds} s)</small>`).join(' · ') : '';
+    if (d.seq === liveDecSeq) return;
+    liveDecSeq = d.seq;
+    const tm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    $('liveDecList').innerHTML = (d.events || []).slice(0, 40).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
+      + (e.snr != null ? ` <small class="muted">${e.snr > 0 ? '+' : ''}${e.snr} dB · ${e.audio_hz} Hz</small>` : '')
+      + ` <span class="no-i18n">${esc(e.text)}</span></div>`).join('');
+  }
+  $('liveDecKind').addEventListener('change', async e => { try { await post('/api/live/decoder', { kind: e.target.value }); } catch (err) { toast(err.message); } });
+  $('liveRec').addEventListener('click', async () => {
+    const on = !$('liveRec').classList.contains('btn-danger');
+    try { const d = await post('/api/live/record', { on }); renderLiveDec(d.decode); } catch (err) { toast(err.message); }
+  });
   function renderRds(r) {
     const box = $('liveRds');
     if (!r || !r.groups) { box.hidden = true; return; }
