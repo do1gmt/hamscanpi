@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.33 – 2026-10-30
+
+- README screenshot of the scan page: header corrected (status and clocks on the right – the screenshot was
+  taken before the header fix of 1.7.31).
+
 ## 1.7.32 – 2026-10-30
 
 - **Shortwave scans with the stick.** If the main stick can do HF via direct sampling (e.g. NESDR SMArt v5) and
