@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.29 – 2026-10-30
+
+- **Satellite passes independent of the band chip.** The pass list is always computed for the selected
+  satellites; the chip "Satellites" only decides about recording. Without it the list shows "preview only" and
+  "preview – not recorded". The box can be collapsed (▾/▸, remembered per browser); the pass tile and 🛰 work
+  without the chip.
+- **Notices** (counter at the top, System → Notices): every problem with what happened, since when, what to do
+  and a command to copy; acknowledge single or all; resolved ones stay visible for 7 days. Checked every minute
+  (`bin/health.py`): system restart (boot id), stick plugged in / removed / changed, main stick missing, stick
+  without role, SD card and file system errors from the kernel log, read-only file system, storage almost full,
+  high write load, zram full, process killed by the kernel, undervoltage, throttling, heat, clock not
+  synchronised, service restarted, missing software (rtl_sdr, multimon-ng, ft8_lib, Python packages), outdated
+  orbital elements, driver without direct sampling. The pass watchdog and updates also report as notices.
+- **Notifications by level, area and event** (Settings → Notifications): levels error/warning/info, areas,
+  "always report" for stick changes, restart, SD card, power/heat and updates; collect into one message every
+  X minutes (errors always immediately); **send the log** (ERROR/WARN/INFO/DEBUG) daily at a chosen hour or now,
+  as a file by mail or Telegram/ntfy.
+- **Stick capabilities** (`bin/sdrcaps.py`): range by tuner and model, HF via direct sampling (NESDR SMArt v5,
+  RTL-SDR Blog V3) or upconverter (Blog V4, needs the Blog driver); shown in System → Devices and the scan box.
+  The direct-sampling syntax of the installed driver is read from the help text (`rtl_sdr -D` without value on
+  Debian's 2.0.2, `-D 2` on other builds, `rtl_fm -E direct2`).
+- **Live below 24 MHz with the stick:** direct sampling (Q branch) is switched on, gain control hidden with a
+  note (tuner bypassed, HF antenna needed), lower limit 100 kHz. Device choice: HF goes to the PMSDR if present,
+  otherwise to the stick if it can; otherwise a clear message.
+- Self-test section 19.
+
 ## 1.7.28 – 2026-10-29
 
 - **Stay on signals to decode more.** Until now data packets only got the short listening window plus at most

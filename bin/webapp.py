@@ -274,6 +274,7 @@ def load_settings():
                    for k, v in (data.get("notify") or {}).items()},
         "devices": device_labels(),
         "antennas": antennas_effective(),
+        "rtl_caps": (_main_stick() or {}).get("caps"),
         "follow": {k: scanner_config().get(k) for k in FOLLOW_KEYS},
         "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
                       "antenna": (scanner_config().get("antennas") or {}).get("pmsdr", "")},
@@ -392,6 +393,19 @@ def save_settings(data):
                 n[k] = str(data["notify"][k])
         if n.get("push") not in ("", "ntfy", "telegram", None):
             raise ValueError("Push: ntfy, telegram oder aus")
+        # Hinweise: welche Stufen/Bereiche/Ereignisse gemeldet werden, Sammelmeldung, Protokoll-Versand
+        if isinstance(data["notify"].get("notices"), dict):
+            src = data["notify"]["notices"]
+            import notify as _N
+            rn = {"levels": [x for x in (src.get("levels") or []) if x in ("error", "warn", "info")],
+                  "areas": [x for x in (src.get("areas") or []) if x in ("hardware", "storage", "system", "software", "satellite", "scan")],
+                  "events": {k: bool((src.get("events") or {}).get(k, True)) for k in _N.EVENT_KEYS},
+                  "digest_min": max(0, min(1440, int(src.get("digest_min") or 0)))}
+            n["notices"] = rn
+        if isinstance(data["notify"].get("log_send"), dict):
+            src = data["notify"]["log_send"]
+            n["log_send"] = {"levels": [x for x in (src.get("levels") or []) if x in ("ERROR", "WARN", "INFO", "DEBUG")] or ["ERROR", "WARN"],
+                             "daily": bool(src.get("daily")), "hour": max(0, min(23, int(src.get("hour") or 7)))}
         out["notify"] = n
     if "my_locator" in data:
         loc = str(data["my_locator"] or "").strip().upper()
@@ -1457,6 +1471,7 @@ def sat_passes():
     chip = "Satelliten" in (eff or [])
     # Satelliten nur mit dem RTL-SDR (gewähltes Gerät = angeschlossene Antenne)
     on = chip and st.get("active_device") == "rtlsdr"
+    # Überflüge immer berechnen (Vorschau) – der Chip „Satelliten“ entscheidet nur über die Aufnahme
     prio = st.get("sat_prio") or {}
     key = (tuple(ids), st.get("my_locator", ""), on, json.dumps(prio, sort_keys=True))
     with _sat_lock:
@@ -1464,11 +1479,13 @@ def sat_passes():
             res = _sat_cache["data"]
         else:
             try:
-                res = (SAT.upcoming(ids, st.get("my_locator", ""), hours=24, past_s=12 * 3600, prio=prio) if on
-                       else {"passes": [], "recordings": []})
+                res = (SAT.upcoming(ids, st.get("my_locator", ""), hours=24, past_s=12 * 3600, prio=prio)
+                       if ids and st.get("my_locator") else {"passes": [], "recordings": []})
             except Exception as e:
                 res = {"passes": [], "problem": f"{type(e).__name__}: {e}"}
             res["enabled"] = on
+            res["preview"] = not on                                      # nur anzeigen, nicht aufnehmen
+            res["chip"] = chip
             res["paused_device"] = chip and not on
             res["satellites"] = [{"id": x["id"], "name": x["name"], "label": x["label"], "center_hz": x["center_hz"],
                                   "prio": x["prio"], "norad": x["norad"], "group": x.get("group", "")}
@@ -1556,11 +1573,17 @@ def live_start(data):
         if not device:
             # Gerät nach der Frequenz: Kurzwelle an die PMSDR, alles ab 24 MHz an den Stick – sonst das
             # unter Scan gewählte (der Suchlauf landete sonst bei 7 MHz auf dem Stick und sprang auf 24 MHz)
+            # Unter 24 MHz kann auch ein Stick mit Direktabtastung (z. B. NESDR SMArt v5) übernehmen
             hw = DEV.detect_hardware()
+            import sdrcaps as SC
+            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            rtl_hf, rtl_hf_why = SC.hf_ok(main) if hw["rtlsdr"]["present"] else (False, "kein Stick angesteckt")
             if freq < 30_000_000 and hw["pmsdr"]["present"]:
                 device = "pmsdr"
-            elif freq >= 24_000_000 and hw["rtlsdr"]["present"]:
+            elif hw["rtlsdr"]["present"] and (freq >= 24_000_000 or rtl_hf):
                 device = "rtlsdr"
+            elif freq < 24_000_000:
+                raise ValueError(f"Unter 24 MHz braucht es die PMSDR oder einen Stick mit Kurzwelle – {rtl_hf_why}")
             else:
                 device = settings["active_device"]
         mode = str(data.get("mode", "nfm"))
@@ -1776,6 +1799,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(SYSMON.live())
             if path == "/api/sticks":
                 return self.send_json(STK.overview())
+            if path == "/api/notices":
+                import notices as NT
+                return self.send_json(NT.listing())
             if path == "/api/backup/info":
                 up = None
                 if BK.UPLOAD.exists():
@@ -2108,6 +2134,15 @@ class Handler(BaseHTTPRequestHandler):
                 DEV._HW_CACHE["v"] = None
                 APPLOG.log("INFO", "webapp", "hf_device_updated", label=lab or "PMSDR", antenna=ant)
                 return self.send_json({"ok": True, "label": lab or "PMSDR", "antenna": ant})
+            if path == "/api/notices/ack":
+                import notices as NT
+                NT.ack(data.get("id"))
+                return self.send_json({"ok": True})
+            if path == "/api/notify/send-log":
+                import notify as N
+                lv = [x for x in (data.get("levels") or []) if x in ("ERROR", "WARN", "INFO", "DEBUG")] or None
+                n = N.send_log_now(lv, int(data.get("hours") or 24))
+                return self.send_json({"ok": True, "lines": n})
             if path == "/api/backup/restore":
                 if not BK.UPLOAD.exists():
                     raise ValueError("Keine Sicherung hochgeladen")

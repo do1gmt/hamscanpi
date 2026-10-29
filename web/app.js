@@ -170,7 +170,9 @@
   function renderDeviceSwitch() {
     const root = $('deviceSwitch'); root.innerHTML = '';
     const names = settings.devices || { pmsdr: 'PMSDR', rtlsdr: 'RTL-SDR' };
-    const sub = { pmsdr: 'Kurzwelle 160 m – 10 m', rtlsdr: 'VHF/UHF 50 MHz – 1.3 GHz' };
+    const rc = settings && settings.rtl_caps;
+    const fmtF = h => h >= 1e9 ? (h / 1e9).toFixed(2).replace(/0$/, '').replace('.', ',') + ' GHz' : h >= 1e6 ? Math.round(h / 1e6) + ' MHz' : Math.round(h / 1e3) + ' kHz';
+    const sub = { pmsdr: 'Kurzwelle 160 m – 10 m', rtlsdr: rc ? `${rc.hf_ok ? 'KW/' : ''}VHF/UHF ${fmtF(rc.hf_ok ? rc.min_hz : Math.max(rc.min_hz, 24e6))} – ${fmtF(rc.max_hz)}` : 'VHF/UHF 24 MHz – 1,7 GHz' };
     const hw = settings.hardware || { pmsdr: { present: true }, rtlsdr: { present: true } };
     const short = id => names[id].split(' (')[0];
     for (const id of ['pmsdr', 'rtlsdr']) {
@@ -913,6 +915,8 @@
     }
     $('liveMeter').hidden = !hasSnr;
     $('liveSmeter').hidden = hasSnr;
+    $('liveDirectNote').hidden = !(on && st.direct);
+    $('liveGainField').hidden = !!(on && st.direct);
     renderRds(on ? st.rds : null);
   }
   function liveEnsureCtx() {
@@ -1186,6 +1190,14 @@
   function fillNotify() {
     const n = settings?.notify || {}; const f = $('notifyForm');
     for (const el of f.elements) { if (!el.name) continue; if (el.type === 'checkbox') el.checked = !!n[el.name]; else if (n[el.name] !== undefined) el.value = n[el.name]; }
+    const nr = n.notices || {}, lv = nr.levels || ['error', 'warn'], ar = nr.areas || ['hardware', 'storage', 'system', 'software', 'satellite', 'scan'], ev = nr.events || {};
+    f.querySelectorAll('[data-nl]').forEach(el => el.checked = lv.includes(el.dataset.nl));
+    f.querySelectorAll('[data-na]').forEach(el => el.checked = ar.includes(el.dataset.na));
+    f.querySelectorAll('[data-ne]').forEach(el => el.checked = ev[el.dataset.ne] !== false);
+    f.querySelector('[data-nd]').value = nr.digest_min || 0;
+    const ls = n.log_send || {};
+    f.querySelectorAll('[data-ll]').forEach(el => el.checked = (ls.levels || ['ERROR', 'WARN']).includes(el.dataset.ll));
+    f.querySelector('[data-ld]').checked = !!ls.daily; f.querySelector('[data-lh]').value = ls.hour ?? 7;
     pushFields();
   }
   function pushFields() {
@@ -1210,8 +1222,50 @@
   $('notifyForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = $('notifyForm'); const n = {};
     for (const el of f.elements) { if (!el.name) continue; n[el.name] = el.type === 'checkbox' ? el.checked : el.value; }
+    const pick = sel => [...f.querySelectorAll(sel)].filter(el => el.checked);
+    n.notices = { levels: pick('[data-nl]').map(el => el.dataset.nl), areas: pick('[data-na]').map(el => el.dataset.na),
+                  events: Object.fromEntries([...f.querySelectorAll('[data-ne]')].map(el => [el.dataset.ne, el.checked])),
+                  digest_min: Number(f.querySelector('[data-nd]').value || 0) };
+    n.log_send = { levels: pick('[data-ll]').map(el => el.dataset.ll), daily: f.querySelector('[data-ld]').checked, hour: Number(f.querySelector('[data-lh]').value || 7) };
     try { const d = await post('/api/settings', { notify: n }); settings.notify = d.settings.notify; fillNotify(); note($('notifyNote'), '✓ gespeichert'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); }
   });
+  $('logSendNow').addEventListener('click', async () => {
+    const levels = [...$('notifyForm').querySelectorAll('[data-ll]')].filter(el => el.checked).map(el => el.dataset.ll);
+    note($('notifyNote'), 'sende Protokoll …');
+    try { const d = await post('/api/notify/send-log', { levels, hours: 24 }); note($('notifyNote'), `✓ Protokoll verschickt (${d.lines} Einträge)`); }
+    catch (err) { note($('notifyNote'), 'Fehler: ' + err.message + ' (vorher speichern)', true); }
+  });
+  // ---------- Hinweise (System → Hinweise, Zähler oben) ----------
+  const NOTICE_ICON = { error: '⛔', warn: '⚠', info: 'ℹ' };
+  let noticeData = null;
+  function renderNotices() {
+    const d = noticeData; if (!d) return;
+    const pill = $('noticePill');
+    pill.hidden = !d.open; $('noticeCount').textContent = d.open;
+    pill.classList.toggle('bad', d.worst === 0);
+    const showOld = $('noticeShowOld').checked;
+    const items = d.items.filter(r => showOld || (r.active && !r.acked) || (r.active && r.kind === 'state'));
+    const tm = x => new Date(x * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    $('noticeSummary').textContent = d.open ? `${d.open} offen` : 'alles in Ordnung';
+    $('noticeList').innerHTML = items.length ? items.map(r => `<div class="notice ${r.level}${r.active ? '' : ' done'}${r.acked ? ' acked' : ''}">
+      <div class="notice-head"><span>${NOTICE_ICON[r.level] || ''}</span><b>${esc(r.title)}</b>
+        <small class="muted">${esc((d.areas || {})[r.area] || r.area)} · ${r.kind === 'event' ? tm(r.first) : 'seit ' + tm(r.first)}${r.count > 1 ? ` · ${r.count}×` : ''}${r.active ? '' : ' · behoben ' + tm(r.resolved || r.last)}</small>
+        ${r.active && !r.acked ? `<button type="button" class="btn btn-small" data-ack="${esc(r.id)}">Quittieren</button>` : ''}</div>
+      ${r.detail ? `<div class="notice-detail">${esc(r.detail)}</div>` : ''}
+      ${r.fix ? `<div class="notice-fix">→ ${esc(r.fix)}</div>` : ''}
+      ${r.cmd ? `<div class="notice-cmd"><code>${esc(r.cmd)}</code> <button type="button" class="btn btn-small" data-copy="${esc(r.cmd)}">Kopieren</button></div>` : ''}
+    </div>`).join('') : '<div class="muted">Keine Hinweise – alles in Ordnung.</div>';
+  }
+  async function loadNotices() { try { noticeData = await api('/api/notices'); renderNotices(); } catch (e) { /* nächste Runde */ } }
+  $('noticeList').addEventListener('click', async e => {
+    const a = e.target.closest('[data-ack]'), c = e.target.closest('[data-copy]');
+    if (a) { try { await post('/api/notices/ack', { id: a.dataset.ack }); loadNotices(); } catch (err) { toast(err.message); } }
+    if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); toast('kopiert'); } catch (err) { toast('Kopieren nicht möglich – Befehl markieren und kopieren'); } }
+  });
+  $('noticeAckAll').addEventListener('click', async () => { try { await post('/api/notices/ack', {}); loadNotices(); } catch (err) { toast(err.message); } });
+  $('noticeShowOld').addEventListener('change', renderNotices);
+  $('noticePill').addEventListener('click', () => { showView('system'); setTimeout(() => $('panel-notices').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); });
+  loadNotices(); setInterval(loadNotices, 30000);
   $('notifyTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/notify-test'); note($('notifyNote'), '✓ Testmail verschickt'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); } });
 
   // ---------- Bereiche (Tabs) ----------
@@ -1307,13 +1361,24 @@
     if ($('ssNext')) renderNextPass();
     if (!document.activeElement || !document.activeElement.dataset || !document.activeElement.dataset.satprio) renderSatPrio();
   }
+  // Überflugliste ein-/ausklappen (je Browser gemerkt)
+  function satCollapse(set) {
+    let c = false; try { c = localStorage.getItem('satCollapsed') === '1'; } catch (e) { }
+    if (set !== undefined) { c = set; try { localStorage.setItem('satCollapsed', c ? '1' : '0'); } catch (e) { } }
+    $('satBody').hidden = c; $('satCollapse').textContent = c ? '▸' : '▾'; $('satCollapse').setAttribute('aria-expanded', String(!c));
+  }
+  $('satCollapse').addEventListener('click', () => satCollapse($('satBody').hidden ? false : true));
+  satCollapse();
   function renderSatPasses() {
     const d = satData; if (!d) return; const root = $('satPasses');
-    $('panel-sat').hidden = !(settings && settings.active_device === 'rtlsdr');   // nur mit Antenne am Stick
     const hint = $('satHint');
     const now = Date.now() / 1000;
     const future = (d.passes || []).filter(p => p.los > now);
-    if (!d.enabled) hint.textContent = 'Unter „Bänder & Betriebsarten“ das Band „Satelliten“ einschalten – dann nimmt der RTL-SDR jeden Überflug automatisch auf (Doppler-Korrektur, SSTV und APRS werden dekodiert). Die mit „SSTV ·“ markierten Bildsatelliten senden nur gelegentlich; sie werden nur aufgenommen, wenn der Stick frei ist.';
+    $('satPreviewTag').textContent = d.preview ? '· nur Vorschau' : '';
+    if (d.preview) hint.textContent = (d.chip
+      ? 'Nur Vorschau – gewählt ist die PMSDR (Kurzwelle); aufgenommen wird mit dem RTL-SDR, wenn er gewählt ist.'
+      : 'Nur Vorschau – es wird nicht aufgenommen. Zum Aufnehmen unter „Bänder & Betriebsarten“ das Band „Satelliten“ einschalten (Doppler-Korrektur, SSTV und APRS werden dekodiert).')
+      + (future.length ? '' : ' In den nächsten 24 h kein Überflug über 10° Höhe (oder kein Locator eingetragen).');
     else {
       const parts = [];
       if (d.problem) parts.push('⚠ ' + d.problem);
@@ -1335,7 +1400,8 @@
       const ch = p.channels.map(c => MHz(c)).join(' + ');
       const dropped = (p.dropped || []).length ? `<br><small class="muted">nicht gleichzeitig: ${p.dropped.map(MHz).join(', ')}</small>` : '';
       let plan = '';
-      if (p.status === 'joined' && !p.result) plan = `<span class="ok">gemeinsam</span><br><small class="muted">${esc(p.reason)}</small>`;
+      if (d.preview && !p.result) plan = `<span class="muted">${past ? 'nicht aufgenommen' : 'Vorschau – keine Aufnahme'}</span>`;
+      else if (p.status === 'joined' && !p.result) plan = `<span class="ok">gemeinsam</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.result) {
         const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted', cancelled: 'muted' }[r.state] || '';
         // Signal: höchster Kanalpegel über dem Rauschen – zeigt, ob der Satellit überhaupt zu hören war
@@ -1433,7 +1499,7 @@
     const now = Date.now() / 1000;
     const p = (satData?.passes || []).find(x => x.los > now && x.status !== 'skipped' && x.status !== 'joined');
     const card = $('ssNextWrap');
-    card.hidden = !(satData && satData.enabled);
+    card.hidden = !(satData && (satData.passes || []).length);
     $('ssNextTrack').hidden = !p;
     if (p) $('ssNextTrack').dataset.track = `${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${p.name}`;
     if (!p) { $('ssNext').textContent = '–'; $('ssNextLbl').textContent = 'kein Überflug geplant'; return; }
@@ -1809,7 +1875,9 @@
       const badge = r.kind === 'other' ? '<span class="badge">nicht unterstützt</span>'
         : `<span class="badge ${role === 'main' ? 'b-main' : role === '' ? 'b-new' : ''}">${ROLE_TEXT[role]}</span>`;
       const where = r.present ? `steckt · Port ${esc(r.port || '?')}` : `zuletzt gesehen ${fmtSeen(r.last_seen)}`;
-      const info = [`Seriennummer <span class="no-i18n">${esc(r.serial || '–')}</span>`, r.kind === 'rtl' ? `Tuner <span class="no-i18n">${esc(r.tuner || '?')}</span>` : null].filter(Boolean).join(' · ');
+      const cp = r.caps, fmtR = h => h >= 1e9 ? (h / 1e9).toFixed(2).replace('.', ',') + ' GHz' : h >= 1e6 ? Math.round(h / 1e6) + ' MHz' : Math.round(h / 1e3) + ' kHz';
+      const capTxt = cp ? `${fmtR(cp.hf_ok ? cp.min_hz : Math.max(cp.min_hz, 24e6))} – ${fmtR(cp.max_hz)}${cp.hf_ok ? ' · Kurzwelle per Direktabtastung' : cp.hf ? ' · Kurzwelle möglich, aber: ' + esc(cp.hf_why) : ''}` : null;
+      const info = [`Seriennummer <span class="no-i18n">${esc(r.serial || '–')}</span>`, r.kind === 'rtl' ? `Tuner <span class="no-i18n">${esc(r.tuner || '?')}</span>` : null, capTxt].filter(Boolean).join(' · ');
       const warn = [];
       if (r.duplicate) warn.push('Dieser Stick lässt sich nicht sicher über seine Seriennummer ansprechen (gleiche Nummer wie ein anderer Stick, oder eine Nummer wie 00000001, die rtl_sdr als Gerätenummer liest). HamScanPi nimmt dann die USB-Reihenfolge – die kann sich ändern. Eigene Seriennummer schreiben (dafür die anderen Sticks abziehen).');
       else if (r.generic && r.present && d.rtl_present > 1) warn.push('Seriennummer ab Werk (bei vielen Sticks gleich). Solange nur ein solcher Stick steckt, kein Problem – sonst eigene Nummer schreiben.');

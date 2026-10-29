@@ -437,5 +437,50 @@ assert sec == 28, sec
 _, sec = CW.hf_continue(H(), {}, [7000.0], 200.0, max_s=12, hang_s=6, chunk_s=4)
 assert sec == 12, sec                              # Höchstdauer greift
 PY
+echo "== 19 Hinweise, Melderegeln, Stick-Fähigkeiten, Überflug-Vorschau"
+python3 - <<'PY' && ok "Neustart/Stickwechsel erkannt, Regeln greifen, Direktabtastung erkannt, Live unter 24 MHz" || bad "Hinweise/Stick"
+import json, os, re, sys, time
+sys.path.insert(0, "bin")
+import health as H, notices as NT, notify as N, sdrcaps as SC
+sent = []
+N.send_all = lambda s, t, c, **k: sent.append(s)
+N.cfg = lambda: {"push": "telegram", "tg_token": "x", "tg_chat": "1",
+                 "notices": {"levels": ["error"], "events": {"reboot": True, "stick": False}}}
+for f in ("data/notices.json", "data/health_state.json"):
+    if os.path.exists(f):
+        os.remove(f)
+H.run_all()
+st = json.load(open("data/health_state.json"))
+st["boot_id"], st["alive"] = "alter-start", time.time() - 600
+st["sticks_present"] = ["rtl:weg"]
+json.dump(st, open("data/health_state.json", "w"))
+H.run_all()
+keys = [r["key"] for r in NT.listing()["items"]]
+assert "reboot" in keys and "stick" in keys, keys
+assert any("neu gestartet" in x for x in sent) and not any("abgezogen" in x for x in sent), sent
+n = len(sent); NT.raise_("t_warn", "warn", "scan", "Testwarnung"); assert len(sent) == n      # nur Fehler gewählt
+NT.raise_("t_err", "error", "scan", "Testfehler"); assert len(sent) == n + 1
+NT.ack(); assert NT.listing()["open"] == 0
+# Schreibweise der Direktabtastung aus dem Hilfetext
+for txt, want in (("\t[-D enable direct sampling (default: off)]\n", ["-D"]),
+                  ("\t[-D direct_sampling_mode, 0 (default/off), 1 (I), 2 (Q)]\n", ["-D", "2"])):
+    m = re.search(r"\[-D\s+([^\]]*)\]", txt)
+    got = ["-D", "2"] if re.search(r"mode|\(I\)|\(Q\)|0 \(", m.group(1)) else ["-D"]
+    assert got == want, (txt, got)
+c = SC.caps({"manufacturer": "Nooelec", "product": "NESDR SMArt v5", "tuner": "Rafael Micro R820T"})
+assert c["hf"] == "direct_q" and c["min_hz"] == 100e3
+assert SC.caps({"product": "RTL2838UHIDIR", "tuner": "Rafael Micro R820T"})["hf"] is None
+# Live: unter 24 MHz Direktabtastung, darüber nicht
+import live as LV
+SC.tool_flags = lambda refresh=False: {"rtl_sdr": ["-D"], "rtl_fm": ["-E", "direct2"]}
+import sticks as STK
+STK.load = lambda: {"sticks": {"k": {"role": "main", "kind": "rtl", "manufacturer": "Nooelec",
+                                     "product": "NESDR SMArt v5", "tuner": "Rafael Micro R820T"}}}
+cls = [k for k in vars(LV).values() if isinstance(k, type) and hasattr(k, "_direct")][0]
+o = cls.__new__(cls)
+assert o._direct(7_100_000, "rtl_sdr") == ["-D"] and o.direct
+assert o._direct(145_000_000, "rtl_sdr") == [] and not o.direct
+assert o._direct(3_700_000, "rtl_fm") == ["-E", "direct2"] and o.rtl_min() == 100000
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -185,6 +185,7 @@ class LiveSession:
             "snr_db": getattr(self, "snr_db", None), "clip_pct": getattr(self, "clip_pct", None),
             "rds": self.rds if (self.mode == "wfm" and self.rds and self.rds.get("freq_hz") == self.active_hz) else None,
             "gain": self._rtl_gain() if self.device == "rtlsdr" else None,
+            "direct": bool(getattr(self, "direct", False)),           # Kurzwelle per Direktabtastung
             "text": self.status_text, "listeners": len(self.subscribers), "rate": OUT_RATE,
         }
 
@@ -232,6 +233,21 @@ class LiveSession:
             LIVE_LOCK.unlink(missing_ok=True)
 
     # ---------------- RTL-SDR: hoeren
+    def _direct(self, freq_hz, tool):
+        """Kurzwelle mit dem Stick: unter 24 MHz Direktabtastung (Q-Zweig), wenn Stick und Treiber das
+        können – Rückgabe der Schalter für tool (rtl_sdr/rtl_fm) oder [] (darüber bzw. nicht möglich)."""
+        if freq_hz >= 24_000_000:
+            self.direct = False
+            return []
+        import sdrcaps as SC
+        import sticks as STK
+        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        ok, why = SC.hf_ok(main)
+        if not ok:
+            raise RuntimeError(f"unter 24 MHz nicht möglich: {why}")
+        self.direct = True
+        return list(SC.tool_flags().get(tool) or [])
+
     def _rtl_fm_cmd(self, freq_hz):
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}
         import sticks as STK
@@ -246,7 +262,9 @@ class LiveSession:
             cmd += ["-s", "24000", "-r", str(OUT_RATE)]
         else:
             cmd += ["-s", "24000", "-r", str(OUT_RATE), "-E", "deemp"] if m == "fm" else ["-s", "24000", "-r", str(OUT_RATE)]
-        if gain:
+        ds = self._direct(freq_hz, "rtl_fm")
+        cmd += ds
+        if gain and not ds:                             # Direktabtastung: Tuner umgangen, keine Verstärkung
             cmd += ["-g", str(gain)]
         if self.squelch_db > 0 and m in ("fm", "am"):
             cmd += ["-l", str(int(self.squelch_db * 10))]   # rtl_fm-Squelch ist eine Rohzahl, grob skaliert
@@ -290,13 +308,15 @@ class LiveSession:
         gain = self._rtl_gain()
         # „automatisch“: nicht die Regelung im Stick (übersteuert bei starken Ortssendern), sondern eine
         # eigene: feste Stufen, runter bei Übersteuerung, rauf wenn das Signal sehr leise ist
-        agc = not gain
+        ds = self._direct(int(freq_hz) + DSP.TUNE_OFFSET, "rtl_sdr")
+        agc = not gain and not ds                       # Direktabtastung: keine Verstärkung zu regeln
         if agc:
             gain = self._agc_gain
         def spawn(g):
             cmd = [rtl.get("binary", "rtl_sdr"), "-d", sp["d"],
                    "-f", str(int(freq_hz) + DSP.TUNE_OFFSET), "-s", str(DSP.IN_RATE), "-p", str(int(sp["ppm"]))]
-            if g:
+            cmd += ds
+            if g and not ds:
                 cmd += ["-g", str(g)]
             if rtl.get("bias_t"):
                 cmd += ["-T"]                           # Speisung für Vorverstärker an der Antenne
@@ -401,6 +421,19 @@ class LiveSession:
     SEEK_BW = {"nfm": 10000, "am": 8000, "wfm": 150000, "usb": 3000, "lsb": 3000}
     RTL_MIN, RTL_MAX = 24_000_000, 1_766_000_000
 
+    def rtl_min(self):
+        """Untere Grenze des Haupt-Sticks: mit Kurzwelle (Direktabtastung) ab 100 kHz, sonst 24 MHz."""
+        try:
+            import sdrcaps as SC
+            import sticks as STK
+            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            ok, _ = SC.hf_ok(main)
+            if ok:
+                return int(SC.caps(main)["min_hz"])
+        except Exception:
+            pass
+        return self.RTL_MIN
+
     def _channel_level(self, P, f_axis, off, bw):
         """dB über Rauschen, belegte Breite (Hz) und Seitenband-Pegel (AM) eines Kanals."""
         m = (f_axis >= off - bw / 2) & (f_axis <= off + bw / 2)
@@ -455,7 +488,7 @@ class LiveSession:
         # wie am Funkgerät: auf das Raster einrasten, dann den nächsten Kanal in Suchrichtung nehmen
         f = round(self.freq_hz / step) * step + d * step
         # UKW („FM breit“): nur im Rundfunkband 87,5–108 MHz suchen und dort im Kreis
-        lo, hi = (87_500_000, 108_000_000) if self.mode == "wfm" else (self.RTL_MIN, self.RTL_MAX)
+        lo, hi = (87_500_000, 108_000_000) if self.mode == "wfm" else (self.rtl_min(), self.RTL_MAX)
         if not lo <= f <= hi:
             if self.mode != "wfm":               # nicht still auf 24 MHz springen (Kurzwelle gehört an die PMSDR)
                 self.status_text = (f"Fehler: {self.freq_hz/1e6:.3f} MHz liegt außerhalb des Sticks "

@@ -35,7 +35,7 @@ def log(level, component, event, **data):
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         pass
-    if level == "ERROR":
+    if level == "ERROR" and component != "notice":         # Hinweise melden sich selbst (notices.py)
         try:
             from notify import notify_error
             notify_error(component, event, rec.get("data", {}))

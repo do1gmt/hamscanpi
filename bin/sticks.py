@@ -209,15 +209,14 @@ def _announce(r):
                                                     "erst, wenn du unter System → Geräte festlegst, was er sein soll "
                                                     "(Haupt-Stick, Reserve oder ignorieren).")
 
-    def send():
-        try:
-            import notify as N
-            c = N.cfg()
-            if c.get("enabled") or N.push_on(c):
-                N.send_all(title, text, c)
-        except Exception:
-            pass
-    threading.Thread(target=send, daemon=True).start()
+    # gemeldet wird über die Hinweise (health.py: „Stick angesteckt“ – nach den Benachrichtigungs-Einstellungen,
+    # Ereignisart „stick“); hier nur noch der Eintrag für die Hinweis-Liste ohne zweite Nachricht
+    try:
+        import notices as NT
+        NT.raise_("stick_pending" if r["kind"] == "rtl" else f"stick_other_{r['key']}", "info", "hardware", title, text,
+                  fix="Unter System → Geräte eine Rolle wählen." if r["kind"] == "rtl" else "", notify=False)
+    except Exception:
+        pass
 
 
 def update(key, **fields):
@@ -432,6 +431,16 @@ def overview():
         out.append(dict(r, label=_label(r), present=d is not None, port=(d or {}).get("port") or r.get("port"),
                         duplicate=dup, generic=r["kind"] == "rtl" and generic_serial(r.get("serial")),
                         v4=r["kind"] == "rtl" and ("v4" in (r.get("product") or "").lower() or r.get("tuner") == "Rafael Micro R828D")))
+    try:                                                      # Fähigkeiten (Bereich, Kurzwelle) je RTL-Stick
+        import sdrcaps as SC
+        for r in out:
+            if r["kind"] == "rtl":
+                c = SC.caps(r)
+                ok, why = SC.hf_ok(r)
+                r["caps"] = {"min_hz": c["min_hz"], "max_hz": c["max_hz"], "hf": c["hf"], "hf_ok": ok, "hf_why": why,
+                             "model": c["model"]}
+    except Exception:
+        pass
     out.sort(key=lambda r: (not r["present"], {"main": 0, None: 1, "spare": 2, "ignore": 3}.get(r.get("role"), 4), r["label"]))
     main = main_device(present, reg)
     return {"sticks": out, "main_present": main is not None, "rtl_present": len(rtl),

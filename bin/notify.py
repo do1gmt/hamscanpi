@@ -149,6 +149,165 @@ def send_all(subject, text, c, image=None, priority="default"):
             _log_fail(e, "push_failed")
 
 
+# ---------------------------------------------------------------- Hinweise (notices.py)
+EVENT_KEYS = {"stick": "Stick angesteckt, abgezogen oder gewechselt", "reboot": "System neu gestartet",
+              "storage": "Probleme mit Speicherkarte / Dateisystem", "power": "Unterspannung, Drosselung, Hitze",
+              "update": "Update eingespielt"}
+LEVEL_ICON = {"error": "⛔", "warn": "⚠", "info": "ℹ"}
+
+
+def notice_rules(c=None):
+    c = c or cfg()
+    r = dict(c.get("notices") or {})
+    r.setdefault("levels", ["error", "warn"])
+    r.setdefault("areas", ["hardware", "storage", "system", "software", "satellite", "scan"])
+    ev = {k: True for k in EVENT_KEYS}
+    ev.update(r.get("events") or {})
+    r["events"] = ev
+    r.setdefault("digest_min", 0)
+    return r
+
+
+def _notice_text(rec):
+    t = rec.get("detail") or ""
+    if rec.get("fix"):
+        t += ("\n\n" if t else "") + "Was tun: " + rec["fix"]
+    if rec.get("cmd"):
+        t += "\n" + rec["cmd"]
+    return t
+
+
+def notify_notice(rec):
+    """Hinweis melden – nach Stufe, Bereich und Ereignisart (Einstellungen → Benachrichtigungen)."""
+    c = cfg()
+    if not (c.get("enabled") or push_on(c)):
+        return
+    r = notice_rules(c)
+    key = rec.get("key")
+    if key in EVENT_KEYS:
+        if not r["events"].get(key, True):
+            return
+    elif rec.get("level") not in r["levels"] or rec.get("area") not in r["areas"]:
+        return
+    if float(r.get("digest_min") or 0) > 0 and rec.get("level") != "error":
+        st = _state()
+        st.setdefault("digest", []).append({"t": time.time(), "level": rec["level"], "title": rec["title"],
+                                            "text": _notice_text(rec)})
+        _save_state(st)
+        return
+    send_all(f"{LEVEL_ICON.get(rec.get('level'), '')} {rec['title']}", _notice_text(rec) + "\n", c,
+             priority="high" if rec.get("level") == "error" else "default")
+
+
+def flush_digest(force=False):
+    """Gesammelte Hinweise als eine Nachricht (aus dem Scheduler, jede Minute aufgerufen)."""
+    c = cfg()
+    r = notice_rules(c)
+    st = _state()
+    items = st.get("digest") or []
+    if not items:
+        return
+    if not force and time.time() - float(st.get("digest_sent", 0)) < float(r.get("digest_min") or 0) * 60:
+        return
+    st["digest"], st["digest_sent"] = [], time.time()
+    _save_state(st)
+    lines = [f"{time.strftime('%d.%m. %H:%M', time.localtime(x['t']))} {LEVEL_ICON.get(x['level'], '')} {x['title']}"
+             + (f" – {x['text'].splitlines()[0]}" if x.get("text") else "") for x in items]
+    send_all(f"{len(items)} Hinweise", "\n".join(lines) + "\n", c)
+
+
+def log_text(levels, hours=24):
+    """Protokoll der gewählten Stufen der letzten Stunden als Text (für den Versand)."""
+    from applog import read
+    import datetime as _dt
+    since = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours)).isoformat(timespec="seconds")
+    want = {x.upper() for x in levels}
+    recs = [x for x in read(limit=20000, level="DEBUG", since=since) if x.get("level") in want]
+    out = [f"HamScanPi – Protokoll der letzten {hours} h ({', '.join(sorted(want))}), {len(recs)} Einträge", ""]
+    for x in reversed(recs):
+        d = x.get("data") or {}
+        out.append(f"{x['ts']}  {x['level']:<5} {x['component']:<10} {x['event']}"
+                   + (("  " + json.dumps(d, ensure_ascii=False)) if d else ""))
+    return "\n".join(out) + "\n"
+
+
+def send_document(subject, filename, content, c=None):
+    """Datei verschicken: Mail-Anhang und/oder Telegram-Dokument (ntfy: als Anhang)."""
+    import urllib.request
+    c = c or cfg()
+    data = content.encode("utf-8") if isinstance(content, str) else content
+    sent = False
+    if c.get("enabled"):
+        msg = EmailMessage()
+        msg["Subject"] = "[HamScanPi] " + subject
+        msg["From"] = c.get("mail_from") or c.get("smtp_user") or "pmsdr@localhost"
+        msg["To"] = c["mail_to"]
+        msg["Date"] = formatdate(localtime=True)
+        msg.set_content(f"{subject}\n\nIm Anhang: {filename}\n")
+        msg.add_attachment(data, maintype="text", subtype="plain", filename=filename)
+        port = int(c.get("smtp_port", 587))
+        s = smtplib.SMTP_SSL(c["smtp_host"], port, timeout=30) if c.get("tls") == "ssl" else smtplib.SMTP(c["smtp_host"], port, timeout=30)
+        if c.get("tls", "starttls") == "starttls":
+            s.starttls()
+        if c.get("smtp_user"):
+            s.login(c["smtp_user"], c.get("smtp_pass", ""))
+        s.send_message(msg)
+        s.quit()
+        sent = True
+    if c.get("push") == "telegram":
+        import uuid
+        tok, chat = str(c.get("tg_token") or "").strip(), str(c.get("tg_chat") or "").strip()
+        b = uuid.uuid4().hex
+        body = (f"--{b}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat}\r\n"
+                f"--{b}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{subject}\r\n"
+                f"--{b}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"{filename}\"\r\n"
+                f"Content-Type: text/plain\r\n\r\n").encode("utf-8") + data + f"\r\n--{b}--\r\n".encode()
+        req = urllib.request.Request(f"https://api.telegram.org/bot{tok}/sendDocument", data=body,
+                                     headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        sent = True
+    elif c.get("push") == "ntfy" and str(c.get("ntfy_url") or "").startswith(("http://", "https://")):
+        headers = {"Filename": filename, "Title": subject}
+        if c.get("ntfy_token"):
+            headers["Authorization"] = "Bearer " + str(c["ntfy_token"])
+        req = urllib.request.Request(str(c["ntfy_url"]).strip(), data=data, headers=headers, method="PUT")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        sent = True
+    if not sent:
+        raise ValueError("Kein Versandweg eingerichtet (Mail oder Push)")
+
+
+def send_log_now(levels=None, hours=24):
+    c = cfg()
+    ls = levels or (c.get("log_send") or {}).get("levels") or ["ERROR", "WARN"]
+    txt = log_text(ls, hours)
+    send_document(f"Protokoll {time.strftime('%d.%m.%Y %H:%M')}", f"hamscanpi-log-{time.strftime('%Y%m%d-%H%M')}.txt", txt, c)
+    return txt.count("\n") - 2
+
+
+def log_send_due():
+    """Tägliches Protokoll (Einstellungen → Benachrichtigungen): einmal je Tag zur gewählten Stunde."""
+    c = cfg()
+    ls = c.get("log_send") or {}
+    if not ls.get("daily") or not (c.get("enabled") or push_on(c)):
+        return
+    lt = time.localtime()
+    if lt.tm_hour != int(ls.get("hour", 7)):
+        return
+    st = _state()
+    today = time.strftime("%Y-%m-%d")
+    if st.get("log_sent_day") == today:
+        return
+    st["log_sent_day"] = today
+    _save_state(st)
+    try:
+        send_log_now(ls.get("levels"), 24)
+    except Exception as e:
+        _log_fail(e, "log_send_failed")
+
+
 def notify_watch(rule_id, label, detail, quiet_min=30, image=None):
     """Meldung für einen Treffer der Beobachtungsliste – höchstens eine je Regel und quiet_min."""
     c = cfg()

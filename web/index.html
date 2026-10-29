@@ -15,6 +15,7 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" id="brandHome" href="/" title="Zur Startseite (Scan)"><img class="brand-icon" src="/static/icon.svg" alt="" width="28" height="28"><span class="brand-name">HamScan<em>Pi</em></span></a>
+    <button type="button" class="notice-pill" id="noticePill" hidden title="Hinweise ansehen (System → Hinweise)">⚠ <span id="noticeCount">0</span></button>
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Verbinde …</span></div>
     <div class="clock"><span class="clock-utc" id="clock">--:--:--</span><span class="clock-sep">UTC</span><span class="clock-local" id="clockLocal">--:--:--</span><span class="clock-sep" id="clockZone">Lokal</span></div>
   </div>
@@ -99,8 +100,9 @@
         <p class="hint" id="intervalHint"></p>
         <div class="save-note" id="scanSaveNote" aria-live="polite"></div>
       </section>
-      <section class="panel" id="panel-sat" hidden>
-        <h2>Satelliten-Überflüge</h2>
+      <section class="panel" id="panel-sat">
+        <h2 class="collapsible"><button type="button" class="collapse-btn" id="satCollapse" aria-expanded="true">▾</button> Satelliten-Überflüge <small class="muted" id="satPreviewTag"></small></h2>
+        <div id="satBody">
         <p class="hint" id="satHint"></p>
         <div class="table-wrap">
           <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th id="satTimeHead">Zeit (Ortszeit)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
@@ -109,6 +111,7 @@
         <div class="row pager-row">
           <label class="check"><input type="checkbox" id="satShowPast"> vergangene zeigen</label>
           <label class="check"><input type="checkbox" id="satShowAll"> alle 24 h</label>
+        </div>
         </div>
         <p class="hint" id="satFoot"></p>
       </section>
@@ -228,12 +231,13 @@
       <button type="button" class="btn btn-small" data-livestep="-1">◀</button>
       <select id="liveStep"><option value="100">100 Hz</option><option value="1000">1 kHz</option><option value="5000">5 kHz</option><option value="8333">8,33 kHz</option><option value="12500" selected>12,5 kHz</option><option value="25000">25 kHz</option><option value="100000">100 kHz</option></select>
       <button type="button" class="btn btn-small" data-livestep="1">▶</button>
-      <label class="field"><span>Verstärkung</span>
+      <label class="field" id="liveGainField"><span>Verstärkung</span>
         <select id="liveGain"><option value="0" selected>automatisch</option><option value="">wie Scan</option><option value="9">9 dB</option><option value="20">20 dB</option><option value="30">30 dB</option><option value="40">40 dB</option><option value="49.6">49,6 dB</option></select>
       </label>
       <label class="field"><span>Rauschsperre / Suchlauf-Schwelle</span><input id="liveSquelch" type="range" min="0" max="40" value="0"></label>
       <label class="field"><span>Lautstärke <small class="muted" id="liveVolTxt">80 %</small></span><input id="liveVol" type="range" min="0" max="150" value="80"></label>
     </div>
+    <p class="hint" id="liveDirectNote" hidden>Kurzwelle mit dem Stick per Direktabtastung (Q-Zweig): der Tuner ist umgangen, darum gibt es keine Verstärkungsregelung. Am Stick muss eine Kurzwellenantenne hängen (Langdraht, Dipol – Discone oder 2-m-Antennen taugen dort nicht).</p>
     <div class="row">
       <button class="btn btn-primary" id="liveStart">Hören</button>
       <button class="btn" id="liveStop" hidden>Stopp</button>
@@ -292,6 +296,15 @@
 </section>
 
 <section class="view" data-view="system" hidden>
+  <section class="panel" id="panel-notices">
+    <h2>Hinweise <small class="muted" id="noticeSummary"></small></h2>
+    <div id="noticeList"><div class="muted">–</div></div>
+    <div class="row pager-row">
+      <label class="check"><input type="checkbox" id="noticeShowOld"> behobene und quittierte zeigen</label>
+      <button type="button" class="btn btn-small" id="noticeAckAll">Alle quittieren</button>
+    </div>
+    <p class="hint">HamScanPi prüft jede Minute Sticks, Speicherkarte, Strom, Uhr, Dienste und Software. Was es selbst beheben kann, behebt es; was du tun kannst, steht dabei – Befehle zum Kopieren auf dem Pi. Welche Hinweise per Mail/Push kommen: Einstellungen → Benachrichtigungen.</p>
+  </section>
   <div class="two-col">
     <div class="col">
       <section class="panel" id="panel-now">
@@ -524,6 +537,40 @@
           <label class="check"><input type="checkbox" name="on_scan_done"> nach jedem Scan</label>
           <label class="inline-num">ab <input name="min_new_hits" type="number" min="0" value="1" inputmode="numeric"> Treffern, fehlgeschlagene Scans immer</label>
         </div>
+          <h3>Hinweise melden</h3>
+          <div class="notify-grid">
+            <div><b class="small">Stufen</b>
+              <label class="check"><input type="checkbox" data-nl="error"> Fehler</label>
+              <label class="check"><input type="checkbox" data-nl="warn"> Warnungen</label>
+              <label class="check"><input type="checkbox" data-nl="info"> Info</label></div>
+            <div><b class="small">Bereiche</b>
+              <label class="check"><input type="checkbox" data-na="hardware"> Stick/Hardware</label>
+              <label class="check"><input type="checkbox" data-na="storage"> Speicherkarte</label>
+              <label class="check"><input type="checkbox" data-na="system"> System</label>
+              <label class="check"><input type="checkbox" data-na="software"> Software</label>
+              <label class="check"><input type="checkbox" data-na="satellite"> Satelliten</label>
+              <label class="check"><input type="checkbox" data-na="scan"> Scan</label></div>
+            <div><b class="small">Immer melden</b>
+              <label class="check"><input type="checkbox" data-ne="stick"> Stick angesteckt, abgezogen, gewechselt</label>
+              <label class="check"><input type="checkbox" data-ne="reboot"> System neu gestartet</label>
+              <label class="check"><input type="checkbox" data-ne="storage"> Probleme mit Speicherkarte</label>
+              <label class="check"><input type="checkbox" data-ne="power"> Unterspannung, Drosselung, Hitze</label>
+              <label class="check"><input type="checkbox" data-ne="update"> Update eingespielt</label></div>
+          </div>
+          <label class="inline-num" title="0 = jeden Hinweis sofort. Sonst Warnungen und Infos gesammelt alle X Minuten in einer Nachricht; Fehler kommen immer sofort.">Sammeln: alle <input data-nd type="number" min="0" max="1440" value="0" inputmode="numeric"> min (0 = sofort)</label>
+          <h3>Protokoll schicken</h3>
+          <div class="notify-rule">
+            <span>Stufen:</span>
+            <label class="check"><input type="checkbox" data-ll="ERROR"> ERROR</label>
+            <label class="check"><input type="checkbox" data-ll="WARN"> WARN</label>
+            <label class="check"><input type="checkbox" data-ll="INFO"> INFO</label>
+            <label class="check"><input type="checkbox" data-ll="DEBUG"> DEBUG</label>
+          </div>
+          <div class="notify-rule">
+            <label class="check"><input type="checkbox" data-ld> täglich</label>
+            <label class="inline-num">um <input data-lh type="number" min="0" max="23" value="7" inputmode="numeric"> Uhr (letzte 24 h als Datei)</label>
+            <button type="button" class="btn btn-small" id="logSendNow">Jetzt schicken</button>
+          </div>
           <div class="actions"><button type="submit" class="btn btn-primary">Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button><button type="button" class="btn" id="pushTest">Test-Push senden</button></div>
           <div class="save-note" id="notifyNote"></div>
           <p class="hint">Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.</p>

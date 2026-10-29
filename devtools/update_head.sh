@@ -184,6 +184,14 @@ for u in hamscanpi-web hamscanpi-scheduler; do echo "  $u: $(systemctl is-active
 for i in 1 2 3 4 5 6 7 8; do curl -fs -m 3 "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && break; sleep 1; done
 curl -fs -m 3 "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && ok "Dashboard antwortet auf Port $PORT" || warn "Dashboard antwortet nicht – journalctl -u hamscanpi-web -n 30"
 
+# Hinweis „Update eingespielt“ (Benachrichtigung je nach Einstellung, Ereignisart „update“)
+( cd "$NEW" && python3 - "$(cat VERSION 2>/dev/null)" "${HSP_MSG:-}" <<'PYN' ) >/dev/null 2>&1 || true
+import sys
+sys.path.insert(0, "bin")
+import notices
+notices.event("update", "info", "software", f"Update eingespielt: {sys.argv[1]}", sys.argv[2] if len(sys.argv) > 2 else "")
+PYN
+
 bold "5/5 Git"
 cd "$NEW"
 # eigene GitHub-Adresse statt Platzhalter in README und Kennung des Bahndatenabrufs

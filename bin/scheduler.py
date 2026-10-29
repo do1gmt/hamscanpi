@@ -188,6 +188,21 @@ def restore_if_pending():
     os._exit(0)                                              # Scheduler neu (systemd)
 
 
+_health = {"t": 0.0}
+
+
+def health_tick():
+    """Einmal je Minute: Gesundheitsprüfungen (Neustart, Sticks, Speicherkarte, Strom, Dienste, Software)."""
+    if time.time() - _health["t"] < 60:
+        return
+    _health["t"] = time.time()
+    try:
+        import health
+        health.run_all()
+    except Exception as e:
+        applog("WARN", "scheduler", "health_failed", error=f"{type(e).__name__}: {e}")
+
+
 WATCHDOG_S = 600              # Überflug-Prozess so lange nach dem geplanten Ende noch da -> beenden
 
 
@@ -217,6 +232,14 @@ def sat_watchdog():
         w[pid] = time.time()
         applog("ERROR", "scheduler", "satellite_watchdog", pid=pid, over_min=round(over / 60),
                action="SIGTERM", hint="Überflug-Prozess lief weit über das geplante Ende – Stick hing")
+        try:
+            import notices as NT
+            NT.event("watchdog", "warn", "satellite", "Hängender Überflug beendet",
+                     f"Eine Satellitenaufnahme lief {round(over / 60)} min über ihr Ende hinaus (Stick lieferte "
+                     "keine Daten mehr) und wurde beendet, damit Scans und Überflüge weiterlaufen.",
+                     fix="Kommt das öfter vor: USB-Kabel/Netzteil prüfen, Stick an einen USB-2-Port.")
+        except Exception:
+            pass
         try:
             os.killpg(pid, _sig.SIGTERM)
         except OSError:
@@ -442,6 +465,7 @@ while True:
         check_started_passes()
         sat_watchdog()
         restore_if_pending()
+        health_tick()
         for key, (bp, why) in list(_sat["blocked"].items()):       # Fenster vorbei, nie gestartet
             if key in _sat["started"]:
                 del _sat["blocked"][key]
