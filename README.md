@@ -73,8 +73,8 @@ PMSDR receiver (IW3AUT) for shortwave.
 
 | | |
 |---|---|
-| ![A hit with spectrum, audio player and APRS decode](docs/screenshots/hits.png) | ![Live listening with waterfall](docs/screenshots/live.png) |
-| Hit card: spectrum, audio with tuning and noise reduction, decoded APRS packets | Live listening: FM broadcast with RDS (station, programme type, RT+, AF) and waterfall |
+| ![A hit with spectrum, audio player and APRS decode](docs/screenshots/hits.png) | ![Live listening on 10 m FT8 with waterfall and live decodes](docs/screenshots/live.png) |
+| Hit card: spectrum, audio with tuning and noise reduction, decoded APRS packets | Live listening: 10 m FT8 via the stick (direct sampling) with level meter, waterfall and live decodes (FT8/FT4, APRS, POCSAG, CW, RTTY, SSTV) |
 | ![Readable event log](docs/screenshots/log.png) | ![Phone: satellite passes and live listening (German UI)](docs/screenshots/mobile.png) |
 | Event log with the monitored frequencies of every scan | On the phone (here with the German UI) |
 | ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |

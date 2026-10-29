@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.43 – 2026-10-30
+
+- **Continuous watch (Live without a browser).** New tick box "Continuous watch" with optional end time in Live:
+  reception keeps running with the decoders only when no browser is listening (before: Live ended 90 s after
+  the last listener) – e.g. FT8 on 14.074 all night to PSK Reporter, or APRS on 144.800. Stored on the Pi
+  (`data/live_state.json`): restarted automatically after a web server restart, ended at the end time or with
+  Stop. **Satellite passes** no longer get skipped: the scheduler asks for the stick (`data/live_yield.json`),
+  the watch pauses, the pass is recorded, then the watch continues on the same frequency. Scans pause while the
+  watch runs. Header shows "Continuous watch 14.074 USB · until 07:00" (or "paused (ISS)"); a notice is shown
+  while it runs.
+- README: new Live screenshot (10 m FT8 via the stick with live decodes).
+- Self-test section 27.
+
 ## 1.7.42 – 2026-10-30
 
 - **Live no longer stutters after starting.** The automatic gain (stick) went up one step per second – and every

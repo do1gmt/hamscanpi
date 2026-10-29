@@ -54,7 +54,7 @@ a { color: var(--accent); }
 .row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; margin-top: .6rem; }
 .field { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; color: var(--muted); }
 .field.grow { flex: 1 1 160px; }
-select, input[type=search], input[type=text], input[type=number], input[type=password], input[type=email] { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; min-height: var(--tap); padding: .4rem .7rem; width: 100%; }
+select, input[type=search], input[type=text], input[type=number], input[type=password], input[type=email], input[type=time] { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; min-height: var(--tap); padding: .4rem .7rem; width: 100%; }
 .check { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .4rem; min-height: var(--tap); color: var(--muted); font-size: .9rem; }
 .check input[type=number] { width: 5em; min-height: 36px; padding: .2rem .4rem; }
 .check input { width: 20px; height: 20px; }
@@ -602,3 +602,4 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .live-dec-list { max-height: min(60vh, 520px); overflow-y: auto; font-size: .88rem; font-family: ui-monospace, monospace; }
 .live-dec-ev { padding: .15rem 0; border-bottom: 1px solid var(--line); word-break: break-word; }
 .live-sstv { max-width: 320px; width: 100%; image-rendering: auto; border-radius: 6px; margin-top: .3rem; }
+input[type=time] { color-scheme: dark; min-width: 7.5rem; }

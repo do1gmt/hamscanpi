@@ -519,7 +519,7 @@ for conj in (False, True):
         S = np.abs(np.fft.fftshift(np.fft.fft(z[:48000])))
         return round(np.fft.fftshift(np.fft.fftfreq(48000, 1 / 48000))[S.argmax()])
     i, q = dev.capture(2); assert abs(len(i) - 98400) < 200 and peak(i, q) == 1000, (len(i), peak(i, q))
-    i, q = dev.capture(14); assert len(i) == 14 * 48000 and peak(i, q) == 1000, (len(i), peak(i, q))
+    i, q = dev.capture(14); assert abs(len(i) - 14 * 48000) <= 50 and peak(i, q) == 1000, (len(i), peak(i, q))   # ±1 Wert je Block durch Rundung
 i, q, T = dev.capture_slot(15.0, lead_s=0.5); assert len(i) == 15 * 48000 and T % 15 == 0
 # Plan: mit Kurzwellen-fähigem Stick kommen die gewählten Kurzwellenbänder als „rtlhf“ dazu
 D.hf_via_rtl = lambda: True
@@ -763,6 +763,35 @@ cls = [c for c in vars(LV).values() if isinstance(c, type) and hasattr(c, "_agc_
 o = cls.__new__(cls); o._agc_hold = 0.0
 g1 = o._agc_step(29.7, 0.0, 10)                          # leise: ein großer Schritt statt vieler kleiner
 assert g1 >= 40 and o._agc_step(g1, 0.0, 10) == g1       # danach 10 s Ruhe (kein Neustart je Sekunde)
+PY
+echo "== 27 Dauerwache (Live ohne Browser)"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Dauerwache: Pause für Überflug und weiter, Neustart des Webservers, Endzeit" || bad "Dauerwache"
+import json, time
+import webapp as W
+class Fake:
+    def __init__(s, f, m): s.freq_hz = s.active_hz = f; s.mode = m; s.running = True; s.device = "rtlsdr"; s.keep_alive = False; s.watch_until = 0
+    def stop(s): s.running = False
+    class dec:
+        @staticmethod
+        def set_kind(k): pass
+starts = []
+def fake_start(d):
+    W._live = Fake(d["freq_hz"], d["mode"]); starts.append(d["freq_hz"])
+W.live_start = fake_start
+W.scan_running = lambda: False
+W.live_start({"freq_hz": 14074000, "mode": "usb"})
+W.watch_set(True, 0)
+st = json.load(open("../data/live_state.json"))
+assert st["watch"]["on"] and st["watch"]["freq_hz"] == 14074000
+W.LIVE_YIELD.write_text(json.dumps({"until": time.time() + 1.5, "sat": "ISS"}))
+W.watch_tick(); assert W._live is None                                   # Stick für den Überflug frei
+time.sleep(1.7); W.watch_tick()
+assert W._live and W._live.freq_hz == 14074000 and W._live.keep_alive and not W.LIVE_YIELD.exists()
+W._live = None; W._live_state["data"] = None
+W.watch_tick(); assert W._live and W._live.keep_alive                    # nach Neustart des Webservers wieder da
+W.watch_set(True, time.time() - 1); W.watch_tick()
+assert W._watch_cfg() is None and not W._live                            # Endzeit erreicht: aus
+assert starts == [14074000] * 3, starts
 PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

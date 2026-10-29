@@ -39,6 +39,14 @@ def interval_minutes():
         return DEFAULT_INTERVAL
 
 
+def live_watch_on():
+    """Läuft Live als Dauerwache (ohne Browser)? Dann wird der Stick für Überflüge freigegeben statt sie auszulassen."""
+    try:
+        return bool((json.loads((BASE / "data" / "live_state.json").read_text(encoding="utf-8")).get("watch") or {}).get("on"))
+    except Exception:
+        return False
+
+
 def live_active_now():
     lk = BASE / "data" / "live.lock"
     return lk.exists() and (time.time() - lk.stat().st_mtime) < 120
@@ -336,6 +344,13 @@ def start_sat_pass(p):
     import satellites as SAT
     if p["key"] in _sat["started"]:
         return True
+    if live_active_now() and live_watch_on():
+        # Dauerwache: um den Stick bitten (der Webserver hält Live an und macht nach dem Überflug weiter)
+        yf = BASE / "data" / "live_yield.json"
+        if not yf.exists():
+            yf.write_text(json.dumps({"until": float(p["los"]) + 30, "sat": p["name"]}), encoding="utf-8")
+            applog("INFO", "scheduler", "satellite_live_yield", sat=p["name"])
+        return False                                         # in 10 s erneut – dann ist der Stick frei
     if live_active_now():
         _sat["started"].add(p["key"])
         applog("WARN", "scheduler", "satellite_skipped", sat=p["name"], reason="Live-Empfang läuft")

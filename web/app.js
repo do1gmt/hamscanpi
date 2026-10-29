@@ -454,7 +454,11 @@
     try { s = await api('/api/status'); } catch (e) { setPill('Server nicht erreichbar', 'error'); return; }
     if (s.hardware && settings) hardwareChanged(s.hardware);
     const busy = s.state === 'running' || s.state === 'queued';
-    if (s.live_active && !busy) { setPill('Live-Empfang', 'running'); }
+    const lw = s.live_watch;
+    if (lw && !busy) {
+      const end = lw.until ? ' · bis ' + new Date(lw.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' }) : '';
+      setPill(lw.paused_for ? `Dauerwache pausiert (${lw.paused_for})` : `Dauerwache ${(lw.freq_hz / 1e6).toFixed(3)} ${String(lw.mode || '').toUpperCase()}${end}`, 'running');
+    } else if (s.live_active && !busy) { setPill('Live-Empfang', 'running'); }
     $('scanTitle').textContent = humanState(s);
     $('scanMsg').textContent = s.message || '';
     $('progressBar').style.width = (busy ? s.progress : (s.state === 'done' ? 100 : 0)) + '%';
@@ -463,7 +467,7 @@
     const sm = $('scanMeter'), mi = busy && s.meter && s.meter.items && s.meter.items.length ? s.meter.items : null;
     sm.innerHTML = mi ? meterHTML(mi, (s.meter.age_s || 0) > 10)
       : meterHTML([{ label: busy ? 'Pegel – noch keine Messung' : 'Pegel – kein Scan aktiv', db: 0, hist: [] }], true);
-    if (!(s.live_active && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
+    if (!((s.live_active || s.live_watch) && !busy)) setPill(busy ? `${humanState(s)} ${s.progress}%` : humanState(s), s.state === 'error' ? 'error' : busy ? 'running' : (s.state === 'done' ? 'done' : ''));
     const btn = $('scanNow'); btn.disabled = busy; btn.textContent = busy ? 'Scan läuft …' : 'Jetzt scannen';
     lastStatus = s;
     const pend = (s.hardware && s.hardware.rtlsdr && s.hardware.rtlsdr.pending) || 0;
@@ -924,6 +928,10 @@
     $('liveGainField').hidden = !!(on && st.direct);
     renderRds(on ? st.rds : null);
     renderLiveDec(on ? st.decode : null);
+    if (on && document.activeElement !== $('liveWatch')) $('liveWatch').checked = !!st.watch;
+    if (on && st.watch && st.watch.until && document.activeElement !== $('liveWatchUntil')) {
+      const u = new Date(st.watch.until * 1000); $('liveWatchUntil').value = `${String(u.getHours()).padStart(2, '0')}:${String(u.getMinutes()).padStart(2, '0')}`;
+    }
   }
   function liveEnsureCtx() {
     // muss synchron im Klick passieren, sonst bleibt der Browser stumm
@@ -939,6 +947,7 @@
     try {
       const d = await post('/api/live/start', body);
       liveSetUI(Object.assign({ active: true }, d.live));
+      if ($('liveWatch').checked) liveWatchSend(true);
       if (!body.preset && !body.seek) liveRemember(body.freq_hz, body.mode);
       await liveAudio();
     } catch (e) {
@@ -1371,6 +1380,12 @@
   // RDS-Anzeige (UKW, „FM breit“)
   // ---------- Live-Dekoder (FT8/FT4, APRS/Packet, POCSAG) und Mitschnitt ----------
   let liveDecSeq = -1;
+  async function liveWatchSend(on) {
+    try { await post('/api/live/watch', { on, until: $('liveWatchUntil').value }); toast(on ? 'Dauerwache an – Live läuft ohne Browser weiter' : 'Dauerwache aus'); }
+    catch (e) { $('liveWatch').checked = false; toast(e.message); }
+  }
+  $('liveWatch').addEventListener('change', e => { if (live.active || !e.target.checked) liveWatchSend(e.target.checked); });
+  $('liveWatchUntil').addEventListener('change', () => { if ($('liveWatch').checked && live.active) liveWatchSend(true); });
   function renderLiveDec(d) {
     $('liveRec').disabled = !d;
     if (!d) { $('liveDecNote').textContent = ''; return; }

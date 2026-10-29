@@ -50,6 +50,8 @@ class LiveSession:
         self.pmsdr = None
         self._pm_center = None                 # Mitte des aktuellen PMSDR-Fensters (für schnelles Abstimmen)
         self.restart_wanted = threading.Event()
+        self.keep_alive = False                # Dauerwache: ohne Browser weiterlaufen (nur Dekoder)
+        self.watch_until = 0.0                 # Dauerwache endet um (Unixzeit, 0 = ohne Ende)
         import live_decode
         self.dec = live_decode.LiveDecoders()          # FT8/FT4, APRS/Packet, POCSAG, Mitschnitt
 
@@ -198,6 +200,7 @@ class LiveSession:
             "direct": bool(getattr(self, "direct", False)),           # Kurzwelle per Direktabtastung
             "text": self.status_text, "listeners": len(self.subscribers), "rate": OUT_RATE,
             "decode": self.dec.status() if getattr(self, "dec", None) else None,
+            "watch": {"on": bool(self.keep_alive), "until": self.watch_until} if self.keep_alive else None,
         }
 
     # ---------------- Hauptschleife
@@ -207,7 +210,7 @@ class LiveSession:
         try:
             while self.running:
                 # Ohne Zuhoerer (Browser weg) nach 90 s von selbst beenden
-                if not self.subscribers:
+                if not self.subscribers and not self.keep_alive:
                     idle_since = idle_since or time.time()
                     if time.time() - idle_since > 90:
                         self.status_text = "beendet – kein Zuhörer mehr"
@@ -370,7 +373,7 @@ class LiveSession:
         while self.running and not self.restart_wanted.is_set():
             if max_s is not None and time.time() - t_start > max_s:
                 break
-            if not self.subscribers:
+            if not self.subscribers and not self.keep_alive:
                 idle_t = idle_t or time.time()
                 if time.time() - idle_t > 90:
                     self.running = False
@@ -522,7 +525,7 @@ class LiveSession:
             f = lo if d > 0 else hi
         idle_t = None
         while self.running and not self.restart_wanted.is_set():
-            if not self.subscribers:
+            if not self.subscribers and not self.keep_alive:
                 idle_t = idle_t or time.time()
                 if time.time() - idle_t > 90:
                     self.running = False

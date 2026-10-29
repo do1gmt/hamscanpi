@@ -512,6 +512,9 @@ def load_status():
     st["scan_interval_minutes"] = settings["scan_interval_minutes"]
     st["scan_running"] = scan_running()
     st["live_active"] = LIVE.live_active()
+    w = _watch_cfg()
+    st["live_watch"] = ({"freq_hz": w.get("freq_hz"), "mode": w.get("mode"), "until": w.get("until"),
+                         "paused_for": _watch.get("sat") if _watch.get("paused_until") else None} if w else None)
     try:
         st["hardware"] = DEV.detect_hardware()
     except Exception:
@@ -1461,6 +1464,103 @@ def live_presets():
     return out
 
 
+# ------------------------------------------------------------------ Dauerwache (Live ohne Browser)
+# Gespeichert in data/live_state.json („watch“): Frequenz, Betriebsart, Dekoder, Endzeit. Ein Wächter-Thread
+#  - startet die Dauerwache nach einem Neustart des Webservers wieder,
+#  - räumt den Stick für einen Satellitenüberflug (der Scheduler schreibt data/live_yield.json) und macht
+#    danach auf derselben Frequenz weiter,
+#  - beendet sie zur eingestellten Uhrzeit.
+LIVE_YIELD = BASE / "data" / "live_yield.json"
+_watch = {"paused_until": 0.0, "sat": None}
+
+
+def _watch_cfg():
+    w = live_state().get("watch") or {}
+    return w if w.get("on") else None
+
+
+def watch_set(on, until=0.0):
+    """Dauerwache an/aus für den laufenden Live-Empfang."""
+    import notices as NT
+    with _live_lock:
+        if on:
+            if not (_live and _live.running):
+                raise ValueError("Erst Live starten, dann die Dauerwache einschalten")
+            _live.keep_alive, _live.watch_until = True, float(until or 0)
+            w = {"on": True, "freq_hz": int(_live.active_hz or _live.freq_hz), "mode": _live.mode, "device": _live.device,
+                 "until": float(until or 0), "kind": _live_dec_kind[0], "gain": getattr(_live, "gain", None),
+                 "since": time.time()}
+        else:
+            if _live:
+                _live.keep_alive = False
+            w = {"on": False}
+    live_state()["watch"] = w
+    _live_state["dirty"] = True
+    _live_state_write()                                      # sofort: überlebt einen Neustart des Webservers
+    if on:
+        end = f" bis {time.strftime('%H:%M', time.localtime(until))}" if until else ""
+        NT.raise_("live_watch", "info", "scan", f"Dauerwache {w['freq_hz'] / 1e6:.4f} MHz {w['mode'].upper()}{end}",
+                  "Live läuft ohne Browser weiter (nur die Dekoder). Scans ruhen solange; Satellitenüberflüge "
+                  "unterbrechen die Dauerwache kurz, danach geht es auf derselben Frequenz weiter.",
+                  fix="Beenden: Live → Stopp oder den Haken „Dauerwache“ entfernen.", notify=False)
+        APPLOG.log("INFO", "live", "watch_on", freq_hz=w["freq_hz"], mode=w["mode"], until=until or None)
+    else:
+        NT.clear("live_watch", "beendet")
+        APPLOG.log("INFO", "live", "watch_off")
+    return w
+
+
+def _watch_start(w):
+    """Live mit den gespeicherten Einstellungen der Dauerwache starten (nach Überflug/Neustart)."""
+    global _live
+    live_start({"freq_hz": w["freq_hz"], "mode": w["mode"], "device": w.get("device"),
+                "gain": w.get("gain") if w.get("gain") not in (None, "") else ""})
+    with _live_lock:
+        if _live:
+            _live.keep_alive, _live.watch_until = True, float(w.get("until") or 0)
+            if w.get("kind"):
+                _live.dec.set_kind(w["kind"])
+
+
+def watch_loop_live():
+    """Wächter der Dauerwache (alle 3 s)."""
+    time.sleep(15)
+    while True:
+        watch_tick()
+        time.sleep(3)
+
+
+def watch_tick():
+    if True:
+        try:
+            w = _watch_cfg()
+            now = time.time()
+            if w:
+                running = bool(_live and _live.running)
+                if w.get("until") and now >= float(w["until"]):          # Ende erreicht
+                    watch_set(False)
+                    live_stop()
+                elif LIVE_YIELD.exists():                                 # Satellit will den Stick
+                    y = read_json(LIVE_YIELD, {}) or {}
+                    if running:
+                        _watch["paused_until"], _watch["sat"] = float(y.get("until", now + 900)), y.get("sat")
+                        APPLOG.log("INFO", "live", "watch_yield", sat=y.get("sat"))
+                        with _live_lock:
+                            if _live:
+                                _live.stop()
+                                globals()["_live"] = None
+                    elif now > float(y.get("until", 0)) and not scan_running():
+                        LIVE_YIELD.unlink(missing_ok=True)                # Überflug vorbei: weiter
+                        _watch["paused_until"] = 0.0
+                        _watch_start(w)
+                        APPLOG.log("INFO", "live", "watch_resumed", sat=_watch.get("sat"))
+                elif not running and not scan_running():                 # nach Neustart des Webservers
+                    _watch_start(w)
+                    APPLOG.log("INFO", "live", "watch_restarted")
+        except Exception as e:
+            APPLOG.log("WARN", "live", "watch_loop_failed", error=f"{type(e).__name__}: {e}")
+
+
 def _agc_key(freq_hz):
     return str(int(freq_hz) // 10_000_000)
 
@@ -1665,8 +1765,13 @@ def live_start(data):
         return st
 
 
-def live_stop():
+def live_stop(keep_watch=False):
     global _live
+    if not keep_watch and _watch_cfg():
+        try:
+            watch_set(False)
+        except Exception:
+            pass
     with _live_lock:
         if _live:
             live_state_update({"freq_hz": int(_live.active_hz or _live.freq_hz), "mode": _live.mode}, force=True)
@@ -2179,6 +2284,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if path == "/api/live/start":
                 return self.send_json({"ok": True, "live": live_start(data)})
+            if path == "/api/live/watch":
+                until = 0.0
+                u = str(data.get("until") or "").strip()
+                if u:                                                   # „07:00“ = nächstes Mal 07:00 Uhr
+                    hh, mm = (int(x) for x in u.split(":"))
+                    lt = time.localtime()
+                    t = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh, mm, 0, 0, 0, -1))
+                    until = t if t > time.time() + 60 else t + 86400
+                w = watch_set(bool(data.get("on")), until)
+                return self.send_json({"ok": True, "watch": w})
             if path == "/api/live/decoder":
                 kind = str(data.get("kind", "auto"))
                 with _live_lock:
@@ -2347,6 +2462,7 @@ def main():
                 APPLOG.log("WARN", "watch", "watch_failed", error=f"{type(e).__name__}: {e}")
             time.sleep(60)
     threading.Thread(target=watch_loop, daemon=True).start()
+    threading.Thread(target=watch_loop_live, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()
