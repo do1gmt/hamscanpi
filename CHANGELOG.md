@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.31 – 2026-10-30
+
+- Header: without open notices the status pill and the clocks jumped to the left next to the logo (CSS rule for
+  the notice counter also applied while it was hidden).
+- Translations: notification settings ("Collect every … min", "Levels:", "at … o’clock (last 24 h as a file)"),
+  "HF/VHF/UHF" in the device box, "Probe satellite" in the satellite list.
+- New README screenshots: scan page (pass preview, distance, HF-capable stick) and settings (notices and log
+  sending).
+
 ## 1.7.30 – 2026-10-30
 
 - **Saving a stick now shows it.** "✓ saved" appears right next to the button of that stick (the common note

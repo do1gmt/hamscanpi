@@ -577,7 +577,7 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 /* Hinweise */
 .notice-pill { margin-left: auto; margin-right: .4rem; background: var(--panel-2); color: var(--amber); border: 1px solid var(--amber); border-radius: 999px; padding: .2rem .65rem; font: inherit; font-size: .85rem; cursor: pointer; }
 .notice-pill.bad { color: var(--red); border-color: var(--red); }
-.notice-pill + .status-pill { margin-left: 0; }
+.notice-pill:not([hidden]) + .status-pill { margin-left: 0; }   /* nur wenn der Zähler sichtbar ist – sonst rutschte alles nach links */
 .notice { border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 8px; padding: .55rem .7rem; margin-bottom: .5rem; background: var(--panel-2); }
 .notice.error { border-left-color: var(--red); } .notice.warn { border-left-color: var(--amber); } .notice.info { border-left-color: var(--accent); }
 .notice.done, .notice.acked { opacity: .55; }
