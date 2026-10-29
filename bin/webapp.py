@@ -1992,6 +1992,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(SYSMON.live())
             if path == "/api/sticks":
                 return self.send_json(STK.overview())
+            if path == "/api/pskreporter":
+                import pskreporter as PSK
+                st = load_settings()
+                return self.send_json(dict(PSK.last_report(), enabled=bool(st.get("pskreporter")),
+                                           ready=bool(st.get("my_call") and st.get("my_locator"))))
             if path == "/api/notices":
                 import notices as NT
                 return self.send_json(NT.listing())

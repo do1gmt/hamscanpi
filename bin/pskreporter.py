@@ -109,6 +109,12 @@ def dedupe(spots):
     return sorted(best.values(), key=lambda s: s["t"])
 
 
+def last_report():
+    """Zuletzt an PSK Reporter verschickt (Zeit, Zahl, Spots) und Zustand (eingeschaltet, offline)."""
+    st = _state()
+    return {"last": st.get("last_report"), "offline_since": st.get("offline_since"), "sent": st.get("sent")}
+
+
 def _state():
     try:
         return json.loads(STATE.read_text(encoding="utf-8"))
@@ -172,6 +178,11 @@ def report(db, call, locator, antenna="", log=None, now=None, send=True):
             s.close()
     if st.pop("offline_since", None) and log:
         log("INFO", "pskreporter_resumed", spots=len(spots))
+    # für das Dashboard: was zuletzt verschickt wurde (System → PSK Reporter)
+    st["last_report"] = {"t": now, "spots": len(spots), "packets": len(msgs), "receiver": call, "locator": locator,
+                         "software": software(),
+                         "list": [{k: sp.get(k) for k in ("call", "freq_hz", "mode", "snr", "grid", "t", "band", "antenna")}
+                                  for sp in sorted(spots, key=lambda x: -x["t"])[:30]]}
     st["seq"] = int(st.get("seq", 0)) + len(msgs)
     st["last_heard_id"] = int(rows[-1][0])
     STATE.write_text(json.dumps(st), encoding="utf-8")

@@ -1310,7 +1310,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1824,6 +1824,26 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- System: zuletzt an PSK Reporter gemeldet ----------
+  async function loadPsk() {
+    let d; try { d = await api('/api/pskreporter'); } catch (e) { return; }
+    const L = d.last, utc = t => new Date(t * 1000).toISOString().slice(11, 19);
+    const sinceTxt = t => { const m = Math.round((Date.now() / 1000 - t) / 60); return m < 60 ? `vor ${m} min` : `vor ${Math.round(m / 60)} h`; };
+    $('pskWhen').textContent = L ? `· ${new Date(L.t * 1000).toLocaleString(I18N.locale, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })} (${sinceTxt(L.t)}) · ${L.spots} Spots` : '';
+    $('pskList').innerHTML = L && L.list && L.list.length ? L.list.slice(0, 15).map(x => `<tr><td><b class="no-i18n">${esc(x.call)}</b></td>`
+      + `<td class="mono-num">${(x.freq_hz / 1e6).toFixed(6)}</td><td>${esc(x.band || '')}</td><td>${esc(x.mode)}</td>`
+      + `<td class="mono-num">${x.snr != null ? (x.snr > 0 ? '+' : '') + Math.round(x.snr) + ' dB' : '–'}</td><td class="no-i18n">${esc(x.grid || '')}</td>`
+      + `<td class="mono-num">${utc(x.t)}</td><td>${esc(x.antenna || '')}</td></tr>`).join('')
+      : '<tr><td colspan="8" class="muted">Noch nichts gemeldet.</td></tr>';
+    const parts = [];
+    if (!d.enabled) parts.push('Melden ist aus – Einstellungen → Station → „FT8/FT4-Spots an PSK Reporter melden“.');
+    else if (!d.ready) parts.push('Rufzeichen und Locator fehlen (Einstellungen → Station).');
+    if (d.offline_since) parts.push(`Kein Internet seit ${new Date(d.offline_since * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })} – die Spots werden nachgemeldet.`);
+    if (L) parts.push(`Empfänger ${L.receiver} · ${L.locator} · ${L.software} · ${L.packets} Paket(e). Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
+    $('pskHint').textContent = parts.join(' ');
+  }
+  setInterval(() => { if (sysVisible()) loadPsk(); }, 60000);
+
   // ---------- System: Sicherung (bin/backup.py) ----------
   const fmtSize = b => b >= 1e9 ? (b / 1e9).toFixed(1).replace('.', ',') + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
   function bkLink() {

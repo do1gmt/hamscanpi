@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.44 – 2026-10-30
+
+- **System → PSK Reporter – last report:** below the Raspberry Pi card, the newest 15 spots of the last report
+  (callsign, frequency, band, mode, SNR, locator, time heard in UTC, antenna), when it was sent, how many spots
+  and packets, receiver/locator/software; notes if reporting is off, callsign/locator are missing or the internet
+  is down. The last report is kept in `data/pskreporter_state.json`.
+
 ## 1.7.43 – 2026-10-30
 
 - **Continuous watch (Live without a browser).** New tick box "Continuous watch" with optional end time in Live:
