@@ -330,7 +330,42 @@ def check_software(st):
         pass
 
 
-CHECKS = (check_reboot, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def internet_ok(timeout=3.0):
+    """Erreicht der Pi das Internet? TCP-Verbindung zu öffentlichen Diensten (DNS/HTTPS) – eine genügt."""
+    import socket
+    for host, port in (("1.1.1.1", 443), ("8.8.8.8", 53), ("9.9.9.9", 443)):
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def check_internet(st):
+    """Kein Internet: nach 15 min ein Hinweis (verschwindet von selbst); Ende des Ausfalls im Protokoll.
+    Ohne Netz laufen Scan, Live, Satelliten und Dekoder weiter – es fehlen PSK Reporter, Mail/Push (werden
+    nachgeschickt), Bahndaten und die Zeitsynchronisation."""
+    if internet_ok():
+        since = st.pop("offline_since", None)
+        if since:
+            NT.clear("internet")
+            try:
+                from applog import log
+                log("INFO", "health", "internet_back", offline_min=round((time.time() - since) / 60))
+            except Exception:
+                pass
+        return
+    st.setdefault("offline_since", time.time())
+    if time.time() - st["offline_since"] >= 900:
+        NT.raise_("internet", "warn", "system",
+                  f"Kein Internet seit {time.strftime('%H:%M', time.localtime(st['offline_since']))}",
+                  "Scan, Live, Satelliten und Dekoder laufen weiter. Es fehlen: PSK Reporter (die Spots der letzten Stunde "
+                  "werden nachgemeldet), Mail/Push (werden nachgeschickt), neue Bahndaten und die Zeitsynchronisation.",
+                  fix="Router, WLAN bzw. Netzwerkkabel prüfen.", notify=False)
+
+
+CHECKS = (check_reboot, check_internet, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 
@@ -349,6 +384,8 @@ def run_all():
     _save(st)
     try:
         import notify as N
+        if not st.get("offline_since"):
+            N.flush_outbox()                                   # ohne Internet aufgehobene Nachrichten
         N.flush_digest()
         N.log_send_due()
     except Exception:

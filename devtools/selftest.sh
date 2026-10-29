@@ -709,5 +709,49 @@ NT.FILE = d / "n.json"; NT.LOCK = d / "n.lock"
 r = NT.raise_("t", "warn", "hardware", "Haupt-Stick fehlt", "Noch 5.0 GB frei.", fix="Stick anstecken oder USB-Verbindung prüfen.", notify=False)
 assert r["en"] == {"title": "Main stick missing", "detail": "5.0 GB free.", "fix": "Plug in the stick or check the USB connection."}, r["en"]
 PY
+echo "== 26 Ohne Internet: Nachrichten nachschicken, PSK Reporter wartet"
+(cd bin && python3 - <<'PY') && ok "Mail/Push ohne Netz aufgehoben und verspätet nachgeschickt, PSK Reporter warnt einmal und meldet nach" || bad "Ohne Internet"
+import json, socket, sqlite3, tempfile, time, urllib.error
+from pathlib import Path
+import notify as N, pskreporter as PSK
+d = Path(tempfile.mkdtemp())
+N.STATE = d / "n.json"
+N.cfg = lambda: {"push": "telegram", "tg_token": "x", "tg_chat": "1"}
+sent, online = [], [False]
+def push(subject, text, c, image=None, priority="default"):
+    if not online[0]:
+        raise urllib.error.URLError(socket.gaierror(-3, "Temporary failure in name resolution"))
+    sent.append(subject)
+N.send_push = push
+N.send_all("Testmeldung", "Text", N.cfg())
+assert len(json.load(open(N.STATE))["outbox"]) == 1 and not sent
+assert N.flush_outbox() == 0 and len(json.load(open(N.STATE))["outbox"]) == 1      # noch offline: bleibt liegen
+online[0] = True
+assert N.flush_outbox() == 1 and sent[0].startswith("Testmeldung (verspätet, eigentlich") and not json.load(open(N.STATE))["outbox"]
+def push_bad(*a, **k):                                   # falsche Einstellung (kein Netzfehler): nicht aufheben
+    raise urllib.error.HTTPError("u", 401, "Unauthorized", {}, None)
+N.send_push = push_bad
+N.send_all("X", "Y", N.cfg())
+assert not json.load(open(N.STATE)).get("outbox")
+PSK.STATE = d / "p.json"
+db = sqlite3.connect(":memory:")
+db.execute("CREATE TABLE heard (id INTEGER PRIMARY KEY, peak_id INTEGER, time TEXT, call TEXT, band TEXT, freq_hz REAL, mode TEXT, grid TEXT, snr REAL, info TEXT)")
+logs = []
+lg = lambda level, event, **kw: logs.append(event)
+now = time.time()
+db.execute("INSERT INTO heard (time, call, freq_hz, mode) VALUES ('2026-01-01T00:00:00+00:00', 'OLD1AB', 7074000, 'FT8')")
+PSK.report(db, "DO1GMT", "JN59HH", log=lg, now=now)                                  # erster Lauf: Startpunkt
+from datetime import datetime, timezone
+db.execute("INSERT INTO heard (time, call, freq_hz, mode, grid, snr) VALUES (?,?,?,?,?,?)",
+           (datetime.fromtimestamp(now + 400, timezone.utc).isoformat(), "DL1ABC", 14075000, "FT8", "JO31", -10))
+real = socket.getaddrinfo
+socket.getaddrinfo = lambda *a, **k: (_ for _ in ()).throw(socket.gaierror(-3, "offline"))
+assert PSK.report(db, "DO1GMT", "JN59HH", log=lg, now=now + 400) == 0
+assert PSK.report(db, "DO1GMT", "JN59HH", log=lg, now=now + 800) == 0
+assert logs.count("pskreporter_offline") == 1, logs
+socket.getaddrinfo = lambda *a, **k: [(socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("127.0.0.1", 9))]
+assert PSK.report(db, "DO1GMT", "JN59HH", log=lg, now=now + 1200) == 1 and "pskreporter_resumed" in logs, logs
+socket.getaddrinfo = real
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

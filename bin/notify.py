@@ -135,18 +135,90 @@ def send_push(title, text, c, image=None, priority="default"):
             r.read()
 
 
+OUTBOX_MAX = 50                    # so viele Nachrichten werden ohne Internet aufgehoben
+OUTBOX_MAX_AGE_S = 3 * 86400
+
+
+def _network_error(e):
+    """Fehlt das Netz (statt einer falschen Einstellung)? Dann wird die Nachricht aufgehoben."""
+    import socket
+    import urllib.error
+    if isinstance(e, urllib.error.HTTPError):
+        return False                                          # Server erreicht, aber abgelehnt (Token, Chat-ID)
+    if isinstance(e, (urllib.error.URLError, socket.gaierror, socket.timeout, ConnectionError, TimeoutError)):
+        return True
+    if isinstance(e, smtplib.SMTPServerDisconnected):
+        return True
+    return isinstance(e, OSError) and not isinstance(e, (smtplib.SMTPException,))
+
+
+def _queue(way, subject, text, image, priority):
+    st = _state()
+    box = st.setdefault("outbox", [])
+    box.append({"t": time.time(), "way": way, "subject": subject, "text": text,
+                "image": str(image) if image else None, "priority": priority})
+    st["outbox"] = box[-OUTBOX_MAX:]
+    _save_state(st)
+
+
 def send_all(subject, text, c, image=None, priority="default"):
-    """An alle eingerichteten Wege: Mail (enabled) und Push."""
+    """An alle eingerichteten Wege: Mail (enabled) und Push. Ohne Internet wird die Nachricht aufgehoben und
+    nachgeschickt, sobald das Netz wieder da ist (flush_outbox, jede Minute aus dem Scheduler)."""
     if c.get("enabled"):
         try:
             send_mail(subject, text, c)
         except Exception as e:
-            _log_fail(e)
+            if _network_error(e):
+                _queue("mail", subject, text, image, priority)
+                _log_fail(e, "mail_queued")
+            else:
+                _log_fail(e)
     if push_on(c):
         try:
             send_push(subject, text, c, image=image, priority=priority)
         except Exception as e:
-            _log_fail(e, "push_failed")
+            if _network_error(e):
+                _queue("push", subject, text, image, priority)
+                _log_fail(e, "push_queued")
+            else:
+                _log_fail(e, "push_failed")
+
+
+def flush_outbox():
+    """Aufgehobene Nachrichten nachschicken – beim ersten Netzfehler aufhören (nächste Minute weiter).
+    Zu alte (über 3 Tage) werden verworfen. Rückgabe: Anzahl verschickter."""
+    st = _state()
+    box = st.get("outbox") or []
+    if not box:
+        return 0
+    c = cfg()
+    now, sent, keep = time.time(), 0, []
+    for i, m in enumerate(box):
+        if now - m["t"] > OUTBOX_MAX_AGE_S:
+            continue
+        late = time.strftime("%d.%m. %H:%M", time.localtime(m["t"]))
+        subj = m["subject"] + (f" (late, originally {late})" if _is_en() else f" (verspätet, eigentlich {late})")
+        try:
+            if m["way"] == "mail" and c.get("enabled"):
+                send_mail(subj, m["text"], c)
+            elif m["way"] == "push" and push_on(c):
+                send_push(subj, m["text"], c, image=m.get("image"), priority=m.get("priority", "default"))
+            sent += 1
+        except Exception as e:
+            if _network_error(e):
+                keep = [x for x in box[i:] if now - x["t"] <= OUTBOX_MAX_AGE_S]
+                break
+            _log_fail(e, "outbox_failed")                        # Einstellung falsch: diese Nachricht verwerfen
+    st = _state()
+    st["outbox"] = keep
+    _save_state(st)
+    if sent:
+        try:
+            from applog import log
+            log("INFO", "notify", "outbox_sent", messages=sent, left=len(keep))
+        except Exception:
+            pass
+    return sent
 
 
 # ---------------------------------------------------------------- Hinweise (notices.py)

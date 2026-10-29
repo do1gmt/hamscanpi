@@ -208,6 +208,7 @@ EN_EXACT = {
     "Paket rtl-sdr aktualisieren:": "Update the rtl-sdr package:",
     "Kommt das öfter vor: USB-Kabel/Netzteil prüfen, Stick an einen USB-2-Port.": "If this happens often: check USB cable/power supply, stick on a USB 2 port.",
     "USB-Stick einstecken bzw. Netzwerkfreigabe einhängen, Zielordner unter System → Sicherung prüfen.": "Plug in the USB stick or mount the network share, check the target folder under System → Backup.",
+    "Router, WLAN bzw. Netzwerkkabel prüfen.": "Check the router, Wi-Fi or network cable.",
 }
 EN_RX = [
     (r"^Stick angesteckt: (.+)$", r"Stick plugged in: \1"), (r"^Stick abgezogen: (.+)$", r"Stick removed: \1"),
@@ -246,6 +247,10 @@ EN_RX = [
     (r"^Zielordner (.+) ist nicht beschreibbar$", r"Target folder \1 is not writable"),
     (r"^(.+) liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht$", r"\1 is on the same drive as HamScanPi – a backup there does not help if the card fails"),
     (r"^kein Zielordner eingetragen$", "no target folder set"),
+    (r"^Kein Internet seit (.+)$", r"No internet since \1"),
+    (r"^Scan, Live, Satelliten und Dekoder laufen weiter\. Es fehlen: .*$",
+     "Scans, Live, satellites and decoders keep running. Missing: PSK Reporter (the spots of the last hour are reported "
+     "later), mail/push (sent later), new orbital elements and time synchronisation."),
 ]
 
 

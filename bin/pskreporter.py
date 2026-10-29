@@ -101,7 +101,7 @@ def report(db, call, locator, antenna="", log=None, now=None, send=True):
     if now - st.get("sent", 0) < MIN_INTERVAL_S:
         return 0
     last = int(st.get("last_heard_id", 0))
-    if not last:                                         # beim ersten Mal nichts Altes nachmelden
+    if "last_heard_id" not in st:                        # beim ersten Mal nichts Altes nachmelden (auch bei leerer Liste)
         row = db.execute("SELECT COALESCE(MAX(id), 0) FROM heard").fetchone()
         st.update(last_heard_id=int(row[0]), sent=now, domain=random.randint(1, 2**31), seq=0)
         STATE.write_text(json.dumps(st), encoding="utf-8")
@@ -128,8 +128,20 @@ def report(db, call, locator, antenna="", log=None, now=None, send=True):
             addr = socket.getaddrinfo(HOST, PORT, socket.AF_INET, socket.SOCK_DGRAM)[0][4]
             for m in msgs:
                 s.sendto(m, addr)
+        except OSError as e:
+            # kein Netz: die Spots bleiben offen (last_heard_id unverändert) und werden in 5 min erneut
+            # versucht; gewarnt wird nur einmal je Ausfall
+            first = not st.get("offline_since")
+            st.setdefault("offline_since", now)
+            STATE.write_text(json.dumps(st), encoding="utf-8")
+            if log and first:
+                log("WARN", "pskreporter_offline", error=f"{type(e).__name__}: {e}",
+                    hint="Spots werden nachgemeldet, sobald das Internet wieder da ist (höchstens 1 h alte)")
+            return 0
         finally:
             s.close()
+    if st.pop("offline_since", None) and log:
+        log("INFO", "pskreporter_resumed", spots=len(spots))
     st["seq"] = int(st.get("seq", 0)) + len(msgs)
     st["last_heard_id"] = int(rows[-1][0])
     STATE.write_text(json.dumps(st), encoding="utf-8")

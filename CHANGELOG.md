@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.41 – 2026-10-30
+
+- **Without internet:**
+  - **Mail/Push** messages are kept when the network is missing (not when a setting is wrong, e.g. a rejected
+    token) and sent later, marked "(late, originally 14:32)"; up to 50 messages, at most 3 days old.
+  - **PSK Reporter:** after a network error the next attempt is 5 minutes later (before: every minute, with a
+    warning each time); warned once per outage, "resumed" logged when it works again; the spots of the last hour
+    are reported afterwards. Also fixed: with an empty station list at the first run, reporting never started.
+  - Notice **"No internet since …"** after 15 minutes (checked every minute by TCP to public DNS/HTTPS servers),
+    gone by itself when the connection is back; the outage length is logged.
+- Self-test section 26.
+
 ## 1.7.40 – 2026-10-30
 
 - **RBDS** for the US and Canada: North American programme types (Rock, Top 40, Country, …) instead of the
