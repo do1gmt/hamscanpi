@@ -1360,7 +1360,9 @@
     if (d.seq === liveDecSeq) return;
     liveDecSeq = d.seq;
     const tm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    $('liveDecList').innerHTML = (d.events || []).slice(0, 40).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
+    $('liveDecCount').textContent = (d.events || []).length ? `${d.events.length}` : '';
+    if (!(d.events || []).length) return;
+    $('liveDecList').innerHTML = (d.events || []).slice(0, 60).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
       + (e.snr != null ? ` <small class="muted">${e.snr > 0 ? '+' : ''}${e.snr} dB · ${e.audio_hz} Hz</small>` : '')
       + ` <span class="no-i18n">${esc(e.text)}</span>${e.detail ? ` <small class="muted">${esc(e.detail)}</small>` : ''}`
       + (e.img ? `<br><a href="${esc(e.img)}" target="_blank" rel="noopener"><img class="live-sstv" src="${esc(e.img)}" alt="SSTV-Bild"></a>` : '') + `</div>`).join('');

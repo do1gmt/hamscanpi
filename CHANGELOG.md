@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.38 – 2026-10-30
+
+- Live: the decodes moved into their own card "Decodes" in the right column (on phones below the controls and
+  the waterfall), scrolling inside the card. The tuning buttons, decoder choice and record button stay in place –
+  before, the growing list sat between the controls and the listen/seek buttons and pushed them down.
+
 ## 1.7.37 – 2026-10-30
 
 - **Live decodes to the station list and PSK Reporter.** FT8/FT4 senders (with locator) and APRS senders with

@@ -599,6 +599,6 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 /* Live-Dekoder */
 .live-dec { margin: .6rem 0; }
 .live-dec-row { align-items: flex-end; gap: .6rem; flex-wrap: wrap; }
-.live-dec-list { max-height: 260px; overflow-y: auto; font-size: .88rem; font-family: ui-monospace, monospace; }
+.live-dec-list { max-height: min(60vh, 520px); overflow-y: auto; font-size: .88rem; font-family: ui-monospace, monospace; }
 .live-dec-ev { padding: .15rem 0; border-bottom: 1px solid var(--line); word-break: break-word; }
 .live-sstv { max-width: 320px; width: 100%; image-rendering: auto; border-radius: 6px; margin-top: .3rem; }

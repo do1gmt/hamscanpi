@@ -245,8 +245,6 @@
         <button type="button" class="btn" id="liveRec" title="Den Ton als WAV-Datei mitschneiden (höchstens 10 min)">● Mitschneiden</button>
         <span class="hint" id="liveDecNote"></span>
       </div>
-      <div class="live-dec-list" id="liveDecList"></div>
-      <div class="hint" id="liveRecList"></div>
     </div>
     <p class="hint" id="liveDirectNote" hidden>Kurzwelle mit dem Stick per Direktabtastung (Q-Zweig): der Tuner ist umgangen, darum gibt es keine Verstärkungsregelung. Am Stick muss eine Kurzwellenantenne hängen (Langdraht, Dipol – Discone oder 2-m-Antennen taugen dort nicht).</p>
     <div class="row">
@@ -273,6 +271,11 @@
   </section>
     </div>
     <div class="col">
+  <section class="panel" id="panel-livedec">
+    <h2>Dekodierungen <small class="muted" id="liveDecCount"></small></h2>
+    <div class="live-dec-list" id="liveDecList"><div class="muted">Noch nichts dekodiert – den Dekoder unter den Live-Reglern wählen.</div></div>
+    <div class="hint" id="liveRecList"></div>
+  </section>
   <section class="panel">
     <h2>Zuletzt gehört</h2>
     <ul class="plain" id="liveHistory"><li>noch nichts</li></ul>
