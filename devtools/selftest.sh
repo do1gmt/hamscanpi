@@ -560,5 +560,16 @@ bandplan.country = lambda settings=None: "US"
 plan = {p["name"]: p for p in SP.make_plan(None, st)}
 assert set(plan) == {"2m", "FRS/GMRS", "NOAA WX"}, set(plan)
 PY
+echo "== 22 ISS-APRS: 437,825 und Weiterleitung über den Satelliten"
+(cd bin && python3 - <<'PY') && ok "Kanal RS0ISS 437,825, „*“ im Pfad = vom Satelliten weitergesendet, Station mit Locator" || bad "ISS-APRS"
+import satellites as S, sat_pass as P, stations as ST
+ch = S.BY_ID["iss_aprs70"]
+assert ch["center_hz"] == 437825000 and ch.get("aprs") and ch["norad"] == 25544
+a = P.aprs_tnc2("DL1ABC-7>APRS,RS0ISS*,ARISS:!5030.00N/01135.00E-Test")
+b = P.aprs_tnc2("OE3XYZ>APRS,ARISS:=4800.00N/01600.00E-direkt")
+assert "⟲ RS0ISS (Satellit)" in a and "⟲" not in b, (a, b)
+snd = ST.aprs_senders(a)
+assert snd and snd[0][0].startswith("DL1ABC") and snd[0][1], snd
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

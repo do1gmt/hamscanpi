@@ -97,6 +97,10 @@ SATELLITES = [
      "label": "ISS 145.800 FM (Sprache, SSTV)"},
     {"id": "iss_aprs", "norad": 25544, "center_hz": 145825000, "kind": "fm", "aprs": True, "prio": 4,
      "label": "ISS 145.825 APRS-Digipeater"},
+    # Zweites Funkgerät (Zvezda, RS0ISS): APRS seit 2026 auf 70 cm, solange Columbus (NA1SS) Sprachrelais macht
+    # – Stand laut ARISS-Statusseite Oktober 2026
+    {"id": "iss_aprs70", "norad": 25544, "center_hz": 437825000, "kind": "fm", "aprs": True, "prio": 4,
+     "label": "ISS 437.825 APRS (RS0ISS, Zvezda)", "note": "APRS-Digipeater des Zvezda-Funkgeräts"},
     {"id": "iss_rpt", "norad": 25544, "center_hz": 437800000, "kind": "fm", "prio": 3,
      "label": "ISS-Relais 437.800 FM"},
     {"id": "ao7", "norad": 7530, "center_hz": 145950000, "kind": "linear", "prio": 5,

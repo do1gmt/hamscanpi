@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.35 – 2026-10-30
+
+- **ISS APRS on 437.825 MHz (RS0ISS, Zvezda).** According to the ARISS status page (October 2026) the Columbus
+  radio (NA1SS) runs the voice repeater (145.990 up / 437.800 down) and APRS is active on the Zvezda radio
+  RS0ISS on 437.825 MHz. New channel `iss_aprs70` with Doppler correction and APRS decoding like 145.825; the
+  145.825 channel stays for when NA1SS returns to packet. Whoever had 145.825 selected gets 437.825 added on
+  update. VIZARD-meteo (SSTV) shares 437.825 – both are recorded together when they overlap.
+- **Digipeated or heard directly?** multimon-ng now runs in APRS mode (`-A`, TNC2 output, falls back on older
+  versions): a digipeater marked with "*" really retransmitted the packet. Packets repeated by a satellite
+  digipeater (ARISS, RS0ISS, NA1SS, PCSAT, …) end in "⟲ RS0ISS (satellite)"; ground stations heard directly
+  have no mark. The pass summary counts the packets repeated by the satellite.
+- Self-test section 22.
+
 ## 1.7.34 – 2026-10-30
 
 - **Band plan by country / IARU region** (Settings → Station → Country / band plan). New `bin/bandplan.py`

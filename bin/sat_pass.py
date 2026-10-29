@@ -619,6 +619,8 @@ class Channel:
         self.cleanup()
         return self.hits
 
+    _mm_aprs = True                                     # multimon-ng mit -A (TNC2, Digipeater-„*“)
+
     def _aprs(self, audio, iq, n_iq, t0, pw_all):
         mm = shutil.which("multimon-ng")
         if not mm:
@@ -640,13 +642,23 @@ class Channel:
                 a = np.clip(a / mx * 0.9, -1, 1)
                 (a * 32767).astype("<i2").tofile(raw)
                 try:
-                    r = subprocess.run([mm, "-t", "raw", "-a", "AFSK1200", "-q", str(raw)],
+                    r = subprocess.run([mm, "-t", "raw", "-a", "AFSK1200", "-q"] + (["-A"] if self._mm_aprs else []) + [str(raw)],
                                        capture_output=True, text=True, timeout=60)
+                    if self._mm_aprs and r.returncode != 0 and "APRS:" not in r.stdout:
+                        self._mm_aprs = False                     # ältere Version ohne -A: wie bisher
+                        r = subprocess.run([mm, "-t", "raw", "-a", "AFSK1200", "-q", str(raw)],
+                                           capture_output=True, text=True, timeout=60)
                 except Exception:
                     continue
                 lines = r.stdout.splitlines()
                 for j, l in enumerate(lines):
                     l = l.strip()
+                    if l.startswith("APRS:"):                     # TNC2: QUELLE>ZIEL,DIGI*,…:Nutzlast
+                        txt = aprs_tnc2(l[5:].strip())
+                        if txt and txt not in first:
+                            first[txt] = i0 / 22050
+                            packets.append(txt)
+                        continue
                     if not l.startswith("AFSK1200:"):
                         continue
                     txt = aprs_text(l.split(":", 1)[1].strip(),
@@ -665,7 +677,8 @@ class Channel:
         self.hits.append({"rf_hz": self.f0, "path": str(p), "mode": "aprs", "sideband": None,
                           "snr_db": float(10 * np.log10(np.mean(seg) + 1e-12)) if len(seg) else 0.0,
                           "dec_type": "APRS", "note": "\n".join(packets[:60])})
-        print(f"   APRS: {len(packets)} Pakete")
+        via_sat = sum(1 for x in packets if "⟲" in x)
+        print(f"   APRS: {len(packets)} Pakete" + (f", {via_sat} vom Satelliten weitergesendet" if via_sat else ""))
 
 
 # ---------------------------------------------------------------- Prüfsatelliten (Meteor-LRPT)
@@ -854,6 +867,27 @@ def aprs_text(head, payload):
     cl = lambda c: re.sub(r"-0$", "", c or "")
     via = f" über {','.join(cl(x) for x in m.group(3).split(','))}" if m.group(3) else ""
     return f"{cl(m.group(1))} → {cl(m.group(2))}{via}: {payload}".strip()
+
+
+SAT_DIGIS = {"ARISS", "RS0ISS", "NA1SS", "PCSAT", "PSAT", "W3ADO", "YB0X", "DP0SNX", "OK0LSR"}
+
+
+def aprs_tnc2(line):
+    """multimon-ng -A: 'DL1ABC-7>APRS,RS0ISS*,ARISS:!5030.00N/…' -> lesbare Zeile. Ein „*“ hinter einem
+    Digipeater heißt: dieser hat das Paket weitergesendet (H-Bit). Steht dort ein Satelliten-Digipeater,
+    kam das Paket wirklich über den Satelliten – sonst wurde eine Bodenstation direkt gehört."""
+    import re
+    m = re.match(r"([^>\s]+)>([^,:\s]+)((?:,[^,:\s]+)*):(.*)$", line)
+    if not m:
+        return line.strip()
+    src, dst, path, payload = m.group(1), m.group(2), [x for x in m.group(3).split(",") if x], m.group(4)
+    via = f" über {','.join(path)}" if path else ""
+    rep = [p.rstrip("*") for p in path if p.endswith("*")]
+    tag = ""
+    if rep:
+        last = rep[-1]
+        tag = f"  ⟲ {last}" + (" (Satellit)" if last.split("-")[0] in SAT_DIGIS else "")
+    return f"{src} → {dst}{via}: {payload}{tag}".strip()
 
 
 def detach():

@@ -41,6 +41,16 @@ names = {r["name"] for r in c.get("ranges", [])}
 new_bands = [r for r in d.get("ranges", []) if r["name"] not in names]
 c.setdefault("ranges", []).extend(new_bands)
 local.write_text(json.dumps(c, indent=2, ensure_ascii=False), encoding="utf-8")
+ws_path = BASE / "config" / "web_settings.json"
+try:
+    ws = json.loads(ws_path.read_text(encoding="utf-8"))
+    sat_sel = (ws.get("selected_segments") or {}).get("Satelliten")
+    if isinstance(sat_sel, list) and "iss_aprs" in sat_sel and "iss_aprs70" not in sat_sel:
+        sat_sel.append("iss_aprs70")
+        ws_path.write_text(json.dumps(ws, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("Satelliten: ISS-APRS 437,825 (RS0ISS) zur Auswahl hinzugefügt")
+except Exception:
+    pass
 print("config/scanner.json ergänzt" + (": " + ", ".join(added + [b["name"] for b in new_bands]) if added or new_bands else ""))
 
 # Neue Satellitenkanäle (z. B. Prüfsatelliten Meteor) in eine vorhandene Einzelauswahl übernehmen –
