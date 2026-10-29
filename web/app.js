@@ -1351,7 +1351,7 @@
     $('liveRec').disabled = !d;
     if (!d) { $('liveDecNote').textContent = ''; return; }
     if (document.activeElement !== $('liveDecKind')) $('liveDecKind').value = d.kind;
-    const act = { ft8: 'FT8', ft4: 'FT4', packet: 'APRS/Packet', pocsag: 'POCSAG' }[d.active];
+    const act = { ft8: 'FT8', ft4: 'FT4', packet: 'APRS/Packet', pocsag: 'POCSAG', cw: 'CW', rtty: 'RTTY', sstv: 'SSTV' }[d.active];
     $('liveDecNote').textContent = d.note || (act ? act + ' läuft' : (d.kind === 'auto' ? 'kein Dekoder für diese Frequenz/Betriebsart' : ''));
     $('liveRec').textContent = d.recording ? `■ Mitschnitt beenden (${d.rec_s} s)` : '● Mitschneiden';
     $('liveRec').classList.toggle('btn-danger', !!d.recording);
@@ -1362,7 +1362,8 @@
     const tm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     $('liveDecList').innerHTML = (d.events || []).slice(0, 40).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
       + (e.snr != null ? ` <small class="muted">${e.snr > 0 ? '+' : ''}${e.snr} dB · ${e.audio_hz} Hz</small>` : '')
-      + ` <span class="no-i18n">${esc(e.text)}</span></div>`).join('');
+      + ` <span class="no-i18n">${esc(e.text)}</span>${e.detail ? ` <small class="muted">${esc(e.detail)}</small>` : ''}`
+      + (e.img ? `<br><a href="${esc(e.img)}" target="_blank" rel="noopener"><img class="live-sstv" src="${esc(e.img)}" alt="SSTV-Bild"></a>` : '') + `</div>`).join('');
   }
   $('liveDecKind').addEventListener('change', async e => { try { await post('/api/live/decoder', { kind: e.target.value }); } catch (err) { toast(err.message); } });
   $('liveRec').addEventListener('click', async () => {

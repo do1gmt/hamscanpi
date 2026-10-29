@@ -1352,6 +1352,33 @@ def try_rtty_decode(
     return text
 
 
+def estimate_rtty_baud(z, rate, f1, f2):
+    """Baudrate aus den Bitlängen: Frequenz-Diskriminator, Wechsel zwischen den beiden Tönen, welche der
+    üblichen Raten (45,45 / 50 / 75 Bd) teilt die gemessenen Laufzeiten am saubersten? Rückgabe Bd oder None.
+    (Vorher gewann die Rate mit den meisten druckbaren Zeichen – bei 45,45 Bd oft fälschlich 75 Bd.)"""
+    try:
+        fi = np.angle(z[1:] * np.conj(z[:-1])) * rate / (2 * np.pi)
+        sos = butter(3, min(120, rate / 4), fs=rate, output="sos")
+        fi = sosfiltfilt(sos, fi)
+        ch = np.flatnonzero(np.diff((fi > (f1 + f2) / 2).astype(np.int8)) != 0)
+        runs = np.diff(ch) / rate
+        runs = runs[(runs > 0.008) & (runs < 0.2)]
+        if len(runs) < 20:
+            return None
+        best = None
+        for b in (45.45, 50, 75):
+            k = np.round(runs * b)
+            m = k >= 1
+            if m.sum() < 10:
+                continue
+            err = float(np.mean(np.abs(runs[m] * b - k[m])))
+            if best is None or err < best[0]:
+                best = (err, b)
+        return best[1] if best and best[0] < 0.2 else None
+    except Exception:
+        return None
+
+
 def decode_rtty(
     z,
     rate
@@ -1365,6 +1392,16 @@ def decode_rtty(
         return None
 
     score, f1, f2, shift = pair
+
+    est = estimate_rtty_baud(z, rate, f1, f2)
+    if est:
+        try:
+            text = try_rtty_decode(z, rate, f1, f2, est)
+        except Exception:
+            text = None
+        if text and sum(1 for c in text if c.isalnum() or c in " .,/?-") >= 4:
+            return {"type": "RTTY", "confidence": 85, "text": text,
+                    "detail": f"{est:g} Bd, {shift:.0f} Hz Shift"}
 
     best_text = None
     best_baud = None
@@ -1529,86 +1566,198 @@ def dominant_audio_tone(
 # Hauptprogramm
 # --------------------------------------------------
 
-db = sqlite3.connect(DB)
+def main():
+    db = sqlite3.connect(DB)
 
-rows = db.execute("""
-SELECT
-    p.id,
-    p.rf_hz,
-    p.recording_path,
-    COALESCE(p.rec_center_hz, s.center_hz),
-    s.band
-FROM peak p
-JOIN scan s
-    ON s.id = p.scan_id
-WHERE p.recording_path
-    IS NOT NULL
-  AND COALESCE(p.mode, '') IN
-      ('', 'unknown', 'cw', 'digital', 'rtty', 'beacon', 'carrier')
-ORDER BY p.id
-""").fetchall()
+    rows = db.execute("""
+    SELECT
+        p.id,
+        p.rf_hz,
+        p.recording_path,
+        COALESCE(p.rec_center_hz, s.center_hz),
+        s.band
+    FROM peak p
+    JOIN scan s
+        ON s.id = p.scan_id
+    WHERE p.recording_path
+        IS NOT NULL
+      AND COALESCE(p.mode, '') IN
+          ('', 'unknown', 'cw', 'digital', 'rtty', 'beacon', 'carrier')
+    ORDER BY p.id
+    """).fetchall()
 
-db.close()
+    db.close()
 
-decoded_count = 0
+    decoded_count = 0
 
-for (
-    peak_id,
-    rf_hz,
-    recording_path,
-    center_hz,
-    band
-) in rows:
+    for (
+        peak_id,
+        rf_hz,
+        recording_path,
+        center_hz,
+        band
+    ) in rows:
 
-    src = Path(
-        recording_path
-    )
-
-    if not src.exists():
-        continue
-
-    stem = src.stem
-
-    outfile = (
-        REPORTS /
-        f"{stem}_decode.json"
-    )
-
-    # Bereits ausgewertet:
-    # nicht jedes Mal neu rechnen.
-    if outfile.exists():
-        continue
-
-    try:
-        z, rate = load_iq(
-            src
+        src = Path(
+            recording_path
         )
 
-        bb = shift_to_hit(
-            z,
-            rate,
-            center_hz,
-            rf_hz
+        if not src.exists():
+            continue
+
+        stem = src.stem
+
+        outfile = (
+            REPORTS /
+            f"{stem}_decode.json"
         )
 
-        # FT8 zuerst prüfen.
-        # Wenn das Muster passt, werden
-        # CW / RTTY / DTMF absichtlich
-        # NICHT mehr gestartet.
-        ft8 = detect_ft8(
-            bb,
-            rate
-        )
+        # Bereits ausgewertet:
+        # nicht jedes Mal neu rechnen.
+        if outfile.exists():
+            continue
 
-        if ft8:
+        try:
+            z, rate = load_iq(
+                src
+            )
+
+            bb = shift_to_hit(
+                z,
+                rate,
+                center_hz,
+                rf_hz
+            )
+
+            # FT8 zuerst prüfen.
+            # Wenn das Muster passt, werden
+            # CW / RTTY / DTMF absichtlich
+            # NICHT mehr gestartet.
+            ft8 = detect_ft8(
+                bb,
+                rate
+            )
+
+            if ft8:
+
+                data = {
+                    "peak_id": peak_id,
+                    "band": band,
+                    "frequency_hz": rf_hz,
+                    "decoders": [
+                        ft8
+                    ]
+                }
+
+                outfile.write_text(
+                    json.dumps(
+                        data,
+                        ensure_ascii=False,
+                        indent=2
+                    ),
+                    encoding="utf-8"
+                )
+
+                decoded_count += 1
+
+                print(
+                    f"{band:4s} "
+                    f"{rf_hz/1e6:.6f} MHz:"
+                )
+
+                print(
+                    "   FT8 "
+                    f"{ft8['confidence']} % "
+                    f"{ft8['detail']}"
+                )
+
+                continue
+
+            results = []
+
+            # CW
+            cw = decode_cw(
+                bb,
+                rate
+            )
+
+            if cw:
+                results.append(cw)
+
+            # RTTY
+            rtty = decode_rtty(
+                bb,
+                rate
+            )
+
+            if rtty:
+                results.append(rtty)
+
+            usb = (
+                REPORTS /
+                f"{stem}_USB.wav"
+            )
+
+            lsb = (
+                REPORTS /
+                f"{stem}_LSB.wav"
+            )
+
+            # DTMF beide Seiten versuchen
+            dtmf_usb = decode_dtmf_file(
+                usb
+            )
+
+            dtmf_lsb = decode_dtmf_file(
+                lsb
+            )
+
+            if dtmf_usb:
+                dtmf_usb["detail"] += (
+                    " · USB"
+                )
+                results.append(
+                    dtmf_usb
+                )
+
+            elif dtmf_lsb:
+                dtmf_lsb["detail"] += (
+                    " · LSB"
+                )
+                results.append(
+                    dtmf_lsb
+                )
+
+            # Nur wenn noch nichts erkannt:
+            # dominanten Ton anzeigen.
+            strong_types = {
+                r["type"]
+                for r in results
+            }
+
+            if not (
+                "CW" in strong_types
+                or
+                "RTTY" in strong_types
+                or
+                "DTMF" in strong_types
+            ):
+                tone = dominant_audio_tone(
+                    usb
+                )
+
+                if tone:
+                    tone["detail"] += (
+                        " · USB"
+                    )
+
+                    results.append(tone)
 
             data = {
                 "peak_id": peak_id,
                 "band": band,
                 "frequency_hz": rf_hz,
-                "decoders": [
-                    ft8
-                ]
+                "decoders": results
             }
 
             outfile.write_text(
@@ -1620,160 +1769,54 @@ for (
                 encoding="utf-8"
             )
 
-            decoded_count += 1
+            if results:
+                decoded_count += 1
 
-            print(
-                f"{band:4s} "
-                f"{rf_hz/1e6:.6f} MHz:"
-            )
-
-            print(
-                "   FT8 "
-                f"{ft8['confidence']} % "
-                f"{ft8['detail']}"
-            )
-
-            continue
-
-        results = []
-
-        # CW
-        cw = decode_cw(
-            bb,
-            rate
-        )
-
-        if cw:
-            results.append(cw)
-
-        # RTTY
-        rtty = decode_rtty(
-            bb,
-            rate
-        )
-
-        if rtty:
-            results.append(rtty)
-
-        usb = (
-            REPORTS /
-            f"{stem}_USB.wav"
-        )
-
-        lsb = (
-            REPORTS /
-            f"{stem}_LSB.wav"
-        )
-
-        # DTMF beide Seiten versuchen
-        dtmf_usb = decode_dtmf_file(
-            usb
-        )
-
-        dtmf_lsb = decode_dtmf_file(
-            lsb
-        )
-
-        if dtmf_usb:
-            dtmf_usb["detail"] += (
-                " · USB"
-            )
-            results.append(
-                dtmf_usb
-            )
-
-        elif dtmf_lsb:
-            dtmf_lsb["detail"] += (
-                " · LSB"
-            )
-            results.append(
-                dtmf_lsb
-            )
-
-        # Nur wenn noch nichts erkannt:
-        # dominanten Ton anzeigen.
-        strong_types = {
-            r["type"]
-            for r in results
-        }
-
-        if not (
-            "CW" in strong_types
-            or
-            "RTTY" in strong_types
-            or
-            "DTMF" in strong_types
-        ):
-            tone = dominant_audio_tone(
-                usb
-            )
-
-            if tone:
-                tone["detail"] += (
-                    " · USB"
-                )
-
-                results.append(tone)
-
-        data = {
-            "peak_id": peak_id,
-            "band": band,
-            "frequency_hz": rf_hz,
-            "decoders": results
-        }
-
-        outfile.write_text(
-            json.dumps(
-                data,
-                ensure_ascii=False,
-                indent=2
-            ),
-            encoding="utf-8"
-        )
-
-        if results:
-            decoded_count += 1
-
-            print(
-                f"{band:4s} "
-                f"{rf_hz/1e6:.6f} MHz:"
-            )
-
-            for r in results:
                 print(
-                    "   ",
-                    r["type"],
-                    r.get(
-                        "text",
-                        ""
-                    ),
-                    r.get(
-                        "detail",
-                        ""
-                    )
+                    f"{band:4s} "
+                    f"{rf_hz/1e6:.6f} MHz:"
                 )
 
-    except Exception as e:
+                for r in results:
+                    print(
+                        "   ",
+                        r["type"],
+                        r.get(
+                            "text",
+                            ""
+                        ),
+                        r.get(
+                            "detail",
+                            ""
+                        )
+                    )
 
-        data = {
-            "peak_id": peak_id,
-            "band": band,
-            "frequency_hz": rf_hz,
-            "decoders": [],
-            "error": str(e)
-        }
+        except Exception as e:
 
-        outfile.write_text(
-            json.dumps(
-                data,
-                ensure_ascii=False,
-                indent=2
-            ),
-            encoding="utf-8"
-        )
+            data = {
+                "peak_id": peak_id,
+                "band": band,
+                "frequency_hz": rf_hz,
+                "decoders": [],
+                "error": str(e)
+            }
 
-print()
-print(
-    "Treffer mit Decodergebnis:",
-    decoded_count
-)
+            outfile.write_text(
+                json.dumps(
+                    data,
+                    ensure_ascii=False,
+                    indent=2
+                ),
+                encoding="utf-8"
+            )
+
+    print()
+    print(
+        "Treffer mit Decodergebnis:",
+        decoded_count
+    )
+
+
+
+if __name__ == "__main__":
+    main()

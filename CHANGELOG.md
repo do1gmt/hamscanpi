@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.37 – 2026-10-30
+
+- **Live decodes to the station list and PSK Reporter.** FT8/FT4 senders (with locator) and APRS senders with
+  position from Live are written to the station list (`heard`, marked "Live:"); FT8/FT4 spots go to PSK Reporter
+  with the next report (at most every 5 minutes, as before) when reporting is switched on.
+- **CW and RTTY in Live** as running text: every 8 s the last section goes through the decoders of the hit
+  analysis (CW: strongest tone 300–1200 Hz, cut at a word gap so no character is split; RTTY: tone pair in the
+  passband, only the part with signal). Noise-only sections no longer produce "??H??".
+- **SSTV in Live:** while the 1100–2400 Hz band is busy, the audio of the last 150 s is decoded every 15 s – the
+  picture grows in the list (one entry per picture, updated in place); images in `reports/live_sstv_*.png`,
+  deleted after 30 days like the recordings.
+- Automatic decoder choice extended: CW and narrow digital segments (RTTY) in USB/LSB, SSTV frequencies.
+- **RTTY baud rate from the signal** (also for scan hits): the bit lengths decide between 45.45, 50 and 75 Bd –
+  before, the rate with the most printable characters won, which often picked 75 Bd for a 45.45 Bd signal.
+- `decode_recordings.py` can be imported (main part in `main()`).
+- Self-test section 24: CW and RTTY from a live stream, growing SSTV picture, live stations in `heard`.
+
 ## 1.7.36 – 2026-10-30
 
 - **Decoders in Live** (`bin/live_decode.py`): the demodulated audio that the browser hears also goes to

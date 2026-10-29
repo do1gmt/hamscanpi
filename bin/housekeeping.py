@@ -191,7 +191,7 @@ def run(settings, bulk_delete, log):
         except OSError:
             pass
     # 2c. Live-Mitschnitte (Live → Mitschneiden) nach 30 Tagen
-    for p in (BASE / "recordings" / "live").glob("live_*.wav"):
+    for p in [*(BASE / "recordings" / "live").glob("live_*.wav"), *(BASE / "reports").glob("live_sstv_*.png")]:
         try:
             if now - p.stat().st_mtime > 30 * 86400:
                 p.unlink()

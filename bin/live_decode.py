@@ -5,6 +5,12 @@
               der Dial-Frequenz hören (z. B. 7,074 MHz USB).
   APRS/Packet multimon-ng läuft dauerhaft mit (AFSK1200, APRS-Format mit „*“ für weitergesendete Pakete);
   POCSAG      dasselbe multimon-ng mit POCSAG 512/1200/2400 – in FM hören.
+  CW / RTTY   alle 8 s der letzte Abschnitt mit den Dekodern der Trefferauswertung (decode_recordings) –
+              laufender Text; CW: stärkster Ton 300–1200 Hz, RTTY: Tonpaar im Durchlass.
+  SSTV        der Ton der letzten 150 s; ist das Band 1100–2400 Hz belegt, wird alle 15 s dekodiert – das Bild
+              wächst mit (reports/live_sstv_*.png), ein neues Bild ab dem nächsten VIS-Kopf.
+  Stationen   FT8/FT4- und APRS-Absender kommen in die Stationsliste (Tabelle heard) und damit – wenn
+              eingeschaltet – zu PSK Reporter (FT8/FT4).
   Mitschnitt  der Ton als WAV unter recordings/live/ (höchstens 10 min), zum Herunterladen.
 
 Welcher Dekoder läuft: „auto“ nach dem Bandplan-Segment der Frequenz (ft8, ft4, aprs, pocsag) oder fest
@@ -27,7 +33,9 @@ import numpy as np
 BASE = Path(__file__).resolve().parent.parent
 LIVE_DIR = BASE / "recordings" / "live"
 RATE = 24000
-KINDS = ("auto", "ft8", "ft4", "packet", "pocsag", "off")
+KINDS = ("auto", "ft8", "ft4", "packet", "pocsag", "cw", "rtty", "sstv", "off")
+REPORTS = BASE / "reports"
+DB = BASE / "data" / "scanner.db"
 REC_MAX_S = 600
 
 
@@ -38,7 +46,7 @@ def _segment_mode(freq_hz):
         cfg = BP.load()
     except Exception:
         return None
-    best = None
+    best, rng = None, None
     for b in cfg.get("ranges", []):
         if not (b["start_hz"] - 5000 <= freq_hz <= b["stop_hz"] + 5000):
             continue
@@ -47,7 +55,23 @@ def _segment_mode(freq_hz):
                 d = abs(freq_hz - f)
                 if d <= 3000 and (best is None or d < best[0]):
                     best = (d, s.get("mode"))
-    return best[1] if best else None
+            for a, z in s.get("ranges", []):
+                if min(a, z) <= freq_hz <= max(a, z):
+                    w = abs(z - a)
+                    if rng is None or w < rng[0]:
+                        rng = (w, s.get("mode"))
+    return best[1] if best else (rng[1] if rng else None)
+
+
+def band_of(freq_hz):
+    try:
+        import bandplan as BP
+        for b in BP.load().get("ranges", []):
+            if b["start_hz"] <= freq_hz <= b["stop_hz"] and b.get("name") != "Satelliten":
+                return b["name"]
+    except Exception:
+        pass
+    return "Live"
 
 
 def auto_kind(freq_hz, mode):
@@ -58,6 +82,12 @@ def auto_kind(freq_hz, mode):
         return "packet"
     if m == "pocsag" and mode == "nfm":
         return "pocsag"
+    if m == "cw" and mode in ("usb", "lsb"):
+        return "cw"
+    if m == "digital" and mode in ("usb", "lsb"):
+        return "rtty"
+    if m == "sstv":
+        return "sstv"
     return None
 
 
@@ -97,6 +127,9 @@ class LiveDecoders:
         self._ring_n = 0
         self._next_slot = None
         self.rec = None                       # (wave-Datei, Pfad, Start)
+        self._blk, self._blk_n, self._busy = [], 0, False         # CW/RTTY-Abschnitte, SSTV-Puffer
+        self._sstv_last = 0.0
+        self._sstv_img = None                                     # (Bild-Start, Datei, Ereignis-seq)
         self.recordings = []
         threading.Thread(target=self._worker, daemon=True).start()
 
@@ -181,15 +214,25 @@ class LiveDecoders:
             x = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
             if self.active in ("packet", "pocsag"):
                 self._mm_feed(x)
-            else:
+            elif self.active in ("ft8", "ft4"):
                 self._ft8_feed(t, x)
+            else:
+                self._block_feed(t, x)
 
     def _switch(self, kind):
         self._stop_mm()
         self._ring.clear()
         self._ring_n = 0
         self._next_slot = None
+        self._blk, self._blk_n = [], 0
+        self._sstv_img = None
         self.active, self.note = kind, ""
+        if kind == "cw":
+            self.note = "CW: alle 8 s wird der letzte Abschnitt dekodiert (stärkster Ton 300–1200 Hz)"
+        elif kind == "rtty":
+            self.note = "RTTY: alle 8 s wird der letzte Abschnitt dekodiert (45,45/50/75 Bd)"
+        elif kind == "sstv":
+            self.note = "SSTV: wartet auf ein Bild – es baut sich alle 15 s weiter auf"
         if kind in ("packet", "pocsag"):
             self._start_mm(kind)
         elif kind in ("ft8", "ft4"):
@@ -239,7 +282,14 @@ class LiveDecoders:
         for raw in iter(p.stdout.readline, b""):
             line = raw.decode(errors="replace").strip()
             if line.startswith("APRS:"):
-                self._add("APRS", aprs_tnc2(line[5:].strip()))
+                txt = aprs_tnc2(line[5:].strip())
+                self._add("APRS", txt)
+                try:                                                  # Absender mit Position in die Stationsliste
+                    import stations as ST
+                    self._heard([(c, g, None, t_, "APRS", self.freq_hz) for c, g, _s, t_ in ST.aprs_senders(txt)],
+                                time.time())
+                except Exception:
+                    pass
             elif line.startswith("AFSK1200:"):
                 pend = line.split(":", 1)[1].strip()               # Nutzlast folgt in der nächsten Zeile
             elif pend is not None:
@@ -263,6 +313,146 @@ class LiveDecoders:
                     p.kill()
                 except Exception:
                     pass
+
+    # ---------------- Stationsliste (Tabelle heard): peak_id negativ = aus Live (ein Eintrag je Takt/Paket)
+    def _heard(self, rows, t):
+        if not rows:
+            return
+        import sqlite3
+        from datetime import datetime, timezone
+        ts = datetime.fromtimestamp(t, timezone.utc).isoformat(timespec="seconds")
+        band = band_of(self.freq_hz)
+        try:
+            db = sqlite3.connect(DB, timeout=10)
+            try:
+                db.execute("""CREATE TABLE IF NOT EXISTS heard (
+                    id INTEGER PRIMARY KEY, peak_id INTEGER, time TEXT, call TEXT, band TEXT, freq_hz REAL,
+                    mode TEXT, grid TEXT, snr REAL, info TEXT, UNIQUE(peak_id, call))""")   # wie stations.py
+                for call, grid, snr, text, typ, f in rows:
+                    db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info)
+                                  VALUES (?,?,?,?,?,?,?,?,?)""",
+                               (-int(t), ts, call, band, float(f or self.freq_hz), typ, grid, snr,
+                                ("Live: " + str(text or ""))[:200]))
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            try:
+                from applog import log
+                log("WARN", "live", "live_heard_failed", error=f"{type(e).__name__}: {e}")
+            except Exception:
+                pass
+
+    # ---------------- CW / RTTY (Abschnitte) und SSTV (wachsendes Bild)
+    def _block_feed(self, t, x):
+        self._blk.append(x)
+        self._blk_n += len(x)
+        if self.active == "sstv":
+            while self._blk_n > RATE * 150 and len(self._blk) > 1:
+                self._blk_n -= len(self._blk.pop(0))
+            if t - self._sstv_last >= 15 and not self._busy:
+                self._sstv_last = t
+                a = np.concatenate(self._blk)
+                self._busy = True
+                threading.Thread(target=self._sstv_run, args=(a, t), daemon=True).start()
+            return
+        if self._blk_n < RATE * 8 or self._busy:
+            if self._blk_n > RATE * 30:                               # Dekoder zu langsam: ältestes verwerfen
+                self._blk, self._blk_n = self._blk[-50:], sum(len(b) for b in self._blk[-50:])
+            return
+        a = np.concatenate(self._blk)
+        cut = len(a)
+        if self.active == "cw":
+            # an einer Pause schneiden (zwischen Wörtern), damit kein Zeichen zerteilt wird; Rest bleibt
+            k = int(RATE * 0.02)
+            env = np.abs(a[: len(a) // k * k]).reshape(-1, k).max(axis=1)
+            thr = 0.2 * float(np.percentile(env, 95))
+            quiet = env < thr
+            best = None
+            i = len(quiet) - 1
+            while i > int(5 / 0.02):
+                if quiet[i]:
+                    j = i
+                    while j > 0 and quiet[j - 1]:
+                        j -= 1
+                    if (i - j + 1) * 0.02 >= 0.25:
+                        best = (i + j) // 2
+                        break
+                    i = j - 1
+                else:
+                    i -= 1
+            if best is not None:
+                cut = best * k
+        rest = a[cut:]
+        self._blk, self._blk_n = ([rest], len(rest)) if len(rest) else ([], 0)
+        self._busy = True
+        threading.Thread(target=self._text_run, args=(a[:cut], self.active), daemon=True).start()
+
+    def _text_run(self, a, kind):
+        try:
+            from scipy.signal import resample_poly, hilbert
+            import decode_recordings as DR
+            r = 8000
+            y = resample_poly(a.astype(np.float64), 1, 3)
+            if np.max(np.abs(y)) < 1e-4:
+                return
+            n = np.arange(len(y)) / r
+            if kind == "cw":                                          # stärkster Ton 300–1200 Hz -> 0 Hz
+                S = np.abs(np.fft.rfft(y * np.hanning(len(y))))
+                f = np.fft.rfftfreq(len(y), 1 / r)
+                m = (f >= 300) & (f <= 1200)
+                f0 = float(f[m][np.argmax(S[m])])
+                res = DR.decode_cw(y * np.exp(-2j * np.pi * f0 * n), r)
+            else:                                                     # RTTY: Durchlass um 1500 Hz -> 0 Hz
+                z = hilbert(y) * np.exp(-2j * np.pi * 1500.0 * n)
+                env = np.convolve(np.abs(z), np.ones(160) / 160, mode="same")
+                on = np.flatnonzero(env > 0.3 * float(np.percentile(env, 95)))
+                if len(on) < r:                                       # weniger als 1 s Signal
+                    return
+                z = z[max(0, on[0] - 80):on[-1] + 80]                 # nur der Teil mit Signal (sonst Zeichensalat)
+                res = DR.decode_rtty(z, r)
+            if res and res.get("text") and int(res.get("confidence", 100)) >= 60:   # Rauschen ergibt „??H??“
+                self._add(res["type"], res["text"], detail=res.get("detail"))
+        except Exception as e:
+            self.note = f"{kind.upper()}-Dekoder: {type(e).__name__}: {e}"
+        finally:
+            self._busy = False
+
+    def _sstv_run(self, a, t):
+        try:
+            band = a[-RATE * 15:]
+            S = np.abs(np.fft.rfft(band * np.hanning(len(band)))) ** 2
+            f = np.fft.rfftfreq(len(band), 1 / RATE)
+            share = float(S[(f >= 1100) & (f <= 2400)].sum() / max(S[(f >= 200) & (f <= 4000)].sum(), 1e-12))
+            if share < 0.55 and not self._sstv_img:
+                return                                                # kein SSTV-Ton: nichts tun
+            import sstv_decode as SD
+            imgs = SD.decode_all(a, RATE, min_lines=0.05, auto_offset=True)
+            if not imgs:
+                return
+            im = imgs[-1]
+            start = t - (len(a) / RATE) + im["start_s"]
+            if not self._sstv_img or abs(self._sstv_img[0] - start) > 5:  # neues Bild
+                name = f"live_sstv_{time.strftime('%Y%m%d_%H%M%S', time.gmtime(start))}.png"
+                self._sstv_img = (start, name, None)
+            name = self._sstv_img[1]
+            REPORTS.mkdir(parents=True, exist_ok=True)
+            SD.save_png(im["image"], REPORTS / name)
+            text, img = f"{im['mode']} – {round(im['complete'] * 100)} % der Zeilen", f"/files/{name}?v={int(t)}"
+            ev = None
+            with self.lock:
+                if self._sstv_img[2] is not None:                      # dasselbe Bild: Eintrag auffrischen
+                    ev = next((e for e in self.events if e["seq"] == self._sstv_img[2]), None)
+                if ev:
+                    ev.update(text=text, img=img, t=time.time())
+                    self.seq += 1
+            if not ev:
+                self._add("SSTV", text, img=img)
+                self._sstv_img = (self._sstv_img[0], name, self.seq)
+        except Exception as e:
+            self.note = f"SSTV-Dekoder: {type(e).__name__}: {e}"
+        finally:
+            self._busy = False
 
     # ---------------- FT8 / FT4
     def _ft8_feed(self, t_end, x):
@@ -316,6 +506,12 @@ class LiveDecoders:
         for m in sorted(msgs, key=lambda m: -m["snr"]):
             self._add(proto.upper(), m["text"], snr=round(m["snr"]), audio_hz=m["audio_hz"], slot=stamp,
                       rf_hz=dial + m["audio_hz"])
+        try:                                                          # Stationsliste und PSK Reporter
+            import stations as ST
+            self._heard([(c, g, sn, txt, proto.upper(), dial + (ah or 0))
+                         for c, g, sn, txt, ah in ST.ft8_senders(msgs)], T)
+        except Exception:
+            pass
         if not msgs:
             self.note = f"{proto.upper()} Takt {stamp} UTC: keine Dekodierung"
         else:

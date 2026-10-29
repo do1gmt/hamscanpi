@@ -610,5 +610,72 @@ time.sleep(1)
 ev = d.status()["events"]
 assert len(got) == 1 and abs(got[0] - 180000) < 50 and ev[0]["slot"].endswith(":15") and ev[0]["rf_hz"] == 7_075_234, (got, ev)
 PY
+echo "== 24 Live: CW, RTTY, SSTV, Stationsliste"
+(cd bin && timeout 300 python3 - <<'PY') && ok "CW und RTTY als laufender Text, SSTV-Bild wächst, FT8/APRS-Absender in der Stationsliste" || bad "Live CW/RTTY/SSTV"
+import ast, sqlite3, tempfile, time
+from pathlib import Path
+import numpy as np
+from scipy.signal import resample_poly
+import live_decode as LD, decode_recordings as DR
+R = 24000
+def run(kind, a, freq, mode):
+    d = LD.LiveDecoders(); d.set_kind(kind)
+    pcm = (a * 32767).astype("<i2")
+    for i in range(0, len(pcm), 480):
+        d.feed(pcm[i:i + 480].tobytes(), freq, mode)
+        time.sleep(0.0003)
+    for _ in range(60):
+        time.sleep(0.2)
+        if not d._busy and d.q.empty() and d.status()["events"]:
+            time.sleep(1)
+            break
+    txt = " ".join(e["text"] for e in reversed(d.status()["events"]))
+    d.stop()
+    return txt
+M = {v: k for k, v in DR.MORSE.items()}
+u, out = 1.2 / 18, []
+tone = lambda dur: np.sin(2 * np.pi * 700 * np.arange(int(dur * R)) / R) * 0.5
+for w in "CQ CQ DE DL1ABC K".split():
+    for ch in w:
+        for sym in M[ch]:
+            out += [tone(u if sym == "." else 3 * u), np.zeros(int(u * R))]
+        out.append(np.zeros(int(2 * u * R)))
+    out.append(np.zeros(int(4 * u * R)))
+a = np.concatenate(out + [np.zeros(R * 9)]); a = a + 0.01 * np.random.default_rng(1).standard_normal(len(a))
+t = run("cw", a, 7_020_000, "usb")
+assert "DL1ABC" in t and "?????" not in t, t
+inv = {v: k for k, v in DR.ITA2_LETTERS.items() if v}
+bits = [1] * 40
+for ch in "RYRYRY CQ CQ DE DLABC K ":
+    c = inv[ch]; bits += [0] + [(c >> b) & 1 for b in range(5)] + [1, 1]
+bits += [1] * 20
+sp, out, ph = R / 45.45, [], 0.0
+for k, b in enumerate(bits):
+    n = int(round((k + 1) * sp)) - int(round(k * sp))
+    f = 2125 if b else 2295
+    w = ph + 2 * np.pi * f / R * np.arange(1, n + 1); ph = w[-1]; out.append(np.sin(w) * 0.4)
+a = np.concatenate(out + [np.zeros(R * 9)]); a = a + 0.01 * np.random.default_rng(2).standard_normal(len(a))
+t = run("rtty", a, 14_085_000, "usb")
+assert "CQ CQ DE DLABC" in t, t
+src = open("../devtools/sim_pass.py").read()
+fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "robot36_audio")
+ns = {"np": np, "A_RATE": 48000}; exec(compile(ast.Module([fn], []), "sim", "exec"), ns)
+a = np.concatenate([np.zeros(R * 3), resample_poly(ns["robot36_audio"]().astype(np.float64), 1, 2) * 0.6, np.zeros(R * 5)])
+LD.REPORTS = Path(tempfile.mkdtemp())
+d = LD.LiveDecoders(); d.running = False; d.active = "sstv"
+tt = 1_800_000_000.0
+for i in range(0, len(a), 2400):
+    tt += 0.1
+    d._block_feed(tt, a[i:i + 2400].astype(np.float32))
+    while d._busy:
+        time.sleep(0.05)
+ev = [e for e in d.status()["events"] if e["type"] == "SSTV"]
+assert len(ev) == 1 and ev[0].get("img") and list(LD.REPORTS.glob("live_sstv_*.png")), ev
+LD.DB = Path(tempfile.mkdtemp()) / "t.db"
+d = LD.LiveDecoders(); d.running = False; d.freq_hz = 14_074_000
+d._heard([("DL1ABC", "JO31", -10.0, "CQ DL1ABC JO31", "FT8", 14_075_000), ("OE3XYZ", "JN88", None, "x", "APRS", 144_800_000)], time.time())
+rows = sqlite3.connect(LD.DB).execute("SELECT call, mode, grid, peak_id < 0, info FROM heard").fetchall()
+assert {r[0] for r in rows} == {"DL1ABC", "OE3XYZ"} and all(r[3] for r in rows) and rows[0][4].startswith("Live:"), rows
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi
