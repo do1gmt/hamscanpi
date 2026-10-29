@@ -113,6 +113,7 @@ class StreamResampler:
 class LiveDecoders:
     def __init__(self):
         self.kind = "auto"                    # gewählt im Dashboard
+        self.antenna = None                   # Antenne des Live-Empfängers (für PSK Reporter)
         self.active = None                    # gerade laufender Dekoder (ft8, ft4, packet, pocsag)
         self.freq_hz, self.mode = 0, "nfm"
         self.events = collections.deque(maxlen=200)
@@ -204,7 +205,7 @@ class LiveDecoders:
                         self.record(False)
                 except Exception:
                     self.record(False)
-            want = self.kind if self.kind != "auto" else auto_kind(self.freq_hz, self.mode)
+            want = self.kind if self.kind != "auto" else self._auto()
             if want in (None, "off"):
                 want = None
             if want != self.active:
@@ -218,6 +219,19 @@ class LiveDecoders:
                 self._ft8_feed(t, x)
             else:
                 self._block_feed(t, x)
+
+    def _auto(self):
+        """Automatische Wahl – nur neu bestimmen, wenn Frequenz oder Betriebsart sich ändern (bzw. alle 30 s).
+        Vorher wurde der Bandplan bei jedem 20-ms-Tonblock neu gelesen: das kostete so viel Rechenzeit, dass der
+        Ton zum Browser ins Stocken kam."""
+        key = (int(self.freq_hz) // 500, self.mode)
+        now = time.time()
+        c = getattr(self, "_auto_cache", None)
+        if c and c[0] == key and now - c[1] < 30:
+            return c[2]
+        k = auto_kind(self.freq_hz, self.mode)
+        self._auto_cache = (key, now, k)
+        return k
 
     def _switch(self, kind):
         self._stop_mm()
@@ -328,11 +342,13 @@ class LiveDecoders:
                 db.execute("""CREATE TABLE IF NOT EXISTS heard (
                     id INTEGER PRIMARY KEY, peak_id INTEGER, time TEXT, call TEXT, band TEXT, freq_hz REAL,
                     mode TEXT, grid TEXT, snr REAL, info TEXT, UNIQUE(peak_id, call))""")   # wie stations.py
+                if "antenna" not in {r[1] for r in db.execute("PRAGMA table_info(heard)")}:
+                    db.execute("ALTER TABLE heard ADD COLUMN antenna TEXT")
                 for call, grid, snr, text, typ, f in rows:
-                    db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info)
-                                  VALUES (?,?,?,?,?,?,?,?,?)""",
+                    db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
+                                  VALUES (?,?,?,?,?,?,?,?,?,?)""",
                                (-int(t), ts, call, band, float(f or self.freq_hz), typ, grid, snr,
-                                ("Live: " + str(text or ""))[:200]))
+                                ("Live: " + str(text or ""))[:200], self.antenna))
                 db.commit()
             finally:
                 db.close()

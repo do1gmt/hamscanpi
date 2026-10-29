@@ -288,16 +288,29 @@ class LiveSession:
                  32.8, 33.8, 36.4, 37.2, 38.6, 40.2, 42.1, 43.4, 43.9, 44.5, 48.0, 49.6]
 
     def _agc_step(self, gain, clip, peak):
-        """Nächste Verstärkungsstufe: bei Übersteuerung (> 0,3 % der Werte am Anschlag) zwei Stufen runter
-        (und 30 s nicht wieder rauf), bei sehr leisem Signal (Spitzen < 25 % des Bereichs) eine rauf."""
+        """Nächste Verstärkungsstufe. Jeder Wechsel heißt: rtl_sdr neu starten – eine hörbare Lücke. Darum
+        in einem Schritt dorthin, wo die Spitzen etwa 40 % des Bereichs erreichen (statt Stufe für Stufe, was nach
+        dem Start bis zu 2 min Ruckeln bedeutete), und danach höchstens alle 10 s ändern.
+        Übersteuerung (> 0,3 % am Anschlag): 6 dB runter und 30 s nicht wieder rauf."""
+        now = time.time()
+        if now < getattr(self, "_agc_next", 0.0):
+            return gain
         g = self.RTL_GAINS
-        i = min(range(len(g)), key=lambda k: abs(g[k] - gain))
-        if clip > 0.003 and i > 0:
-            self._agc_hold = time.time() + 30
-            return g[max(0, i - 2)]
-        if peak < 32 and i < len(g) - 1 and time.time() > self._agc_hold:
-            return g[i + 1]
-        return gain
+        if clip > 0.003:
+            new = max([x for x in g if x <= gain - 6.0] or [g[0]])
+            self._agc_hold = now + 30
+        elif peak < 32 and now > self._agc_hold:
+            import math
+            up = min(15.0, max(2.0, 20 * math.log10(50.0 / max(peak, 1.0))))   # Ziel: Spitzen bei ~50 von 127
+            new = max([x for x in g if x <= gain + up] or [gain])
+            if new <= gain:
+                nxt = [x for x in g if x > gain]
+                new = nxt[0] if nxt else gain
+        else:
+            return gain
+        if new != gain:
+            self._agc_next = now + 10
+        return new
 
     def _rtl_gain(self):
         rtl = self.cfg.get("rtlsdr", {}) if isinstance(self.cfg.get("rtlsdr"), dict) else {}

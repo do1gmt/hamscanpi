@@ -55,8 +55,15 @@ def templates():
     return _set(3, rx) + _set(2, tx)
 
 
+def software():
+    try:
+        return "HamScanPi " + (BASE / "VERSION").read_text().strip()
+    except OSError:
+        return "HamScanPi"
+
+
 def rx_record(call, locator, antenna=""):
-    return _set(RX_TPL, _vstr(call) + _vstr(locator) + _vstr("HamScanPi") + _vstr(antenna))
+    return _set(RX_TPL, _vstr(call) + _vstr(locator) + _vstr(software()) + _vstr(antenna))
 
 
 def tx_record(s):
@@ -87,6 +94,21 @@ def packets(spots, call, locator, antenna, seq, domain):
     return msgs
 
 
+def dedupe(spots):
+    """Je Rufzeichen, Band und Betriebsart ein Spot pro Meldung – der mit dem besten SNR (Ortskenner dazu, falls
+    nur ein anderer Takt ihn hatte). Ein CQ-Rufer, der in Live alle 30 s gehört wird, geht so nur einmal raus."""
+    best = {}
+    for sp in spots:
+        k = (sp["call"], sp.get("band") or round(float(sp["freq_hz"]) / 1e6), sp["mode"])
+        cur = best.get(k)
+        if cur is None or (sp.get("snr") or -99) > (cur.get("snr") or -99):
+            grid = (cur or {}).get("grid")
+            best[k] = dict(sp, grid=sp.get("grid") or grid)
+        elif not cur.get("grid") and sp.get("grid"):
+            cur["grid"] = sp["grid"]
+    return sorted(best.values(), key=lambda s: s["t"])
+
+
 def _state():
     try:
         return json.loads(STATE.read_text(encoding="utf-8"))
@@ -106,8 +128,9 @@ def report(db, call, locator, antenna="", log=None, now=None, send=True):
         st.update(last_heard_id=int(row[0]), sent=now, domain=random.randint(1, 2**31), seq=0)
         STATE.write_text(json.dumps(st), encoding="utf-8")
         return 0
-    rows = db.execute("""SELECT id, time, call, freq_hz, mode, grid, snr FROM heard
-                         WHERE id > ? AND mode IN ('FT8', 'FT4') ORDER BY id LIMIT 2000""", (last,)).fetchall()
+    has_ant = "antenna" in {r[1] for r in db.execute("PRAGMA table_info(heard)")}
+    rows = db.execute(f"""SELECT id, time, call, freq_hz, mode, grid, snr, band, {'antenna' if has_ant else 'NULL'} FROM heard
+                          WHERE id > ? AND mode IN ('FT8', 'FT4') ORDER BY id LIMIT 2000""", (last,)).fetchall()
     st["sent"] = now
     if not rows:
         STATE.write_text(json.dumps(st), encoding="utf-8")
@@ -120,8 +143,15 @@ def report(db, call, locator, antenna="", log=None, now=None, send=True):
             t = now
         if now - t > 3600:                               # PSK Reporter will aktuelle Spots
             continue
-        spots.append({"call": r[2], "freq_hz": r[3], "mode": r[4], "grid": r[5], "snr": r[6], "t": t})
-    msgs = packets(spots, call, locator, antenna, int(st.get("seq", 0)), int(st.get("domain") or random.randint(1, 2**31)))
+        spots.append({"call": r[2], "freq_hz": r[3], "mode": r[4], "grid": r[5], "snr": r[6], "t": t,
+                      "band": r[7], "antenna": r[8] or antenna})
+    spots = dedupe(spots)
+    msgs, seq0, dom = [], int(st.get("seq", 0)), int(st.get("domain") or random.randint(1, 2**31))
+    by_ant = {}
+    for sp in spots:                                    # je Antenne eigene Pakete (Empfänger-Datensatz enthält sie)
+        by_ant.setdefault(sp["antenna"] or "", []).append(sp)
+    for ant, group in by_ant.items():
+        msgs += packets(group, call, locator, ant, seq0 + len(msgs), dom)
     if send and msgs:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.42 – 2026-10-30
+
+- **Live no longer stutters after starting.** The automatic gain (stick) went up one step per second – and every
+  change restarts `rtl_sdr`, an audible gap; with overload it stepped down and crept up again, which could take up
+  to two minutes. Now it jumps in one step to where the peaks reach about 40 % of the range, changes at most every
+  10 s, and starts at the gain it last settled on for that 10 MHz range (stored on the Pi). Also: the automatic
+  decoder choice read the band plan for every 20 ms audio block (now only when frequency/mode change; band plan
+  reading cached), and the browser's playback lead grows after a dropout (up to 0.8 s) and shrinks again.
+- **PSK Reporter:** one spot per callsign, band and mode per report (the best SNR, with the locator from any
+  cycle) – a CQ caller heard every 30 s in Live is no longer reported repeatedly; the antenna of the receiver
+  that actually heard it (stored per heard station, scan and Live; separate receiver records per antenna);
+  software reported with version ("HamScanPi 1.7.42").
+
 ## 1.7.41 – 2026-10-30
 
 - **Without internet:**

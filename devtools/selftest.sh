@@ -752,6 +752,17 @@ assert logs.count("pskreporter_offline") == 1, logs
 socket.getaddrinfo = lambda *a, **k: [(socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("127.0.0.1", 9))]
 assert PSK.report(db, "DO1GMT", "JN59HH", log=lg, now=now + 1200) == 1 and "pskreporter_resumed" in logs, logs
 socket.getaddrinfo = real
+sp = [{"call": "DL1ABC", "band": "20m", "mode": "FT8", "snr": -15, "grid": "JO31", "t": 1, "freq_hz": 14075000},
+      {"call": "DL1ABC", "band": "20m", "mode": "FT8", "snr": -8, "grid": None, "t": 31, "freq_hz": 14075010},
+      {"call": "DL1ABC", "band": "40m", "mode": "FT8", "snr": -12, "grid": None, "t": 61, "freq_hz": 7075000}]
+dd = PSK.dedupe(sp)
+assert len(dd) == 2 and [x for x in dd if x["band"] == "20m"][0]["snr"] == -8 and [x for x in dd if x["band"] == "20m"][0]["grid"] == "JO31", dd
+assert PSK.software().startswith("HamScanPi")
+import live as LV
+cls = [c for c in vars(LV).values() if isinstance(c, type) and hasattr(c, "_agc_step")][0]
+o = cls.__new__(cls); o._agc_hold = 0.0
+g1 = o._agc_step(29.7, 0.0, 10)                          # leise: ein großer Schritt statt vieler kleiner
+assert g1 >= 40 and o._agc_step(g1, 0.0, 10) == g1       # danach 10 s Ruhe (kein Neustart je Sekunde)
 PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

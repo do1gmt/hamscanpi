@@ -1461,10 +1461,22 @@ def live_presets():
     return out
 
 
+def _agc_key(freq_hz):
+    return str(int(freq_hz) // 10_000_000)
+
+
 def live_status():
     with _live_lock:
         if _live and _live.running:
-            return dict(_live.status(), active=True)
+            st = _live.status()
+            # eingeregelte Verstärkung merken: beim nächsten Start dort beginnen statt neu einzuregeln
+            if _live.device == "rtlsdr" and not getattr(_live, "gain", None) and getattr(_live, "_agc_gain", None):
+                agc = dict(live_state().get("agc") or {})
+                k = _agc_key(_live.active_hz or _live.freq_hz)
+                if agc.get(k) != _live._agc_gain:
+                    agc[k] = _live._agc_gain
+                    live_state_update({"agc": agc})
+            return dict(st, active=True)
     return {"active": False, "running": False, "text": "aus", "level_db": -120, "listeners": 0}
 
 
@@ -1629,6 +1641,13 @@ def live_start(data):
         sq = 0.0 if (scan and scan.get("kind") == "seek") else float(data.get("squelch_db", 0))
         _live = LIVE.LiveSession(scanner_config(), device, freq, mode, sq, scan)
         _live.dec.set_kind(_live_dec_kind[0])                 # gewählter Live-Dekoder bleibt über Neustarts
+        g0 = (live_state().get("agc") or {}).get(_agc_key(freq))
+        if g0:
+            _live._agc_gain = float(g0)                      # dort anfangen, wo die Regelung zuletzt stand
+        try:
+            _live.dec.antenna = (antennas_effective() or {}).get("rtlsdr" if device == "rtlsdr" else "pmsdr") or None
+        except Exception:
+            pass
         if data.get("gain") not in (None, ""):
             _live.gain = _gain_value(data.get("gain"))
         _live.start()
@@ -1678,6 +1697,8 @@ def live_state_update(upd, force=False):
         clean["mode"] = upd["mode"]
     if upd.get("step_hz"):
         clean["step_hz"] = int(float(upd["step_hz"]))
+    if isinstance(upd.get("agc"), dict):                    # eingeregelte Verstärkung je 10-MHz-Bereich
+        clean["agc"] = {str(k)[:6]: float(v) for k, v in upd["agc"].items() if isinstance(v, (int, float))}
     if isinstance(upd.get("history"), list):
         clean["history"] = [{"f": int(x.get("f", 0)), "m": str(x.get("m", ""))[:4], "name": str(x.get("name") or "")[:40]}
                             for x in upd["history"][:8] if isinstance(x, dict) and x.get("f")]

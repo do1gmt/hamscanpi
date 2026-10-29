@@ -48,6 +48,8 @@ def ensure_tables(db):
     db.execute("""CREATE TABLE IF NOT EXISTS heard (
         id INTEGER PRIMARY KEY, peak_id INTEGER, time TEXT, call TEXT, band TEXT, freq_hz REAL,
         mode TEXT, grid TEXT, snr REAL, info TEXT, UNIQUE(peak_id, call))""")
+    if "antenna" not in {r[1] for r in db.execute("PRAGMA table_info(heard)")}:
+        db.execute("ALTER TABLE heard ADD COLUMN antenna TEXT")        # gehört mit welcher Antenne (PSK Reporter)
     db.execute("CREATE INDEX IF NOT EXISTS heard_call ON heard(call)")
     db.execute("CREATE INDEX IF NOT EXISTS heard_time ON heard(time)")
     db.execute("""CREATE TABLE IF NOT EXISTS watch_hit (
@@ -186,12 +188,14 @@ def ingest(db, limit=2000):
     ensure_tables(db)
     row = db.execute("SELECT v FROM meta WHERE k='heard_last_peak'").fetchone()
     last = int(row[0]) if row else 0
-    rows = db.execute("""SELECT p.id, p.rf_hz, p.mode, p.segment_id, p.recording_path, p.snr_db, s.time, s.band, p.audio
-                         FROM peak p JOIN scan s ON s.id = p.scan_id WHERE p.id > ? ORDER BY p.id LIMIT ?""",
+    has_ant = "antenna" in {r[1] for r in db.execute("PRAGMA table_info(scan)")}
+    rows = db.execute(f"""SELECT p.id, p.rf_hz, p.mode, p.segment_id, p.recording_path, p.snr_db, s.time, s.band, p.audio,
+                                 {'s.antenna' if has_ant else 'NULL'}
+                          FROM peak p JOIN scan s ON s.id = p.scan_id WHERE p.id > ? ORDER BY p.id LIMIT ?""",
                       (last, limit)).fetchall()
     out = []
     for r in rows:
-        pid, rf, mode, seg, rec, snr, t, band, audio = r
+        pid, rf, mode, seg, rec, snr, t, band, audio, antenna = r
         last = pid
         dec = decode_of(rec) if rec else None
         if band != "Satelliten":
@@ -203,9 +207,9 @@ def ingest(db, limit=2000):
         calls = []
         if dec:
             for call, grid, s, text, typ, f in senders_for(dec):
-                db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info)
-                              VALUES (?,?,?,?,?,?,?,?,?)""", (pid, t, call, band, f or rf, typ, grid,
-                                                              s if s is not None else snr, text[:200]))   # SNR: FT8 je Nachricht, sonst Treffer
+                db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
+                              VALUES (?,?,?,?,?,?,?,?,?,?)""", (pid, t, call, band, f or rf, typ, grid,
+                                                                s if s is not None else snr, text[:200], antenna))   # SNR: FT8 je Nachricht, sonst Treffer
                 calls.append({"call": call, "grid": grid, "mode": typ})
         for d in (dec or {}).get("decoders", []):
             if d.get("type") == "RDS" and d.get("rds"):

@@ -981,8 +981,11 @@
         for (let i = 0; i < n; i++) ch[i] = pcm[i] / 32768;
         const src = live.ctx.createBufferSource(); src.buffer = ab; src.connect(liveGainNode());
         const now = live.ctx.currentTime;
-        if (live.nextT < now + 0.05) live.nextT = now + 0.2;    // kleiner Vorlauf gegen Aussetzer
-        if (live.nextT > now + 0.6) continue;                   // zu weit voraus (Uhren laufen auseinander): Stück auslassen, Verzögerung bleibt klein
+        // Vorlauf passt sich an: nach einem Aussetzer größer (bis 0,8 s), bei ruhigem Lauf langsam wieder kleiner
+        live.lead = live.lead || 0.2;
+        if (live.nextT < now + 0.05) { live.lead = Math.min(0.8, live.lead + 0.15); live.nextT = now + live.lead; live.calm = 0; }
+        else if (++live.calm > 500) { live.lead = Math.max(0.2, live.lead - 0.05); live.calm = 0; }
+        if (live.nextT > now + live.lead + 0.5) continue;       // zu weit voraus (Uhren laufen auseinander): Stück auslassen
         src.start(live.nextT); live.nextT += ab.duration;
       }
     })().catch(() => { });

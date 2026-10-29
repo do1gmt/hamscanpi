@@ -91,10 +91,24 @@ def apply(cfg, settings=None, code=None):
     return out
 
 
+_load_cache = {}
+
+
 def load(path=None, settings=None):
-    """config/scanner.json lesen und den Bandplan des Landes anwenden."""
+    """config/scanner.json lesen und den Bandplan des Landes anwenden – zwischengespeichert, solange sich weder
+    scanner.json noch web_settings.json ändern (Live fragt oft)."""
     path = Path(path or BASE / "config" / "scanner.json")
-    return apply(json.loads(path.read_text(encoding="utf-8")), settings)
+    try:
+        key = (str(path), path.stat().st_mtime, SETTINGS.stat().st_mtime if SETTINGS.exists() else 0,
+               settings is None)
+    except OSError:
+        key = None
+    if key and settings is None and _load_cache.get("key") == key:
+        return _load_cache["cfg"]
+    cfg = apply(json.loads(path.read_text(encoding="utf-8")), settings)
+    if key and settings is None:
+        _load_cache.update(key=key, cfg=cfg)
+    return cfg
 
 
 def suggest(locator):
