@@ -1583,14 +1583,20 @@ def main():
                 continue          # Satelliten nimmt der Scheduler bei jedem Überflug auf (sat_pass.py)
             cfg = effective_config(base_cfg, band)
             band = dict(band, step_hz=int(plan_by_band[name].get("step_hz", band["step_hz"])))   # Frequenzraster
-            if not hw[cfg["device"]]["present"]:
+            hw_dev = cfg["device"]
+            if plan_by_band[name].get("via") == "rtlhf":
+                # Kurzwelle mit dem Stick: Gerät „rtlhf“ (48-kHz-Fenster wie die PMSDR); ppm stellt rtl_sdr ein
+                cfg = dict(cfg, device="rtlhf", frequency_correction_ppm=0.0)
+                hw_dev = "rtlsdr"
+                print(f"Band       : {name} mit dem Stick (Kurzwelle per Direktabtastung)")
+            if not hw[hw_dev]["present"]:
                 missing.append(name)
                 print(f"Band       : {name} übersprungen – {DEVICE_NAMES.get(cfg['device'], cfg['device'])} nicht angeschlossen")
                 applog("WARN", "scanner", "band_skipped", band=name, reason="device_missing", device=cfg["device"])
                 continue
             scanned_bands += 1
             dev_obj = get_device(cfg["device"], cfg)
-            CUR_ANTENNA[0] = antenna_label(cfg["device"])
+            CUR_ANTENNA[0] = antenna_label("rtlsdr" if cfg["device"] == "rtlhf" else cfg["device"])
             applog("DEBUG", "scanner", "band_start", band=name, device=cfg["device"], tunes=len(plan_by_band[name]))
             _band_t0, _band_p0, _band_r0 = time.time(), total_peaks, total_rejected
 
@@ -1616,7 +1622,7 @@ def main():
 
             # FT8/FT4 (PMSDR): einen Takt zeitgenau aufnehmen und direkt dekodieren, statt über
             # Spitzensuche -> Bestätigung -> Langaufnahme zu gehen (jede Stufe konnte FT8 verlieren)
-            ft8_watch_on = cfg.get("device", "pmsdr") == "pmsdr" and cfg.get("ft8_watch", True)
+            ft8_watch_on = cfg.get("device", "pmsdr") in ("pmsdr", "rtlhf") and cfg.get("ft8_watch", True)
             if ft8_watch_on:
                 sel = set(str(x) for x in selected_segments) if selected_segments else {"all"}
                 dig = [sg for sg in band.get("segments", [])
@@ -1813,7 +1819,7 @@ def main():
 
                 # Sprachwache (PMSDR, Kurzwelle): SSB-Sprache über die Energie im 2,4-kHz-Fenster
                 # über einige Sekunden finden – die Spitzensuche sieht Sprache praktisch nicht.
-                if cfg.get("device", "pmsdr") == "pmsdr" and cfg.get("voice_watch", True):
+                if cfg.get("device", "pmsdr") in ("pmsdr", "rtlhf") and cfg.get("voice_watch", True):
                     candidates = [
                         p for p in candidates
                         if (classify_segment(band, p["rf_hz"]) or {}).get("mode") != "voice"
@@ -1965,7 +1971,7 @@ def main():
                         # CW/RTTY/Digital: weiter aufnehmen, solange auf der Frequenz noch gesendet wird
                         # (statt fest record_seconds) – mehr Text für den Dekoder
                         seg_mode = (classify_segment(band, p["rf_hz"]) or {}).get("mode")
-                        if (cfg.get("device") == "pmsdr" and seg_mode in HF_FOLLOW_BW
+                        if (cfg.get("device") in ("pmsdr", "rtlhf") and seg_mode in HF_FOLLOW_BW
                                 and float(cfg.get("hf_follow_max_seconds", 60)) > 0):
                             try:
                                 (xi, xq), extra_s = CW.hf_continue(

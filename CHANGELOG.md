@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.32 – 2026-10-30
+
+- **Shortwave scans with the stick.** If the main stick can do HF via direct sampling (e.g. NESDR SMArt v5) and
+  the RTL-SDR is selected, the HF bands (160–10 m, up to 28.8 MHz) can be chosen as well. They run through the
+  new device `rtlhf`: the stick records at 240 kS/s in direct sampling (60 kHz off-centre), HamScanPi computes
+  the same 48 kHz windows as with the PMSDR (also in the PMSDR's I/Q orientation) – so voice, FT8/FT4 (cycle
+  start on the UTC boundary), CW/RTTY with keep-recording and SSTV detection work unchanged. Long recordings
+  (SSTV up to 120 s) are reduced second by second instead of holding ~300 MB raw data; a stalled stick ends the
+  recording with an error after 6 s. The scan box says "VHF/UHF and HF up to 28.8 MHz (direct sampling – HF
+  antenna needed)"; schedules can use the HF bands too.
+- Translations: "Main stick:", "… days" (uptime), the antenna note under Devices.
+- README: shortwave without a PMSDR; new screenshot of the system page; new settings screenshot.
+- Self-test section 20: window position, length and cycle timing with a simulated stick, HF bands in the plan.
+
 ## 1.7.31 – 2026-10-30
 
 - Header: without open notices the status pill and the clocks jumped to the left next to the logo (CSS rule for

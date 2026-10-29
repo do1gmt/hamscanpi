@@ -390,7 +390,9 @@ class RtlDevice:
         n = int(self.rate * seconds)
         cmd = [self.binary, "-f", str(int(center)), "-s", str(self.rate), "-n", str(n),
                "-d", str(self.index), "-p", str(self.ppm)]
-        if self.gain:
+        ds = list(getattr(self, "ds_flags", None) or [])
+        cmd += ds                                  # Kurzwelle: Direktabtastung (Tuner umgangen, keine Verstärkung)
+        if self.gain and not ds:
             cmd += ["-g", str(self.gain)]
         if self.bias_t:
             cmd += ["-T"]
@@ -487,7 +489,161 @@ def effective_config(base_cfg, band):
     return cfg
 
 
+class RtlHfDevice:
+    """Kurzwelle mit dem RTL-Stick per Direktabtastung (Q-Zweig) – sieht für den Scanner aus wie die PMSDR:
+    48-kHz-I/Q-Fenster um die Mitte, gleiche Methoden (tune, capture, capture_slot, record, rerecord).
+    Der Stick nimmt mit 240 kS/s auf, 60 kHz neben der Mitte abgestimmt (kein Gleichanteil/IF-Rest in der
+    Fenstermitte), daraus wird das 48-kHz-Fenster herausgerechnet. Damit laufen Sprach-, FT8-, CW-, RTTY- und
+    SSTV-Erkennung unverändert. Daten kommen in der I/Q-Lage der PMSDR (iq_conjugate), so dass alle Leser
+    der Aufnahmen – Dashboard, Dekoder – sie wie PMSDR-Aufnahmen behandeln."""
+    name = "rtlhf"
+    WIDE = 240000
+    OFFSET = 60000
+
+    def __init__(self, cfg):
+        import sdrcaps as SC
+        self.cfg = cfg
+        self.rate = 48000
+        self.center = None
+        self.rtl = RtlDevice(dict(cfg, sample_rate=self.WIDE))
+        flags = SC.tool_flags().get("rtl_sdr")
+        if not flags:
+            raise RuntimeError("Kurzwelle mit dem Stick: der installierte Treiber kann keine Direktabtastung (rtl_sdr ohne -D)")
+        self.rtl.ds_flags, self.rtl.gain = list(flags), None
+        self.conj = bool(cfg.get("iq_conjugate", False))   # Lage wie bei der PMSDR liefern
+
+    def tune(self, center):
+        self.center = int(center)
+
+    def _to48(self, i, q):
+        zi, zq = self.rtl._slice(i, q, self.center + self.OFFSET, self.center, self.rate)
+        zi, zq = np.asarray(zi, dtype=np.float64), np.asarray(zq, dtype=np.float64)
+        if self.conj:
+            zq = -zq
+        return zi - zi.mean(), zq - zq.mean()
+
+    def capture(self, seconds):
+        """seconds Sekunden als 48-kHz-Fenster. Kurze Stücke über _grab (mit dessen Erholung bei hängendem
+        Stick), lange (SSTV bis 120 s) als Datenstrom Sekunde für Sekunde heruntergerechnet – sonst lägen
+        bei 120 s rund 300 MB Rohdaten im Speicher."""
+        if seconds <= 12:
+            i, q = self.rtl._grab(self.center + self.OFFSET, seconds + 0.05)
+            return self._to48(i, q)
+        return self._stream(seconds)
+
+    def _stream(self, seconds):
+        import select
+        from scipy.signal import resample_poly
+        rate = self.WIDE
+        g = math.gcd(self.rate, rate)
+        up, down = self.rate // g, rate // g
+        pad = 20 * down
+        n_total = int(rate * seconds)
+        cmd = [self.rtl.binary, "-f", str(int(self.center + self.OFFSET)), "-s", str(rate), "-n", str(n_total),
+               "-d", str(self.rtl.index), "-p", str(self.rtl.ppm)] + list(self.rtl.ds_flags) + \
+              (["-T"] if self.rtl.bias_t else []) + ["-"]
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        fd = p.stdout.fileno()
+        out, tail, n_done, buf = [], None, 0, bytearray()
+        w = 2.0 * np.pi * self.OFFSET / rate                  # Fenstermitte liegt OFFSET unter der Abstimmung
+        try:
+            while n_done < n_total:
+                r, _, _ = select.select([fd], [], [], 6.0)
+                if not r:
+                    raise RuntimeError("Stick liefert keine Daten mehr (Kurzwelle)")
+                chunk = os.read(fd, 1 << 18)
+                if not chunk:
+                    break
+                buf += chunk
+                if len(buf) < rate * 2 and n_done + len(buf) // 2 < n_total:
+                    continue
+                k = len(buf) // 2 * 2
+                u = np.frombuffer(bytes(buf[:k]), dtype=np.uint8).reshape(-1, 2)
+                del buf[:k]
+                z = ((u[:, 0].astype(np.float32) - 127.5) + 1j * (u[:, 1].astype(np.float32) - 127.5)) / 127.5
+                n = np.arange(n_done, n_done + len(z), dtype=np.float64)
+                z = (z * np.exp(1j * np.mod(w * n, 2 * np.pi))).astype(np.complex64)
+                zz = z if tail is None else np.concatenate([tail, z])
+                y = resample_poly(zz, up, down)
+                skip = 0 if tail is None else len(tail) * up // down
+                out.append(y[skip:skip + len(z) * up // down].astype(np.complex64))
+                tail = z[-pad:]
+                n_done += len(z)
+        finally:
+            try:
+                p.send_signal(signal.SIGINT)
+                p.wait(timeout=3)
+            except Exception:
+                p.kill()
+        y = np.concatenate(out) if out else np.zeros(0, np.complex64)
+        zi, zq = y.real.astype(np.float64), y.imag.astype(np.float64)
+        if self.conj:
+            zq = -zq
+        return zi - (zi.mean() if len(zi) else 0), zq - (zq.mean() if len(zq) else 0)
+
+    def capture_slot(self, slot_s, lead_s=2.0):
+        """Genau einen FT8/FT4-Takt ab der UTC-Taktgrenze (wie bei der PMSDR): rtl_sdr läuft vorher an,
+        der Anfang wird über die Ankunftszeit der ersten Daten bestimmt."""
+        rate = self.WIDE
+        T = math.ceil((time.time() + lead_s + 1.0) / slot_s) * slot_s
+        cmd = [self.rtl.binary, "-f", str(int(self.center + self.OFFSET)), "-s", str(rate), "-d", str(self.rtl.index),
+               "-p", str(self.rtl.ppm)] + list(self.rtl.ds_flags) + (["-T"] if self.rtl.bias_t else []) + ["-"]
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        block = rate // 20
+        try:
+            first = p.stdout.read(block * 2)
+            if not first:
+                raise RuntimeError("rtl_sdr liefert keine Daten")
+            t0 = time.time() - (len(first) // 2) / rate
+            if t0 > T - 0.2:
+                T += slot_s
+            parts, total = [first], len(first) // 2
+            end = T + slot_s + 0.3
+            while t0 + total / rate < end:
+                b = p.stdout.read(block * 2)
+                if not b:
+                    raise RuntimeError("rtl_sdr abgebrochen")
+                parts.append(b)
+                total += len(b) // 2
+        finally:
+            try:
+                p.send_signal(signal.SIGINT)
+                p.wait(timeout=3)
+            except Exception:
+                p.kill()
+        u = np.frombuffer(b"".join(parts), dtype=np.uint8)
+        u = u[: len(u) // 2 * 2].reshape(-1, 2)
+        k = int(round((T - t0) * rate))
+        u = u[k: k + int(slot_s * rate)]
+        i = (u[:, 0].astype(np.float32) - 127.5) / 127.5
+        q = (u[:, 1].astype(np.float32) - 127.5) / 127.5
+        zi, zq = self._to48(i, q)
+        return zi, zq, T
+
+    def record(self, center, seconds, band, rf_hz, mode=None):
+        self.tune(center)
+        RECDIR.mkdir(parents=True, exist_ok=True)
+        path = RECDIR / recording_name(band, rf_hz)
+        i, q = self.capture(seconds)
+        wav_write_iq(path, i, q, self.rate)
+        return str(path), int(center)
+
+    def rerecord(self, path, center, seconds, rf_hz, mode=None):
+        self.tune(center)
+        i, q = self.capture(seconds)
+        wav_write_iq(path, i, q, self.rate)
+        return int(center)
+
+    def close(self):
+        pass
+
+
 def open_device(name, cfg):
+    if name == "rtlhf":
+        lk = BASE / "data" / "live.lock"
+        if lk.exists() and (time.time() - lk.stat().st_mtime) < 120:
+            raise RuntimeError("Stick belegt: Live-Empfang läuft – erst im Dashboard unter Live stoppen")
+        return RtlHfDevice(cfg)
     if name == "rtlsdr":
         lk = BASE / "data" / "live.lock"
         if lk.exists() and (time.time() - lk.stat().st_mtime) < 120:
@@ -590,6 +746,17 @@ def _detect_hardware():
                               else ("active" if seen["pmsdr_usb"] else "inactive")),
                   "port": ", ".join(seen["pmsdr_usb"] + seen["aureon"])},
     }
+
+
+def hf_via_rtl():
+    """Kann der Haupt-Stick Kurzwelle (Direktabtastung) mit dem installierten Treiber?"""
+    try:
+        import sdrcaps as SC
+        import sticks as STK
+        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        return bool(main) and SC.hf_ok(main)[0]
+    except Exception:
+        return False
 
 
 def resolve_device(choice, hw=None):

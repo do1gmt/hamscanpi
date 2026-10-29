@@ -80,6 +80,11 @@ PMSDR receiver (IW3AUT) for shortwave.
 | ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |
 | Settings: station (ADIF, PSK Reporter), watchlist, mail and push notifications | Satellite priorities with the last 14 days, system status of the Pi |
 
+![System: notices, system values and history, status, devices](docs/screenshots/system.png)
+System page: notices with what to do, live values and 24-hour history (CPU, memory/zram, temperature),
+status (storage, write load, swap, services, version) and the device register – here an NESDR SMArt v5 that
+also covers HF via direct sampling.
+
 ![Stations: heard callsigns with distance and bearing, FM stations with RDS](docs/screenshots/stations.png)
 *Stations: callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export); FM stations with RDS name, PI, programme type and radio text.*
 
@@ -98,6 +103,13 @@ PMSDR receiver (IW3AUT) for shortwave.
 | RTL-SDR stick | any RTL2832U stick (RTL-SDR Blog V3/V4, Nooelec NESDR, …) – VHF/UHF and satellites |
 | Antenna | a discone or a vertical works for strong passes; a turnstile or QFH is better for satellites |
 | PMSDR (optional) | shortwave 160–10 m, needs a USB sound card for I/Q and its control program – see [docs/pmsdr.md](docs/pmsdr.md) |
+
+**Shortwave without a PMSDR:** sticks with direct sampling on the Q branch (Nooelec NESDR SMArt v5, RTL-SDR
+Blog V3) also receive 100 kHz – 28.8 MHz. HamScanPi recognises them (*System → Devices*: "HF via direct
+sampling"), switches direct sampling on below 24 MHz (Live and scan; the driver's syntax `-D` / `-D 2` /
+`-E direct2` is detected automatically) and then offers the HF bands for the stick as well – the same voice,
+FT8/FT4, CW/RTTY and SSTV detection as with the PMSDR. There is no gain control in this mode, and an HF antenna
+(long wire, dipole) has to be connected to the stick. The RTL-SDR Blog V4 needs the Blog driver for HF.
 
 ## Installation
 

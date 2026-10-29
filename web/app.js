@@ -197,7 +197,8 @@
     }
     const act = settings.active_device, choice = settings.active_device_choice || act;
     const ant = (settings.antennas || {})[act];
-    let hint = `${ant ? ant + ' am ' + short(act) + '. ' : ''}Gescannt werden nur die ${act === 'rtlsdr' ? 'VHF/UHF-Bänder' : 'Kurzwellenbänder'}.`;
+    const rtlHf = act === 'rtlsdr' && settings.rtl_caps && settings.rtl_caps.hf_ok;
+    let hint = `${ant ? ant + ' am ' + short(act) + '. ' : ''}${rtlHf ? 'Gescannt werden die VHF/UHF-Bänder und Kurzwelle bis 28,8 MHz (Direktabtastung – Kurzwellenantenne nötig).' : `Gescannt werden nur die ${act === 'rtlsdr' ? 'VHF/UHF-Bänder' : 'Kurzwellenbänder'}.`}`;
     if (choice !== act) hint = `${short(choice)} nicht angeschlossen – automatisch ${short(act)}. ` + hint;
     if (!hw.pmsdr?.present && !hw.rtlsdr?.present) hint = `Kein Empfänger angeschlossen – ${devName('rtlsdr')} oder ${devName('pmsdr')} anstecken.`;
     $('deviceHint').textContent = hint;
@@ -229,12 +230,15 @@
   function chip(label, on, cls = '') { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + cls + (on ? ' on' : ''); b.innerHTML = label; b.setAttribute('aria-pressed', on ? 'true' : 'false'); return b; }
 
   const isMore = b => b.legal === 'jedermann' || b.legal === 'restricted';
+  // Band beim gewählten Gerät wählbar? Kurzwelle auch beim Stick, wenn er sie per Direktabtastung kann
+  const bandOk = (b, active) => (b.device || 'pmsdr') === active
+    || (active === 'rtlsdr' && settings.rtl_caps && settings.rtl_caps.hf_ok && (b.device || 'pmsdr') === 'pmsdr' && b.start_hz < 28.8e6);
   function renderBands() {
     const root = $('bandChips'); root.innerHTML = '';
     const moreRoot = $('moreBandChips'); moreRoot.innerHTML = '';
     const active = settings.active_device || 'pmsdr';
     for (const b of bandplan) {
-      if ((b.device || 'pmsdr') !== active) continue;
+      if (!bandOk(b, active)) continue;
       const on = settings.selected_bands.includes(b.name);
       const c = chip(b.legal === 'restricted' ? `${b.name} ⚠` : b.name, on, b.legal === 'restricted' ? 'chip-restricted' : '');
       if (b.legal === 'restricted') c.title = 'Eingeschränkt: Mithören in vielen Ländern verboten (z. B. Deutschland, § 5 TDDDG) – nur einschalten, wo es erlaubt ist.';
@@ -249,7 +253,7 @@
     const seg = $('segmentList'); seg.innerHTML = '';
     const moreSeg = $('moreSegmentList'); moreSeg.innerHTML = '';
     for (const b of bandplan) {
-      if ((b.device || 'pmsdr') !== active) continue;
+      if (!bandOk(b, active)) continue;
       if (!settings.selected_bands.includes(b.name)) continue;
       const chosen = settings.selected_segments[b.name] || ['all'];
       const all = chosen.includes('all');
@@ -1536,7 +1540,7 @@
     $('schedList').querySelectorAll('[data-sdel]').forEach(b => b.addEventListener('click', () => { const l = [...settings.schedules]; l.splice(Number(b.dataset.sdel), 1); saveSchedules(l); }));
     $('scDays').innerHTML = ''; DAYS.forEach((d, i) => { const c = chip(d, scSel.days.has(i)); c.addEventListener('click', () => { scSel.days.has(i) ? scSel.days.delete(i) : scSel.days.add(i); renderSchedules(); }); $('scDays').appendChild(c); });
     $('scBands').innerHTML = '';
-    bandplan.filter(b => b.device === settings.active_device && b.legal !== 'restricted').forEach(b => {
+    bandplan.filter(b => bandOk(b, settings.active_device) && b.legal !== 'restricted').forEach(b => {
       const c = chip(b.name, scSel.bands.has(b.name)); c.addEventListener('click', () => { scSel.bands.has(b.name) ? scSel.bands.delete(b.name) : scSel.bands.add(b.name); renderSchedules(); }); $('scBands').appendChild(c);
     });
   }

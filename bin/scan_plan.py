@@ -31,6 +31,9 @@ def raster_factor(settings, device):
     return RASTER.get(str(r.get(device, "normal")), 1.0)
 
 
+HF_DS_MAX = 28_800_000          # Direktabtastung: halbe Abtastrate des RTL2832U-Wandlers
+
+
 def band_step(band, settings):
     return max(1000, int(int(band["step_hz"]) * raster_factor(settings, str(band.get("device", "pmsdr")))))
 
@@ -119,6 +122,14 @@ def active_schedule(settings, cfg=None, now=None):
     cfg = cfg if cfg is not None else read_json(CFG, {"ranges": []})
     dev = "rtlsdr" if settings.get("active_device") == "rtlsdr" else "pmsdr"
     dev_bands = {b["name"] for b in cfg.get("ranges", []) if str(b.get("device", "pmsdr")) == dev}
+    if dev == "rtlsdr":                                   # Kurzwelle auch mit dem Stick (Direktabtastung)
+        try:
+            from devices import hf_via_rtl
+            if hf_via_rtl():
+                dev_bands |= {b["name"] for b in cfg.get("ranges", [])
+                              if str(b.get("device", "pmsdr")) == "pmsdr" and b["start_hz"] < HF_DS_MAX}
+        except Exception:
+            pass
     for sc in settings.get("schedules") or []:
         if not sc.get("enabled", True):
             continue
@@ -220,6 +231,14 @@ def make_plan(
         active_device = resolve_device(active_device)
     except Exception:
         pass
+    # Kurzwelle mit dem Stick (Direktabtastung), wenn der Haupt-Stick das kann und keine PMSDR gewählt ist
+    rtl_hf = False
+    if active_device == "rtlsdr":
+        try:
+            from devices import hf_via_rtl
+            rtl_hf = hf_via_rtl()
+        except Exception:
+            rtl_hf = False
 
     plan = []
 
@@ -239,9 +258,14 @@ def make_plan(
         if band.get("legal") == "restricted" and not cfg.get("allow_restricted_bands"):
             continue
 
-        # Nur Baender des gerade angeschlossenen Geraets (eine Antenne!)
+        # Nur Baender des gerade angeschlossenen Geraets (eine Antenne!) – Kurzwelle auch mit einem
+        # Kurzwellen-fähigen Stick (Direktabtastung bis 28,8 MHz)
+        via = None
         if str(band.get("device", "pmsdr")) != active_device:
-            continue
+            if rtl_hf and str(band.get("device", "pmsdr")) == "pmsdr" and band["start_hz"] < HF_DS_MAX:
+                via = "rtlhf"
+            else:
+                continue
 
         requested = selected_segments.get(
             name,
@@ -347,12 +371,15 @@ def make_plan(
             if rng_fm:
                 centers |= set(rtl_centers(rng_fm, [], 2 * 380000))
 
+        if via == "rtlhf":
+            centers = {c for c in centers if c <= HF_DS_MAX - 24000}
         if not centers:
             continue
 
         plan.append({
             "name": name,
             "device": str(band.get("device", "pmsdr")),
+            "via": via,
             "step_hz": step,
             "segments": requested,
             "labels": labels,

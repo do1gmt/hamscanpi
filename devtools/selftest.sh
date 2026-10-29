@@ -482,5 +482,52 @@ assert o._direct(7_100_000, "rtl_sdr") == ["-D"] and o.direct
 assert o._direct(145_000_000, "rtl_sdr") == [] and not o.direct
 assert o._direct(3_700_000, "rtl_fm") == ["-E", "direct2"] and o.rtl_min() == 100000
 PY
+echo "== 20 Kurzwelle mit dem Stick (Direktabtastung)"
+cat > fake_rtl_hf.py <<'PY'
+import signal, sys
+import numpy as np
+a = sys.argv[1:]
+opt = lambda k, d=None: a[a.index(k) + 1] if k in a else d
+f, rate, n = float(opt("-f")), int(opt("-s")), int(opt("-n", "0")) or None
+off = 7_101_000 - f                                  # Ton bei 7,101 MHz
+signal.signal(signal.SIGINT, lambda *x: sys.exit(0))
+done, blk = 0, rate // 10
+while n is None or done < n:
+    m = blk if n is None else min(blk, n - done)
+    k = np.arange(done, done + m)
+    z = 0.5 * np.exp(2j * np.pi * off * k / rate) + 0.01 * (np.random.randn(m) + 1j * np.random.randn(m))
+    u = np.empty(2 * m, np.uint8); u[0::2] = np.clip(z.real * 127.5 + 127.5, 0, 255); u[1::2] = np.clip(z.imag * 127.5 + 127.5, 0, 255)
+    try:
+        sys.stdout.buffer.write(u.tobytes()); sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        break
+    done += m
+PY
+printf '#!/bin/sh\nexec python3 "%s/fake_rtl_hf.py" "$@"\n' "$PWD" > fake_rtl_hf.sh; chmod +x fake_rtl_hf.sh
+(cd bin && timeout 200 python3 - <<'PY') && ok "Fenster wie PMSDR (Lage, Länge, Takt), Kurzwellenbänder im Plan" || bad "Kurzwelle mit dem Stick"
+import os, numpy as np
+import devices as D, sdrcaps as SC, sticks as STK, scan_plan as SP
+SC.tool_flags = lambda refresh=False: {"rtl_sdr": ["-D"], "rtl_fm": ["-E", "direct2"]}
+STK.rtl_params = lambda rtl: {"d": "0", "node": None, "gain": None, "ppm": 0}
+D.kill_orphan_rtl = lambda: 0
+fake = os.path.abspath("../fake_rtl_hf.sh")
+for conj in (False, True):
+    dev = D.RtlHfDevice({"rtlsdr": {"binary": fake}, "iq_conjugate": conj})
+    dev.tune(7_100_000)
+    def peak(i, q):
+        z = (i - 1j * q) if conj else (i + 1j * q)
+        S = np.abs(np.fft.fftshift(np.fft.fft(z[:48000])))
+        return round(np.fft.fftshift(np.fft.fftfreq(48000, 1 / 48000))[S.argmax()])
+    i, q = dev.capture(2); assert abs(len(i) - 98400) < 200 and peak(i, q) == 1000, (len(i), peak(i, q))
+    i, q = dev.capture(14); assert len(i) == 14 * 48000 and peak(i, q) == 1000, (len(i), peak(i, q))
+i, q, T = dev.capture_slot(15.0, lead_s=0.5); assert len(i) == 15 * 48000 and T % 15 == 0
+# Plan: mit Kurzwellen-fähigem Stick kommen die gewählten Kurzwellenbänder als „rtlhf“ dazu
+D.hf_via_rtl = lambda: True
+D.resolve_device = lambda c, hw=None: c
+st = {"active_device": "rtlsdr", "selected_bands": ["40m", "10m", "2m"], "selected_segments": {}}
+plan = {p["name"]: p for p in SP.make_plan(None, st)}
+assert plan.get("40m", {}).get("via") == "rtlhf" and plan["2m"].get("via") is None, plan.keys()
+assert max(plan["10m"]["centers_hz"]) <= 28_800_000, max(plan["10m"]["centers_hz"])
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi
