@@ -39,6 +39,7 @@ import sysmon as SYSMON
 import sticks as STK
 import stations as ST
 import backup as BK
+import bandplan as BPL
 
 BASE = Path(__file__).resolve().parent.parent
 REPORTS = BASE / "reports"
@@ -123,7 +124,10 @@ def ensure_schema():
 
 
 def scanner_config():
-    return read_json(SCANNER_CONFIG, {"ranges": []})
+    """Konfiguration mit dem Bandplan des gewählten Landes – nur lesen! Geschrieben wird mit read_json/write_json
+    auf die Datei selbst, damit die Länder-Überlagerung nie in config/scanner.json landet."""
+    import bandplan as BP
+    return BP.apply(read_json(SCANNER_CONFIG, {"ranges": []}))
 
 
 # Weiter aufnehmen (Einstellungen → „Weiter aufnehmen“): Schlüssel in config/scanner.json, Grenzen
@@ -267,6 +271,8 @@ def load_settings():
         "sat_gain": data.get("sat_gain"),
         "sat_beam_prefer": data.get("sat_beam_prefer", True),
         "ui_lang": data.get("ui_lang"),
+        "country": BPL.country(data), "country_suggest": BPL.suggest(data.get("my_locator")),
+        "countries": [{"code": k, "name": v["name"], "region": v["region"]} for k, v in BPL.COUNTRIES.items()],
         "active_device": DEV.resolve_device(choice, hw),
         "active_device_choice": choice,
         "hardware": hw,
@@ -354,6 +360,10 @@ def save_settings(data):
         out["sat_prio"] = sp
     if "sat_beam_prefer" in data:
         out["sat_beam_prefer"] = bool(data["sat_beam_prefer"])
+    if "country" in data:
+        if str(data["country"]).upper() not in BPL.COUNTRIES:
+            raise ValueError("Land: " + ", ".join(BPL.COUNTRIES))
+        out["country"] = str(data["country"]).upper()
     if "ui_lang" in data:
         if data["ui_lang"] not in ("de", "en"):
             raise ValueError("Sprache: de oder en")

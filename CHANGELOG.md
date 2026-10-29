@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.34 – 2026-10-30
+
+- **Band plan by country / IARU region** (Settings → Station → Country / band plan). New `bin/bandplan.py`
+  lays a country profile from `bandplans/<country>.json` over `config/scanner.json` when reading (remove /
+  replace / add bands, change legal status) – the file itself stays unchanged, own band overrides are kept.
+  All parts that read bands use it (scanner, scan plan, dashboard, segment guard, analysis and decoders).
+  Germany (Region 1) is the default and exactly as before.
+- **USA (Region 2)**, checked against the ARRL band plan: 160/80/60/40 m with US edges and segments (60 m:
+  4 channels + 5351.5–5366.5 kHz segment), CB 40 channels, 6 m 50–54 MHz with repeaters −500 kHz, 2 m 144–148
+  MHz (APRS 144.390, simplex 146.40–146.58/147.42–147.57, call 146.520, repeater outputs with −600 / +600 kHz),
+  **1.25 m**, 70 cm 420–450 MHz (simplex 446.000, repeaters +5/−5 MHz, satellites 435–438), **33 cm**, 23 cm
+  repeaters (−12 MHz) and simplex 1294.5, **FRS/GMRS**, **MURS**, **NOAA Weather Radio**, **ISM 915**, FM
+  broadcast 87.9–107.9 MHz, airband as a normal band. Freenet, PMR446, LPD433, ISM 868 and 4 m are not offered.
+  The locator suggests the country; Live starts on 146.520 in the US.
+- System → Now: with zram the memory warning only appears when memory is really short (under 200 MB available or
+  zram over 80 % full); the swap tile is coloured by zram fill level. Swapping idle pages into zram is normal.
+- Self-test section 21: Germany unchanged, US bands, APRS/simplex/repeater classification, scan plan.
+
 ## 1.7.33 – 2026-10-30
 
 - README screenshot of the scan page: header corrected (status and clocks on the right – the screenshot was

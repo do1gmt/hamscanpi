@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import sys
 import sqlite3
 from pathlib import Path
 
@@ -20,6 +21,12 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 with open(CFG, "r", encoding="utf-8") as f:
     cfg = json.load(f)
+try:                                                      # Bandplan des gewählten Landes
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bandplan as _BP
+    cfg = _BP.apply(cfg)
+except Exception:
+    pass
 
 RATE = int(cfg.get("sample_rate", 48000))
 PPM = float(cfg.get("frequency_correction_ppm", 0.0))

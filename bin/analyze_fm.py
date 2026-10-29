@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import sys
 import sqlite3
 from pathlib import Path
 
@@ -21,6 +22,12 @@ REPORTS = BASE / "reports"
 cfg = json.loads(
     CFG.read_text(encoding="utf-8")
 )
+try:                                                      # Bandplan des gewählten Landes
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import bandplan as _BP
+    cfg = _BP.apply(cfg)
+except Exception:
+    pass
 
 PPM = float(
     cfg.get(

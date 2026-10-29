@@ -34,6 +34,17 @@ def raster_factor(settings, device):
 HF_DS_MAX = 28_800_000          # Direktabtastung: halbe Abtastrate des RTL2832U-Wandlers
 
 
+def _bp(cfg):
+    """Bandplan des gewählten Landes (bandplan.py) über die Datei legen."""
+    try:
+        import sys as _s
+        _s.path.insert(0, str(Path(__file__).resolve().parent))
+        import bandplan as BP
+        return BP.apply(cfg)
+    except Exception:
+        return cfg
+
+
 def band_step(band, settings):
     return max(1000, int(int(band["step_hz"]) * raster_factor(settings, str(band.get("device", "pmsdr")))))
 
@@ -119,7 +130,7 @@ def active_schedule(settings, cfg=None, now=None):
     import time as _t
     lt = _t.localtime(now)
     minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
-    cfg = cfg if cfg is not None else read_json(CFG, {"ranges": []})
+    cfg = cfg if cfg is not None else _bp(read_json(CFG, {"ranges": []}))
     dev = "rtlsdr" if settings.get("active_device") == "rtlsdr" else "pmsdr"
     dev_bands = {b["name"] for b in cfg.get("ranges", []) if str(b.get("device", "pmsdr")) == dev}
     if dev == "rtlsdr":                                   # Kurzwelle auch mit dem Stick (Direktabtastung)
@@ -163,10 +174,7 @@ def make_plan(
     settings=None
 ):
     if cfg is None:
-        cfg = read_json(
-            CFG,
-            {"ranges": []}
-        )
+        cfg = _bp(read_json(CFG, {"ranges": []}))
 
     if settings is None:
         settings = read_json(

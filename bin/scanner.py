@@ -39,8 +39,9 @@ def timestamp():
 
 
 def load_config():
+    import bandplan as BP                              # Bandplan des gewählten Landes (Region)
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return BP.apply(json.load(f))
 
 
 

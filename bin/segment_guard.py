@@ -17,6 +17,13 @@ def _load(path, default):
 
 def _band_cfg(name):
     cfg = _load(CFG, {"ranges": []})
+    try:
+        import sys as _s
+        _s.path.insert(0, str(Path(__file__).resolve().parent))
+        import bandplan as BP
+        cfg = BP.apply(cfg)
+    except Exception:
+        pass
     for band in cfg.get("ranges", []):
         if str(band.get("name")) == str(name):
             return band

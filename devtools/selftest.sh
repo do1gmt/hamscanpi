@@ -10,7 +10,7 @@
 set -e
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-cp -r "$SRC/bin" "$SRC/config" "$SRC/devtools" "$SRC/share" "$T/"
+cp -r "$SRC/bin" "$SRC/config" "$SRC/devtools" "$SRC/share" "$SRC/bandplans" "$T/"
 mkdir -p "$T/data" "$T/log" "$T/recordings" "$T/reports"
 cp "$T/config/web_settings.example.json" "$T/config/web_settings.json"
 cp "$T/config/scanner.default.json" "$T/config/scanner.json"
@@ -528,6 +528,37 @@ st = {"active_device": "rtlsdr", "selected_bands": ["40m", "10m", "2m"], "select
 plan = {p["name"]: p for p in SP.make_plan(None, st)}
 assert plan.get("40m", {}).get("via") == "rtlhf" and plan["2m"].get("via") is None, plan.keys()
 assert max(plan["10m"]["centers_hz"]) <= 28_800_000, max(plan["10m"]["centers_hz"])
+PY
+echo "== 21 Bandplan je Land (IARU-Region)"
+python3 - <<'PY' && ok "DE unverändert, USA: Bänder, APRS 144.390, Simplex 146.520, Relais ±600 kHz, FRS/GMRS, Plan" || bad "Bandplan je Land"
+import json, sys
+sys.path.insert(0, "bin")
+import bandplan as BP
+raw = json.load(open("config/scanner.json"))
+assert BP.apply(raw, code="DE") is raw                                   # Deutschland: exakt wie bisher
+us = BP.apply(raw, code="US")
+B = {b["name"]: b for b in us["ranges"]}
+for n in ("1.25m", "33cm", "FRS/GMRS", "MURS", "NOAA WX", "ISM915"):
+    assert n in B, n
+for n in ("Freenet", "PMR446", "LPD", "ISM868", "4m"):
+    assert n not in B, n
+assert B["2m"]["stop_hz"] == 148_000_000 and B["70cm"]["start_hz"] == 420_000_000 and B["80m"]["stop_hz"] == 4_000_000
+assert B["Flugfunk"]["legal"] == "public"
+import scanner as SC
+cls = lambda b, f: (SC.classify_segment(B[b], f) or {}).get("id")
+assert cls("2m", 144.39e6) == "aprs" and cls("2m", 146.52e6) == "fm"
+assert cls("2m", 146.94e6) == "relais" and cls("2m", 147.06e6) == "relais_plus"
+assert cls("70cm", 446.0e6) == "fm" and cls("60m", 5.357e6) == "ft8"
+assert raw == json.load(open("config/scanner.json"))                     # Datei bleibt unverändert
+import devices as D, scan_plan as SP
+D.resolve_device = lambda c, hw=None: c
+D.hf_via_rtl = lambda: False
+SP.BP_TEST = True
+st = {"country": "US", "active_device": "rtlsdr", "selected_bands": ["2m", "FRS/GMRS", "NOAA WX"], "selected_segments": {}}
+import bandplan
+bandplan.country = lambda settings=None: "US"
+plan = {p["name"]: p for p in SP.make_plan(None, st)}
+assert set(plan) == {"2m", "FRS/GMRS", "NOAA WX"}, set(plan)
 PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -104,6 +104,15 @@ also covers HF via direct sampling.
 | Antenna | a discone or a vertical works for strong passes; a turnstile or QFH is better for satellites |
 | PMSDR (optional) | shortwave 160–10 m, needs a USB sound card for I/Q and its control program – see [docs/pmsdr.md](docs/pmsdr.md) |
 
+**Band plan by country:** *Settings → Station → Country / band plan* selects the band plan used for scanning and
+classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **USA (IARU Region 2)** follows the
+ARRL band plan: 160–10 m with US edges (80 m to 4.0, 40 m to 7.3 MHz), the 60 m channels and the 5351.5–5366.5 kHz
+segment, 6 m to 54 MHz, 2 m to 148 MHz with APRS on 144.390, simplex 146.520 and repeaters with −600/+600 kHz,
+1.25 m, 70 cm 420–450 MHz with ±5 MHz repeaters, 33 cm, 23 cm repeaters, FRS/GMRS, MURS, NOAA Weather Radio,
+ISM 915 MHz, FM broadcast 87.9–107.9 MHz, and the airband as a normal band. The locator suggests a country. The
+profile is a data file (`bandplans/us.json`, overlay over `config/scanner.json`, which stays unchanged); more
+countries can be added the same way – pull requests welcome.
+
 **Shortwave without a PMSDR:** sticks with direct sampling on the Q branch (Nooelec NESDR SMArt v5, RTL-SDR
 Blog V3) also receive 100 kHz – 28.8 MHz. HamScanPi recognises them (*System → Devices*: "HF via direct
 sampling"), switches direct sampling on below 24 MHz (Live and scan; the driver's syntax `-D` / `-D 2` /

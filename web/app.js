@@ -86,6 +86,7 @@
 
   async function loadSettings() {
     settings = await api('/api/settings');
+    setTimeout(() => { try { renderCountry(); } catch (e) { } }, 0);
     const iv = $('interval');
     iv.innerHTML = settings.allowed_intervals.map(m => `<option value="${m}">${intervalLabel(m)}</option>`).join('');
     iv.value = settings.scan_interval_minutes;
@@ -1825,9 +1826,11 @@
     if (m.total) {
       sysMemTotal = m.total;
       tile(`${m.available} MB`, `Arbeitsspeicher verfügbar von ${m.total} MB`, m.available < 120 ? 'bad' : m.available < 200 ? 'warn' : '');
-      tile(m.swap_total ? `${m.swap_used} MB` : 'aus', m.swap_total ? `Swap belegt von ${m.swap_total} MB` : 'Swap', lvl(m.swap_used, 100, 300));
+      tile(m.swap_total ? `${m.swap_used} MB` : 'aus', m.swap_total ? `Swap belegt von ${m.swap_total} MB` : 'Swap',
+           m.swap_zram_only ? lvl(m.swap_used, 0.5 * m.swap_total, 0.8 * m.swap_total) : lvl(m.swap_used, 100, 300));   // zram: Auslagern ruhender Seiten ist normal
       if (m.available < 200) warn.push('Wenig freier Arbeitsspeicher – Überflüge und Scans können sich verzögern.');
-      if (m.swap_used >= 100) warn.push(m.swap_zram_only
+      const zramTight = m.swap_zram_only && (m.available < 200 || (m.swap_total && m.swap_used > 0.8 * m.swap_total));
+      if (m.swap_zram_only ? zramTight : m.swap_used >= 100) warn.push(m.swap_zram_only
         ? 'Arbeitsspeicher knapp – der Pi komprimiert ausgelagerte Daten im RAM (zram; schont die Speicherkarte, kostet etwas Rechenzeit). Ist zram voll, muss der Kernel einen Prozess beenden – in der Prozessliste steht, wer den Speicher belegt.'
         : 'Der Pi lagert auf die Speicherkarte aus (Swap) – das bremst alles. In der Prozessliste steht, wer den Speicher belegt.');
     }
@@ -2104,6 +2107,24 @@
   loadAuth();
 
   // ---------- Sprache ----------
+  // Land / Bandplan (IARU-Region): Bänder, Relais, APRS, Jedermannfunk nach dem Bandplan des Landes
+  function renderCountry() {
+    const sel = $('country'); if (!settings || !settings.countries) return;
+    sel.innerHTML = settings.countries.map(c => `<option value="${c.code}">${esc(c.name)} (IARU Region ${c.region})</option>`).join('');
+    sel.value = settings.country || 'DE';
+    if (sel.value === 'US' && $('liveFreq').value === '145.500') $('liveFreq').value = '146.520';   // US-Anruffrequenz
+    const sug = settings.country_suggest;
+    $('countryHint').textContent = sug && sug !== sel.value
+      ? `Dein Locator liegt vermutlich in: ${(settings.countries.find(c => c.code === sug) || {}).name || sug}.`
+      : (sel.value === 'US' ? 'US-Bandplan nach ARRL: 1.25 m, 33 cm, FRS/GMRS, MURS, NOAA Weather Radio, APRS 144.390, Relais mit US-Ablagen.' : '');
+  }
+  $('country').addEventListener('change', async e => {
+    try {
+      await post('/api/settings', { country: e.target.value });
+      await loadSettings(); await loadBandplan(); renderBands(); loadSatPasses();
+      note($('stationNote'), '✓ Bandplan gewechselt – Bänder neu wählen, gilt ab dem nächsten Scan');
+    } catch (err) { note($('stationNote'), 'Fehler: ' + err.message, true); }
+  });
   $('uiLang').value = I18N.lang;
   $('uiLang').addEventListener('change', e => I18N.set(e.target.value));
 
