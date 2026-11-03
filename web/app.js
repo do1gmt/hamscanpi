@@ -1730,11 +1730,12 @@
     mapKey = stParams();
     try { await loadLeaflet(); } catch (e) { $('mapNote').textContent = 'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.'; return; }
     if (!map) {
-      map = L.map('stMap', { worldCopyJump: true }).setView([50, 10], 3);
+      // feinere Zoomstufen: Mausrad und Gesten in Viertelstufen, +/− in halben Stufen
+      map = L.map('stMap', { worldCopyJump: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 160, wheelDebounceTime: 30 }).setView([50, 10], 3);
       // Größe am unteren Rand ziehbar: Karte bei jeder Größenänderung neu einpassen, Höhe merken
       try { const h = localStorage.getItem('mapH'); if (h) $('stMap').style.height = h; } catch (e) { }
       if (window.ResizeObserver) new ResizeObserver(() => { map.invalidateSize(); try { localStorage.setItem('mapH', $('stMap').style.height || ''); } catch (e) { } }).observe($('stMap'));
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12, attribution: '© OpenStreetMap' }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '© OpenStreetMap' }).addTo(map);
       mapLayer = L.layerGroup().addTo(map);
     }
     mapLayer.clearLayers();

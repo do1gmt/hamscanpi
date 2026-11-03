@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.56 – 2026-11-03
+
+- Station map: finer zoom – the +/− buttons zoom in half steps, mouse wheel and pinch in quarter steps (before:
+  whole steps only); maximum zoom raised from 12 to 15.
+
 ## 1.7.55 – 2026-11-03
 
 - **Station position from the most frequently sent locator.** Before, the "largest" (and since 1.7.49 the newest)
