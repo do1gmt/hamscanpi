@@ -172,6 +172,14 @@ else
     echo "  sudo-Regel nicht gültig – Neustart-Knöpfe bleiben gesperrt"
 fi
 rm -f "$SUDOERS_TMP"
+# Systemprotokoll über Neustarts hinweg behalten (sonst ist nach einem plötzlichen Neustart nicht mehr zu sehen,
+# warum – Stromversorgung, Absturz, Wächter); höchstens 64 MB, geschrieben wird gebündelt
+if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then
+    sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+    printf '[Journal]\nStorage=persistent\nSystemMaxUse=64M\nSyncIntervalSec=5m\n' | sudo tee /etc/systemd/journald.conf.d/hamscanpi.conf >/dev/null
+    sudo systemctl restart systemd-journald 2>/dev/null || true
+    echo "  Systemprotokoll bleibt jetzt über Neustarts erhalten (höchstens 64 MB)"
+fi
 sudo systemctl daemon-reload
 sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler hamscanpi-rescue >/dev/null 2>&1
 sleep 3

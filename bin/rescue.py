@@ -25,6 +25,15 @@ import services as SV  # noqa: E402
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8081
 
 
+
+class _Server(ThreadingHTTPServer):
+    """Warteschlange für neue Verbindungen: 128 statt 5 (Standard von socketserver). Mit 5 liefen bei vielen
+    gleichzeitigen Abfragen (Live: Wasserfall und Status jede Sekunde, dazu Trefferliste, Hinweise …) neue Verbindungen
+    über – der Kernel meldete „Possible SYN flooding on port 8080“, der Browser „NetworkError“ bzw. das Dashboard
+    „Server nicht erreichbar“, obwohl der Dienst lief."""
+    request_queue_size = 128
+    daemon_threads = True
+
 def log(level, event, **data):
     try:
         from applog import log as _l
@@ -199,7 +208,7 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
+    srv = _Server(("0.0.0.0", PORT), H)
     srv.daemon_threads = True
     log("INFO", "start", port=PORT)
     srv.serve_forever()

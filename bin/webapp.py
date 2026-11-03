@@ -68,6 +68,15 @@ MODE_LABELS = {
 
 # ------------------------------------------------------------------ Helfer
 
+
+class _Server(ThreadingHTTPServer):
+    """Warteschlange für neue Verbindungen: 128 statt 5 (Standard von socketserver). Mit 5 liefen bei vielen
+    gleichzeitigen Abfragen (Live: Wasserfall und Status jede Sekunde, dazu Trefferliste, Hinweise …) neue Verbindungen
+    über – der Kernel meldete „Possible SYN flooding on port 8080“, der Browser „NetworkError“ bzw. das Dashboard
+    „Server nicht erreichbar“, obwohl der Dienst lief."""
+    request_queue_size = 128
+    daemon_threads = True
+
 def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -589,11 +598,31 @@ def hit_files(recording_path):
     return out
 
 
+_DS_CACHE = {}
+
+
 def decode_summary(recording_path):
-    """Dekoderergebnisse lesen und offensichtlichen Müll markieren."""
+    """Dekoderergebnisse – zwischengespeichert je Datei und Änderungszeit: die Trefferliste (bis 400 Karten) las
+    sonst bei jedem Auffrischen hunderte JSON-Dateien neu und hielt den Webdienst sekundenlang beschäftigt."""
     if not recording_path:
         return []
     p = REPORTS / f"{Path(recording_path).stem}_decode.json"
+    try:
+        mt = p.stat().st_mtime
+    except OSError:
+        return []
+    c = _DS_CACHE.get(str(p))
+    if c and c[0] == mt:
+        return c[1]
+    v = _decode_summary(recording_path, p)
+    if len(_DS_CACHE) > 5000:
+        _DS_CACHE.clear()
+    _DS_CACHE[str(p)] = (mt, v)
+    return v
+
+
+def _decode_summary(recording_path, p):
+    """Dekoderergebnisse lesen und offensichtlichen Müll markieren."""
     data = read_json(p, None)
     if not data:
         return []
@@ -1655,6 +1684,59 @@ def _watch_start(w):
             _live.keep_alive, _live.watch_until = True, float(w.get("until") or 0)
             if w.get("kind"):
                 _live.dec.set_kind(w["kind"])
+
+
+STALL_FILE = BASE / "log" / "webapp_stall.txt"
+
+
+def stall_loop(port, first_wait=60, limit=15, every=10, rounds=None):
+    """Aussetzer des Dashboards festhalten: alle 10 s eine Anfrage an sich selbst. Davor wird faulthandler scharf
+    gemacht – er läuft ohne Python-Sperre (GIL) in eigenem C-Faden: antwortet der Server 15 s lang nicht (egal ob
+    eine Berechnung die GIL hält, Fäden auf Schreiben/Platte warten oder etwas sich gegenseitig blockiert), schreibt
+    er, was JEDER Faden gerade tut, nach log/webapp_stall.txt. Die Datei kommt ins Diagnose-Paket."""
+    import faulthandler
+    import urllib.request
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    time.sleep(first_wait)
+    n = 0
+    while rounds is None or n < rounds:
+        n += 1
+        t0 = time.time()
+        try:
+            STALL_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(STALL_FILE, "a", encoding="utf-8") as fh:
+                fh.write(f"\n===== {datetime.now(timezone.utc).isoformat(timespec='seconds')} Wache scharf (Dump, falls {limit} s keine Antwort)\n")
+                fh.flush()
+                faulthandler.dump_traceback_later(limit, repeat=False, file=fh)
+                try:
+                    with opener.open(f"http://127.0.0.1:{port}/api/ping", timeout=40) as r:
+                        r.read()
+                finally:
+                    faulthandler.cancel_dump_traceback_later()
+            dt = time.time() - t0
+            if dt > min(5, limit):
+                APPLOG.log("WARN", "webapp", "webapp_stall", seconds=round(dt, 1),
+                           dumped=dt >= limit, file="log/webapp_stall.txt" if dt >= limit else None)
+            else:                                        # unauffällig: die Markierungszeile wieder entfernen
+                _trim_stall_file()
+        except Exception as e:
+            APPLOG.log("WARN", "webapp", "webapp_stall_probe_failed", error=f"{type(e).__name__}: {e}",
+                       seconds=round(time.time() - t0, 1))
+        time.sleep(every)
+
+
+def _trim_stall_file():
+    """Nur echte Aussetzer behalten (die letzte „scharf“-Zeile ohne Dump löschen), höchstens 2 MB."""
+    try:
+        txt = STALL_FILE.read_text(encoding="utf-8", errors="replace")
+        k = txt.rfind("\n===== ")
+        if k >= 0 and "Thread 0x" not in txt[k:] and "Current thread" not in txt[k:]:
+            txt = txt[:k]
+        if len(txt) > 2_000_000:
+            txt = txt[-1_500_000:]
+        STALL_FILE.write_text(txt, encoding="utf-8")
+    except OSError:
+        pass
 
 
 def watchdog_loop(port):
@@ -2789,6 +2871,7 @@ def main():
     threading.Thread(target=watch_loop, daemon=True).start()
     threading.Thread(target=watch_loop_live, daemon=True).start()
     threading.Thread(target=watchdog_loop, args=(port,), daemon=True).start()
+    threading.Thread(target=stall_loop, args=(port,), daemon=True).start()
 
     def eibi_loop():                                   # EiBi-Sendeplan: nach dem Start und täglich prüfen, ob neu zu holen
         time.sleep(90)
@@ -2800,7 +2883,7 @@ def main():
                 APPLOG.log("WARN", "webapp", "eibi_refresh_failed", error=f"{type(e).__name__}: {e}")
             time.sleep(86400)
     threading.Thread(target=eibi_loop, daemon=True).start()
-    srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    srv = _Server(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()
 

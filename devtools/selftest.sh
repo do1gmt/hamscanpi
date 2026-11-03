@@ -1270,5 +1270,28 @@ assert st["state"] == "error" and "nicht gestartet" in st["message"] and "PID" i
 assert logs and logs[0][0][2] == "scan_start_rejected" and "PID" in logs[0][1]["holder"]
 p.kill()
 PY
+echo "== 41 Aussetzer des Dashboards: Abbild aller Fäden"
+(cd bin && timeout 60 python3 - <<'PY') && ok "hängt der Webserver, steht in log/webapp_stall.txt, was jeder Faden tut" || bad "Aussetzer-Wache"
+import tempfile, threading, time
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+import webapp as W
+W.STALL_FILE = Path(tempfile.mkdtemp()) / "webapp_stall.txt"
+logs = []
+W.APPLOG.log = lambda *a, **k: logs.append((a, k))
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        def blockiert_hier():
+            time.sleep(4)
+        blockiert_hier()
+        self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
+    def log_message(self, *a): pass
+srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+W.stall_loop(srv.server_address[1], first_wait=0, limit=2, every=0, rounds=1)
+txt = W.STALL_FILE.read_text()
+assert "blockiert_hier" in txt and "do_GET" in txt, txt[-800:]
+assert logs and logs[0][0][2] == "webapp_stall" and logs[0][1]["dumped"]
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

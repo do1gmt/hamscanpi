@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.69 – 2026-11-03
+
+- **Dashboard stalls are recorded:** the web server asks itself every 10 s; before that `faulthandler` is armed
+  (it runs in its own C thread, independent of the Python lock). If there is no answer for 15 s, the current stack of
+  every thread is written to `log/webapp_stall.txt` and `webapp_stall` is logged (with seconds) – so the next
+  "Server not reachable" shows what the server was doing. Shorter delays (> 5 s) are logged too.
+- **System journal kept across reboots** (update installs `/etc/systemd/journald.conf.d/hamscanpi.conf`:
+  persistent, at most 64 MB, written every 5 min): after a sudden reboot the reason (power, crash, watchdog) can
+  be seen. The diagnostics package contains the last 300 lines before the previous boot, the list of boots and
+  `webapp_stall.txt`.
+- Self-test section 41.
+
 ## 1.7.68 – 2026-11-03
 
 - Fix: EiBi card in Live – filters and search could appear not to work: answers to earlier requests (e.g. the

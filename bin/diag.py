@@ -62,12 +62,15 @@ def write(fileobj, stream=True):
         add("info.txt", f"HamScanPi {ver}\nerstellt {time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n\n"
             + _run(["uptime"]) + "\n" + _run(["free", "-m"]) + "\n" + _run(["df", "-h", str(BASE)])
             + "\n" + _run(["swapon", "--show"]) + "\n" + _run(["vcgencmd", "get_throttled"])
-            + "\n" + _run(["vcgencmd", "measure_temp"]) + "\n" + _run(["python3", str(BASE / "bin" / "lockinfo.py")])
+            + "\n" + _run(["vcgencmd", "measure_temp"]) + "\n" + _run(["python3", str(BASE / "bin" / "lockinfo.py")]) + "\n" + _run(["journalctl", "--list-boots", "--no-pager"])[-3000:]
             + "\n" + _run(["ps", "aux", "--sort=-rss"])[:20000])
         add("log/app.jsonl", _tail(BASE / "log" / "app.jsonl", 5_000_000))
         add("log/satellite.log", _tail(BASE / "log" / "satellite.log", 1_000_000))
         add("log/scan-cycle.log", _tail(BASE / "log" / "scan-cycle.log", 1_000_000))       # Ausgabe der Scanläufe
         add("log/scheduler.log", _tail(BASE / "log" / "scheduler.log", 500_000))
+        add("log/webapp_stall.txt", _tail(BASE / "log" / "webapp_stall.txt", 1_000_000))   # Aussetzer des Dashboards
+        # letzte Minuten vor dem vorigen Start (nur mit dauerhaftem Systemprotokoll): warum hat er neu gestartet?
+        add("journal/previous-boot-tail.txt", _run(["journalctl", "-b", "-1", "-n", "300", "--no-pager", "-o", "short-iso"]).encode())
         add("journal/kernel.txt", _run(["journalctl", "-k", "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-3_000_000:])
         for u in ("hamscanpi-web", "hamscanpi-scheduler", "hamscanpi-rescue"):
             add(f"journal/{u}.txt", _run(["journalctl", "-u", u, "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-2_000_000:])
