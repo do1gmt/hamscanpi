@@ -380,7 +380,8 @@ def target_name(code, ref):
 def _describe(row, ref, home, now):
     host, site = site_of(row, ref)
     d = dict(row)
-    d["lang_name"] = ref["langs"].get(row["lang"], row["lang"])
+    # mehrere Sprachen („D,E“): jede einzeln benennen
+    d["lang_name"] = ", ".join(ref["langs"].get(x.strip(), x.strip()) for x in row["lang"].split(",") if x.strip())
     d["country"] = ref["countries"].get(row["itu"], row["itu"])
     d["target_name"] = target_name(row["target"], ref)
     d["site_name"] = site["name"] if site else None

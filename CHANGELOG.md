@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.71 – 2026-11-03
+
+- English UI: hints containing bold text or links (e.g. the SSB hint in Live) stayed half German – translations
+  with HTML are now split into their text pieces automatically, so every hint of this kind is translated.
+- EiBi: "Sprache"/"Sender" in the EiBi card and the EiBi scan card appeared as "Voice"/"Station" (same German word
+  as the voice segments and FM stations) – now "Language" and "Transmitter"; "(irregular)" translated; several
+  languages of one broadcast are spelled out ("D,E" → "German, English"); no lone arrow when a broadcast has no
+  language (fax, RTTY).
+
 ## 1.7.70 – 2026-11-03
 
 - **Memory:** the analysis after a scan (`analyze_recordings.py`) needed 450–620 MB again and again (system history):

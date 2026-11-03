@@ -2143,7 +2143,7 @@
     if (!d.items.length) { $('liveEibi').hidden = false; $('liveEibi').innerHTML = `<span class="muted">EiBi: auf ${khz.toLocaleString(I18N.locale)} kHz (±5) laut Plan gerade nichts.</span>`; return; }
     const top = d.items[0], rest = d.items.slice(1, 6);
     $('liveEibi').hidden = false;
-    $('liveEibi').innerHTML = `<b>EiBi ${top.khz} kHz:</b> <b class="no-i18n">${esc(top.station)}</b> · ${esc(top.lang_name || top.lang || '')} → ${esc(top.target_name || top.target)} · <span class="muted">${esc(eibiSite(top))} · ${EN ? 'until' : 'bis'} ${top.until} UTC${top.unsure ? (EN ? ' · irregular' : ' · unregelmäßig') : ''}</span>`
+    $('liveEibi').innerHTML = `<b>EiBi ${top.khz} kHz:</b> <b class="no-i18n">${esc(top.station)}</b> · ${(top.lang_name || top.lang) ? esc(top.lang_name || top.lang) + ' ' : ''}→ ${esc(top.target_name || top.target)} · <span class="muted">${esc(eibiSite(top))} · ${EN ? 'until' : 'bis'} ${top.until} UTC${top.unsure ? (EN ? ' · irregular' : ' · unregelmäßig') : ''}</span>`
       + (rest.length ? `<div class="muted eibi-alt">${EN ? 'also' : 'auch'}: ${rest.map(x => `${x.khz} <span class="no-i18n">${esc(x.station)}</span> (${esc(x.lang_name || x.lang || '')})`).join(' · ')}</div>` : '');
   }
   setInterval(() => { if (!$('liveEibi').hidden || lf() < 30e6) eibiNow(true); }, 60000);
@@ -2161,7 +2161,7 @@
     fill($('eibiCountry'), d.countries, EN ? 'all' : 'alle');
     $('eibiCount').textContent = d.items.length ? `· ${d.items.length}` : '';
     $('eibiList').innerHTML = d.items.slice(0, 400).map(x => `<tr class="eibi-row" data-khz="${x.khz}" title="antippen: Live in AM auf ${x.khz} kHz">`
-      + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)}${x.unsure ? ' <small class="muted">(unregelmäßig)</small>' : ''}</td>`
+      + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)}${x.unsure ? ` <small class="muted">(${EN ? 'irregular' : 'unregelmäßig'})</small>` : ''}</td>`
       + `<td>${esc(x.lang_name || x.lang || '')}</td><td>${esc(x.target_name || x.target || '')}</td><td>${esc(eibiSite(x))}</td><td class="mono-num">${x.until}</td></tr>`).join('')
       || `<tr><td colspan="6" class="muted">${d.status.count ? 'Gerade nichts für diese Auswahl.' : 'EiBi-Sendeplan noch nicht geladen – „Liste verwalten“ → „Jetzt neu holen“.'}</td></tr>`;
     const S = d.status;
