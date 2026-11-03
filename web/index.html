@@ -341,6 +341,14 @@
           <tbody id="sysProcs"></tbody></table></div>
         <p class="hint">CPU in Prozent des ganzen Prozessors (alle Kerne zusammen), gemessen seit der letzten Anzeige.</p>
       </section>
+      <section class="panel" id="panel-services">
+        <h2>Dienste</h2>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Dienst</th><th>Zustand</th><th>Speicher</th><th>Neustarts</th><th></th></tr></thead>
+          <tbody id="svcList"><tr><td colspan="5" class="muted">–</td></tr></tbody></table></div>
+        <div class="actions"><button type="button" class="btn btn-danger" id="svcReboot">Pi neu starten</button><a class="btn" id="svcDiag" href="/api/diagnose" download>↓ Diagnose herunterladen</a></div>
+        <div class="save-note" id="svcNote" aria-live="polite"></div>
+        <p class="hint" id="svcHint">Hängt das Dashboard, hilft die <a id="svcRescue" href="#" target="_blank" rel="noopener">Notfall-Seite</a> (eigener Dienst, Port 8081): dort lassen sich die Dienste und der Pi ebenso neu starten und die Diagnose herunterladen. Zusätzlich starten Webserver und Zeitplaner von selbst neu, wenn sie 3 bzw. 5 Minuten nicht mehr reagieren. Die Diagnose (Protokolle, Kernel- und Dienstmeldungen der letzten 2 Tage, Systemverlauf, Einstellungen ohne Zugangsdaten) hilft bei der Fehlersuche.</p>
+      </section>
       <section class="panel" id="panel-sticks">
         <h2>Geräte</h2>
         <p class="hint warn-text" id="sticksNew" hidden></p>

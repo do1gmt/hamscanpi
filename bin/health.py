@@ -257,7 +257,7 @@ def check_clock(st):
 
 
 def check_services(st):
-    for unit, name in (("hamscanpi-web", "Webserver"), ("hamscanpi-scheduler", "Zeitplaner")):
+    for unit, name in (("hamscanpi-web", "Webserver"), ("hamscanpi-scheduler", "Zeitplaner"), ("hamscanpi-rescue", "Notfall-Seite")):
         code, out = _run(["systemctl", "show", unit, "-p", "NRestarts", "--value"], timeout=5)
         if code != 0 or not out.strip().isdigit():
             continue

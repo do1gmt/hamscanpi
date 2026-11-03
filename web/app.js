@@ -1320,7 +1320,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1834,6 +1834,32 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- System: Dienste (bin/services.py) ----------
+  async function loadServices() {
+    let d; try { d = await api('/api/services'); } catch (e) { return; }
+    $('svcRescue').href = `${location.protocol}//${location.hostname}:${(Number(location.port) || 80) + 1}/`;
+    $('svcList').innerHTML = d.units.filter(u => u.loaded).map(u => `<tr><td><b>${esc(u.label)}</b> <small class="muted no-i18n">${esc(u.unit)}</small></td>`
+      + `<td class="${u.active === 'active' ? 'ok' : 'warn-text'}">${esc(u.active === 'active' ? 'läuft' : (u.active || '?'))}</td>`
+      + `<td class="mono-num">${u.memory_mb != null ? u.memory_mb + ' MB' : '–'}</td><td class="mono-num">${u.restarts != null ? u.restarts + '×' : '–'}</td>`
+      + `<td><button type="button" class="btn btn-small" data-svc="${esc(u.unit)}" ${d.sudo ? '' : 'disabled'}>Neu starten</button></td></tr>`).join('')
+      || '<tr><td colspan="5" class="muted">–</td></tr>';
+    $('svcReboot').disabled = !d.sudo;
+    if (!d.sudo) note($('svcNote'), 'Neu starten ist noch nicht freigegeben – das Update legt die nötige sudo-Regel an.', true);
+  }
+  $('svcList').addEventListener('click', async e => {
+    const b = e.target.closest('[data-svc]'); if (!b) return;
+    const label = b.closest('tr').querySelector('b').textContent;
+    if (!confirm(`${label} neu starten?` + (b.dataset.svc === 'hamscanpi-scheduler' ? ' Ein laufender Scan oder Überflug wird dabei abgebrochen.' : ''))) return;
+    try { await post('/api/services/restart', { unit: b.dataset.svc }); note($('svcNote'), `✓ ${label} wird neu gestartet`);
+          if (b.dataset.svc === 'hamscanpi-web') setTimeout(() => location.reload(), 8000); else setTimeout(loadServices, 5000); }
+    catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
+  });
+  $('svcReboot').addEventListener('click', async () => {
+    if (!confirm('Den Raspberry Pi wirklich neu starten? Laufende Scans und Aufnahmen werden abgebrochen. In etwa einer Minute ist er wieder da.')) return;
+    try { await post('/api/services/restart', { unit: 'reboot' }); note($('svcNote'), 'Der Pi startet neu – die Seite lädt in 90 s neu'); setTimeout(() => location.reload(), 90000); }
+    catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
+  });
+
   // ---------- System: zuletzt an PSK Reporter gemeldet ----------
   async function loadPsk() {
     let d; try { d = await api('/api/pskreporter'); } catch (e) { return; }

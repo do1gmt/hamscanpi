@@ -829,5 +829,30 @@ tone, ratio, headok, mb = out.stdout.split()
 assert int(tone) == 1000 and float(ratio) < 0.05 and headok == "True", out.stdout + out.stderr
 assert int(mb) < 320, f"Spitzenspeicher {mb} MB"               # vorher über 800 MB
 PY
+echo "== 29 Stabilität: Wächter-Meldung, Notfall-Seite, Diagnose"
+(cd bin && timeout 120 python3 - <<'PY') && ok "sd_notify, Notfall-Seite antwortet, Diagnose ohne Zugangsdaten" || bad "Stabilität"
+import io, json, os, socket, tarfile, tempfile, threading, urllib.request
+import sdnotify, diag, services as SV
+d = tempfile.mkdtemp(); p = d + "/n.sock"
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM); srv.bind(p)
+os.environ["NOTIFY_SOCKET"] = p; os.environ["WATCHDOG_USEC"] = "180000000"
+assert sdnotify.watchdog_enabled() and sdnotify.notify("WATCHDOG=1") and srv.recv(100) == b"WATCHDOG=1"
+ws = json.load(open("../config/web_settings.json")); ws.setdefault("notify", {})["tg_token"] = "GEHEIM-TOKEN"
+json.dump(ws, open("../config/web_settings.json", "w"))
+buf = io.BytesIO(); diag.write(buf, stream=False); buf.seek(0)
+t = tarfile.open(fileobj=buf)
+names = t.getnames()
+assert "info.txt" in names and "log/app.jsonl" in names and "config/web_settings.json" in names
+assert b"GEHEIM-TOKEN" not in t.extractfile("config/web_settings.json").read()
+st = SV.status(); assert {u["unit"] for u in st["units"]} == set(SV.UNITS) and "sudo" in st
+import sys; sys.argv = ["rescue.py", "18081"]
+import rescue
+from http.server import ThreadingHTTPServer
+h = ThreadingHTTPServer(("127.0.0.1", 18081), rescue.H)
+threading.Thread(target=h.serve_forever, daemon=True).start()
+html = urllib.request.build_opener(urllib.request.ProxyHandler({})).open("http://127.0.0.1:18081/", timeout=30).read().decode()
+assert "Notfall-Seite" in html and "Pi neu starten" in html and "Diagnose herunterladen" in html
+h.shutdown()
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

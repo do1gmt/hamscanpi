@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.47 – 2026-11-03
+
+- **Self-healing:** systemd watchdog for the web server (checks itself every 30 s with a request to itself;
+  restarted after 3 min without an answer) and the scheduler (reports every loop, 10 s; restarted after 5 min).
+  Memory limits per service (`MemoryMax`: web 500 MB, scheduler incl. scans/passes/analysis 750 MB with
+  `OOMPolicy=continue`) – an outlier only hits its own service. Restarts appear as notices.
+- **System → Services:** state, memory and restarts of web server, scheduler and rescue page; restart buttons,
+  "Restart Pi", "Download diagnostics", link to the rescue page.
+- **Rescue page** (`bin/rescue.py`, own service `hamscanpi-rescue`, port 8081): standard library only, keeps
+  answering when the dashboard hangs – services, memory, latest log lines, restart services/Pi, diagnostics.
+  Same password and trusted networks as the dashboard (the login works for both).
+- **Diagnostics** (`bin/diag.py`): logs, satellite log, kernel and service journal of the last 2 days, system
+  history, notices, check state, settings without credentials, memory/disks/processes – one tar.gz.
+- Restarting needs root: install and update create `/etc/sudoers.d/hamscanpi` (checked with `visudo`), allowing
+  exactly `systemctl --no-block restart hamscanpi-web|hamscanpi-scheduler|hamscanpi-rescue` and
+  `systemctl reboot`. Requests are logged (`restart_requested`, `reboot_requested`, with IP).
+- README: "When something hangs". Self-test section 29.
+
 ## 1.7.46 – 2026-11-03
 
 - **Cause of the hangs in mixed HF/satellite operation fixed: memory during the analysis.** The system history

@@ -109,6 +109,17 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**When something hangs:** the web server checks itself every 30 s and the scheduler reports every 10 s to
+systemd's watchdog – if one of them stops responding for 3 or 5 minutes, systemd restarts it (shown as a notice).
+Memory limits per service (web 500 MB, scheduler with scans and analysis 750 MB) make an outlier hit only its
+own service instead of the whole Pi. *System → Services* shows the services and restarts them or the Pi; if the
+dashboard itself does not answer, the **rescue page** on port 8081 (`http://<pi>:8081`, a separate tiny service,
+same password) does the same and shows memory and the latest log lines. Restarting needs root: the update
+installs `/etc/sudoers.d/hamscanpi`, which allows exactly `systemctl --no-block restart hamscanpi-web |
+hamscanpi-scheduler | hamscanpi-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
+*Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs, kernel and service
+messages of the last 2 days, the system history and the settings without credentials into one file.
+
 **Band plan by country:** *Settings → Station → Country / band plan* selects the band plan used for scanning and
 classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **Austria**, **Switzerland** and the **United Kingdom** (Region 1) and **Canada** (Region 2) are
 available as well (Freenet only in Germany, no 4 m in Austria, UK 4 m 70.0–70.5 MHz, UK 60 m allocations and CB

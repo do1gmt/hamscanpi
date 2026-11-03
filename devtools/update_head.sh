@@ -74,7 +74,7 @@ for f in /etc/systemd/system/*.service /lib/systemd/system/*.service; do
     case "$(basename "$f")" in hamscanpi-*|pmsdr-control*) continue;; esac
     grep -qE "(webapp|scheduler)\.py" "$f" 2>/dev/null && grep -qi "pmsdr" "$f" 2>/dev/null && OLD_UNITS="$OLD_UNITS $(basename "$f")"
 done
-for u in hamscanpi-web.service hamscanpi-scheduler.service; do
+for u in hamscanpi-web.service hamscanpi-scheduler.service hamscanpi-rescue.service; do
     systemctl cat "$u" >/dev/null 2>&1 && sudo systemctl stop "$u" || true
 done
 if [ -n "${OLD_UNITS// /}" ]; then
@@ -158,6 +158,11 @@ WorkingDirectory=$NEW
 ExecStart=/usr/bin/python3 $NEW/bin/webapp.py $PORT
 Restart=always
 RestartSec=3
+# Wächter: der Webserver prüft sich alle 30 s selbst; antwortet er 3 min nicht, startet systemd ihn neu
+NotifyAccess=main
+WatchdogSec=180
+# Speichergrenze: ein Ausreißer trifft nur den Webserver (Neustart) statt den ganzen Pi
+MemoryMax=500M
 
 [Install]
 WantedBy=multi-user.target
@@ -173,14 +178,48 @@ WorkingDirectory=$NEW
 ExecStart=/usr/bin/python3 $NEW/bin/scheduler.py
 Restart=always
 RestartSec=5
+# Wächter: Meldung bei jedem Durchlauf (10 s); hängt die Schleife 5 min, Neustart
+NotifyAccess=main
+WatchdogSec=300
+# Scans, Überflüge und Auswertung laufen in dieser Gruppe: bei Speichermangel trifft es den größten Prozess
+# (meist eine Auswertung), der Zeitplaner selbst läuft weiter
+MemoryMax=750M
+OOMPolicy=continue
 
 [Install]
 WantedBy=multi-user.target
 UNIT
+sudo tee /etc/systemd/system/hamscanpi-rescue.service >/dev/null <<UNIT
+[Unit]
+Description=HamScanPi rescue page (restart services, reboot, diagnostics)
+After=network.target
+
+[Service]
+User=$(id -un)
+WorkingDirectory=$NEW
+ExecStart=/usr/bin/python3 $NEW/bin/rescue.py $((PORT + 1))
+Restart=always
+RestartSec=3
+MemoryMax=120M
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+# sudo-Regel: genau diese Befehle ohne Passwort (Dienste neu starten, Pi neu starten) – vorher geprüft
+SYSTEMCTL_BIN="$(command -v systemctl || echo /usr/bin/systemctl)"
+SUDOERS_TMP="$(mktemp)"
+printf '# HamScanPi: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s reboot\n' \
+    "$(id -un)" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" > "$SUDOERS_TMP"
+if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
+    sudo install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/hamscanpi
+else
+    echo "  sudo-Regel nicht gültig – Neustart-Knöpfe bleiben gesperrt"
+fi
+rm -f "$SUDOERS_TMP"
 sudo systemctl daemon-reload
-sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler >/dev/null 2>&1
+sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler hamscanpi-rescue >/dev/null 2>&1
 sleep 3
-for u in hamscanpi-web hamscanpi-scheduler; do echo "  $u: $(systemctl is-active $u)"; done
+for u in hamscanpi-web hamscanpi-scheduler hamscanpi-rescue; do echo "  $u: $(systemctl is-active $u)"; done
 for i in 1 2 3 4 5 6 7 8; do curl -fs -m 3 "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && break; sleep 1; done
 curl -fs -m 3 "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && ok "Dashboard antwortet auf Port $PORT" || warn "Dashboard antwortet nicht – journalctl -u hamscanpi-web -n 30"
 

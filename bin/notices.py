@@ -248,6 +248,7 @@ EN_RX = [
     (r"^(.+) liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht$", r"\1 is on the same drive as HamScanPi – a backup there does not help if the card fails"),
     (r"^kein Zielordner eingetragen$", "no target folder set"),
     (r"^Kein Internet seit (.+)$", r"No internet since \1"),
+    (r"^Notfall-Seite wurde neu gestartet$", "Rescue page was restarted"),
     (r"^Dauerwache ([\d.]+) MHz (\S+)( bis (.+))?$", lambda m: f"Continuous watch {m.group(1)} MHz {m.group(2)}" + (f" until {m.group(4)}" if m.group(4) else "")),
     (r"^Live läuft ohne Browser weiter .*$", "Live keeps running without a browser (decoders only). Scans pause meanwhile; satellite passes "
      "interrupt the watch briefly, then it continues on the same frequency."),

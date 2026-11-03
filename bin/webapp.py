@@ -1522,6 +1522,27 @@ def _watch_start(w):
                 _live.dec.set_kind(w["kind"])
 
 
+def watchdog_loop(port):
+    """systemd-Wächter: alle 30 s prüft der Webserver, ob er selbst noch antwortet (Anfrage an sich selbst), und
+    meldet nur dann „lebt“. Hängt er (Speicher voll, blockierte Anfragen), bleibt die Meldung aus und systemd
+    startet ihn nach WatchdogSec (3 min) neu – das steht dann als Hinweis „Webserver wurde neu gestartet“ da."""
+    import urllib.request
+    import sdnotify
+    if not sdnotify.watchdog_enabled():
+        return
+    sdnotify.notify("READY=1")
+    while True:
+        try:
+            # ohne Proxy (ein eingestellter http_proxy würde die Anfrage an sich selbst umleiten)
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+                    f"http://127.0.0.1:{port}/api/ping", timeout=15) as r:
+                if r.status == 200:
+                    sdnotify.notify("WATCHDOG=1")
+        except Exception as e:
+            APPLOG.log("WARN", "webapp", "watchdog_ping_failed", error=f"{type(e).__name__}: {e}")
+        time.sleep(30)
+
+
 def watch_loop_live():
     """Wächter der Dauerwache (alle 3 s)."""
     time.sleep(15)
@@ -1992,6 +2013,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(SYSMON.live())
             if path == "/api/sticks":
                 return self.send_json(STK.overview())
+            if path == "/api/ping":                       # für den systemd-Wächter (siehe watchdog_loop)
+                return self.send_json({"ok": True, "t": time.time()})
+            if path == "/api/services":
+                import services as SV
+                return self.send_json(SV.status())
+            if path == "/api/diagnose":
+                import diag
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Disposition", f'attachment; filename="{diag.filename()}"')
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+                diag.write(self.wfile, stream=True)
+                APPLOG.log("INFO", "webapp", "diagnose_downloaded", ip=self.client_ip())
+                return
             if path == "/api/pskreporter":
                 import pskreporter as PSK
                 st = load_settings()
@@ -2289,6 +2327,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if path == "/api/live/start":
                 return self.send_json({"ok": True, "live": live_start(data)})
+            if path == "/api/services/restart":
+                import services as SV
+                unit = str(data.get("unit", ""))
+                if unit == "reboot":
+                    APPLOG.log("WARN", "webapp", "reboot_requested", ip=self.client_ip())
+                    threading.Thread(target=SV.reboot, daemon=True).start()
+                    return self.send_json({"ok": True, "reboot": True})
+                SV.restart(unit, log=lambda lv, comp, ev, **d: APPLOG.log(lv, "webapp", ev, ip=self.client_ip(), **d))
+                return self.send_json({"ok": True})
             if path == "/api/live/watch":
                 until = 0.0
                 u = str(data.get("until") or "").strip()
@@ -2468,6 +2515,7 @@ def main():
             time.sleep(60)
     threading.Thread(target=watch_loop, daemon=True).start()
     threading.Thread(target=watch_loop_live, daemon=True).start()
+    threading.Thread(target=watchdog_loop, args=(port,), daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()

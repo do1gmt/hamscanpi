@@ -424,7 +424,16 @@ try:
 except Exception:
     _sysmon = None
 
+# systemd-Wächter: jede Runde (alle 10 s) „lebt“ melden – hängt die Schleife länger als WatchdogSec (5 min),
+# startet systemd den Zeitplaner neu (Hinweis „Zeitplaner wurde neu gestartet“)
+try:
+    import sdnotify as _sdn
+    _sdn.notify("READY=1")
+except Exception:
+    _sdn = None
 while True:
+    if _sdn:
+        _sdn.notify("WATCHDOG=1")
     try:
         (BASE / "data" / "scheduler.heartbeat").touch()
         if _sysmon:
