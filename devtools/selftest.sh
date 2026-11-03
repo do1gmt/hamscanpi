@@ -1145,5 +1145,30 @@ for _ in range(60):
 txt = " ".join(e["text"] for e in d.status()["events"]); d.stop()
 assert "SEEWETTERBERICHT" in txt, txt
 PY
+echo "== 37 „Neu im letzten Lauf“ = wirklich der letzte Lauf"
+(cd bin && python3 - <<'PY') && ok "neu zählt nur den letzten abgeschlossenen Lauf (auch ohne Treffer, unterbrochen oder fehlgeschlagen)" || bad "neu im letzten Lauf"
+import webapp as W
+db = W.db_connect()
+db.execute("CREATE TABLE IF NOT EXISTS run (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT, finished_at TEXT, duration_s INTEGER, status TEXT, peaks INTEGER DEFAULT 0, rejected INTEGER DEFAULT 0, error TEXT)")
+def run(st, a, b, status):
+    db.execute("INSERT INTO run (started_at, finished_at, status, peaks) VALUES (?,?,?,0)", (a, b, status))
+def hit(t, band="40m"):
+    cur = db.execute("INSERT INTO scan (time, band, center_hz, noise_db, rms_i, rms_q) VALUES (?,?,?,?,?,?)", (t, band, 7e6, -100, 0, 0))
+    db.execute("INSERT INTO peak (scan_id, rf_hz, offset_hz, level_db, snr_db) VALUES (?,?,?,?,?)", (cur.lastrowid, 7.07e6, 0, -60, 10))
+run(1, "2030-01-01T10:00:00+00:00", "2030-01-01T10:05:00+00:00", "success"); hit("2030-01-01T10:02:00+00:00"); hit("2030-01-01T10:03:00+00:00")
+run(2, "2030-01-01T10:30:00+00:00", "2030-01-01T10:33:00+00:00", "failed"); hit("2030-01-01T10:31:00+00:00")
+hit("2030-01-01T10:40:00+00:00", "Satelliten")                     # Überflug zwischen den Läufen: kein Scan-Treffer
+db.commit()
+assert W.stats()["hits_new"] == 1, W.stats()["hits_new"]           # nur der letzte (fehlgeschlagene) Lauf
+run(3, "2030-01-01T11:00:00+00:00", "2030-01-01T11:04:00+00:00", "cancelled"); db.commit()
+assert W.stats()["hits_new"] == 0                                    # letzter Lauf ohne Treffer: 0, nicht der vorige
+assert W.stats()["last_run"]["status"] == "cancelled"
+run(4, "2030-01-01T11:30:00+00:00", None, "running"); db.commit()
+assert W.stats()["hits_new"] == 0                                    # laufender Lauf zählt noch nicht
+h = [x for x in W.list_hits({"limit": "50", "interference": "1"}) if x["time"].startswith("2030-01-01T10:31")]
+assert h and h[0]["is_new"] is False
+db.execute("DELETE FROM run WHERE started_at LIKE '2030-%'"); db.execute("DELETE FROM peak WHERE scan_id IN (SELECT id FROM scan WHERE time LIKE '2030-%')")
+db.execute("DELETE FROM scan WHERE time LIKE '2030-%'"); db.commit(); db.close()
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

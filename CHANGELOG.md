@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.61 – 2026-11-03
+
+- Fix: **"new in last run"** (counter on the hits page and the "new" badge) now really refers to the last
+  completed scan run – also when it found nothing, was interrupted for a satellite pass or failed – and only to
+  hits inside that run's time window, without satellite passes. Before it took the last *successful* run and
+  counted everything since its start, so after interrupted/failed runs (or while every run was falsely "failed"
+  in 1.7.48–1.7.50) it showed the hits of an older run that had found something. "Hits last scan" uses the same
+  run. Self-test section 37.
+
 ## 1.7.60 – 2026-11-03
 
 - **NAVTEX in Live** (`bin/navtex.py`): SITOR-B, 100 Bd, 170 Hz shift; character table CCIR 476 (ITU-R M.476),

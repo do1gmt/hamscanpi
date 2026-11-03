@@ -616,16 +616,21 @@ def decode_summary(recording_path):
     return out
 
 
-def previous_run_bound():
-    """Startzeit des letzten erfolgreichen Laufs (für 'neu'-Markierung)."""
+def last_run_window():
+    """Zeitfenster des letzten abgeschlossenen Scanlaufs – egal ob er etwas gefunden hat, ob er normal endete, für
+    einen Überflug unterbrochen oder abgebrochen wurde (nur ein gerade laufender zählt noch nicht).
+    Früher: der letzte *erfolgreiche* Lauf und „alles seit dessen Beginn“ – nach unterbrochenen oder
+    fehlgeschlagenen Läufen galten dann die Treffer mehrerer Läufe als „neu“, und ein Lauf ohne Treffer zeigte die
+    des vorletzten. Rückgabe: (Beginn, Ende, Lauf) oder (None, None, None)."""
     db = db_connect()
-    rows = db.execute("SELECT started_at FROM run WHERE status='success' ORDER BY id DESC LIMIT 2").fetchall()
-    db.close()
-    if len(rows) >= 2:
-        return rows[1][0], rows[0][0]
-    if len(rows) == 1:
-        return None, rows[0][0]
-    return None, None
+    try:
+        r = db.execute("""SELECT * FROM run WHERE started_at IS NOT NULL AND status != 'running'
+                          ORDER BY id DESC LIMIT 1""").fetchone()
+        if not r:
+            return None, None, None
+        return r["started_at"], _run_end(db, r), dict(r)
+    finally:
+        db.close()
 
 
 def list_hits(params):
@@ -636,7 +641,7 @@ def list_hits(params):
     only_protected = params.get("protected", "") == "1"
     limit = max(1, min(int(params.get("limit", 500) or 500), 2000))
 
-    prev_start, last_start = previous_run_bound()
+    new_from, new_to, _lr = last_run_window()
     seg_index = {}
     for b in bandplan():
         for sg in b["segments"]:
@@ -712,7 +717,7 @@ def list_hits(params):
             "mode_label": MODE_LABELS.get(mode_v, mode_v),
             "sideband": r["sideband"], "carrier_delta_hz": r["carrier_delta_hz"],
             "protected": bool(r["protected"]), "note": r["note"] or "",
-            "is_new": bool(last_start and r["time"] >= last_start),
+            "is_new": bool(new_from and r["band"] != "Satelliten" and new_from <= r["time"] < new_to),
             "files": files, "decodes": decode_summary(r["recording_path"]),
             "rec": Path(r["recording_path"]).stem if r["recording_path"] else "",
             "audio": r["audio"], "audio_score": r["audio_score"],
@@ -1222,22 +1227,23 @@ def stats():
     db = db_connect()
     total = db.execute("SELECT COUNT(*) FROM peak").fetchone()[0]
     prot = db.execute("SELECT COUNT(*) FROM peak WHERE COALESCE(protected,0)=1").fetchone()[0]
-    last = db.execute("SELECT * FROM run WHERE status IN ('success','failed') ORDER BY id DESC LIMIT 1").fetchone()
+    last = None
     per_band = db.execute("""SELECT s.band, COUNT(*) AS n FROM peak p JOIN scan s ON s.id=p.scan_id
                              GROUP BY s.band""").fetchall()
     per_mode = db.execute("""SELECT COALESCE(p.mode,'unknown') AS m, COUNT(*) AS n FROM peak p
                              GROUP BY m""").fetchall()
     db.close()
-    prev_start, last_start = previous_run_bound()
+    new_from, new_to, last = last_run_window()
     new_count = 0
-    if last_start:
+    if new_from:
         db = db_connect()
-        new_count = db.execute("SELECT COUNT(*) FROM peak p JOIN scan s ON s.id=p.scan_id WHERE s.time >= ?",
-                               (last_start,)).fetchone()[0]
+        new_count = db.execute("""SELECT COUNT(*) FROM peak p JOIN scan s ON s.id=p.scan_id
+                                  WHERE s.time >= ? AND s.time < ? AND s.band != 'Satelliten'""",
+                               (new_from, new_to)).fetchone()[0]
         db.close()
     return {
         "hits_total": total, "hits_protected": prot, "hits_new": new_count,
-        "last_run": dict(last) if last else None,
+        "last_run": last,
         "per_band": {r["band"]: r["n"] for r in per_band},
         "per_mode": {r["m"]: r["n"] for r in per_mode},
         "disk_free_mb": int(__import__("shutil").disk_usage(str(BASE)).free / 1e6),
