@@ -445,7 +445,32 @@ def check_network(st):
         pass
 
 
-CHECKS = (check_reboot, check_internet, check_network, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def check_wifi_powersave(st):
+    """Läuft der Pi über WLAN und schläft der WLAN-Chip zwischen den Paketen (Stromsparen), kommen Antworten gebündelt
+    mit Sekunden Verspätung: Live ruckelt, das Dashboard meldet „Server nicht erreichbar“. Hinweis mit Abhilfe."""
+    import subprocess as sp
+    cur = st.get("net") or {}
+    iface = cur.get("iface") or ""
+    if not iface.startswith("wl"):
+        NT.clear("wifi_powersave")
+        return
+    try:
+        out = sp.run(["iw", "dev", iface, "get", "power_save"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return
+    if "on" in out.lower().split(":")[-1]:
+        NT.raise_("wifi_powersave", "warn", "system", "WLAN-Stromsparen ist an",
+                  f"Der Pi hängt über WLAN ({iface}) am Netz, und der WLAN-Chip schläft zwischen den Paketen. Antworten "
+                  "kommen dann gebündelt mit Sekunden Verspätung – Live ruckelt, oben steht immer wieder „Server nicht "
+                  "erreichbar“.",
+                  fix="Das Update schaltet es aus; sofort per Hand: sudo iw dev wlan0 set power_save off – "
+                      "oder den Pi per Netzwerkkabel anschließen.",
+                  cmd=f"sudo iw dev {iface} set power_save off")
+    elif "off" in out.lower():
+        NT.clear("wifi_powersave")
+
+
+CHECKS = (check_reboot, check_internet, check_network, check_wifi_powersave, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.73 – 2026-11-03
+
+- **"Server not reachable" and stuttering Live over Wi-Fi:** the diagnostics showed the server answering its own
+  checks every 10 s without delay while the browser's requests arrived in bursts every few seconds – the Pi's Wi-Fi
+  chip was in power-save mode (kernel: "power save enabled") and slept between packets. The update now switches
+  Wi-Fi power saving off: right away (`iw dev wlan0 set power_save off`) and permanently
+  (`/etc/NetworkManager/conf.d/hamscanpi-wifi.conf`, `wifi.powersave = 2`).
+- New notice "Wi-Fi power saving is on" when the Pi is connected via Wi-Fi with power saving on (checked every
+  minute), with the command to switch it off.
+- Self-test section 39 extended.
+
 ## 1.7.72 – 2026-11-03
 
 - Live: the memory clean-up of 1.7.70 (gc + `malloc_trim` every 5 min) no longer runs while Live or the

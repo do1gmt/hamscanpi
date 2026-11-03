@@ -172,6 +172,17 @@ else
     echo "  sudo-Regel nicht gültig – Neustart-Knöpfe bleiben gesperrt"
 fi
 rm -f "$SUDOERS_TMP"
+# WLAN-Stromsparen aus: der Pi-WLAN-Chip schläft sonst zwischen den Paketen – Live ruckelt, das Dashboard meldet
+# immer wieder „Server nicht erreichbar“ (Antworten kommen gebündelt mit Sekunden Verspätung). Für einen Empfänger,
+# der dauernd erreichbar sein soll, die richtige Einstellung; gilt ab jetzt und nach jedem Neustart.
+if command -v nmcli >/dev/null 2>&1 && [ ! -f /etc/NetworkManager/conf.d/hamscanpi-wifi.conf ]; then
+    sudo mkdir -p /etc/NetworkManager/conf.d
+    printf '[connection]\nwifi.powersave = 2\n' | sudo tee /etc/NetworkManager/conf.d/hamscanpi-wifi.conf >/dev/null
+    echo "  WLAN-Stromsparen dauerhaft aus (ab der nächsten WLAN-Verbindung)"
+fi
+for w in $(ls /sys/class/net 2>/dev/null | grep '^wl'); do
+    sudo iw dev "$w" set power_save off 2>/dev/null && echo "  WLAN-Stromsparen auf $w jetzt aus"
+done
 # Systemprotokoll über Neustarts hinweg behalten (sonst ist nach einem plötzlichen Neustart nicht mehr zu sehen,
 # warum – Stromversorgung, Absturz, Wächter); höchstens 64 MB, geschrieben wird gebündelt
 if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then

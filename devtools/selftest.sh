@@ -1240,6 +1240,16 @@ newnet = [r for r in items if r["title"].startswith("Neues Netzwerk")][0]
 assert "http://10.0.5.23:" in newnet["detail"] and "Locator" in newnet["fix"]
 assert not [r for r in items if r["title"].startswith("Neue IP")][0]["fix"]                  # gleiches Netz: kein Locator-Hinweis
 assert len(sent) == 2 and "network" in N.EVENT_KEYS, sent
+import subprocess as _sp
+class _R: stdout = "Power save: on\n"
+_orig = _sp.run
+_sp.run = lambda *a, **k: _R()
+H.check_wifi_powersave({"net": {"iface": "wlan0"}})
+assert any(r["key"] == "wifi_powersave" and r["active"] for r in NT.listing()["items"])     # WLAN schläft: Hinweis
+_R.stdout = "Power save: off\n"
+H.check_wifi_powersave({"net": {"iface": "wlan0"}})
+assert not any(r["key"] == "wifi_powersave" and r["active"] for r in NT.listing()["items"])
+_sp.run = _orig
 PY
 echo "== 40 Scan startet nicht (Sperre belegt): Meldung statt „angefordert 0 %“"
 (cd bin && timeout 60 python3 - <<'PY') && ok "Sperrenhalter erkannt, abgelehnter Start gemeldet und Anzeige zurückgesetzt" || bad "abgelehnter Scanstart"
