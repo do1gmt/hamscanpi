@@ -246,7 +246,7 @@
       c.addEventListener('click', () => {
         if (on) settings.selected_bands = settings.selected_bands.filter(x => x !== b.name);
         else settings.selected_bands = bandplan.map(x => x.name).filter(n => n === b.name || settings.selected_bands.includes(n));
-        renderBands(); scheduleSave('bands', { toggle_band: { name: b.name, on: !on } }); setTimeout(loadSatPasses, 1500);
+        renderBands(); scheduleSave('bands', { toggle_band: { name: b.name, on: !on } }); setTimeout(loadSatPasses, 1500); setTimeout(loadEibiScan, 1500);
       });
       (isMore(b) ? moreRoot : root).appendChild(c);
     }
@@ -2083,6 +2083,39 @@
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
   });
 
+  // ---------- EiBi im Scan (Chip „EiBi“, Karte „Kurzwellen-Rundfunk im Scan“) ----------
+  async function loadEibiScan() {
+    let d; try { d = await api('/api/eibi/scan'); } catch (e) { return; }
+    const c = d.cfg || {};
+    if (!document.activeElement || !document.activeElement.closest('#panel-eibiscan')) {
+      $('esMax').value = String(c.max_windows || 20); $('esDb').value = c.heard_db ?? 15; $('esEu').checked = !!c.europe_only;
+    }
+    $('esSum').textContent = d.enabled ? (EN ? '· on' : '· an') : (EN ? '· preview' : '· Vorschau');
+    $('esHint').textContent = !d.status.count ? (EN ? 'EiBi schedule not loaded yet (Live → Shortwave → Manage list).' : 'EiBi-Sendeplan noch nicht geladen (Live → Kurzwelle → „Liste verwalten“).')
+      : d.enabled ? (EN ? `Next scan checks ${d.targets} broadcasts in ${d.windows} windows (carrier level each) – after the bands.` : `Der nächste Scan prüft ${d.targets} Sendungen in ${d.windows} Fenstern (Trägerpegel je Sendung) – nach den Bändern.`)
+      : (EN ? `Preview: ${d.targets} broadcasts in ${d.windows} windows would be checked now. Switch on the chip “EiBi” under Bands & modes (the meter bands are its segments).` : `Vorschau: jetzt würden ${d.targets} Sendungen in ${d.windows} Fenstern geprüft. Chip „EiBi“ unter Bänder & Betriebsarten einschalten (die Meterbänder sind seine Segmente).`);
+    const snr = v => v == null ? '–' : `${Math.round(v)} dB`;
+    $('esList').innerHTML = d.last.length ? d.last.slice(0, 150).map(x => `<tr class="eibi-row${x.heard ? '' : ' muted'}" data-khz="${x.khz}" title="${EN ? 'tap: Live in AM' : 'antippen: Live in AM'}">`
+      + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)} <small class="muted">${esc(x.lang || '')}</small></td>`
+      + `<td>${esc(x.site || x.itu || '')}${x.distance_km != null ? ` <small class="muted">${Math.round(x.distance_km).toLocaleString(I18N.locale)} km</small>` : ''}</td>`
+      + `<td class="mono-num">${snr(x.snr_db)}</td><td>${x.heard ? '✓' : ''}</td></tr>`).join('')
+      : `<tr><td colspan="5" class="muted">${EN ? 'No scan with EiBi yet.' : 'Noch kein Scan mit EiBi.'}</td></tr>`;
+    $('esHist').textContent = d.last_time ? (EN ? `Last check ${fmtTime(d.last_time)} · ` : `Zuletzt geprüft ${fmtTime(d.last_time)} · `)
+      + (EN ? 'last 24 h: ' : 'letzte 24 h: ') + d.hist.map(h => `${h.band || '?'} ${h.heard}/${h.n}`).join(' · ') : '';
+  }
+  async function saveEibiScan() {
+    try { await post('/api/eibi/scan', { max_windows: Number($('esMax').value), heard_db: Number($('esDb').value), europe_only: $('esEu').checked }); loadEibiScan(); loadEstimate && loadEstimate(); }
+    catch (e) { toast(e.message); }
+  }
+  ['esMax', 'esDb', 'esEu'].forEach(id => $(id).addEventListener('change', saveEibiScan));
+  $('esList').addEventListener('click', e => {
+    const r = e.target.closest('[data-khz]'); if (!r) return;
+    const f = Math.round(Number(r.dataset.khz) * 1000);
+    showView('live'); $('liveFreq').value = (f / 1e6).toFixed(4); $('liveMode').value = 'am';
+    liveStart({ freq_hz: f, mode: 'am', squelch_db: Number($('liveSquelch').value) });
+  });
+  setInterval(() => { if (document.querySelector('section.view[data-view="scan"]:not([hidden])')) loadEibiScan(); }, 60000);
+
   // ---------- EiBi: was sendet hier, was ist jetzt auf Sendung (bin/eibi.py) ----------
   let eibiKhz = null, eibiT = null;
   function eibiSite(x) { return x.site_name ? `${x.site_name}${x.site_country && x.site_country !== x.country ? ', ' + x.site_country : ''}${x.distance_km != null ? ` · ${x.distance_km.toLocaleString(I18N.locale)} km` : ''}` : (x.site_country || ''); }
@@ -2598,6 +2631,7 @@
     setInterval(pollLive, 1000);
     setInterval(pollStatus, 2000);
     loadSatPasses(); setInterval(loadSatPasses, 30000);
+    loadEibiScan();
     loadScanSummary(); setInterval(() => { if (document.visibilityState === 'visible') loadScanSummary(); }, 30000);
     setInterval(renderNextPass, 15000);
     setInterval(() => { if (document.visibilityState === 'visible') { loadStats(); loadHits(); } }, 20000);

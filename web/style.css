@@ -608,7 +608,7 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 /* Handy: Scan, dann Bänder und Zeitpläne, dann Satelliten und Verlauf (statt erst die ganze linke Spalte) */
 @media (max-width: 959px) {
   .view[data-view="scan"] .two-col > .col { display: contents; }
-  #panel-scan { order: 1; } #panel-bands { order: 2; } #panel-sched { order: 3; } #panel-sat { order: 4; } #panel-runs { order: 5; }
+  #panel-scan { order: 1; } #panel-bands { order: 2; } #panel-sched { order: 3; } #panel-sat { order: 4; } #panel-eibiscan { order: 5; } #panel-runs { order: 6; }
 }
 .ant-profiles { margin: .3rem 0 .8rem; } .ant-profiles summary { cursor: pointer; }
 .ant-table input { width: 100%; min-width: 4.5rem; }
@@ -631,3 +631,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .eibi-table td { font-size: .85rem; } .eibi-filters { margin-bottom: .4rem; }
 .eibi-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }
 .live-dec-list .no-i18n { white-space: pre-wrap; }
+.es-wrap { max-height: 360px; overflow-y: auto; } .es-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }

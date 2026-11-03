@@ -117,6 +117,17 @@
         </div>
         <p class="hint" id="satFoot"></p>
       </section>
+      <section class="panel" id="panel-eibiscan">
+        <h2>Kurzwellen-Rundfunk im Scan <small class="muted">EiBi</small> <small class="muted" id="esSum"></small></h2>
+        <p class="hint" id="esHint"></p>
+        <div class="filter-grid es-opts">
+          <label class="field"><span>höchstens Fenster je Scan</span><select id="esMax"><option>10</option><option>20</option><option>40</option><option>60</option></select></label>
+          <label class="field" title="Ab diesem Abstand des Trägers zum Grundrauschen gilt eine Sendung als gehört"><span>gehört ab (dB)</span><input id="esDb" type="number" min="3" max="40" step="1"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="esEu"> nur Sendungen mit Ziel Europa / weltweit</label>
+        <div class="table-wrap es-wrap"><table class="table"><thead><tr><th>kHz</th><th>Station</th><th>Sender</th><th>SNR</th><th></th></tr></thead><tbody id="esList"></tbody></table></div>
+        <p class="hint" id="esHist"></p>
+      </section>
       <section class="panel" id="panel-runs">
         <h2>Scan-Verlauf</h2>
         <div class="table-wrap">

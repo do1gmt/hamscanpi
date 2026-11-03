@@ -204,13 +204,14 @@ def make_plan(
             "15m"
         ]
 
+    want_eibi = "EiBi" in [str(x) for x in selected_bands]   # Kurzwellen-Rundfunk laut EiBi (eigener Chip)
     selected_bands = [
         str(x)
         for x in selected_bands
         if str(x) in all_names
     ]
 
-    if not selected_bands:
+    if not selected_bands and not want_eibi:
         selected_bands = [
             x
             for x in ("80m", "15m")
@@ -394,6 +395,24 @@ def make_plan(
             "centers_hz":
                 sorted(centers)
         })
+
+    # EiBi: die gerade laufenden Rundfunksendungen der gewählten Meterbänder, zu Fenstern zusammengefasst –
+    # mit der PMSDR oder dem Stick per Direktabtastung (bis 28,8 MHz)
+    if want_eibi and (active_device == "pmsdr" or rtl_hf):
+        try:
+            import eibi as EI
+            req = selected_segments.get("EiBi", ["all"]) or ["all"]
+            wins = EI.scan_targets(req, settings)
+            if rtl_hf and active_device != "pmsdr":
+                wins = [w for w in wins if w["center_hz"] <= HF_DS_MAX - 24000]
+            if wins:
+                plan.append({"name": "EiBi", "device": "pmsdr", "via": "rtlhf" if active_device != "pmsdr" else None,
+                             "step_hz": EI.WINDOW_HZ, "segments": req, "labels": ["EiBi"], "eibi": True,
+                             "centers_hz": [w["center_hz"] for w in wins],
+                             "targets": [[{k: d.get(k) for k in ("khz", "station", "itu", "lang", "target", "site_name",
+                                                                 "distance_km", "band")} for d in w["items"]] for w in wins]})
+        except Exception:
+            pass
 
     return plan
 

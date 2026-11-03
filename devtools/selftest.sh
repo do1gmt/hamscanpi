@@ -1170,5 +1170,39 @@ assert h and h[0]["is_new"] is False
 db.execute("DELETE FROM run WHERE started_at LIKE '2030-%'"); db.execute("DELETE FROM peak WHERE scan_id IN (SELECT id FROM scan WHERE time LIKE '2030-%')")
 db.execute("DELETE FROM scan WHERE time LIKE '2030-%'"); db.commit(); db.close()
 PY
+echo "== 38 EiBi im Scan (Chip wie Satelliten)"
+(cd bin && timeout 120 python3 - <<'PY') && ok "EiBi-Chip in der Bandliste, Fenster in der Planung, Trägerpegel gemessen und protokolliert" || bad "EiBi im Scan"
+import json, tempfile, time
+from datetime import datetime, timezone
+from pathlib import Path
+import numpy as np
+import eibi as E
+E.DIR = Path(tempfile.mkdtemp()); E.CSV = E.DIR / "sked.csv"; E.README = E.DIR / "README.TXT"; E.STATE = E.DIR / "state.json"
+h = datetime.now(timezone.utc).hour
+lines = open("../devtools/fixtures/eibi_sked_sample.csv").read().splitlines()[:1] + [
+    f"6070;{h:02d}00-{(h + 1) % 24:02d}00;;D;Radio Jetzt A;D;Eu;r;1;;", f"6085;{h:02d}00-{(h + 1) % 24:02d}00;;D;Radio Jetzt B;D;Eu;n;1;;",
+    f"9420;{h:02d}00-{(h + 2) % 24:02d}00;;ROU;Radio Jetzt C;E;Eu;t;1;;"]
+E.upload(("\n".join(lines) + "\n").encode()); E.upload(open("../devtools/fixtures/eibi_readme_sample.txt", "rb").read(), readme=True)
+import webapp as W, scan_plan as SP, scanner as S
+assert any(b["name"] == "EiBi" and len(b["segments"]) == 14 for b in W.bandplan())
+st = json.load(open("../config/web_settings.json")); st.update(selected_bands=["EiBi"], active_device="pmsdr")
+plan = SP.make_plan(None, st)
+e = [p for p in plan if p["name"] == "EiBi"][0]
+assert len(e["centers_hz"]) == 2 and [len(t) for t in e["targets"]] == [2, 1], e
+assert all(abs(x["khz"] * 1000 - c) >= 1000 for c, t in zip(e["centers_hz"], e["targets"]) for x in t)   # nicht auf DC
+class Dev:
+    def tune(self, c): self.c = c
+    def capture(self, sec):
+        n = int(48000 * sec); t = np.arange(n) / 48000
+        z = 0.01 * (np.random.default_rng(1).standard_normal(n) + 1j * np.random.default_rng(2).standard_normal(n))
+        if abs(self.c - 6077500) < 30000:
+            z = z + 0.003 * np.exp(2j * np.pi * (6070000 - self.c) * t)
+        return z.real, z.imag
+db = S.open_database()
+assert S.eibi_scan(Dev(), {"device": "pmsdr", "sample_rate": 48000}, e, db) == 2
+rows = {r[0]: (r[1], r[2]) for r in db.execute("SELECT station, snr_db, heard FROM eibi_log WHERE station LIKE 'Radio Jetzt%'")}
+assert rows["Radio Jetzt A"][1] == 1 and rows["Radio Jetzt A"][0] > 20 and rows["Radio Jetzt B"][1] == 0 and rows["Radio Jetzt C"][1] == 0, rows
+db.close()
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

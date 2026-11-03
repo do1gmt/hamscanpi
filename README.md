@@ -122,6 +122,16 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**EiBi in the scan:** like "Satellites", "EiBi" is a chip under *Bands & modes*; its segments are the broadcast
+meter bands (120 m … 11 m). When it is on, every scan – after the normal bands – checks the broadcasts EiBi lists
+as on air at that moment: they are grouped into windows (at most 30 kHz apart, never tuned exactly onto a carrier
+because of the receiver's DC residue), each window is recorded for 3 s and the carrier level of every broadcast is
+measured against the noise floor; from 15 dB (adjustable) it counts as heard. Results go to their own log
+(`eibi_log`, not the hit list); the card *Shortwave broadcasting in the scan* shows the last check (station,
+transmitter with distance, SNR, ✓) and per band how many were heard in the last 24 h – a propagation picture.
+Options: max. windows per scan, threshold, only broadcasts targeting Europe/global. Tapping a row tunes Live to it
+in AM. Works with the PMSDR or the stick (direct sampling up to 28.8 MHz).
+
 **Utility decoders in Live:** besides FT8/FT4, APRS, POCSAG, CW, RTTY and SSTV, Live decodes **NAVTEX**
 (SITOR-B, 518/490/4209.5 kHz: CCIR 476 with the FEC repetition, complete messages `ZCZC … NNNN` with station,
 subject and number appear as their own entries), **weather fax** (HF fax 120 lpm/IOC 576, e.g. DWD Pinneberg

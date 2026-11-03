@@ -454,3 +454,86 @@ def status():
     return {"season": st.get("season"), "current_season": season(), "file": st.get("file"), "fetched": st.get("fetched"),
             "error": st.get("error"), "count": data["count"], "sites": sum(len(v) for v in data["ref"]["sites"].values()),
             "source": st.get("source")}
+
+
+# ---------------------------------------------------------------- EiBi im Scan (Chip „EiBi“ unter Bänder & Betriebsarten)
+SCAN_DEFAULTS = {"max_windows": 20, "europe_only": False, "seconds": 3.0, "heard_db": 15.0}
+WINDOW_HZ = 30_000                                # Sendungen je Scanfenster höchstens 30 kHz auseinander (48 kHz Abtastung)
+
+
+def scan_cfg(settings=None):
+    if settings is None:
+        try:
+            settings = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+        except Exception:
+            settings = {}
+    c = dict(SCAN_DEFAULTS)
+    c.update({k: v for k, v in (settings.get("eibi_scan") or {}).items() if k in SCAN_DEFAULTS})
+    return c
+
+
+def pseudo_band():
+    """Eintrag für „Bänder & Betriebsarten“: ein Chip „EiBi“, die Meterbänder als Segmente."""
+    return {"name": "EiBi", "device": "pmsdr", "legal": "public", "start_hz": BC_BANDS[0][1] * 1000,
+            "stop_hz": BC_BANDS[-1][2] * 1000, "step_hz": WINDOW_HZ, "eibi": True,
+            "segments": [{"id": n, "label": f"{n} {a}–{b} kHz", "mode": "am", "mode_label": "AM-Rundfunk",
+                          "sideband": None, "ranges": [[a * 1000, b * 1000]], "frequencies_hz": [], "offset_hz": None,
+                          "note": "Sendungen laut EiBi", "legal": "public"} for n, a, b in BC_BANDS]}
+
+
+def scan_targets(segments=None, settings=None, now=None):
+    """Was ein Scan jetzt prüfen soll: laut EiBi laufende Sendungen in den gewählten Meterbändern, zu Fenstern
+    (40 kHz) zusammengefasst. Bei zu vielen Fenstern die mit den meisten Sendungen (und den nahen Sendern)."""
+    c = scan_cfg(settings)
+    segs = set(segments or ["all"])
+    items = [d for d in now_list(now=now)["items"]
+             if ("all" in segs or d["band"] in segs)
+             and (not c["europe_only"] or _target_score(d["target"]) == 0)]
+    windows = []
+    for d in sorted(items, key=lambda x: x["khz"]):
+        f = int(round(d["khz"] * 1000))
+        if windows and f - windows[-1]["lo"] <= WINDOW_HZ:
+            windows[-1]["items"].append(d)
+            windows[-1]["hi"] = f
+        else:
+            windows.append({"lo": f, "hi": f, "items": [d]})
+    for w in windows:
+        w["center_hz"] = int((w["lo"] + w["hi"]) / 2)
+        # nicht genau auf einen Träger abstimmen: in der Fenstermitte liegt der Gleichspannungsrest des Empfängers
+        if any(abs(x["khz"] * 1000 - w["center_hz"]) < 1000 for x in w["items"]):
+            w["center_hz"] += 2500
+        near = [x["distance_km"] for x in w["items"] if x.get("distance_km") is not None]
+        w["score"] = len(w["items"]) + (2 if near and min(near) < 2500 else 0)
+    keep = sorted(windows, key=lambda w: -w["score"])[: int(c["max_windows"])]
+    return sorted(keep, key=lambda w: w["center_hz"])
+
+
+def ensure_log(db):
+    db.execute("""CREATE TABLE IF NOT EXISTS eibi_log (id INTEGER PRIMARY KEY, time TEXT, khz REAL, station TEXT,
+                  itu TEXT, lang TEXT, target TEXT, site TEXT, distance_km REAL, snr_db REAL, heard INTEGER,
+                  band TEXT, antenna TEXT)""")
+    db.execute("CREATE INDEX IF NOT EXISTS eibi_log_time ON eibi_log(time)")
+
+
+def measure(i, q, rate, center_hz, items, conj=False):
+    """Trägerpegel jeder Sendung im Fenster: stärkste Linie ±300 Hz um die Sollfrequenz gegen das Grundrauschen
+    (Median des Spektrums) – AM-Rundfunk hat einen kräftigen Träger, der den Empfang verlässlich anzeigt."""
+    from scipy.signal import welch
+    z = (np.asarray(i) + 1j * np.asarray(q)).astype(np.complex64)
+    if conj:
+        z = np.conj(z)
+    # detrend=False: der Träger kann genau in der Fenstermitte liegen (0 Hz) – „constant“ würde ihn entfernen
+    f, p = welch(z, fs=rate, nperseg=min(len(z), 16384), return_onesided=False, scaling="density", detrend=False)
+    order = np.argsort(f)
+    f, p = f[order], p[order]
+    floor = float(np.median(p)) or 1e-20
+    out = []
+    for d in items:
+        off = d["khz"] * 1000 - center_hz
+        m = (f >= off - 300) & (f <= off + 300)
+        snr = 10 * np.log10(float(p[m].max()) / floor) if m.any() else None
+        out.append((d, round(snr, 1) if snr is not None else None))
+    return out
+
+
+import numpy as np  # noqa: E402  (nur für den Scan gebraucht)

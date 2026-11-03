@@ -1522,6 +1522,44 @@ def save_birdies(db, band, birdies):
     db.commit()
 
 
+def eibi_scan(dev, cfg, plan_entry, db):
+    """EiBi-Fenster abhören: je Fenster wenige Sekunden aufnehmen, für jede laut Plan laufende Sendung den Trägerpegel
+    messen und ins Rundfunk-Protokoll (eibi_log) schreiben – gehört (≥ Schwelle) oder nicht. Rückgabe: Abstimmungen."""
+    import eibi as EI
+    import devices as _DV
+    EI.ensure_log(db)
+    c = EI.scan_cfg()
+    CUR_ANTENNA[0] = antenna_label("rtlsdr" if cfg["device"] == "rtlhf" else cfg["device"])
+    CUR_DEVICE[0] = cfg["device"]
+    print()
+    print(f"Band       : EiBi {len(plan_entry['centers_hz'])} Fenster (Kurzwellen-Rundfunk laut Sendeplan)")
+    t0, n_heard, n_all = time.time(), 0, 0
+    for center, items in zip(plan_entry["centers_hz"], plan_entry.get("targets") or []):
+        _DV.check_yield()
+        _DV.heartbeat()
+        dev.tune(center)
+        i, q = dev.capture(float(c["seconds"]))
+        rate = int(cfg.get("sample_rate", 48000))
+        res = EI.measure(i, q, rate, center, items, conj=bool(cfg.get("iq_conjugate", False)))
+        ts = timestamp()
+        noise = 10 * np.log10(float(np.mean(np.asarray(i) ** 2 + np.asarray(q) ** 2)) + 1e-20)
+        save_scan(db, "EiBi", center, {"noise_db": float(noise), "rms_i": float(np.std(i)), "rms_q": float(np.std(q))}, [])
+        for d, snr in res:
+            heard = snr is not None and snr >= float(c["heard_db"])
+            n_all += 1
+            n_heard += int(heard)
+            db.execute("""INSERT INTO eibi_log (time, khz, station, itu, lang, target, site, distance_km, snr_db, heard,
+                          band, antenna) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       (ts, d["khz"], d["station"], d.get("itu"), d.get("lang"), d.get("target"), d.get("site_name"),
+                        d.get("distance_km"), snr, int(heard), d.get("band"), CUR_ANTENNA[0]))
+        db.commit()
+        print(f"   {center/1e3:8.1f} kHz: " + ", ".join(f"{d['khz']:g} {d['station'][:18]} {snr if snr is not None else '–'} dB"
+                                                    for d, snr in res[:4]) + (" …" if len(res) > 4 else ""))
+    applog("INFO", "scanner", "band_scanned", band="EiBi", device=cfg["device"], hits=n_heard, rejected=n_all - n_heard,
+           seconds=round(time.time() - t0), windows=len(plan_entry["centers_hz"]), heard=n_heard, checked=n_all)
+    return len(plan_entry["centers_hz"])
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -2196,6 +2234,19 @@ def main():
             except Exception as e:
                 applog("DEBUG", "scanner", "band_summary_failed", band=name, error=str(e))
 
+        if "EiBi" in plan_by_band:                       # Kurzwellen-Rundfunk laut EiBi (Chip „EiBi“)
+            p_e = plan_by_band["EiBi"]
+            eb = {"name": "EiBi", "device": "pmsdr", "start_hz": 2_300_000, "stop_hz": 26_100_000, "step_hz": 40_000}
+            ecfg = effective_config(base_cfg, eb)
+            ehw = "pmsdr"
+            if p_e.get("via") == "rtlhf":
+                ecfg, ehw = dict(ecfg, device="rtlhf", frequency_correction_ppm=0.0), "rtlsdr"
+            if not hw[ehw]["present"]:
+                missing.append("EiBi")
+                applog("WARN", "scanner", "band_skipped", band="EiBi", reason="device_missing", device=ecfg["device"])
+            else:
+                scanned_bands += 1
+                total_scans += eibi_scan(get_device(ecfg["device"], ecfg), ecfg, p_e, db)
         if missing and not scanned_bands:
             raise RuntimeError("Kein passendes Gerät angeschlossen – übersprungen: " + ", ".join(missing))
     finally:

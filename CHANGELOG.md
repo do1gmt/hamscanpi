@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.62 – 2026-11-03
+
+- **EiBi in the scan, like "Satellites":** new chip "EiBi" under Bands & modes, its segments are the broadcast meter
+  bands. When on, each scan (after the bands) checks the broadcasts on air now according to EiBi: grouped into
+  windows (≤ 30 kHz apart, centre shifted off any carrier), 3 s each, carrier level of every broadcast against the
+  noise floor (spectrum without DC removal), heard from 15 dB. Results in their own log `eibi_log` (not hits), scan
+  rows for the progress and the scan history. Planned by `scan_plan.py` (counts in the duration estimate), run by
+  `scanner.py` (`eibi_scan`), works with the PMSDR or the stick via direct sampling.
+- Card **"Shortwave broadcasting in the scan"** in the scan tab (after satellite passes; on phones as well): what the
+  next scan will check (or a preview while the chip is off), options (max. windows, threshold, only Europe/global
+  targets), the last check per broadcast (station, language, transmitter with distance, SNR, ✓ heard), heard/checked
+  per band in the last 24 h; tapping a row tunes Live in AM.
+- Self-test section 38. README: EiBi in the scan.
+
 ## 1.7.61 – 2026-11-03
 
 - Fix: **"new in last run"** (counter on the hits page and the "new" badge) now really refers to the last

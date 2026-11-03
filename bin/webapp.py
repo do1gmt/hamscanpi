@@ -220,6 +220,13 @@ def bandplan():
                 for s in b.get("segments", []) if s.get("id")
             ],
         })
+    try:                                   # Kurzwellen-Rundfunk laut EiBi: eigener Chip wie „Satelliten“
+        import eibi as EI
+        e = EI.pseudo_band()
+        out.append({k: e[k] for k in ("name", "device", "legal", "start_hz", "stop_hz", "segments")})
+        out[-1]["eibi"] = True
+    except Exception:
+        pass
     return out
 
 
@@ -2171,6 +2178,36 @@ class Handler(BaseHTTPRequestHandler):
                 import eibi as EI
                 return self.send_json({"items": EI.on_air(float(qs.get("khz", 0) or 0), float(qs.get("tol", 5) or 5))[:12],
                                        "status": EI.status()})
+            if path == "/api/eibi/scan":
+                import eibi as EI
+                import sqlite3 as _sq
+                st = load_settings()
+                on = "EiBi" in (st.get("selected_bands") or [])
+                wins = EI.scan_targets((st.get("selected_segments") or {}).get("EiBi", ["all"]), st)
+                last, hist = [], []
+                db = db_connect()
+                try:
+                    EI.ensure_log(db)
+                    t = db.execute("SELECT MAX(time) FROM eibi_log").fetchone()[0]
+                    if t:
+                        # der letzte Durchgang: alles bis 30 min vor dem jüngsten Eintrag (ISO-Zeiten, in Python gerechnet)
+                        t0 = (datetime.fromisoformat(t) - timedelta(minutes=30)).isoformat(timespec="seconds")
+                        seen, last = set(), []
+                        for r in db.execute("SELECT * FROM eibi_log WHERE time >= ? ORDER BY time DESC", (t0,)):
+                            k = (r["khz"], r["station"])        # je Sendung nur die jüngste Messung
+                            if k not in seen:
+                                seen.add(k)
+                                last.append(dict(r))
+                        last.sort(key=lambda x: (-(x["heard"] or 0), -(x["snr_db"] or -99)))
+                        d24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(timespec="seconds")
+                        hist = [dict(r) for r in db.execute(
+                            "SELECT band, COUNT(*) n, SUM(heard) heard FROM eibi_log WHERE time >= ? GROUP BY band ORDER BY band",
+                            (d24,))]
+                finally:
+                    db.close()
+                return self.send_json({"enabled": on, "cfg": EI.scan_cfg(st), "windows": len(wins),
+                                       "targets": sum(len(w["items"]) for w in wins), "last_time": last[0]["time"] if last else None,
+                                       "last": last[:300], "hist": hist, "status": EI.status()})
             if path == "/api/eibi/list":
                 import eibi as EI
                 d = EI.now_list(qs.get("band", ""), qs.get("lang", ""), qs.get("country", ""), qs.get("q", ""),
@@ -2336,6 +2373,19 @@ class Handler(BaseHTTPRequestHandler):
                 n = EI.upload(self.rfile.read(length), readme=qs.get("readme", "") == "1")
                 APPLOG.log("INFO", "webapp", "eibi_uploaded", entries=n, readme=qs.get("readme", "") == "1")
                 return self.send_json({"ok": True, "count": n, "status": EI.status()})
+            if path == "/api/eibi/scan":
+                import eibi as EI
+                st = read_json(SETTINGS, {})
+                c = dict(st.get("eibi_scan") or {})
+                if "max_windows" in data:
+                    c["max_windows"] = max(1, min(100, int(data["max_windows"])))
+                if "europe_only" in data:
+                    c["europe_only"] = bool(data["europe_only"])
+                if "heard_db" in data:
+                    c["heard_db"] = max(3.0, min(40.0, float(data["heard_db"])))
+                st["eibi_scan"] = c
+                write_json(SETTINGS, st)
+                return self.send_json({"ok": True, "cfg": EI.scan_cfg(st)})
             if path == "/api/eibi/refresh":
                 import eibi as EI
                 st = EI.refresh(force=True)
