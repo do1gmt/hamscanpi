@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.50 – 2026-11-03
+
+- **Antenna profiles** (`bin/antennas.py`, System → Devices → Antennas): each antenna once with name, frequency
+  range and – for directional antennas – direction, beamwidth, elevation; the first profiles are created from
+  the existing entries (sticks, PMSDR). Choosing a profile – in the scan box ("Antenna ▾"), at the main stick or
+  at the HF receiver – is saved immediately ("✓ Antenna … – applies right away"), fills the stick's antenna
+  fields (used by pass planning and hits) and is logged (`antenna_changed`). Saving edited profiles updates the
+  receivers using them; editing a stick's fields by hand turns its profile off. Included in the backup.
+- **Pass tile in preview** (satellites not recorded): "in the sky" in a neutral colour instead of a green
+  "running".
+- **Phone layout of the scan page:** scan, then bands & modes and schedules, then satellite passes and history.
+- **Scan history shows the receiver actually used:** HF runs via the stick (direct sampling) appeared as
+  "PMSDR"; the device is now stored per scan window (`scan.device`).
+- README: antenna profiles. Self-test section 32.
+
 ## 1.7.49 – 2026-11-03
 
 - **Station map shows all stations with a locator**, not only the 100 of the current list page (that was why it

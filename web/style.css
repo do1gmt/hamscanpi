@@ -604,3 +604,12 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .live-sstv { max-width: 320px; width: 100%; image-rendering: auto; border-radius: 6px; margin-top: .3rem; }
 input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .sat-arm { background: var(--panel-2); border-left: 4px solid var(--amber); border-radius: 6px; padding: .45rem .6rem; margin: .4rem 0; font-size: .9rem; }
+.stat-preview .stat-next b { color: var(--muted); }
+/* Handy: Scan, dann Bänder und Zeitpläne, dann Satelliten und Verlauf (statt erst die ganze linke Spalte) */
+@media (max-width: 959px) {
+  .view[data-view="scan"] .two-col > .col { display: contents; }
+  #panel-scan { order: 1; } #panel-bands { order: 2; } #panel-sched { order: 3; } #panel-sat { order: 4; } #panel-runs { order: 5; }
+}
+.ant-profiles { margin: .3rem 0 .8rem; } .ant-profiles summary { cursor: pointer; }
+.ant-table input { width: 100%; min-width: 4.5rem; }
+.ant-quick { max-width: 22rem; margin-top: .4rem; }

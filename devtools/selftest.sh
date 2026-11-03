@@ -947,5 +947,29 @@ m = W.stations_map(0)
 assert len([p for p in m["points"] if p[0].startswith("T") and p[0].endswith("AB")]) == 200, len(m["points"])   # alle mit Locator
 assert len(d["stations"]) == 100                                    # Liste bleibt seitenweise
 PY
+echo "== 32 Antennen-Profile"
+(cd bin && python3 - <<'PY') && ok "Profile aus bisherigen Angaben, Auswahl übernimmt Richtung und Bereich, Handänderung löst das Profil" || bad "Antennen-Profile"
+import json, tempfile
+from pathlib import Path
+import sticks as STK, antennas as AN
+STK.REG = Path(tempfile.mkdtemp()) / "sticks.json"
+json.dump({"sticks": {"a": {"key": "a", "role": "main", "kind": "rtl", "antenna": "Discone"},
+                      "b": {"key": "b", "role": "spare", "kind": "rtl", "antenna": "Yagi", "ant_az": 245, "ant_bw": 70,
+                            "ant_fmin": 137, "ant_fmax": 150}}}, open(STK.REG, "w"))
+AN.FILE = Path(tempfile.mkdtemp()) / "antennas.json"
+d = AN.load()
+names = {p["name"]: p for p in d["profiles"]}
+assert "Discone" in names and names["Yagi"]["az"] == 245 and names["Yagi"]["fmax"] == 150, d
+AN.select("rtlsdr", names["Yagi"]["id"])
+m = STK.load()["sticks"]["a"]
+assert m["antenna"] == "Yagi" and m["ant_az"] == 245 and m["ant_fmin"] == 137 and m["ant_profile"] == names["Yagi"]["id"], m
+assert AN.current()["rtlsdr"] == names["Yagi"]["id"]
+STK.update("a", antenna="Selbstbau")                      # von Hand geändert: kein Profil mehr
+assert STK.load()["sticks"]["a"].get("ant_profile") is None
+try:
+    AN.set_profiles([{"name": "X", "fmin": 150, "fmax": 137}]); raise SystemExit("Bereich falsch herum angenommen")
+except ValueError:
+    pass
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

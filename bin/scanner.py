@@ -1356,6 +1356,11 @@ def open_database():
         db.commit()
     except sqlite3.OperationalError:
         pass
+    try:                                                   # ab 1.7.50: tatsächlich benutzter Empfänger (rtlhf = Stick auf KW)
+        db.execute("ALTER TABLE scan ADD COLUMN device TEXT")
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
 
     for col, typ in (
         ("recording_path", "TEXT"),
@@ -1412,6 +1417,7 @@ def listened_summary(band, cfg, centers, selected, plan_entry):
 
 
 CUR_ANTENNA = [None]          # Antenne des gerade benutzten Empfängers (System → Geräte)
+CUR_DEVICE = [None]           # tatsächlich benutzter Empfänger: pmsdr, rtlsdr oder rtlhf (Stick auf Kurzwelle)
 
 
 def antenna_label(device):
@@ -1438,9 +1444,10 @@ def save_scan(db, band, center, result, peaks):
             noise_db,
             rms_i,
             rms_q,
-            antenna
+            antenna,
+            device
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         timestamp(),
         band,
@@ -1448,7 +1455,8 @@ def save_scan(db, band, center, result, peaks):
         result["noise_db"],
         result["rms_i"],
         result["rms_q"],
-        CUR_ANTENNA[0]
+        CUR_ANTENNA[0],
+        CUR_DEVICE[0]
     ))
 
     scan_id = cur.lastrowid
@@ -1601,6 +1609,7 @@ def main():
             scanned_bands += 1
             dev_obj = get_device(cfg["device"], cfg)
             CUR_ANTENNA[0] = antenna_label("rtlsdr" if cfg["device"] == "rtlhf" else cfg["device"])
+            CUR_DEVICE[0] = cfg["device"]
             applog("DEBUG", "scanner", "band_start", band=name, device=cfg["device"], tunes=len(plan_by_band[name]))
             _band_t0, _band_p0, _band_r0 = time.time(), total_peaks, total_rejected
 

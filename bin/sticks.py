@@ -257,6 +257,11 @@ def update(key, **fields):
                 r["gain"] = v
         if "antenna" in fields:
             r["antenna"] = str(fields["antenna"] or "")[:60]
+        if "ant_profile" not in fields and any(k in fields for k in ("antenna", "ant_az", "ant_bw", "ant_el", "ant_range",
+                                                                      "ant_fmin", "ant_fmax")):
+            fields["ant_profile"] = None                # von Hand geändert: kein Profil mehr
+        if "ant_profile" in fields:                    # gewähltes Antennen-Profil (antennas.py) oder None = eigene Angaben
+            r["ant_profile"] = str(fields["ant_profile"])[:40] if fields["ant_profile"] else None
         # Richtantenne: Azimut, Öffnungswinkel, Frequenzbereich (MHz) – leer = Rundstrahler
         def num(k, lo, hi, what):
             v = fields[k]

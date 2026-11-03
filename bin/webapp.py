@@ -748,6 +748,14 @@ def list_runs(limit=25, offset=0):
         d["bands"] = bands
         d["tunes"] = len(scans)
         d["device"] = (devmap.get(bands[0]) if bands else None)
+        try:                                     # ab 1.7.50: der tatsächlich benutzte Empfänger steht am Scan
+            used = [x[0] for x in db.execute("SELECT DISTINCT device FROM scan WHERE time >= ? AND time < ? AND device IS NOT NULL",
+                                             (r["started_at"], _run_end(db, r))).fetchall()] if r["started_at"] else []
+            if used:
+                devs = sorted({"rtlsdr" if u == "rtlhf" else u for u in used})
+                d["device"] = devs[0] if len(devs) == 1 else ",".join(devs)
+        except sqlite3.OperationalError:
+            pass
         if r["started_at"]:
             hb = db.execute("""SELECT s.band, COUNT(*) n FROM peak p JOIN scan s ON s.id = p.scan_id
                                WHERE s.time >= ? AND s.time < ? AND s.band != 'Satelliten' GROUP BY s.band""",
@@ -2075,6 +2083,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(STK.overview())
             if path == "/api/ping":                       # für den systemd-Wächter (siehe watchdog_loop)
                 return self.send_json({"ok": True, "t": time.time()})
+            if path == "/api/antennas":
+                import antennas as AN
+                return self.send_json(dict(AN.load(), current=AN.current()))
             if path == "/api/services":
                 import services as SV
                 return self.send_json(SV.status())
@@ -2400,6 +2411,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if path == "/api/live/start":
                 return self.send_json({"ok": True, "live": live_start(data)})
+            if path == "/api/antennas":
+                import antennas as AN
+                d = AN.set_profiles(data.get("profiles"))
+                ids = {p["id"] for p in d["profiles"]}
+                for target, pid in AN.current().items():          # geänderte Profile gleich übernehmen
+                    if pid in ids:
+                        AN.select(target, pid)
+                APPLOG.log("INFO", "webapp", "antenna_profiles_saved", n=len(d["profiles"]))
+                return self.send_json(dict(d, current=AN.current()))
+            if path == "/api/antennas/select":
+                import antennas as AN
+                prof = AN.select(str(data.get("target")), str(data.get("id")),
+                                 log=lambda lv, comp, ev, **k: APPLOG.log(lv, comp, ev, ip=self.client_ip(), **k))
+                return self.send_json({"ok": True, "profile": prof, "current": AN.current()})
             if path == "/api/services/restart":
                 import services as SV
                 unit = str(data.get("unit", ""))

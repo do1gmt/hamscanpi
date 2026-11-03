@@ -553,7 +553,7 @@
       const bands = (r.bands || []).map(b => hpb[b] ? `${esc(b)} <span class="n">${hpb[b]}</span>` : esc(b)).join(', ') || '<span class="muted">–</span>';
       const why = r.reason ? `<div class="run-why">${esc(r.reason)}</div>` : '';
       return `<tr title="Lauf ${r.id}"><td>${fmtTime(r.started_at)}<br><small class="muted">${r.finished_at ? 'bis ' + fmtTime(r.finished_at, false) : ''}</small></td>
-        <td>${r.device ? `<small class="muted">${dev[r.device] || r.device}</small><br>` : ''}${bands}</td>
+        <td>${r.device ? `<small class="muted">${r.device.split(',').map(x => dev[x] || x).join(' + ')}</small><br>` : ''}${bands}</td>
         <td class="${r.status === 'success' ? 'ok' : r.status === 'running' ? '' : r.status === 'cancelled' ? 'muted' : 'bad'}">${st}${why}</td>
         <td>${r.peaks ?? ''}${r.rejected ? ` <small class="muted">/ ${r.rejected}</small>` : ''}</td><td>${r.tunes ?? ''}</td><td>${fmtDur(r.duration_s)}</td></tr>`;
     }).join('') || '<tr><td colspan="6">noch kein Lauf</td></tr>';
@@ -1320,7 +1320,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   showView(localStorage.getItem('view') || 'scan');
@@ -1599,7 +1599,10 @@
     if (!p) { $('ssNext').textContent = '–'; $('ssNextLbl').textContent = 'kein Überflug geplant'; return; }
     const live = p.aos <= now;
     const dt = Math.max(0, Math.round((p.aos - now) / 60));
-    $('ssNext').textContent = live ? 'läuft' : dt < 60 ? `in ${dt} min` : `in ${Math.floor(dt / 60)}:${String(dt % 60).padStart(2, '0')} h`;
+    // Vorschau (Satelliten nicht aktiv): „am Himmel“ in neutraler Farbe – „läuft“ nur, wenn aufgenommen wird
+    const preview = !!(satData && satData.preview);
+    card.classList.toggle('stat-preview', preview);
+    $('ssNext').textContent = live ? (preview ? 'am Himmel' : 'läuft') : dt < 60 ? `in ${dt} min` : `in ${Math.floor(dt / 60)}:${String(dt % 60).padStart(2, '0')} h`;
     $('ssNextLbl').textContent = `Überflug ${p.name.split(' (')[0]} · ${Math.round(p.max_el)}°${p.min_km ? ` · ↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km` : ''}`;
   }
   document.querySelectorAll('#scanStats [data-go]').forEach(b => b.addEventListener('click', () => {
@@ -1859,6 +1862,61 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- Antennen-Profile (bin/antennas.py) ----------
+  let antData = { profiles: [], current: {} };
+  const antRange = p => (p.fmin != null && p.fmax != null) ? `${String(p.fmin).replace('.', ',')}–${String(p.fmax).replace('.', ',')}` : '';
+  function renderAntProfiles() {
+    $('antCount').textContent = antData.profiles.length ? `· ${antData.profiles.length}` : '';
+    $('antRows').innerHTML = antData.profiles.map((p, i) => `<tr data-i="${i}">
+      <td><input type="text" data-k="name" value="${esc(p.name)}" maxlength="60"></td>
+      <td><input type="text" data-k="range" value="${esc(antRange(p))}" placeholder="z. B. 137–150"></td>
+      <td><input type="number" data-k="az" value="${p.az ?? ''}" min="0" max="360" placeholder="rund"></td>
+      <td><input type="number" data-k="bw" value="${p.bw ?? ''}" min="10" max="360"></td>
+      <td><input type="number" data-k="el" value="${p.el ?? ''}" min="0" max="90"></td>
+      <td><button type="button" class="btn btn-small btn-danger" data-del="${i}" title="Profil löschen">✕</button></td></tr>`).join('')
+      || '<tr><td colspan="6" class="muted">Noch keine Antenne angelegt.</td></tr>';
+    const opts = (sel, cur, custom) => { sel.innerHTML = (custom ? `<option value="">${custom}</option>` : '')
+      + antData.profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.fmin != null ? ' · ' + antRange(p) + ' MHz' : ''}${p.az != null ? ' · ' + p.az + '°' : ''}</option>`).join('');
+      sel.value = cur || ''; };
+    opts($('hfAntProfile'), antData.current.pmsdr, '– eigene Angabe –');
+    const act = settings && settings.active_device === 'pmsdr' ? 'pmsdr' : 'rtlsdr';
+    opts($('antQuick'), antData.current[act], '– eigene Angabe –');
+    $('antQuick').dataset.target = act;
+    $('antQuick').closest('.ant-quick').hidden = !antData.profiles.length;
+    document.querySelectorAll('select[data-antsel]').forEach(sel => opts(sel, antData.current.rtlsdr, '– eigene Angaben –'));
+  }
+  async function loadAntennas() { try { antData = await api('/api/antennas'); renderAntProfiles(); } catch (e) { } }
+  function antRowsData() {
+    return [...$('antRows').querySelectorAll('tr[data-i]')].map(tr => {
+      const g = k => tr.querySelector(`[data-k="${k}"]`).value.trim(), r = g('range');
+      const m = r.split(/\s*[-–—]\s*|\s+bis\s+/).filter(Boolean).map(x => x.replace(',', '.'));
+      return { id: antData.profiles[Number(tr.dataset.i)].id, name: g('name'), az: g('az'), bw: g('bw'), el: g('el'),
+               fmin: m.length === 2 ? m[0] : '', fmax: m.length === 2 ? m[1] : '' };
+    });
+  }
+  $('antAdd').addEventListener('click', () => { antData.profiles = antRowsData().concat([{ id: '', name: '' }]); renderAntProfiles(); });
+  $('antRows').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return;
+    const rows = antRowsData(); rows.splice(Number(b.dataset.del), 1); antData.profiles = rows; renderAntProfiles(); });
+  $('antSave').addEventListener('click', async () => {
+    try { antData = await post('/api/antennas', { profiles: antRowsData() }); renderAntProfiles(); note($('antNote'), '✓ gespeichert – gewählte Profile sind gleich übernommen');
+          loadSticks(); loadSettings(); }
+    catch (err) { note($('antNote'), 'Fehler: ' + err.message, true); }
+  });
+  async function antSelect(target, id, from) {
+    if (!id) return;
+    try {
+      const d = await post('/api/antennas/select', { target, id });
+      antData.current = d.current; renderAntProfiles();
+      toast(`✓ Antenne ${d.profile.name} – gilt ab sofort`);
+      loadSettings(); if (from !== 'sticks') loadSticks(); else sticksLast = '';
+      loadSatPasses();
+    } catch (err) { toast('Fehler: ' + err.message); }
+  }
+  $('antQuick').addEventListener('change', e => antSelect(e.target.dataset.target, e.target.value));
+  $('hfAntProfile').addEventListener('change', e => antSelect('pmsdr', e.target.value));
+  document.addEventListener('change', e => { const s2 = e.target.closest('select[data-antsel]'); if (s2) antSelect('rtlsdr', s2.value, 'sticks'); });
+  loadAntennas();
+
   // ---------- System: Dienste (bin/services.py) ----------
   async function loadServices() {
     let d; try { d = await api('/api/services'); } catch (e) { return; }
@@ -2073,6 +2131,7 @@
           <label class="field" title="Neigung der Antenne nach oben: 0 = waagrecht. Bei 0° und 70° Öffnungswinkel zählt alles bis 35° Höhe als „im Strahl“."><span>Erhebung (°)</span><input data-f="ant_el" type="number" step="1" min="0" max="90" placeholder="0" value="${r.ant_el ?? ''}"></label>
           <label class="field" title="Frequenzbereich der Antenne in MHz, z. B. 137–150 (mit Bindestrich). Satelliten außerhalb gelten als „falsches Band“. Leer = alle Frequenzen."><span>gilt für (MHz)</span><input data-f="ant_range" type="text" inputmode="decimal" maxlength="20" placeholder="z. B. 137–150" value="${r.ant_fmin != null || r.ant_fmax != null ? `${r.ant_fmin ?? ''}–${r.ant_fmax ?? ''}` : ''}"></label>
           <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
+          ${role === 'main' ? '<label class="field stick-antprof" title="Antennen-Profil wählen – wird sofort gespeichert und füllt Antenne, Richtung, Öffnungswinkel, Erhebung und Frequenzbereich"><span>Antennen-Profil</span><select data-antsel></select></label>' : ''}
           <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}<span class="save-note stick-note" aria-live="polite"></span></div>
         </div>`;
       } else if (!r.present) {
@@ -2085,10 +2144,12 @@
         <div class="stick-sub">${where} · ${info}</div>
         ${warn.map(w => `<p class="hint warn-text">${esc(w)}</p>`).join('')}${body}</div>`;
     }).join('');
+    try { renderAntProfiles(); } catch (e) { /* Profile noch nicht geladen */ }
     $('sticksList').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => stickAction(b)));
     $('sticksList').querySelectorAll('input, select').forEach(el => {
       el.addEventListener('focus', () => { sticksEditing = true; });
-      el.addEventListener('input', () => { if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
+      el.addEventListener('input', () => { if (el.matches('[data-antsel]')) return;   // Profilwahl speichert sofort
+        if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
       el.addEventListener('change', () => { if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
       el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
     });

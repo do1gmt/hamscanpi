@@ -116,6 +116,12 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**Antenna profiles:** under *System → Devices → Antennas* each antenna is created once (name, frequency range,
+and for directional antennas direction, beamwidth, elevation – the existing entries become the first profiles).
+When switching antennas, just choose the profile in the scan box ("Antenna ▾") or at the main stick / HF receiver
+– it is saved immediately, the pass planning uses its range and beam, and the change is logged. Editing a profile
+updates the receivers that use it; changing the fields by hand turns the profile off for that stick.
+
 **Scans and satellite passes share the stick.** A scan is only started if it will be finished before the next
 important pass (estimated from the longest recent scans and the estimate for the current band selection). If a
 pass still needs the stick, the scanner is asked to give it up (`data/scan_yield`): it stops between two steps

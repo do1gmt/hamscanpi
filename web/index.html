@@ -91,6 +91,7 @@
           </div>
         </div>
         <div class="device-switch" id="deviceSwitch" role="radiogroup" aria-label="Angeschlossenes Gerät"></div>
+        <label class="field ant-quick" title="Welche Antenne gerade am gewählten Empfänger hängt – beim Umschalten hier wählen, wird sofort gespeichert. Profile anlegen: System → Geräte → Antennen."><span>Antenne</span><select id="antQuick"></select></label>
         <p class="hint" id="deviceHint"></p>
         <div class="row">
           <label class="field"><span>Automatisch (Start zu Start)</span><select id="interval"></select></label>
@@ -352,6 +353,12 @@
       </section>
       <section class="panel" id="panel-sticks">
         <h2>Geräte</h2>
+        <details class="ant-profiles" id="antBox"><summary><b>Antennen</b> <small class="muted" id="antCount"></small></summary>
+          <p class="hint">Jede Antenne einmal anlegen – beim Umschalten dann nur noch auswählen (im Scan-Kasten oder hier beim Haupt-Stick bzw. Kurzwellen-Empfänger), das wird sofort gespeichert. „gilt für“: Frequenzbereich in MHz (Satelliten außerhalb gelten als „falsches Band“); Richtung/Öffnungswinkel/Erhebung nur bei Richtantennen.</p>
+          <div class="table-wrap"><table class="table ant-table"><thead><tr><th>Name</th><th>gilt für (MHz)</th><th>Richtung (°)</th><th>Öffnung (°)</th><th>Erhebung (°)</th><th></th></tr></thead><tbody id="antRows"></tbody></table></div>
+          <div class="actions"><button type="button" class="btn" id="antAdd">＋ Antenne</button><button type="button" class="btn btn-primary" id="antSave">Speichern</button></div>
+          <div class="save-note" id="antNote" aria-live="polite"></div>
+        </details>
         <p class="hint warn-text" id="sticksNew" hidden></p>
         <div id="sticksList"><div class="muted">–</div></div>
         <div class="save-note" id="sticksNote" aria-live="polite"></div>
@@ -360,12 +367,13 @@
           <div class="stick-form">
             <label class="field" title="Name des Kurzwellen-Empfängers, wie er in der Oberfläche erscheint. Leer = PMSDR."><span>Bezeichnung</span><input id="hfLabel" type="text" maxlength="40" placeholder="PMSDR"></label>
             <label class="field" title="Name der Kurzwellenantenne – nur eine Beschriftung. Erscheint in der Scan-Anzeige und bei jedem Treffer."><span>Antenne</span><input id="hfAntenna" type="text" maxlength="60" placeholder="z. B. Langdraht, Dipol 40 m"></label>
+            <label class="field" title="Antennen-Profil wählen – wird sofort gespeichert"><span>Profil</span><select id="hfAntProfile"></select></label>
             <div class="stick-actions"><button class="btn" id="hfSave" type="button">Speichern</button></div>
           </div>
         </div>
         <div class="save-note" id="hfNote" aria-live="polite"></div>
         <p class="hint">HamScanPi benutzt für VHF/UHF, Satelliten und Live nur den <b>Haupt-Stick</b> und spricht ihn über seine Seriennummer an – egal an welchem USB-Port. Ein neu angesteckter Stick wird nie von selbst benutzt. ppm und Verstärkung leer = Werte aus dem Bandplan. Die PMSDR (Kurzwelle) ist davon unabhängig.</p>
-        <p class="hint"><b>Antennen</b> sind nur eine Beschriftung: Sie erscheinen in der Scan-Anzeige und bei jeder Satellitenaufnahme. HamScanPi kann nicht sehen, welche Antenne tatsächlich angeschlossen ist – wer einen Antennenumschalter benutzt, trägt hier beim Umschalten die aktuelle ein.</p>
+        <p class="hint"><b>Antennen</b> sind nur eine Beschriftung (mit Frequenzbereich und Richtung für die Überflugplanung): HamScanPi kann nicht sehen, welche Antenne tatsächlich angeschlossen ist – wer einen Antennenumschalter benutzt, wählt beim Umschalten das passende Profil (oben unter „Antennen“ anlegen, dann im Scan-Kasten oder hier auswählen).</p>
       </section>
       <section class="panel" id="panel-pi">
         <h2>Raspberry Pi</h2>
