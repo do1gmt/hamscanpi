@@ -64,44 +64,21 @@ def shift_to_baseband(z, rate, offset_hz):
     return z * osc
 
 
-def demod_ssb(z, rate, mode):
-    f = np.fft.fftfreq(len(z), 1.0 / rate)
-    Z = np.fft.fft(z)
-
-    if mode == "USB":
-        mask = (f >= 250) & (f <= 3000)
-    else:
-        mask = (f <= -250) & (f >= -3000)
-
-    Zf = np.zeros_like(Z)
-    Zf[mask] = Z[mask]
-
-    audio_complex = np.fft.ifft(Zf)
-
-    if mode == "USB":
-        audio = np.real(audio_complex)
-    else:
-        audio = np.real(np.conj(audio_complex))
-
-    sos = butter(
-        6,
-        [250, 3000],
-        btype="bandpass",
-        fs=rate,
-        output="sos"
-    )
-
-    audio = sosfiltfilt(sos, audio)
-
-    # auf 12 kHz runter
-    audio = resample_poly(audio, 1, 4)
-    outrate = rate // 4
-
-    peak = np.max(np.abs(audio))
+def demod_ssb(bb, rate, mode):
+    """SSB aus dem Basisband (Träger bei 0 Hz, 12 kHz): Durchlass 250–3000 Hz auf der richtigen Seite als
+    komplexer Bandpass (in die Mitte schieben, Tiefpass, zurückschieben), Realteil = Ton. Braucht nur
+    wenige Kopien der 12-kHz-Daten statt vieler in voller Aufnahmerate."""
+    lo, hi = 250.0, 3000.0
+    sgn = 1.0 if mode == "USB" else -1.0
+    n = np.arange(len(bb), dtype=np.float64)
+    rot = np.exp(-2j * np.pi * sgn * (lo + hi) / 2 * n / rate).astype(np.complex64)
+    sos = butter(6, (hi - lo) / 2, fs=rate, output="sos")
+    x = sosfiltfilt(sos, bb * rot).astype(np.complex64) * np.conj(rot)
+    audio = np.real(x).astype(np.float32)
+    peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
     if peak > 0:
         audio = audio / peak * 0.85
-
-    return audio.astype(np.float32), outrate
+    return audio.astype(np.float32), rate
 
 
 def make_spectrum(z, rate, rf_center, rf_hit, outfile):
@@ -173,6 +150,27 @@ if not rows:
 
 count = 0
 
+def _skip(src, pngfile, why):
+    """Aufnahme nicht auswertbar: im Protokoll vermerken und ein leeres Spektrumbild hinterlegen, damit sie nicht
+    bei jedem Scan erneut versucht wird (und den Speicher wieder füllt)."""
+    try:
+        from applog import log
+        log("WARN", "analyze", "analysis_skipped", file=src.name, reason=why,
+            size_mb=round(src.stat().st_size / 1e6, 1))
+    except Exception:
+        pass
+    try:
+        if not pngfile.exists():
+            fig = plt.figure(figsize=(4, 1))
+            fig.text(0.5, 0.5, "nicht ausgewertet", ha="center", va="center")
+            fig.savefig(pngfile, dpi=60)
+            plt.close(fig)
+    except Exception:
+        pass
+
+
+import iqload as IQ  # noqa: E402
+
 for peak_id, rf_hz, recpath, center_hz, band, mode, sideband in rows:
     src = Path(recpath)
     if not src.exists():
@@ -200,33 +198,31 @@ for peak_id, rf_hz, recpath, center_hz, band, mode, sideband in rows:
     if not need_usb and not need_lsb and pngfile.exists():
         continue
 
-    z, rate = load_iq(src)
-
     cc = corrected_center(center_hz)
     offset = rf_hz - cc
-
-    bb = shift_to_baseband(
-        z,
-        rate,
-        offset
-    )
-
-    if need_usb:
-        usb, arate = demod_ssb(bb, rate, "USB")
-        sf.write(usbfile, usb, arate, subtype="PCM_16")
-
-    if need_lsb:
-        lsb, arate = demod_ssb(bb, rate, "LSB")
-        sf.write(lsbfile, lsb, arate, subtype="PCM_16")
-
-    if not pngfile.exists():
-        make_spectrum(
-            z,
-            rate,
-            cc,
-            rf_hz,
-            pngfile
-        )
+    try:
+        if need_usb or need_lsb:
+            # Stückweise laden, auf die Trefferfrequenz mischen, auf 12 kHz – Speicher ~15 MB statt bis 500 MB
+            bb, brate = IQ.baseband(src, offset, 12000, CONJ)
+            if need_usb:
+                usb, arate = demod_ssb(bb, brate, "USB")
+                sf.write(usbfile, usb, arate, subtype="PCM_16")
+            if need_lsb:
+                lsb, arate = demod_ssb(bb, brate, "LSB")
+                sf.write(lsbfile, lsb, arate, subtype="PCM_16")
+            del bb
+        if not pngfile.exists():
+            z, rate = IQ.head(src, 5.0, CONJ)               # das Spektrumbild braucht nur die ersten 5 s
+            make_spectrum(z, rate, cc, rf_hz, pngfile)
+            del z
+    except MemoryError:
+        print("ZU WENIG SPEICHER, übersprungen:", src.name)
+        _skip(src, pngfile, "memory")
+        continue
+    except Exception as e:
+        print("FEHLER bei", src.name, "–", type(e).__name__, e)
+        _skip(src, pngfile, f"{type(e).__name__}: {e}")
+        continue
 
     print(
         f"{band:4s}  "

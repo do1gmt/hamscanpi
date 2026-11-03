@@ -104,6 +104,11 @@ also covers HF via direct sampling.
 | Antenna | a discone or a vertical works for strong passes; a turnstile or QFH is better for satellites |
 | PMSDR (optional) | shortwave 160–10 m, needs a USB sound card for I/Q and its control program – see [docs/pmsdr.md](docs/pmsdr.md) |
 
+**Memory:** HamScanPi runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
+frequency and reduced to 12 kHz while reading, in single precision), so even 120 s shortwave recordings need
+only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
+memory.
+
 **Band plan by country:** *Settings → Station → Country / band plan* selects the band plan used for scanning and
 classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **Austria**, **Switzerland** and the **United Kingdom** (Region 1) and **Canada** (Region 2) are
 available as well (Freenet only in Germany, no 4 m in Austria, UK 4 m 70.0–70.5 MHz, UK 60 m allocations and CB

@@ -793,5 +793,41 @@ W.watch_set(True, time.time() - 1); W.watch_tick()
 assert W._watch_cfg() is None and not W._live                            # Endzeit erreicht: aus
 assert starts == [14074000] * 3, starts
 PY
+echo "== 28 Speicher bei der Auswertung langer Kurzwellen-Aufnahmen"
+(cd bin && timeout 300 python3 - <<'PY') && ok "120-s-Aufnahme: Basisband stückweise, SSB-Ton richtig, Speicher begrenzt" || bad "Speicher Auswertung"
+import resource, subprocess, sys, tempfile
+import numpy as np, soundfile as sf
+R, T = 48000, 120
+p = tempfile.mktemp(suffix=".wav")
+# Testdatei in eigenem Prozess erzeugen: Linux vererbt den Spitzenwert des Speichers an Kindprozesse – die
+# Messung unten zeigte sonst den Speicher dieses Erzeugers mit
+subprocess.run([sys.executable, "-c", f"""
+import numpy as np, soundfile as sf
+R, T = {R}, {T}
+n = np.arange(R * T)
+z = 0.3 * np.exp(2j * np.pi * 6000 * n / R) + 0.01 * (np.random.default_rng(1).standard_normal(len(n)) + 1j * np.random.default_rng(2).standard_normal(len(n)))
+sf.write({p!r}, np.stack([z.real, z.imag], 1).astype(np.float32), R, subtype="PCM_16")
+"""], check=True, timeout=120)
+# Auswertung wie analyze_recordings.py (Basisband + USB + LSB + Spektrum-Kopf) in eigenem Prozess messen
+run = f"""
+import resource, sys, numpy as np
+sys.path.insert(0, '.')
+import iqload as IQ
+from scipy.signal import butter, sosfiltfilt
+src = open('analyze_recordings.py', encoding='utf-8').read()
+i = src.index('def demod_ssb('); j = src.index('def make_spectrum(')
+exec(src[i:j])
+bb, r = IQ.baseband({p!r}, 5000, 12000)
+u, _ = demod_ssb(bb, r, 'USB'); l, _ = demod_ssb(bb, r, 'LSB')
+z, rr = IQ.head({p!r}, 5.0)
+S = np.abs(np.fft.rfft(u[:r * 10])); f = np.fft.rfftfreq(r * 10, 1 / r)
+print(round(f[S.argmax()]), round(float(np.std(l) / np.std(u)), 3), len(z) == 5 * rr,
+      round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024))
+"""
+out = subprocess.run([sys.executable, "-c", run], capture_output=True, text=True, timeout=240)
+tone, ratio, headok, mb = out.stdout.split()
+assert int(tone) == 1000 and float(ratio) < 0.05 and headok == "True", out.stdout + out.stderr
+assert int(mb) < 320, f"Spitzenspeicher {mb} MB"               # vorher über 800 MB
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

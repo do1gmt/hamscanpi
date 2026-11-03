@@ -214,14 +214,9 @@ for (
 
     try:
 
-        z, fs = load_iq(src)
-
-        z = shift_signal(
-            z,
-            fs,
-            center_hz,
-            rf_hz
-        )
+        # stückweise laden und mischen (complex64) – lange FM-Aufnahmen füllten sonst den Speicher
+        import iqload as IQ
+        z, fs = IQ.baseband(src, rf_hz - center_hz * (1.0 + PPM * 1e-6), 10 ** 9, CONJ)
 
         audio, afs = demod_fm(
             z,

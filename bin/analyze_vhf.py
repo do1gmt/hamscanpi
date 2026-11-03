@@ -87,9 +87,10 @@ def main():
         if out.exists() and (mode not in ("aprs", "pocsag") or jpath.exists()):
             continue
         try:
-            z, rate = load_iq(src)
-            n = np.arange(len(z))
-            bb = z * np.exp(-2j * np.pi * (float(rf_hz) - float(center_hz)) * n / rate)
+            # stückweise laden und mischen (complex64, ohne Herunterrechnen) – Aufnahmen verfolgter QSOs sind bis
+            # 120 s lang; früher lagen mehrere Kopien in doppelter Genauigkeit im Speicher
+            import iqload as IQ
+            bb, rate = IQ.baseband(src, float(rf_hz) - float(center_hz), 10 ** 9)
             audio, arate = W.demodulate(bb, rate, amode)
             write_wav(out, audio, arate)
             print(f"{band:9s} {rf_hz/1e6:10.4f} MHz  {mode:7s} -> {out.name}")

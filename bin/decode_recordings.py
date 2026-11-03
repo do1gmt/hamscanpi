@@ -1618,16 +1618,10 @@ def main():
             continue
 
         try:
-            z, rate = load_iq(
-                src
-            )
-
-            bb = shift_to_hit(
-                z,
-                rate,
-                center_hz,
-                rf_hz
-            )
+            # stückweise laden und gleich auf 12 kHz um die Trefferfrequenz (früher: ganze Aufnahme in voller
+            # Rate, bei 120-s-Kurzwellenaufnahmen mehrere hundert MB)
+            import iqload as IQ
+            bb, rate = IQ.baseband(src, rf_hz - center_hz * (1.0 + PPM * 1e-6), 12000, CONJ)
 
             # FT8 zuerst prüfen.
             # Wenn das Muster passt, werden
@@ -1792,6 +1786,12 @@ def main():
                     )
 
         except Exception as e:
+            try:
+                from applog import log as _alog
+                _alog("WARN", "decode", "decode_skipped" if isinstance(e, MemoryError) else "decode_failed",
+                      file=src.name, error=f"{type(e).__name__}: {e}"[:200])
+            except Exception:
+                pass
 
             data = {
                 "peak_id": peak_id,

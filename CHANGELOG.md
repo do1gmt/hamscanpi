@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.46 – 2026-11-03
+
+- **Cause of the hangs in mixed HF/satellite operation fixed: memory during the analysis.** The system history
+  showed `analyze_recordings.py` with 476 MB and only 128 MB free before the hang (and an out-of-memory kill on
+  29.10.). The analysis loaded every recording completely in double precision and kept 6–8 copies – harmless for
+  the former 10 s recordings, but 400–500 MB for the 90–120 s shortwave recordings since keep-recording (1.7.28)
+  and HF via the stick. The Pi then swapped until the dashboard stopped answering.
+  New `bin/iqload.py`: recordings are read in 2 s pieces, mixed to the hit frequency (continuous phase) and
+  reduced to 12 kHz right away, in single precision; the spectrum image reads only the first 5 s. Used by
+  `analyze_recordings.py` (USB/LSB audio, now a complex band-pass at 12 kHz), `decode_recordings.py` (FT8 check,
+  CW, RTTY at 12 kHz), `analyze_vhf.py` and `analyze_fm.py` (mixing only). Measured on a 120 s recording:
+  837 MB → about 210 MB peak, of which ~100 MB are the Python libraries themselves.
+- A recording that cannot be analysed (out of memory or error) is skipped and logged (`analysis_skipped`,
+  `decode_skipped`/`decode_failed`) instead of stopping the whole analysis; it is not retried on every scan.
+- README: memory note. Self-test section 28 (120 s recording: correct SSB tone, memory bound).
+
 ## 1.7.45 – 2026-10-30
 
 - The ⚠ notice counter (and the pass tile) jumped too far: the target card ended up under the sticky header
