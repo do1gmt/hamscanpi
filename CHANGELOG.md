@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.72 – 2026-11-03
+
+- Live: the memory clean-up of 1.7.70 (gc + `malloc_trim` every 5 min) no longer runs while Live or the
+  continuous watch is on – both briefly hold up all threads of the web server and could cause a short dropout.
+- Live with the stick: stutter is made visible – computing time per 20-ms block (shown as "computer busy (… %)"
+  from 80 %) and gaps when reading from the stick (≥ 0.3 s without data: "N× gap (up to … s)" in the status line,
+  `live_gap` in the log at most once a minute with load and frequency).
+
 ## 1.7.71 – 2026-11-03
 
 - English UI: hints containing bold text or links (e.g. the SSB hint in Live) stayed half German – translations

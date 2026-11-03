@@ -367,6 +367,10 @@ class LiveSession:
         t_start = time.time()
         last_signal = time.time()
         idle_t = None
+        # Ruckeln sichtbar machen: Rechenzeit je 20-ms-Block (gleitend) und Lücken beim Lesen vom Stick
+        t_busy, t_read = 0.0, time.time()
+        self.load_pct, self.gaps, self.gap_max = 0, 0, 0.0
+        gap_log_t = 0.0
         base = f"{freq_hz/1e6:.4f} MHz ({self.mode})"
         agc_clip, agc_peak, agc_n = 0.0, 0.0, 0
         self.status_text = f"Empfang {base}"
@@ -388,7 +392,23 @@ class LiveSession:
                     break
                 time.sleep(0.02)
                 continue
+            now_r = time.time()
+            if now_r - t_read > 0.3 and nblk > 50:          # 20-ms-Blöcke: 0,3 s ohne Daten = hörbare Lücke
+                self.gaps += 1
+                self.gap_max = max(self.gap_max, now_r - t_read)
+                if now_r - gap_log_t > 60:
+                    gap_log_t = now_r
+                    try:
+                        from applog import log as _alog
+                        _alog("WARN", "live", "live_gap", seconds=round(now_r - t_read, 2), gaps=self.gaps,
+                              load_pct=self.load_pct, freq_hz=int(freq_hz))
+                    except Exception:
+                        pass
+            t_work = time.time()
             buf.append(demod.process(raw, self.squelch_db))
+            t_busy = 0.95 * t_busy + 0.05 * (time.time() - t_work)
+            self.load_pct = round(100 * t_busy / 0.02)
+            t_read = time.time()
             if rds is not None and getattr(demod, "mpx", None) is not None:
                 try:
                     inf = rds.feed(demod.mpx)
@@ -435,6 +455,10 @@ class LiveSession:
                 warn = f" · ÜBERSTEUERT ({demod.clip_frac*100:.1f} %) – Verstärkung senken"
             elif agc:
                 warn = f" · Verstärkung automatisch {gain:g} dB"
+            if self.load_pct > 80:
+                warn += f" · Rechner ausgelastet ({self.load_pct} %)"
+            if self.gaps:
+                warn += f" · {self.gaps}× Lücke (bis {self.gap_max:.1f} s)"
             self.status_text = f"Empfang {base} · SNR {demod.snr_db:.0f} dB{warn}"
             self._publish(pcm)
             if hold_until_silent:

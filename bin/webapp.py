@@ -1701,6 +1701,10 @@ def trim_loop():
         return
     while True:
         time.sleep(300)
+        with _live_lock:
+            busy = bool(_live and _live.running)
+        if busy:                                     # nie während Live: gc und malloc_trim halten kurz alles an
+            continue
         try:
             gc.collect()
             libc.malloc_trim(0)
