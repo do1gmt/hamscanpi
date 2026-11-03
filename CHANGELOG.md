@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.51 – 2026-11-03
+
+- **Fix: every scan was marked "Scan failed (Scan beendet)" since 1.7.48.** The last line of `run_cycle.sh` was
+  `[ "$CANCELLED" -eq 1 ] && exit 3`; without an interruption that test is false, so the script ended with exit
+  code 1 and each successful run counted as failed (hits were saved, but status "error", error notifications,
+  error counter). Now explicitly `exit 3` when interrupted for a pass, otherwise `exit 0`.
+- Self-test section 33 runs `run_cycle.sh` with a stand-in scanner and checks the exit code for both cases.
+
 ## 1.7.50 – 2026-11-03
 
 - **Antenna profiles** (`bin/antennas.py`, System → Devices → Antennas): each antenna once with name, frequency

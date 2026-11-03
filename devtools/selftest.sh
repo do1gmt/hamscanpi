@@ -971,5 +971,16 @@ try:
 except ValueError:
     pass
 PY
+echo "== 33 Scanlauf: Rückgabewert (erfolgreich / für Überflug unterbrochen)"
+RCT="$(mktemp -d)"; cp -r bin config data "$RCT/" 2>/dev/null; mkdir -p "$RCT/log" "$RCT/data"
+RCOK=1
+for code in 0 3; do
+    printf '#!/usr/bin/env python3\nimport sys\nprint("Peaks : 0"); print("Scan beendet"); sys.exit(%s)\n' "$code" > "$RCT/bin/scanner.py"
+    chmod +x "$RCT/bin/scanner.py"
+    rc=0; (cd "$RCT" && timeout 120 bash bin/run_cycle.sh >/dev/null 2>&1) || rc=$?
+    [ "$rc" -eq "$code" ] || { echo "   Scanner $code -> run_cycle $rc"; RCOK=0; }
+done
+rm -rf "$RCT"
+[ "$RCOK" -eq 1 ] && ok "erfolgreicher Lauf 0, unterbrochener Lauf 3" || bad "Rückgabewert run_cycle"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -292,4 +292,10 @@ write_status "running" "report" 98 "Ergebnisse werden bereitgestellt"
 echo
 echo "Zyklus beendet:"
 date -u --iso-8601=seconds
-[ "${CANCELLED:-0}" -eq 1 ] && exit 3
+# Für einen Überflug unterbrochen: Code 3 (Lauf „unterbrochen“), sonst ausdrücklich 0. (Vorher stand hier nur
+# „[ … ] && exit 3“ als letzte Zeile – ohne Unterbrechung lieferte das Skript damit 1, und jeder Lauf galt als
+# fehlgeschlagen.)
+if [ "${CANCELLED:-0}" -eq 1 ]; then
+    exit 3
+fi
+exit 0
