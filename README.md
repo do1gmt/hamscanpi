@@ -178,6 +178,15 @@ interrupt a scan. A scan without a sign of life for 10 minutes is ended and repo
 with a "now" button in the pass list), so looking around or choosing satellites does not throw out a running
 scan.
 
+**Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
+network it is reachable at the address it gets by DHCP – or as `http://<hostname>.local:8080` where mDNS works.
+When the IP address or the network changes (judged by the gateway and its hardware address, confirmed by two checks
+a minute apart), HamScanPi shows a notice "New network: <IP>" / "New IP address: <IP>" with the links and sends it
+by mail/push (event "New network / new IP address", on by default; without internet it is sent as soon as there is
+one). In a different network it also asks whether the locator still fits. Note: trusted networks of the access
+protection do not apply in a foreign network (the password is asked), and guest networks with client isolation
+can block access from other devices.
+
 **When something hangs:** the web server checks itself every 30 s and the scheduler reports every 10 s to
 systemd's watchdog – if one of them stops responding for 3 or 5 minutes, systemd restarts it (shown as a notice).
 Memory limits per service (web 500 MB, scheduler with scans and analysis 750 MB) make an outlier hit only its

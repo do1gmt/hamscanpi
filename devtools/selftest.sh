@@ -1204,5 +1204,34 @@ rows = {r[0]: (r[1], r[2]) for r in db.execute("SELECT station, snr_db, heard FR
 assert rows["Radio Jetzt A"][1] == 1 and rows["Radio Jetzt A"][0] > 20 and rows["Radio Jetzt B"][1] == 0 and rows["Radio Jetzt C"][1] == 0, rows
 db.close()
 PY
+echo "== 39 Neues Netzwerk / neue IP-Adresse"
+(cd bin && python3 - <<'PY') && ok "neue IP und anderes Netz werden gemeldet (mit Adresse, Locator-Hinweis), kein Fehlalarm" || bad "Netzwechsel"
+import json, tempfile
+from pathlib import Path
+import health as H, notices as NT, notify as N
+NT.FILE = Path(tempfile.mkdtemp()) / "n.json"; NT.LOCK = NT.FILE.with_suffix(".lock")
+sent = []
+N.cfg = lambda: {"push": "telegram", "tg_token": "x", "tg_chat": "1"}
+N.send_push = lambda subject, text, c, image=None, priority="default": sent.append(subject)
+seq = iter([
+    {"iface": "eth0", "ip": "192.168.178.92", "gw": "192.168.178.1", "gwmac": "aa:aa"},   # erster Lauf: merken
+    {"iface": "eth0", "ip": "192.168.178.92", "gw": "192.168.178.1", "gwmac": "aa:aa"},
+    {"iface": "eth0", "ip": "192.168.178.95", "gw": "192.168.178.1", "gwmac": "aa:aa"},   # neue IP: erst vormerken
+    {"iface": "eth0", "ip": "192.168.178.95", "gw": "192.168.178.1", "gwmac": "aa:aa"},   # bestätigt -> Meldung
+    {"iface": "eth0", "ip": "10.0.5.23", "gw": "10.0.5.1", "gwmac": "bb:bb"},
+    {"iface": "eth0", "ip": "10.0.5.23", "gw": "10.0.5.1", "gwmac": "bb:bb"},             # anderes Netz
+])
+H.net_state = lambda: next(seq)
+st = {}
+for _ in range(6):
+    H.check_network(st)
+items = [r for r in NT.listing()["items"] if r["key"] == "network"]
+titles = sorted(r["title"] for r in items)
+assert titles == ["Neue IP-Adresse: 192.168.178.95", "Neues Netzwerk: 10.0.5.23"], titles
+newnet = [r for r in items if r["title"].startswith("Neues Netzwerk")][0]
+assert "http://10.0.5.23:" in newnet["detail"] and "Locator" in newnet["fix"]
+assert not [r for r in items if r["title"].startswith("Neue IP")][0]["fix"]                  # gleiches Netz: kein Locator-Hinweis
+assert len(sent) == 2 and "network" in N.EVENT_KEYS, sent
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

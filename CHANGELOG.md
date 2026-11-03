@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.63 – 2026-11-03
+
+- **New network / new IP address:** checked every minute (default route, IPv4 address, gateway and its hardware
+  address); a change confirmed by two checks in a row gives a notice "New IP address: …" (same network) or
+  "New network: …" (different gateway) with the dashboard link, `<hostname>.local` and the rescue page – sent by
+  mail/push as the new event type "New network / new IP address" (on by default, switchable under Notifications;
+  without internet it is sent later). In a different network the notice asks whether the locator still fits.
+  Logged as `network_changed`. Self-test section 39. README: taking the Pi elsewhere.
+
 ## 1.7.62 – 2026-11-03
 
 - **EiBi in the scan, like "Satellites":** new chip "EiBi" under Bands & modes, its segments are the broadcast meter

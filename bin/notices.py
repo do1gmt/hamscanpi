@@ -248,6 +248,11 @@ EN_RX = [
     (r"^(.+) liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht$", r"\1 is on the same drive as HamScanPi – a backup there does not help if the card fails"),
     (r"^kein Zielordner eingetragen$", "no target folder set"),
     (r"^Kein Internet seit (.+)$", r"No internet since \1"),
+    (r"^Neues Netzwerk: (.+)$", r"New network: \1"), (r"^Neue IP-Adresse: (.+)$", r"New IP address: \1"),
+    (r"^Dashboard: (\S+) · (\S+) · Notfall-Seite: (\S+) \(über (\S+), Gateway (\S+)\)\.$",
+     r"Dashboard: \1 · \2 · rescue page: \3 (via \4, gateway \5)."),
+    (r"^Anderes Netz – Standort gewechselt\? Locator (.+?) unter Einstellungen → Station anpassen, sonst .*$",
+     r"Different network – moved? Adjust locator \1 under Settings → Station, otherwise pass times, distances and the spots sent to PSK Reporter are wrong."),
     (r"^Hängender Scan beendet$", "Hanging scan ended"),
     (r"^Der Scan gab (\d+) min kein Lebenszeichen \((.*)\) und wurde (beendet|nicht vollständig beendet); der nächste startet planmäßig\.$",
      lambda m: f"The scan gave no sign of life for {m.group(1)} min ({m.group(2)}) and was "

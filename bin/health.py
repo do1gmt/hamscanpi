@@ -365,7 +365,87 @@ def check_internet(st):
                   fix="Router, WLAN bzw. Netzwerkkabel prüfen.", notify=False)
 
 
-CHECKS = (check_reboot, check_internet, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def net_state():
+    """Aktuelle Verbindung: Schnittstelle, IPv4-Adresse, Gateway und dessen Hardware-Adresse (kennzeichnet das Netz –
+    zwei Netze mit gleichem Adressbereich, etwa 192.168.178.x, unterscheiden sich an der Gateway-MAC)."""
+    import re
+    import subprocess as sp
+    out = {"iface": None, "ip": None, "gw": None, "gwmac": None}
+    try:
+        r = sp.run(["ip", "-4", "route", "show", "default"], capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r"default via (\S+) dev (\S+)", r)
+        if m:
+            out["gw"], out["iface"] = m.group(1), m.group(2)
+        a = sp.run(["ip", "-4", "-o", "addr", "show"] + (["dev", out["iface"]] if out["iface"] else []),
+                   capture_output=True, text=True, timeout=5).stdout
+        ips = [x for x in re.findall(r"inet (\d+\.\d+\.\d+\.\d+)/", a) if not x.startswith("127.")]
+        out["ip"] = ips[0] if ips else None
+        if out["gw"]:
+            n = sp.run(["ip", "neigh", "show", out["gw"]], capture_output=True, text=True, timeout=5).stdout
+            m = re.search(r"lladdr (\S+)", n)
+            out["gwmac"] = m.group(1).lower() if m else None
+    except Exception:
+        pass
+    return out
+
+
+def _web_port():
+    try:
+        import re
+        txt = Path("/etc/systemd/system/hamscanpi-web.service").read_text()
+        m = re.search(r"webapp\.py\s+(\d+)", txt)
+        return int(m.group(1)) if m else 8080
+    except Exception:
+        return 8080
+
+
+def check_network(st):
+    """Neue IP-Adresse oder anderes Netz (Pi mitgenommen, anderer Router): Hinweis mit der neuen Adresse – per
+    Mail/Push, ohne Internet nachgeschickt, sobald es da ist. In einem anderen Netz zusätzlich die Frage, ob der
+    Locator noch stimmt. Erst nach zwei gleichen Prüfungen hintereinander (kein Fehlalarm beim Neuverbinden)."""
+    cur = net_state()
+    if not cur["ip"]:
+        return
+    seen = st.get("net")
+    if seen is None:                                         # erster Lauf: nur merken
+        st["net"] = cur
+        return
+    same_net = (cur["gw"], cur["gwmac"]) == (seen.get("gw"), seen.get("gwmac")) or not cur["gwmac"] and cur["gw"] == seen.get("gw")
+    if cur["ip"] == seen.get("ip") and same_net:
+        st.pop("net_pending", None)
+        return
+    pend = st.get("net_pending")
+    if pend != cur:                                          # erst beim zweiten gleichen Stand melden
+        st["net_pending"] = cur
+        return
+    st.pop("net_pending", None)
+    st["net"] = cur
+    import socket
+    port = _web_port()
+    host = socket.gethostname()
+    url = f"http://{cur['ip']}:{port}"
+    detail = (f"Dashboard: {url} · http://{host}.local:{port} · Notfall-Seite: http://{cur['ip']}:{port + 1} "
+              f"(über {cur['iface']}, Gateway {cur['gw']}).")
+    fix = ""
+    if not same_net:
+        try:
+            import json as _j
+            loc = _j.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8")).get("my_locator", "")
+        except Exception:
+            loc = ""
+        fix = (f"Anderes Netz – Standort gewechselt? Locator {loc or '(keiner)'} unter Einstellungen → Station anpassen, "
+               f"sonst stimmen Überflugzeiten, Entfernungen und die Spots an PSK Reporter nicht.")
+    NT.event("network", "info", "system", f"{'Neues Netzwerk' if not same_net else 'Neue IP-Adresse'}: {cur['ip']}",
+             detail, fix=fix)
+    try:
+        from applog import log
+        log("INFO", "health", "network_changed", ip=cur["ip"], iface=cur["iface"], gateway=cur["gw"],
+            new_network=not same_net, old_ip=seen.get("ip"))
+    except Exception:
+        pass
+
+
+CHECKS = (check_reboot, check_internet, check_network, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 
