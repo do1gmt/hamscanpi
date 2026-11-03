@@ -988,6 +988,14 @@ def stations(days=30, q="", band="", limit=100, offset=0):
     return {"stations": out, "total": total, "offset": offset, "limit": limit, "home": home}
 
 
+def _period_days(qs, default_days):
+    """Zeitraum der Stationsliste/Karte: „hours“ (0,5 = 30 min … 8760 = 1 Jahr, 0 = alles) oder alt „days“."""
+    if "hours" in qs:
+        h = float(qs.get("hours") or 0)
+        return h / 24.0 if h > 0 else 0
+    return float(qs.get("days", default_days) or 0)
+
+
 def stations_map(days=0, q="", band=""):
     """Alle Stationen mit Locator für die Karte (unabhängig von der Seitenaufteilung der Liste), kompakt:
     [Rufzeichen, Breite, Länge, Locator, bestes SNR, Betriebsarten, Bänder, zuletzt]."""
@@ -2049,9 +2057,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/scan-estimate":
                 return self.send_json(scan_estimate() or {})
             if path == "/api/stations/map":
-                return self.send_json(stations_map(int(qs.get("days", 0) or 0), qs.get("q", ""), qs.get("band", "")))
+                return self.send_json(stations_map(_period_days(qs, 0), qs.get("q", ""), qs.get("band", "")))
             if path == "/api/stations":
-                return self.send_json(stations(int(qs.get("days", 30) or 0), qs.get("q", ""), qs.get("band", ""),
+                return self.send_json(stations(_period_days(qs, 30), qs.get("q", ""), qs.get("band", ""),
                                                max(1, min(int(qs.get("limit", 100)), 1000)), max(0, int(qs.get("offset", 0)))))
             if path == "/api/interference":
                 return self.send_json(interference_list())
@@ -2060,7 +2068,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/activity":
                 return self.send_json(activity(max(1, min(int(qs.get("days", 30) or 30), 365))))
             if path == "/api/stations.adi":
-                days = int(qs.get("days", 30) or 0)
+                days = _period_days(qs, 30)
                 body = stations_adif(days, qs.get("q", ""), qs.get("band", "")).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")

@@ -174,12 +174,13 @@
     <div class="row filter-row">
       <label class="field"><span>Rufzeichen</span><input id="stQuery" type="text" placeholder="DL1ABC oder DL*" autocapitalize="characters" autocomplete="off"></label>
       <label class="field"><span>Band</span><select id="stBand"><option value="">alle</option></select></label>
-      <label class="field"><span>Zeitraum</span><select id="stDays"><option value="1">24 h</option><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="365">1 Jahr</option><option value="0">alles</option></select></label>
+      <label class="field"><span>Zeitraum</span><select id="stDays"><option value="0.5">30 min</option><option value="1">1 h</option><option value="6">6 h</option><option value="12">12 h</option><option value="24">24 h</option><option value="168">1 Woche</option><option value="720" selected>1 Monat</option><option value="4380">6 Monate</option><option value="8760">1 Jahr</option><option value="0">alles</option></select></label>
       <a class="btn" id="stAdif" href="#" download>↓ ADIF-Export</a>
     </div>
     <details class="map-box" id="mapBox"><summary>Karte</summary>
-      <div class="map-opts"><label class="check"><input type="checkbox" id="mapLabels"> Rufzeichen und SNR an die Punkte schreiben</label>
-        <span class="map-legend">Punktfarbe = SNR: <i style="background:#3b82f6"></i>≤ −20 <i style="background:#22c55e"></i>−10 <i style="background:#eab308"></i>0 <i style="background:#ef4444"></i>≥ +10 dB · Rand: FT8 blau, APRS gelb</span></div>
+      <div class="map-opts"><div class="chips map-mode" role="radiogroup" aria-label="Darstellung"><button type="button" class="chip on" data-mm="calls">Rufzeichen</button><button type="button" class="chip" data-mm="grid">Locator-Felder</button></div>
+        <span class="map-legend" id="mapLegendCalls">Punktfarbe = SNR: <i style="background:#3b82f6"></i>≤ −20 <i style="background:#22c55e"></i>−10 <i style="background:#eab308"></i>0 <i style="background:#ef4444"></i>≥ +10 dB · Rand: FT8 blau, APRS gelb</span>
+        <span class="map-legend" id="mapLegendGrid" hidden>Feld = 4-stelliger Locator (2° × 1°) · je kräftiger, desto mehr Stationen</span></div>
       <div id="stMap" class="st-map"></div>
       <p class="hint" id="mapNote">Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Nur Stationen mit Locator.</p>
     </details>

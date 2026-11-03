@@ -1651,7 +1651,7 @@
 
   // ---------- Gehörte Stationen ----------
   const stPage = { offset: 0, per: 100 };
-  function stParams() { return new URLSearchParams({ q: $('stQuery').value.trim(), band: $('stBand').value, days: $('stDays').value }); }
+  function stParams() { return new URLSearchParams({ q: $('stQuery').value.trim(), band: $('stBand').value, hours: $('stDays').value }); }
   async function loadStations() {
     let d; try { d = await api(`/api/stations?${stParams()}&limit=${stPage.per}&offset=${stPage.offset}`); } catch (e) { return; }
     const dir = b => b == null ? '' : ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(b / 45) % 8];
@@ -1706,29 +1706,65 @@
     const snrColor = v => { if (v == null) return '#94a3b8'; const t = Math.max(0, Math.min(1, (v + 20) / 30));
       const stops = [[59, 130, 246], [34, 197, 94], [234, 179, 8], [239, 68, 68]], x = t * 3, i = Math.min(2, Math.floor(x)), f = x - i;
       const c = stops[i].map((a, k) => Math.round(a + (stops[i + 1][k] - a) * f)); return `rgb(${c.join(',')})`; };
-    const many = P.length > 300;
-    const labels = $('mapLabels').checked && !many;
-    const snrTxt = v => v == null ? '' : `${v > 0 ? '+' : ''}${Math.round(v)} dB`;
+    const mode = mapMode();
     const rad = Math.PI / 180;
     const dist = (a, b) => { const p1 = a[0] * rad, p2 = b[0] * rad, dl = (b[1] - a[1]) * rad;
       return Math.round(6371 * Math.acos(Math.max(-1, Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dl))))); };
+    const snrTxt = v => v == null ? '' : `${v > 0 ? '+' : ''}${Math.round(v)} dB`;
     const rend = L.canvas({ padding: 0.3 });
-    if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2, renderer: rend }).bindTooltip('QTH').addTo(mapLayer); pts.push(d.home); }
-    for (const [call, lat, lon, grid, snr, modes, bands, last] of P) {
-      const p = [lat, lon]; pts.push(p);
-      if (d.home && !many) L.polyline([d.home, p], { color: color(modes), weight: 1, opacity: .35, renderer: rend }).addTo(mapLayer);
-      const mk = L.circleMarker(p, { radius: many ? 4 : 6, color: color(modes), fillColor: snrColor(snr), fillOpacity: .9, weight: many ? 1 : 2, renderer: rend })
-        .bindPopup(`<b>${esc(call)}</b> ${esc(grid || '')}${snr != null ? ` · <b>SNR ${snrTxt(snr)}</b>` : ''}<br>${d.home ? dist(d.home, p) + ' km<br>' : ''}${esc((modes || '').replace(/,/g, ', '))} · ${esc((bands || '').replace(/,/g, ', '))}<br>${fmtTime(last)}`).addTo(mapLayer);
-      if (labels) mk.bindTooltip(`${esc(call)} ${snrTxt(snr)}`, { permanent: true, direction: 'right', offset: [6, 0], className: 'map-lbl' });
+    const tip = { direction: 'top', offset: [0, -6], sticky: false, className: 'map-tip no-i18n' };   // Zusatzinfos nur beim Überfahren/Antippen
+    const EN = I18N.lang === 'en', W = { st: EN ? 'station' : 'Station', sts: EN ? 'stations' : 'Stationen', best: EN ? 'best SNR' : 'bestes SNR', last: EN ? 'last' : 'zuletzt' };
+    if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2, renderer: rend }).bindTooltip('QTH', tip).addTo(mapLayer); pts.push(d.home); }
+    if (mode === 'grid') {
+      // Locator-Felder (4-stellig, 2° × 1°): Farbe nach Zahl der Stationen, beim Überfahren Feld, Anzahl, Rufzeichen
+      const cells = new Map();
+      for (const [call, lat, lon, grid, snr, modes, bands, last] of P) {
+        const g = (grid || '').toUpperCase().slice(0, 4);
+        if (!/^[A-R]{2}\d{2}$/.test(g)) continue;
+        const c = cells.get(g) || { calls: [], best: null, last: '' };
+        c.calls.push(call); if (snr != null && (c.best == null || snr > c.best)) c.best = snr; if ((last || '') > c.last) c.last = last;
+        cells.set(g, c);
+      }
+      const maxN = Math.max(1, ...[...cells.values()].map(c => c.calls.length));
+      for (const [g, c] of cells) {
+        const lon0 = (g.charCodeAt(0) - 65) * 20 - 180 + Number(g[2]) * 2, lat0 = (g.charCodeAt(1) - 65) * 10 - 90 + Number(g[3]);
+        const b = [[lat0, lon0], [lat0 + 1, lon0 + 2]]; pts.push(b[0], b[1]);
+        const t = Math.log(1 + c.calls.length) / Math.log(1 + maxN);
+        L.rectangle(b, { color: '#2dd4bf', weight: 1, fillColor: '#2dd4bf', fillOpacity: 0.15 + 0.6 * t, renderer: rend })
+          .bindTooltip(`<b>${g}</b> · ${c.calls.length} ${c.calls.length === 1 ? W.st : W.sts}${c.best != null ? ` · ${W.best} ${snrTxt(c.best)}` : ''}`
+            + `${d.home ? ` · ${dist(d.home, [lat0 + .5, lon0 + 1])} km` : ''}<br>${esc(c.calls.slice(0, 12).join(', '))}${c.calls.length > 12 ? ' …' : ''}<br><small>${W.last} ${fmtTime(c.last)}</small>`, tip)
+          .addTo(mapLayer);
+      }
+    } else {
+      // Rufzeichen: ein Punkt je Station, Farbe nach SNR, Rand nach Betriebsart; Details nur beim Überfahren
+      const color = m => /FT8|FT4/.test(m || '') ? '#38bdf8' : /APRS/.test(m || '') ? '#f5b942' : '#2dd4bf';
+      const snrColor = v => { if (v == null) return '#94a3b8'; const t = Math.max(0, Math.min(1, (v + 20) / 30));
+        const stops = [[59, 130, 246], [34, 197, 94], [234, 179, 8], [239, 68, 68]], x = t * 3, i = Math.min(2, Math.floor(x)), f = x - i;
+        const c = stops[i].map((a, k) => Math.round(a + (stops[i + 1][k] - a) * f)); return `rgb(${c.join(',')})`; };
+      const many = P.length > 300;
+      for (const [call, lat, lon, grid, snr, modes, bands, last] of P) {
+        const p = [lat, lon]; pts.push(p);
+        if (d.home && P.length <= 150) L.polyline([d.home, p], { color: color(modes), weight: 1, opacity: .3, renderer: rend }).addTo(mapLayer);
+        L.circleMarker(p, { radius: many ? 4 : 6, color: color(modes), fillColor: snrColor(snr), fillOpacity: .9, weight: many ? 1 : 2, renderer: rend })
+          .bindTooltip(`<b>${esc(call)}</b> ${esc(grid || '')}${snr != null ? ` · SNR ${snrTxt(snr)}` : ''}${d.home ? ` · ${dist(d.home, p)} km` : ''}<br>${esc((modes || '').replace(/,/g, ', '))} · ${esc((bands || '').replace(/,/g, ', '))}<br><small>${W.last} ${fmtTime(last)}</small>`, tip)
+          .addTo(mapLayer);
+      }
     }
-    $('mapNote').textContent = `${P.length} von ${d.total_stations} Stationen auf der Karte – nur Stationen, deren Locator bekannt ist (FT8 sendet ihn meist nur beim CQ-Ruf, APRS mit Position).`
-      + (many ? ' Bei so vielen Punkten ohne Verbindungslinien und feste Beschriftung – Punkt antippen zeigt die Station.' : '');
+    $('mapNote').textContent = `${P.length} von ${d.total_stations} Stationen auf der Karte (Zeitraum, Band und Suche wie oben) – nur Stationen, deren Locator bekannt ist (FT8 sendet ihn meist nur beim CQ-Ruf, APRS mit Position). Details beim Überfahren mit der Maus bzw. Antippen.`;
     setTimeout(() => map.invalidateSize(), 50);
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
   $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(true); });
-  try { $('mapLabels').checked = localStorage.getItem('mapLabels') !== '0'; } catch (e) { $('mapLabels').checked = true; }
-  $('mapLabels').addEventListener('change', () => { try { localStorage.setItem('mapLabels', $('mapLabels').checked ? '1' : '0'); } catch (e) { } if ($('mapBox').open) drawMap(true); });
+  // Darstellung der Karte: Rufzeichen-Punkte oder Locator-Felder (je Browser gemerkt)
+  function mapMode(set) {
+    let m = 'calls'; try { m = localStorage.getItem('mapMode') || 'calls'; } catch (e) { }
+    if (set) { m = set; try { localStorage.setItem('mapMode', m); } catch (e) { } }
+    document.querySelectorAll('[data-mm]').forEach(b => b.classList.toggle('on', b.dataset.mm === m));
+    $('mapLegendCalls').hidden = m !== 'calls'; $('mapLegendGrid').hidden = m !== 'grid';
+    return m;
+  }
+  document.querySelectorAll('[data-mm]').forEach(b => b.addEventListener('click', () => { mapMode(b.dataset.mm); if ($('mapBox').open) drawMap(true); }));
+  mapMode();
 
   // ---------- Bildanzeige im Fenster (Wasserfall, SSTV …) ----------
   function openLightbox(src, title) {

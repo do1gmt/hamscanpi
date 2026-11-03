@@ -946,6 +946,10 @@ db.close()
 m = W.stations_map(0)
 assert len([p for p in m["points"] if p[0].startswith("T") and p[0].endswith("AB")]) == 200, len(m["points"])   # alle mit Locator
 assert len(d["stations"]) == 100                                    # Liste bleibt seitenweise
+assert W._period_days({"hours": "0.5"}, 30) == 0.5 / 24 and W._period_days({"hours": "0"}, 30) == 0
+assert W._period_days({"days": "7"}, 30) == 7 and W._period_days({}, 30) == 30
+recent = W.stations(1 / 24, "", "", 1000, 0)["total"]                 # letzte Stunde: nur der eben eingetragene
+assert recent <= W.stations(0, "", "", 1, 0)["total"]
 PY
 echo "== 32 Antennen-Profile"
 (cd bin && python3 - <<'PY') && ok "Profile aus bisherigen Angaben, Auswahl übernimmt Richtung und Bereich, Handänderung löst das Profil" || bad "Antennen-Profile"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.52 – 2026-11-03
+
+- **Station map:** switch between **callsigns** (one point per station, colour = SNR, border = mode) and
+  **locator squares** (4-character squares, 2° × 1°, shaded by number of stations). Details (callsign, locator,
+  SNR, distance, modes, bands, last heard – or for a square: stations, best SNR, callsigns) only on mouse-over or
+  tap; no more labels next to the points.
+- **Finer periods** for list, map and ADIF export: 30 min, 1 h, 6 h, 12 h, 24 h, 1 week, 1 month, 6 months,
+  1 year, all (new parameter `hours`; `days` still works). The map follows period, band and search.
+- README: station map. Self-test section 31 extended.
+
 ## 1.7.51 – 2026-11-03
 
 - **Fix: every scan was marked "Scan failed (Scan beendet)" since 1.7.48.** The last line of `run_cycle.sh` was

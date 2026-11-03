@@ -108,8 +108,10 @@ also covers HF via direct sampling.
 record (`heard`, one row per reception) stays for ADIF and details; a summary per callsign (`station`) is kept up
 to date on every new entry, so the list and the map stay fast with hundreds of thousands of entries (measured:
 300 000 receptions of 20 000 callsigns – list 0.01 s, map 0.07 s, filtered by period and band 0.2 s on a PC). The
-map shows all stations whose locator is known, independent of the list page; with more than 300 points it is
-drawn without connecting lines and fixed labels.
+map shows all stations whose locator is known, independent of the list page, for the period, band and search
+chosen above (periods from 30 minutes to 1 year or everything). It shows either one point per **callsign**
+(colour = SNR, border = mode) or the **locator squares** (4-character, 2° × 1°, stronger = more stations);
+details appear on mouse-over or tap.
 
 **Memory:** HamScanPi runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
 frequency and reduced to 12 kHz while reading, in single precision), so even 120 s shortwave recordings need
