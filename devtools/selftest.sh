@@ -979,6 +979,9 @@ AN.select("rtlsdr", names["Yagi"]["id"])
 m = STK.load()["sticks"]["a"]
 assert m["antenna"] == "Yagi" and m["ant_az"] == 245 and m["ant_fmin"] == 137 and m["ant_profile"] == names["Yagi"]["id"], m
 assert AN.current()["rtlsdr"] == names["Yagi"]["id"]
+hf = AN.set_profiles(AN.load()["profiles"] + [{"name": "HF-360", "fmin": 0.1, "fmax": 30}])["profiles"][-1]
+AN.select("rtlsdr", hf["id"])                              # Kurzwellenantenne am Stick (ab 100 kHz) – war ein Fehler
+assert STK.load()["sticks"]["a"]["ant_fmin"] == 0.1
 STK.update("a", antenna="Selbstbau")                      # von Hand geändert: kein Profil mehr
 assert STK.load()["sticks"]["a"].get("ant_profile") is None
 try:

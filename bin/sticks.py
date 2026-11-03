@@ -282,7 +282,7 @@ def update(key, **fields):
                 fields["ant_fmin"], fields["ant_fmax"] = parts[0].replace(",", "."), parts[1].replace(",", ".")
         for k, lo, hi, what in (("ant_az", 0, 360, "Richtung (°)"), ("ant_bw", 10, 360, "Öffnungswinkel (°)"),
                                 ("ant_el", 0, 90, "Erhebung (°)"),
-                                ("ant_fmin", 1, 6000, "Frequenz von (MHz)"), ("ant_fmax", 1, 6000, "Frequenz bis (MHz)")):
+                                ("ant_fmin", 0.01, 6000, "Frequenz von (MHz)"), ("ant_fmax", 0.01, 6000, "Frequenz bis (MHz)")):
             if k in fields:
                 r[k] = num(k, lo, hi, what)
         if r.get("ant_fmin") and r.get("ant_fmax") and r["ant_fmin"] > r["ant_fmax"]:

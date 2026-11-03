@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.57 – 2026-11-03
+
+- Fix: choosing an HF antenna profile (e.g. Sigma HF-360, 0.1–30 MHz) for the stick failed with "Frequency from
+  (MHz) between 1 and 6000" – the stick's antenna range started at 1 MHz, the profiles at 0.01 MHz. Both now
+  accept 0.01–6000 MHz (the stick receives from 100 kHz via direct sampling). Self-test section 32 extended.
+
 ## 1.7.56 – 2026-11-03
 
 - Station map: finer zoom – the +/− buttons zoom in half steps, mouse wheel and pinch in quarter steps (before:
