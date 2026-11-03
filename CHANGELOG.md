@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.53 – 2026-11-03
+
+- Live → **Recently heard** keeps the last **30** frequencies (was 8, stored on the Pi) and shows for each the
+  band, the demodulator, the band-plan mode of that frequency (FT8, APRS, FM, repeater, SSTV, …; full segment
+  name on mouse-over), the RDS station name if any and how long ago it was heard; scrolls inside the card.
+
 ## 1.7.52 – 2026-11-03
 
 - **Station map:** switch between **callsigns** (one point per station, colour = SNR, border = mode) and

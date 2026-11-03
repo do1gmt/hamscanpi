@@ -614,3 +614,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .ant-table input { width: 100%; min-width: 4.5rem; }
 .ant-quick { max-width: 22rem; margin-top: .4rem; }
 .map-mode { display: inline-flex; margin-right: .6rem; } .map-tip { font-size: .82rem; line-height: 1.35; }
+#liveHistory { max-height: 420px; overflow-y: auto; } .live-hist-row .badge { font-size: .72rem; }

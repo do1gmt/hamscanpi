@@ -1900,8 +1900,9 @@ def live_state_update(upd, force=False):
     if isinstance(upd.get("agc"), dict):                    # eingeregelte Verstärkung je 10-MHz-Bereich
         clean["agc"] = {str(k)[:6]: float(v) for k, v in upd["agc"].items() if isinstance(v, (int, float))}
     if isinstance(upd.get("history"), list):
-        clean["history"] = [{"f": int(x.get("f", 0)), "m": str(x.get("m", ""))[:4], "name": str(x.get("name") or "")[:40]}
-                            for x in upd["history"][:8] if isinstance(x, dict) and x.get("f")]
+        clean["history"] = [{"f": int(x.get("f", 0)), "m": str(x.get("m", ""))[:4], "name": str(x.get("name") or "")[:40],
+                             "t": int(x.get("t") or 0)}
+                            for x in upd["history"][:30] if isinstance(x, dict) and x.get("f")]
     if not clean:
         return d
     d.update(clean)

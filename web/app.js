@@ -1334,7 +1334,7 @@
     f = Math.round(f / 100) * 100;
     const old = liveHist.findIndex(x => x.f === f && x.m === m);
     if (old >= 0) { name = name || liveHist[old].name; liveHist.splice(old, 1); }
-    liveHist.unshift({ f, m, name: name || '' }); liveHist.splice(8); renderLiveHist();
+    liveHist.unshift({ f, m, name: name || '', t: Math.round(Date.now() / 1000) }); liveHist.splice(LIVE_HIST_MAX); renderLiveHist();
     post('/api/live/state', { history: liveHist }).catch(() => { });     // „Zuletzt gehört“ auf dem Pi
   }
   // Letzte Live-Einstellung vom Pi übernehmen (gilt für jeden Browser), einmal beim ersten Laden
@@ -1349,8 +1349,32 @@
     if (ls.step_hz && [...$('liveStep').options].some(o => Number(o.value) === ls.step_hz)) $('liveStep').value = String(ls.step_hz);
     if (Array.isArray(ls.history) && !liveHist.length) { liveHist.push(...ls.history); renderLiveHist(); }
   }
+  const LIVE_HIST_MAX = 30;
+  // Band und Betriebsart (Bandplan-Segment) zu einer Frequenz – für „Zuletzt gehört“
+  function freqInfo(f) {
+    let band = null, seg = null, segW = Infinity;
+    for (const b of bandplan || []) {
+      if (b.name === 'Satelliten' || f < b.start_hz || f > b.stop_hz) continue;
+      band = band || b.name;
+      for (const sg of b.segments || []) {
+        if ((sg.frequencies_hz || []).some(x => Math.abs(x - f) <= 3000)) { if (segW > 0) { seg = sg; segW = 0; } continue; }
+        for (const [a, z] of sg.ranges || []) if (f >= Math.min(a, z) && f <= Math.max(a, z) && Math.abs(z - a) < segW) { seg = sg; segW = Math.abs(z - a); }
+      }
+    }
+    if (!band) { const sat = (bandplan || []).find(b => b.name === 'Satelliten' && f >= b.start_hz && f <= b.stop_hz); if (sat) band = sat.name; }
+    return { band, seg };
+  }
   function renderLiveHist() {
-    $('liveHistory').innerHTML = liveHist.map((x, i) => `<li><button type="button" class="linklike" data-hi="${i}">${(x.f / 1e6).toFixed(4)} MHz · ${x.m.toUpperCase()}${x.name ? ' · <b>' + esc(x.name) + '</b>' : ''}</button></li>`).join('');
+    const ago = t => { if (!t) return ''; const m = Math.round((Date.now() / 1000 - t) / 60);
+      return m < 60 ? `vor ${m} min` : m < 1440 ? `vor ${Math.round(m / 60)} h` : `vor ${Math.round(m / 1440)} d`; };
+    $('liveHistory').innerHTML = liveHist.map((x, i) => { const fi = freqInfo(x.f);
+      const segTxt = fi.seg ? (modes && modes[fi.seg.mode]) || fi.seg.mode : '';
+      return `<li class="live-hist-row"><button type="button" class="linklike" data-hi="${i}" title="${esc(fi.seg ? fi.seg.label : '')}">`
+        + `<b class="mono-num">${(x.f / 1e6).toFixed(4)}</b> MHz`
+        + `${fi.band ? ` <span class="badge badge-band">${esc(fi.band)}</span>` : ''}`
+        + ` <span class="badge">${x.m.toUpperCase()}</span>${segTxt ? ` <span class="badge badge-mode px ${esc(fi.seg.mode)}">${esc(segTxt)}</span>` : ''}`
+        + `${x.name ? ' <b>' + esc(x.name) + '</b>' : ''}</button> <small class="muted">${ago(x.t)}</small></li>`; }).join('')
+      || '<li class="muted">noch nichts</li>';
     $('liveHistory').querySelectorAll('[data-hi]').forEach(el => el.addEventListener('click', () => {
       const x = liveHist[Number(el.dataset.hi)]; $('liveFreq').value = (x.f / 1e6).toFixed(4); $('liveMode').value = x.m;
       liveStart({ freq_hz: x.f, mode: x.m, squelch_db: Number($('liveSquelch').value) });
