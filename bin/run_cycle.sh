@@ -14,12 +14,13 @@ mkdir -p "$LOG"
 exec 8>>"$BASE/data/cycle.lock"
 if ! flock -n 8; then
     echo "Ein Scanlauf läuft bereits – nicht doppelt starten"
+    python3 "$BASE/bin/applog.py" WARN cycle already_running holder="$(python3 "$BASE/bin/lockinfo.py" 2>/dev/null | head -1)"
     exit 75
 fi
 exec 9>>"$BASE/data/scan.lock"
 if ! flock -w 30 9; then
     echo "Stick belegt (Überflug oder Live) – Scan übersprungen"
-    python3 "$BASE/bin/applog.py" WARN cycle stick_busy
+    python3 "$BASE/bin/applog.py" WARN cycle stick_busy holder="$(python3 "$BASE/bin/lockinfo.py" 2>/dev/null | tail -1)"
     exit 75
 fi
 

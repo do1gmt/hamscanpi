@@ -143,9 +143,32 @@ def cycle_running():
     return r.returncode != 0
 
 
+def _status_back(msg):
+    """Angeforderten Scan, der nicht startet, nicht als „Scan angefordert 0 %“ stehen lassen."""
+    try:
+        p = BASE / "data" / "runtime_status.json"
+        st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        if st.get("state") == "queued":
+            p.write_text(json.dumps({"state": "error", "phase": "error", "progress": 0, "message": msg, "run_id": None,
+                                     "started_at": None, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                                    ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def run_scan():
     if cycle_running() or scan_running():
-        log("Scan bereits aktiv - Start verworfen")
+        # Wer hält die Sperre? Läuft wirklich ein Scan, ist alles in Ordnung; sonst steht im Protokoll, welcher
+        # Prozess sie festhält (früher blieb die Anzeige stumm auf „Scan angefordert 0 %“ stehen)
+        try:
+            import lockinfo as LI
+            which = "cycle" if cycle_running() else "scan"
+            holder = LI.describe(LI.LOCKS[which])
+        except Exception:
+            which, holder = "?", "?"
+        log(f"Scan bereits aktiv - Start verworfen ({which}.lock: {holder})")
+        applog("WARN", "scheduler", "scan_start_rejected", lock=which, holder=holder)
+        _status_back(f"Scan nicht gestartet – Empfänger bzw. Scanlauf belegt ({which}.lock: {holder})")
         return
 
     log("Scan gestartet")
@@ -552,6 +575,17 @@ while True:
                 if not _sat.get("sticks_err"):
                     applog("WARN", "scheduler", "sticks_failed", error=f"{type(exc).__name__}: {exc}")
                 _sat["sticks_err"] = True
+
+        # Angefordert, aber kein Lauf gestartet (z. B. run_cycle.sh gleich wieder beendet): nach 3 min zurücksetzen
+        try:
+            _rs = json.loads((BASE / "data" / "runtime_status.json").read_text(encoding="utf-8"))
+            if _rs.get("state") == "queued" and not TRIGGER.exists() and not cycle_running():
+                _age = (datetime.now(timezone.utc) - datetime.fromisoformat(_rs.get("updated_at"))).total_seconds()
+                if _age > 180:
+                    applog("WARN", "scheduler", "scan_request_stale", age_s=round(_age))
+                    _status_back("Angeforderter Scan ist nicht gestartet – bitte erneut starten (Details im Protokoll)")
+        except Exception:
+            pass
 
         # manueller Scan
         if TRIGGER.exists():

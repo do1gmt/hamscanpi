@@ -2375,6 +2375,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "count": n, "status": EI.status()})
             if path == "/api/eibi/scan":
                 import eibi as EI
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(n) or b"{}") if n else {}
                 st = read_json(SETTINGS, {})
                 c = dict(st.get("eibi_scan") or {})
                 if "max_windows" in data:
@@ -2485,7 +2487,13 @@ class Handler(BaseHTTPRequestHandler):
                 if live_status().get("active"):
                     return self.send_json({"ok": False, "error": "Live-Empfang läuft – erst stoppen"}, 409)
                 st = load_status()
-                if st.get("scan_running") or st.get("state") == "queued":
+                stale = False
+                if st.get("state") == "queued":
+                    try:
+                        stale = (datetime.now(timezone.utc) - datetime.fromisoformat(st.get("updated_at"))).total_seconds() > 120
+                    except Exception:
+                        stale = True
+                if st.get("scan_running") or (st.get("state") == "queued" and not stale):
                     return self.send_json({"ok": True, "already_running": True})
                 save_status({"state": "queued", "phase": "queued", "progress": 0,
                              "message": "Scan wurde angefordert", "run_id": None,

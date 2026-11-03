@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.64 – 2026-11-03
+
+- Fix: a requested scan that does not start no longer hangs as "Scan requested 0 %". If the scheduler finds the
+  run or receiver lock taken, it logs `scan_start_rejected` with the process holding it (new `bin/lockinfo.py`,
+  via /proc) and shows "Scan not started – … (PID …)" instead; `run_cycle.sh` logs `already_running` /
+  `stick_busy` with the holder as well. A request still queued after 3 min without a run is reset
+  (`scan_request_stale`), and "Scan now" can be pressed again after 2 min.
+- Fix: saving the EiBi scan options (max. windows, threshold, Europe only) failed ("cannot access local variable
+  'data'").
+- Diagnose package: lock holders, `log/scan-cycle.log` and `log/scheduler.log` included.
+- Self-test section 40.
+
 ## 1.7.63 – 2026-11-03
 
 - **New network / new IP address:** checked every minute (default route, IPv4 address, gateway and its hardware

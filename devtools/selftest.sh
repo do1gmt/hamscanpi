@@ -1233,5 +1233,34 @@ assert "http://10.0.5.23:" in newnet["detail"] and "Locator" in newnet["fix"]
 assert not [r for r in items if r["title"].startswith("Neue IP")][0]["fix"]                  # gleiches Netz: kein Locator-Hinweis
 assert len(sent) == 2 and "network" in N.EVENT_KEYS, sent
 PY
+echo "== 40 Scan startet nicht (Sperre belegt): Meldung statt „angefordert 0 %“"
+(cd bin && timeout 60 python3 - <<'PY') && ok "Sperrenhalter erkannt, abgelehnter Start gemeldet und Anzeige zurückgesetzt" || bad "abgelehnter Scanstart"
+import ast, json, subprocess, sys, time, tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+import lockinfo as LI
+lock = Path(tempfile.mkdtemp()) / "cycle.lock"
+p = subprocess.Popen(["flock", str(lock), "sleep", "20"])
+time.sleep(0.5)
+h = LI.holders(lock)
+assert any(pid in (p.pid,) or "sleep" in cmd or "flock" in cmd for pid, cmd in h), h
+# run_scan / _status_back aus scheduler.py (das Modul selbst läuft beim Import als Endlosschleife)
+src = open("scheduler.py", encoding="utf-8").read()
+tree = ast.parse(src)
+code = "\n".join(ast.get_source_segment(src, n) for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("_status_back", "run_scan"))
+logs = []
+g = {"json": json, "datetime": datetime, "timezone": timezone, "BASE": Path(tempfile.mkdtemp()), "subprocess": subprocess,
+     "cycle_running": lambda: True, "scan_running": lambda: False, "log": lambda m: None,
+     "applog": lambda *a, **k: logs.append((a, k))}
+(g["BASE"] / "data").mkdir()
+(g["BASE"] / "data" / "runtime_status.json").write_text(json.dumps({"state": "queued", "message": "Scan wurde angefordert"}))
+LI.LOCKS["cycle"] = lock
+exec(code, g)
+g["run_scan"]()
+st = json.loads((g["BASE"] / "data" / "runtime_status.json").read_text())
+assert st["state"] == "error" and "nicht gestartet" in st["message"] and "PID" in st["message"], st
+assert logs and logs[0][0][2] == "scan_start_rejected" and "PID" in logs[0][1]["holder"]
+p.kill()
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi
