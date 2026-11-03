@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.54 – 2026-11-03
+
+- **Translations checked systematically:** all tabs were opened in the English interface with test data (FT8, CW,
+  RTTY, APRS, SSTV hits, stations, devices, settings), everything expanded, and every visible text, tooltip and
+  placeholder checked for German leftovers; in addition all German strings in the dashboard code and the band
+  plan labels were run through the translation.
+  - FT8 meanings are now produced in the interface language ("QSO finished", "answers", "gives … report …
+    (confirmed)", "calls", undecodable messages).
+  - Decoder lines ("5 messages · 3 FT8 messages · cycle … UTC"), APRS "via", SSTV "% of the lines",
+    band-plan labels (beacons, satellites, satellite downlink, ISM 433/868, digital voice / data, CW/SSB narrow,
+    probe satellites), device capabilities (HF via direct sampling / driver without direct sampling), scan box
+    hint, serial-number message, watch-list error, track panel, backup placeholder, clock tile, "no signal" note.
+- New `devtools/i18n_check.py`: the same check as a tool (Playwright).
+
 ## 1.7.53 – 2026-11-03
 
 - Live → **Recently heard** keeps the last **30** frequencies (was 8, stored on the Pi) and shows for each the

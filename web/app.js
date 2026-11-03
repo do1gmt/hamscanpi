@@ -786,33 +786,44 @@
   // ft8_lib meldet Nachrichten, die es empfangen, aber nicht auspacken kann, als „Error [n] while unpacking!“
   // (Fehlercodes aus ft8_lib/ft8/message.h). Typ 5: Nachrichtenart, die ft8_lib nicht kennt –
   // DXpedition (Fox/Hound), EU-VHF-Contest, ARRL Field Day, Contest-Kurzform, RTTY Roundup.
-  const UNPACK_WHY = {
+  const UNPACK_WHY = EN ? {
+    1: 'first callsign not readable (sent only as a hash)',
+    2: 'second callsign not readable (sent only as a hash)',
+    3: 'callsign suffix not readable',
+    4: 'locator or report not readable',
+    5: 'message type the decoder cannot unpack – e.g. DXpedition (Fox/Hound) or contest format',
+  } : {
     1: 'erstes Rufzeichen nicht lesbar (nur als Kurzcode übertragen)',
     2: 'zweites Rufzeichen nicht lesbar (nur als Kurzcode übertragen)',
     3: 'Rufzeichenzusatz nicht lesbar',
     4: 'Locator bzw. Rapport nicht lesbar',
     5: 'Nachrichtenart, die der Dekoder nicht auspacken kann – z. B. DXpedition (Fox/Hound) oder Contest-Format',
   };
+  // Deutungen der FT8-Nachrichten in der Sprache der Oberfläche (direkt erzeugt statt nachträglich übersetzt)
+  const FT8W = EN ? { unread: 'received but not readable: ', decErr: 'decoder error', from: 'from', in: 'in', calls: 'calls',
+                      done: 'QSO finished', answers: 'answers', gives: 'gives', report: 'report', confirmed: ' (confirmed)' }
+                  : { unread: 'empfangen, aber nicht lesbar: ', decErr: 'Dekoder-Fehler', from: 'von', in: 'aus', calls: 'ruft',
+                      done: 'QSO abgeschlossen', answers: 'antwortet', gives: 'gibt', report: 'Rapport', confirmed: ' (bestätigt)' };
   function interpret(text) {
     const ue = /^ERROR \[(\d+)\] WHILE UNPACKING!?$/.exec(text.trim().toUpperCase());
     if (ue) return { text, kind: 'undecodable', calls: [], grid: null, unpack: +ue[1],
-                     desc: 'empfangen, aber nicht lesbar: ' + (UNPACK_WHY[+ue[1]] || `Dekoder-Fehler ${ue[1]}`) };
+                     desc: FT8W.unread + (UNPACK_WHY[+ue[1]] || `${FT8W.decErr} ${ue[1]}`) };
     const t = text.trim().toUpperCase().replace(/\s+/g, ' ').split(' ');
     const out = { text, kind: 'other', calls: [], grid: null, desc: '' };
     if (t[0] === 'CQ') {
       let i = 1; let tag = '';
       while (i < t.length && !isCall(t[i])) tag += (tag ? ' ' : '') + t[i++];
       const call = t[i]; const grid = t[i + 1] && GRID_RX.test(t[i + 1]) && t[i + 1] !== 'RR73' ? t[i + 1] : null;
-      if (call) { out.kind = 'cq'; out.calls = [call]; out.grid = grid; out.desc = `CQ${tag ? ' ' + tag : ''} von ${call}${grid ? ' aus ' + grid : ''}`; }
+      if (call) { out.kind = 'cq'; out.calls = [call]; out.grid = grid; out.desc = `CQ${tag ? ' ' + tag : ''} ${FT8W.from} ${call}${grid ? ` ${FT8W.in} ` + grid : ''}`; }
       return out;
     }
     if (t.length >= 2 && isCall(t[0]) && isCall(t[1])) {
       const [to, from] = t; const rest = t.slice(2).join(' ');
       out.calls = [from, to];
-      if (!rest) { out.kind = 'call'; out.desc = `${from} ruft ${to}`; }
-      else if (/^(RR73|RRR|73)$/.test(rest)) { out.kind = 'end'; out.desc = `${from} → ${to}: ${rest} – QSO abgeschlossen`; }
-      else if (GRID_RX.test(rest)) { out.kind = 'answer'; out.grid = rest; out.desc = `${from} (${rest}) antwortet ${to}`; }
-      else if (/^R?[+-]\d{1,2}$/.test(rest)) { out.kind = 'report'; out.desc = `${from} gibt ${to} Rapport ${rest.replace('R', '')}${rest.startsWith('R') ? ' (bestätigt)' : ''}`; }
+      if (!rest) { out.kind = 'call'; out.desc = `${from} ${FT8W.calls} ${to}`; }
+      else if (/^(RR73|RRR|73)$/.test(rest)) { out.kind = 'end'; out.desc = `${from} → ${to}: ${rest} – ${FT8W.done}`; }
+      else if (GRID_RX.test(rest)) { out.kind = 'answer'; out.grid = rest; out.desc = `${from} (${rest}) ${FT8W.answers} ${to}`; }
+      else if (/^R?[+-]\d{1,2}$/.test(rest)) { out.kind = 'report'; out.desc = `${from} ${FT8W.gives} ${to} ${FT8W.report} ${rest.replace('R', '')}${rest.startsWith('R') ? FT8W.confirmed : ''}`; }
       else { out.desc = `${from} → ${to}: ${rest}`; }
       return out;
     }
