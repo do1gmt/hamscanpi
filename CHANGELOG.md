@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.55 – 2026-11-03
+
+- **Station position from the most frequently sent locator.** Before, the "largest" (and since 1.7.49 the newest)
+  locator won – a single deviating locator (portable operation, a decoding error, or a message where the grid
+  belonged to someone else) moved a station far away (HB9MZI near Heidelberg). Now the 4-character square sent
+  most often wins, within it the most precise locator; counts per locator are kept in the summary (`station.grids`),
+  rebuilt once after the update.
+- **Open station:** search field "Open station" (with suggestions), a click on a callsign in the list or on a
+  point on the map opens everything collected for that callsign: receptions, first/last heard, best SNR, position
+  used on the map; every locator sent with count, distance, period and an example message (so you can see where a
+  locator came from); bands and modes; every single reception (newest first, 200 per page) with message, antenna
+  and source (Live or a link that opens the hit). QRZ.com link.
+- Hits list can show a single hit (`/api/hits?id=…`, with "show all hits").
+- README: stations. Self-test section 31 extended.
+
 ## 1.7.54 – 2026-11-03
 
 - **Translations checked systematically:** all tabs were opened in the English interface with test data (FT8, CW,

@@ -174,6 +174,7 @@
     <div class="row filter-row">
       <label class="field"><span>Rufzeichen</span><input id="stQuery" type="text" placeholder="DL1ABC oder DL*" autocapitalize="characters" autocomplete="off"></label>
       <label class="field"><span>Band</span><select id="stBand"><option value="">alle</option></select></label>
+      <label class="field" title="Rufzeichen eingeben und Enter drücken: alle gesammelten Daten zu dieser Station"><span>Station öffnen</span><input id="stOpen" type="search" placeholder="z. B. HB9MZI" autocomplete="off" list="stOpenList"><datalist id="stOpenList"></datalist></label>
       <label class="field"><span>Zeitraum</span><select id="stDays"><option value="0.5">30 min</option><option value="1">1 h</option><option value="6">6 h</option><option value="12">12 h</option><option value="24">24 h</option><option value="168">1 Woche</option><option value="720" selected>1 Monat</option><option value="4380">6 Monate</option><option value="8760">1 Jahr</option><option value="0">alles</option></select></label>
       <a class="btn" id="stAdif" href="#" download>↓ ADIF-Export</a>
     </div>
@@ -645,6 +646,12 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
 
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="st-detail-bg" id="stDetail" hidden>
+  <div class="st-detail-box" role="dialog" aria-modal="true" aria-labelledby="stdCall">
+    <div class="st-detail-head"><h2 id="stdCall" class="no-i18n">–</h2><a id="stdQrz" target="_blank" rel="noopener" class="btn btn-small">QRZ.com ↗</a><button type="button" class="btn btn-small" id="stdClose" aria-label="Schließen">✕</button></div>
+    <div id="stdBody"></div>
+  </div>
+</div>
 <aside class="track-panel" id="trackPanel" hidden aria-label="Flugbahn des Satelliten">
   <div class="track-head"><div><b id="trackTitle">–</b><div class="hint" id="trackSub"></div></div><button type="button" class="btn btn-small" id="trackClose" aria-label="Schließen">✕</button></div>
   <div class="track-tabs"><button type="button" class="chip on" data-tv="sky">Himmel</button><button type="button" class="chip" data-tv="map">Karte</button>

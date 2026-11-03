@@ -59,6 +59,8 @@ def ensure_tables(db):
         call TEXT PRIMARY KEY, first TEXT, last TEXT, n INTEGER, bands TEXT, modes TEXT, best_snr REAL,
         grid TEXT, lat REAL, lon REAL)""")
     db.execute("CREATE INDEX IF NOT EXISTS station_last ON station(last)")
+    if "grids" not in {r[1] for r in db.execute("PRAGMA table_info(station)")}:
+        db.execute("ALTER TABLE station ADD COLUMN grids TEXT")      # {Locator: Anzahl} – Standort = häufigster
     db.execute("""CREATE TABLE IF NOT EXISTS watch_hit (
         id INTEGER PRIMARY KEY, peak_id INTEGER, rule_id TEXT, label TEXT, time TEXT, detail TEXT,
         UNIQUE(peak_id, rule_id))""")
@@ -98,40 +100,71 @@ def _merge_list(cur, val):
     return ",".join(items)
 
 
+def pick_grid(grids):
+    """Standort einer Station aus allen gesendeten Locatoren: das am häufigsten gesendete 4-stellige Feld (ein
+    einzelner Fehldekodierer oder ein /P-Ausflug verschiebt die Station so nicht), darin der genaueste Locator.
+    Früher galt der „größte“ bzw. neueste – ein einzelnes falsches Feld setzte die Station woanders hin."""
+    if not grids:
+        return None
+    sq = {}
+    for g, n in grids.items():
+        sq[g[:4]] = sq.get(g[:4], 0) + n
+    best_sq = max(sq.items(), key=lambda x: (x[1], x[0]))[0]
+    cands = [(g, n) for g, n in grids.items() if g[:4] == best_sq]
+    return max(cands, key=lambda x: (len(x[0]), x[1]))[0]
+
+
 def upsert_station(db, call, t, band, mode, grid, snr):
     """Übersicht je Rufzeichen nachführen (nach jedem neu eingetragenen heard-Eintrag)."""
-    r = db.execute("SELECT first, last, n, bands, modes, best_snr, grid, lat, lon FROM station WHERE call=?", (call,)).fetchone()
+    r = db.execute("SELECT first, last, n, bands, modes, best_snr, grid, lat, lon, grids FROM station WHERE call=?", (call,)).fetchone()
+    grid = (grid or "").upper() or None
     if r is None:
         la, lo = _latlon(grid)
-        db.execute("INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (call, t, t, 1, band or "", mode or "", snr, grid, la, lo))
+        db.execute("""INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon, grids)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   (call, t, t, 1, band or "", mode or "", snr, grid, la, lo, json.dumps({grid: 1}) if grid else None))
         return
-    first, last, n, bands, modes, best, g, la, lo = r
-    if grid and (not g or len(grid) > len(g) or (len(grid) == len(g) and grid != g and (t or "") >= (last or ""))):
-        g = grid                                           # genauerer oder neuerer Locator gewinnt
-        la, lo = _latlon(g)
+    first, last, n, bands, modes, best, g, la, lo, gj = r
+    try:
+        grids = json.loads(gj) if gj else ({g: 1} if g else {})
+    except ValueError:
+        grids = {}
+    if grid:
+        grids[grid] = grids.get(grid, 0) + 1
+        ng = pick_grid(grids)
+        if ng != g:
+            g = ng
+            la, lo = _latlon(g)
     best = snr if best is None else (best if snr is None else max(best, snr))
-    db.execute("""UPDATE station SET first=?, last=?, n=?, bands=?, modes=?, best_snr=?, grid=?, lat=?, lon=? WHERE call=?""",
+    db.execute("""UPDATE station SET first=?, last=?, n=?, bands=?, modes=?, best_snr=?, grid=?, lat=?, lon=?, grids=? WHERE call=?""",
                (min(first or t, t or first), max(last or t, t or last), (n or 0) + 1, _merge_list(bands, band),
-                _merge_list(modes, mode), best, g, la, lo, call))
+                _merge_list(modes, mode), best, g, la, lo, json.dumps(grids) if grids else None, call))
 
 
 def rebuild_stations(db):
     """Übersicht einmalig aus heard aufbauen (erste Version mit Übersicht, oder auf Wunsch neu)."""
     db.execute("DELETE FROM station")
+    allg = {}
+    for call, grid, cnt in db.execute("""SELECT call, UPPER(grid), COUNT(*) FROM heard WHERE grid IS NOT NULL AND grid != ''
+                                          GROUP BY call, UPPER(grid)"""):
+        allg.setdefault(call, {})[grid] = cnt
     rows = db.execute("""SELECT call, MIN(time), MAX(time), COUNT(*), group_concat(DISTINCT band),
-                                group_concat(DISTINCT mode), MAX(snr), MAX(grid) FROM heard GROUP BY call""").fetchall()
-    for call, first, last, n, bands, modes, best, grid in rows:
+                                group_concat(DISTINCT mode), MAX(snr) FROM heard GROUP BY call""").fetchall()
+    for call, first, last, n, bands, modes, best in rows:
+        grids = allg.get(call) or {}
+        grid = pick_grid(grids)
         la, lo = _latlon(grid)
-        db.execute("INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (call, first, last, n, bands or "", modes or "", best, grid, la, lo))
-    db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('station_summary', '1')")
+        db.execute("""INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon, grids)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   (call, first, last, n, bands or "", modes or "", best, grid, la, lo, json.dumps(grids) if grids else None))
+    db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('station_summary', '2')")
     db.commit()
     return len(rows)
 
 
 def ensure_summary(db):
-    if not db.execute("SELECT v FROM meta WHERE k='station_summary'").fetchone():
+    r = db.execute("SELECT v FROM meta WHERE k='station_summary'").fetchone()
+    if not r or r[0] < "2":                               # Version 2: Locator nach Häufigkeit (grids)
         rebuild_stations(db)
 
 

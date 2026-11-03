@@ -355,6 +355,8 @@ class LiveDecoders:
                             db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
                             db.execute("""CREATE TABLE IF NOT EXISTS station (call TEXT PRIMARY KEY, first TEXT, last TEXT,
                                 n INTEGER, bands TEXT, modes TEXT, best_snr REAL, grid TEXT, lat REAL, lon REAL)""")
+                            if "grids" not in {r[1] for r in db.execute("PRAGMA table_info(station)")}:
+                                db.execute("ALTER TABLE station ADD COLUMN grids TEXT")
                             ST.upsert_station(db, call, ts, band, typ, grid, snr)
                         except Exception:
                             pass

@@ -948,6 +948,17 @@ assert len([p for p in m["points"] if p[0].startswith("T") and p[0].endswith("AB
 assert len(d["stations"]) == 100                                    # Liste bleibt seitenweise
 assert W._period_days({"hours": "0.5"}, 30) == 0.5 / 24 and W._period_days({"hours": "0"}, 30) == 0
 assert W._period_days({"days": "7"}, 30) == 7 and W._period_days({}, 30) == 30
+assert ST.pick_grid({"JN47": 5, "JN49": 1}) == "JN47" and ST.pick_grid({"JN47AB": 1, "JN47": 3, "JO31": 2}) == "JN47AB"
+db = W.db_connect()
+for i in range(6):                                                    # 5× JN47, 1× JN49 (Fehldekodierung/Ausflug)
+    g = "JN47" if i < 5 else "JN49"
+    db.execute("INSERT INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info) VALUES (?,?,?,?,?,?,?,?,?)",
+               (-(20_000_000 + i), f"2026-11-0{1 + i % 3}T1{i}:00:15+00:00", "HB9ZZZ", "40m", 7075000, "FT8", g, -10, f"X HB9ZZZ {g}"))
+    ST.upsert_station(db, "HB9ZZZ", f"2026-11-0{1 + i % 3}T1{i}:00:15+00:00", "40m", "FT8", g, -10)
+db.commit(); db.close()
+sd = W.station_detail("HB9ZZZ")
+assert sd["found"] and sd["summary"]["grid"] == "JN47" and sd["total"] == 6 and [g["grid"] for g in sd["grids"]] == ["JN47", "JN49"], sd["summary"]
+assert not W.station_detail("XX9XXX")["found"]
 recent = W.stations(1 / 24, "", "", 1000, 0)["total"]                 # letzte Stunde: nur der eben eingetragene
 assert recent <= W.stations(0, "", "", 1, 0)["total"]
 PY

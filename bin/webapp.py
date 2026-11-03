@@ -650,6 +650,12 @@ def list_hits(params):
                     {ant} AS antenna
              FROM peak p JOIN scan s ON s.id = p.scan_id WHERE 1=1"""
     args = []
+    if str(params.get("id", "")).isdigit():           # ein bestimmter Treffer (aus der Stationsübersicht)
+        sql += " AND p.id = ?"
+        args.append(int(params["id"]))
+        band = mode = q = ""
+        only_protected = False
+        params = dict(params, audio="", interference="1")
     if band and band != "all":
         sql += " AND s.band = ?"
         args.append(band)
@@ -986,6 +992,45 @@ def stations(days=30, q="", band="", limit=100, offset=0):
     except Exception:
         pass
     return {"stations": out, "total": total, "offset": offset, "limit": limit, "home": home}
+
+
+def station_detail(call, limit=200, offset=0):
+    """Alles zu einem Rufzeichen: Übersicht, gesendete Locatoren (wie oft, wann, Beispielnachricht), je Band und
+    Betriebsart, und jeder einzelne Empfang (neueste zuerst, seitenweise) mit Nachricht, Antenne und Treffer."""
+    call = (call or "").strip().upper()
+    if not call:
+        raise ValueError("Rufzeichen fehlt")
+    db = db_connect()
+    ST.ensure_tables(db)
+    ST.ensure_summary(db)
+    srow = db.execute("SELECT * FROM station WHERE call=?", (call,)).fetchone()
+    if not srow:
+        like = db.execute("SELECT call FROM station WHERE call LIKE ? ORDER BY last DESC LIMIT 20",
+                          (call.replace("*", "%") + ("%" if "*" not in call else ""),)).fetchall()
+        db.close()
+        return {"call": call, "found": False, "similar": [r[0] for r in like]}
+    summary = dict(srow)
+    grids = [dict(r) for r in db.execute("""SELECT UPPER(grid) grid, COUNT(*) n, MIN(time) first, MAX(time) last,
+                                                   MAX(info) example FROM heard WHERE call=? AND grid IS NOT NULL AND grid != ''
+                                            GROUP BY UPPER(grid) ORDER BY n DESC""", (call,))]
+    per = [dict(r) for r in db.execute("""SELECT band, mode, COUNT(*) n, MAX(snr) best_snr, MAX(time) last FROM heard
+                                          WHERE call=? GROUP BY band, mode ORDER BY last DESC""", (call,))]
+    total = db.execute("SELECT COUNT(*) FROM heard WHERE call=?", (call,)).fetchone()[0]
+    rows = [dict(r) for r in db.execute("""SELECT time, band, freq_hz, mode, snr, grid, info, antenna, peak_id FROM heard
+                                           WHERE call=? ORDER BY time DESC LIMIT ? OFFSET ?""", (call, limit, offset))]
+    db.close()
+    loc = load_settings().get("my_locator", "")
+    for g in grids:
+        g["distance_km"], g["bearing"] = ST.distance_bearing(g["grid"], loc) if loc else (None, None)
+        g["lat"], g["lon"] = ST._latlon(g["grid"])
+    summary.pop("grids", None)
+    summary["distance_km"], summary["bearing"] = ST.distance_bearing(summary["grid"], loc) if summary.get("grid") and loc else (None, None)
+    for r in rows:
+        r["source"] = "live" if (r.get("peak_id") or 0) < 0 else "scan"
+        if r["source"] == "live":
+            r["peak_id"] = None
+    return {"call": call, "found": True, "summary": summary, "grids": grids, "per_band": per,
+            "receptions": rows, "total": total, "limit": limit, "offset": offset}
 
 
 def _period_days(qs, default_days):
@@ -2057,6 +2102,9 @@ class Handler(BaseHTTPRequestHandler):
                                                 max(0, int(qs.get("offset", 0)))))
             if path == "/api/scan-estimate":
                 return self.send_json(scan_estimate() or {})
+            if path == "/api/station":
+                return self.send_json(station_detail(qs.get("call", ""), max(1, min(int(qs.get("limit", 200)), 1000)),
+                                                     max(0, int(qs.get("offset", 0)))))
             if path == "/api/stations/map":
                 return self.send_json(stations_map(_period_days(qs, 0), qs.get("q", ""), qs.get("band", "")))
             if path == "/api/stations":

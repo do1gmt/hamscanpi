@@ -574,6 +574,7 @@
   let hitsTimer;
   async function loadHits() {
     const qs = new URLSearchParams({ band: filter.band, mode: filter.mode, sort: filter.sort, q: filter.q, protected: filter.protected ? '1' : '0', audio: filter.audio ? '1' : '0', interference: filter.interf ? '1' : '0', limit: '400' });
+    if (filter.id) qs.set('id', filter.id);
     const d = await api('/api/hits?' + qs);
     const root = $('hits');
     const seen = new Set();
@@ -588,6 +589,11 @@
     }
     for (const [id, el] of cards) if (!seen.has(id)) { el.remove(); cards.delete(id); open.delete(id); }
     $('hitCount').textContent = `${d.hits.length} Treffer${d.hits.length >= 400 ? ' (erste 400)' : ''}`;
+    if (filter.id) {                                  // nur ein Treffer (aus der Stationsübersicht): Rückweg anbieten
+      $('hitCount').innerHTML = `Treffer #${filter.id} <button type="button" class="btn btn-small" id="hitIdClear">alle Treffer zeigen</button>`;
+      $('hitIdClear').addEventListener('click', () => { filter.id = null; root.innerHTML = ''; loadHits(); });
+      const c = root.querySelector('.hit'); if (c && !c.classList.contains('open')) c.querySelector('.hit-head, summary')?.click();
+    }
     $('hitsEmpty').hidden = d.hits.length > 0;
   }
 
@@ -1691,7 +1697,7 @@
     let d; try { d = await api(`/api/stations?${stParams()}&limit=${stPage.per}&offset=${stPage.offset}`); } catch (e) { return; }
     const dir = b => b == null ? '' : ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(b / 45) % 8];
     $('stTable').innerHTML = d.stations.map(r => `<tr>
-        <td><a href="https://www.qrz.com/db/${encodeURIComponent(r.call.split('-')[0])}" target="_blank" rel="noopener"><b>${esc(r.call)}</b></a></td>
+        <td><button type="button" class="linklike" data-stcall="${esc(r.call)}" title="Alle Daten zu dieser Station"><b>${esc(r.call)}</b></button> <a href="https://www.qrz.com/db/${encodeURIComponent(r.call.split('-')[0])}" target="_blank" rel="noopener" title="QRZ.com" class="muted">↗</a></td>
         <td>${esc(r.grid || '–')}</td>
         <td>${r.distance_km != null ? `${r.distance_km} km <small class="muted">${r.bearing}° ${dir(r.bearing)}</small>` : '–'}</td>
         <td>${esc((r.bands || '').split(',').join(', '))}</td><td>${esc((r.modes || '').split(',').join(', '))}</td>
@@ -1781,6 +1787,7 @@
         const p = [lat, lon]; pts.push(p);
         if (d.home && P.length <= 150) L.polyline([d.home, p], { color: color(modes), weight: 1, opacity: .3, renderer: rend }).addTo(mapLayer);
         L.circleMarker(p, { radius: many ? 4 : 6, color: color(modes), fillColor: snrColor(snr), fillOpacity: .9, weight: many ? 1 : 2, renderer: rend })
+          .on('click', () => openStation(call))
           .bindTooltip(`<b>${esc(call)}</b> ${esc(grid || '')}${snr != null ? ` · SNR ${snrTxt(snr)}` : ''}${d.home ? ` · ${dist(d.home, p)} km` : ''}<br>${esc((modes || '').replace(/,/g, ', '))} · ${esc((bands || '').replace(/,/g, ', '))}<br><small>${W.last} ${fmtTime(last)}</small>`, tip)
           .addTo(mapLayer);
       }
@@ -1800,6 +1807,65 @@
   }
   document.querySelectorAll('[data-mm]').forEach(b => b.addEventListener('click', () => { mapMode(b.dataset.mm); if ($('mapBox').open) drawMap(true); }));
   mapMode();
+
+  // ---------- Übersicht einer Station (alle gesammelten Daten) ----------
+  async function openStation(call, offset) {
+    call = String(call || '').trim().toUpperCase(); if (!call) return;
+    let d; try { d = await api(`/api/station?call=${encodeURIComponent(call)}&limit=200&offset=${offset || 0}`); } catch (e) { toast(e.message); return; }
+    $('stdCall').textContent = d.call;
+    $('stdQrz').href = `https://www.qrz.com/db/${encodeURIComponent(d.call.split('-')[0])}`;
+    const snr = v => v == null ? '–' : `${v > 0 ? '+' : ''}${Math.round(v)} dB`;
+    const dir = b => b == null ? '' : ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(b / 45) % 8];
+    if (!d.found) {
+      $('stdBody').innerHTML = `<p class="muted">Kein Eintrag für ${esc(d.call)}.</p>` + (d.similar.length ? `<p>Ähnlich: ${d.similar.map(c => `<button type="button" class="linklike" data-stcall="${esc(c)}">${esc(c)}</button>`).join(', ')}</p>` : '');
+    } else {
+      const S = d.summary;
+      const gridRows = d.grids.map(g => `<tr${g.grid.slice(0, 4) === (S.grid || '').slice(0, 4) ? ' class="sel"' : ''}><td class="no-i18n"><b>${esc(g.grid)}</b></td><td class="mono-num">${g.n}×</td>`
+        + `<td>${g.distance_km != null ? `${g.distance_km} km ${g.bearing}° ${dir(g.bearing)}` : '–'}</td><td>${fmtTime(g.first)} – ${fmtTime(g.last)}</td>`
+        + `<td class="no-i18n mono">${esc((g.example || '').replace(/^Live: /, ''))}</td></tr>`).join('');
+      const per = d.per_band.map(x => `<span class="badge badge-band">${esc(x.band || '?')}</span> ${esc(x.mode || '')} ${x.n}× · ${snr(x.best_snr)}`).join(' &nbsp; ');
+      const recs = d.receptions.map(r => `<tr><td class="mono-num">${fmtTime(r.time)}</td><td>${esc(r.band || '')}</td>`
+        + `<td class="mono-num">${r.freq_hz ? (r.freq_hz / 1e6).toFixed(4) : ''}</td><td>${esc(r.mode || '')}</td><td class="mono-num">${snr(r.snr)}</td>`
+        + `<td class="no-i18n">${esc(r.grid || '')}</td><td class="no-i18n mono">${esc((r.info || '').replace(/^Live: /, ''))}</td><td>${esc(r.antenna || '')}</td>`
+        + `<td>${r.source === 'live' ? 'Live' : r.peak_id ? `<button type="button" class="linklike" data-hitid="${r.peak_id}">Treffer</button>` : 'Scan'}</td></tr>`).join('');
+      const a = d.total ? d.offset + 1 : 0, b = Math.min(d.total, d.offset + d.limit);
+      $('stdBody').innerHTML = `
+        <div class="kv-grid">
+          <div><b>${d.total}</b><span>Empfänge</span></div>
+          <div><b>${fmtTime(S.first)}</b><span>zuerst gehört</span></div>
+          <div><b>${fmtTime(S.last)}</b><span>zuletzt gehört</span></div>
+          <div><b>${snr(S.best_snr)}</b><span>bestes SNR</span></div>
+          <div><b class="no-i18n">${esc(S.grid || '–')}</b><span>Standort auf der Karte${S.distance_km != null ? ` · ${S.distance_km} km ${S.bearing}°` : ''}</span></div>
+        </div>
+        <h3>Gesendete Locatoren</h3>
+        ${d.grids.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Locator</th><th>Anzahl</th><th>Entfernung</th><th>Zeitraum</th><th>Beispiel</th></tr></thead><tbody>${gridRows}</tbody></table></div>
+          <p class="hint">Auf der Karte steht die Station im am häufigsten gesendeten Feld (markiert). Weichen einzelne Locatoren ab, war die Station unterwegs (/P, /M) – oder es war ein Dekodierfehler; die Beispielnachricht zeigt, woher der Locator stammt.</p>`
+          : '<p class="muted">Diese Station hat keinen Locator gesendet (FT8 meist nur beim CQ-Ruf) – darum nicht auf der Karte.</p>'}
+        <h3>Bänder und Betriebsarten</h3><p>${per || '–'}</p>
+        <h3>Alle Empfänge <small class="muted">${a}–${b} / ${d.total}</small></h3>
+        <div class="table-wrap"><table class="table st-recs"><thead><tr><th>Zeit (UTC)</th><th>Band</th><th>MHz</th><th>Art</th><th>SNR</th><th>Locator</th><th>Nachricht</th><th>Antenne</th><th>Quelle</th></tr></thead><tbody>${recs}</tbody></table></div>
+        <div class="actions"><button type="button" class="btn" id="stdPrev" ${d.offset ? '' : 'disabled'}>◀ neuer</button><button type="button" class="btn" id="stdNext" ${b >= d.total ? 'disabled' : ''}>älter ▶</button></div>`;
+      $('stdPrev').addEventListener('click', () => openStation(d.call, Math.max(0, d.offset - d.limit)));
+      $('stdNext').addEventListener('click', () => openStation(d.call, d.offset + d.limit));
+    }
+    $('stDetail').hidden = false;
+  }
+  $('stdClose').addEventListener('click', () => { $('stDetail').hidden = true; });
+  $('stDetail').addEventListener('click', e => { if (e.target === $('stDetail')) $('stDetail').hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('stDetail').hidden) $('stDetail').hidden = true; });
+  document.addEventListener('click', e => {
+    const c = e.target.closest('[data-stcall]'); if (c) { e.preventDefault(); openStation(c.dataset.stcall); return; }
+    const h = e.target.closest('[data-hitid]');
+    if (h) { $('stDetail').hidden = true; filter.id = h.dataset.hitid; $('hits').innerHTML = ''; showView('hits'); loadHits(); }
+  });
+  $('stOpen').addEventListener('keydown', e => { if (e.key === 'Enter') openStation(e.target.value); });
+  $('stOpen').addEventListener('change', e => { if ([...$('stOpenList').options].some(o => o.value === e.target.value.toUpperCase())) openStation(e.target.value); });
+  let stOpenT = null;
+  $('stOpen').addEventListener('input', e => {
+    clearTimeout(stOpenT); const v = e.target.value.trim(); if (v.length < 2) return;
+    stOpenT = setTimeout(async () => { try { const d = await api(`/api/stations?q=${encodeURIComponent(v)}&hours=0&limit=15&offset=0`);
+      $('stOpenList').innerHTML = d.stations.map(r => `<option value="${esc(r.call)}">${esc(r.grid || '')} · ${r.n}×</option>`).join(''); } catch (err) { } }, 250);
+  });
 
   // ---------- Bildanzeige im Fenster (Wasserfall, SSTV …) ----------
   function openLightbox(src, title) {

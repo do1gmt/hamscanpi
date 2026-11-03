@@ -111,7 +111,11 @@ to date on every new entry, so the list and the map stay fast with hundreds of t
 map shows all stations whose locator is known, independent of the list page, for the period, band and search
 chosen above (periods from 30 minutes to 1 year or everything). It shows either one point per **callsign**
 (colour = SNR, border = mode) or the **locator squares** (4-character, 2° × 1°, stronger = more stations);
-details appear on mouse-over or tap.
+details appear on mouse-over or tap. A station is placed in the locator square it sent **most often** (a single
+decoding error or a portable trip does not move it). **Open station** (search field, a callsign in the list or a
+point on the map) shows everything collected for one callsign: receptions, first/last heard, best SNR, every
+locator sent with count, period and an example message, bands and modes, and every single reception with message,
+antenna and a link to the hit.
 
 **Memory:** HamScanPi runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
 frequency and reduced to 12 kHz while reading, in single precision), so even 120 s shortwave recordings need
