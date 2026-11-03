@@ -668,6 +668,12 @@ def list_hits(params):
         band = mode = q = ""
         only_protected = False
         params = dict(params, audio="", interference="1")
+    if params.get("last", "") == "1":                  # nur der letzte abgeschlossene Scanlauf (wie „neu im letzten Lauf“)
+        if new_from:
+            sql += " AND s.time >= ? AND s.time < ? AND s.band != 'Satelliten'"
+            args += [new_from, new_to]
+        else:
+            sql += " AND 0"
     if band and band != "all":
         sql += " AND s.band = ?"
         args.append(band)
@@ -1245,7 +1251,8 @@ def stats():
     if new_from:
         db = db_connect()
         new_count = db.execute("""SELECT COUNT(*) FROM peak p JOIN scan s ON s.id=p.scan_id
-                                  WHERE s.time >= ? AND s.time < ? AND s.band != 'Satelliten'""",
+                                  WHERE s.time >= ? AND s.time < ? AND s.band != 'Satelliten'
+                                    AND COALESCE(p.interference, 0) = 0""",   # wie die Liste: ohne gelernte Störlinien
                                (new_from, new_to)).fetchone()[0]
         db.close()
     return {
@@ -2109,7 +2116,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/bandplan":
                 return self.send_json({"bands": bandplan(), "modes": MODE_LABELS})
             if path == "/api/hits":
-                return self.send_json({"hits": list_hits(qs), "server_time": now_iso()})
+                lf, lt, lr = last_run_window()
+                return self.send_json({"hits": list_hits(qs), "server_time": now_iso(),
+                                       "last_run": {"from": lf, "to": lt if lt != "9999" else None,
+                                                    "status": (lr or {}).get("status")} if lf else None})
             if path == "/api/runs":
                 return self.send_json(list_runs(max(1, min(int(qs.get("limit", 25)), 500)),
                                                 max(0, int(qs.get("offset", 0)))))

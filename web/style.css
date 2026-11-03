@@ -632,3 +632,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .eibi-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }
 .live-dec-list .no-i18n { white-space: pre-wrap; }
 .es-wrap { max-height: 360px; overflow-y: auto; } .es-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }
+.stat-new { cursor: pointer; } .stat-new.active { outline: 2px solid var(--amber); outline-offset: -2px; } .tabs-main .n { cursor: pointer; }

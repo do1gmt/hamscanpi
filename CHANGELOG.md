@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.65 – 2026-11-03
+
+- **Hits of the last run only:** tapping "new in last run" (hits page) or the number on the "Hits" tab now filters
+  the list to the hits of the last completed scan run (its time window, without satellite passes); the line above
+  the list names the window ("3 hits in the last run (18:20–18:29)") with "show all hits" to go back. Before the
+  number was only a counter and the list always showed everything, including hits from hours ago.
+  `/api/hits?last=1`, the response carries the window of the last run.
+- "New in last run" counts like the list (without learned interference lines).
+- Self-test section 37 extended.
+
 ## 1.7.64 – 2026-11-03
 
 - Fix: a requested scan that does not start no longer hangs as "Scan requested 0 %". If the scheduler finds the

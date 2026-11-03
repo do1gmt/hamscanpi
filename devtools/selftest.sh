@@ -1167,6 +1167,9 @@ run(4, "2030-01-01T11:30:00+00:00", None, "running"); db.commit()
 assert W.stats()["hits_new"] == 0                                    # laufender Lauf zählt noch nicht
 h = [x for x in W.list_hits({"limit": "50", "interference": "1"}) if x["time"].startswith("2030-01-01T10:31")]
 assert h and h[0]["is_new"] is False
+run(5, "2030-01-01T12:00:00+00:00", "2030-01-01T12:05:00+00:00", "success"); hit("2030-01-01T12:02:00+00:00"); db.commit()
+only = W.list_hits({"limit": "50", "last": "1"})
+assert [x["time"] for x in only] == ["2030-01-01T12:02:00+00:00"], [x["time"] for x in only]   # Filter „nur letzter Lauf“
 db.execute("DELETE FROM run WHERE started_at LIKE '2030-%'"); db.execute("DELETE FROM peak WHERE scan_id IN (SELECT id FROM scan WHERE time LIKE '2030-%')")
 db.execute("DELETE FROM scan WHERE time LIKE '2030-%'"); db.commit(); db.close()
 PY

@@ -521,7 +521,7 @@
     const s = await api('/api/stats');
     $('statTotal').textContent = s.hits_total;
     $('statNew').textContent = s.hits_new;
-    const th = document.querySelector('.tabs-main [data-view=hits]'); if (th) th.innerHTML = 'Treffer' + (s.hits_new ? `<span class="n">${s.hits_new}</span>` : '');
+    const th = document.querySelector('.tabs-main [data-view=hits]'); if (th) th.innerHTML = 'Treffer' + (s.hits_new ? `<span class="n" title="neu im letzten Lauf – antippen zeigt nur diese">${s.hits_new}</span>` : '');
     $('statLastHits').textContent = s.last_run ? s.last_run.peaks : '–';
     $('statRejected').textContent = s.last_run ? s.last_run.rejected : '–';
     if (s.last_run) {
@@ -575,6 +575,7 @@
   async function loadHits() {
     const qs = new URLSearchParams({ band: filter.band, mode: filter.mode, sort: filter.sort, q: filter.q, protected: filter.protected ? '1' : '0', audio: filter.audio ? '1' : '0', interference: filter.interf ? '1' : '0', limit: '400' });
     if (filter.id) qs.set('id', filter.id);
+    if (filter.last) qs.set('last', '1');
     const d = await api('/api/hits?' + qs);
     const root = $('hits');
     const seen = new Set();
@@ -594,8 +595,16 @@
       $('hitIdClear').addEventListener('click', () => { filter.id = null; root.innerHTML = ''; loadHits(); });
       const c = root.querySelector('.hit'); if (c && !c.classList.contains('open')) c.querySelector('.hit-head, summary')?.click();
     }
+    if (filter.last && !filter.id) {                  // nur der letzte Lauf: Zeitraum nennen, Rückweg anbieten
+      const L = d.last_run, hm = t => t ? new Date(t).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' }) : '…';
+      $('hitCount').innerHTML = `${d.hits.length} ${EN ? 'hits of the last run' : 'Treffer im letzten Lauf'}${L ? ` (${hm(L.from)}–${hm(L.to)})` : ''} <button type="button" class="btn btn-small" id="hitLastClear">${EN ? 'show all hits' : 'alle Treffer zeigen'}</button>`;
+      $('hitLastClear').addEventListener('click', () => setLastFilter(false));
+    }
+    $('statNew').closest('.stat').classList.toggle('active', !!filter.last);
     $('hitsEmpty').hidden = d.hits.length > 0;
   }
+  function setLastFilter(on) { filter.last = on; $('hits').innerHTML = ''; cards.clear(); loadHits(); }
+  $('statNew').closest('.stat').addEventListener('click', () => setLastFilter(!filter.last));
 
   function badges(h) {
     return `<span class="badge badge-band">${h.band}</span>${h.device === 'rtlsdr' ? `<span class="badge badge-device">${esc(devName('rtlsdr'))}</span>` : ''}<span class="badge badge-mode px ${h.mode}">${h.mode_label}${h.sideband ? ' ' + h.sideband : ''}</span>${h.audio === 'ton' ? '<span class="badge badge-audio">🔊 Ton</span>' : h.audio === 'traeger' ? '<span class="badge badge-quiet">nur Träger</span>' : ''}${h.is_new ? '<span class="badge badge-new">neu</span>' : ''}${h.protected ? '<span class="badge badge-prot">★ geschützt</span>' : ''}${h.watch ? `<span class="badge badge-watch px" title="Beobachtungsliste">🔔 ${esc(h.watch)}</span>` : ''}${(h.decodes || []).filter(d => d.ps).map(d => `<span class="badge badge-rds px" title="RDS-Sendername">📻 ${esc(d.ps)}</span>`).join('')}${h.interference ? '<span class="badge badge-interf" title="Gelernte Störlinie – siehe Stationen → Störlinien">⚡ Störlinie</span>' : ''}`;
@@ -1341,7 +1350,11 @@
     if (name === 'logs') loadLogs();
     if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); }, 0);
   }
-  document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+  document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', e => {
+    // die Zahl am Reiter „Treffer“ (neu im letzten Lauf) antippen: nur diese Treffer zeigen
+    if (b.dataset.view === 'hits' && e.target.closest('.n') && typeof setLastFilter === 'function') { showView('hits'); setLastFilter(true); return; }
+    showView(b.dataset.view);
+  }));
   showView(localStorage.getItem('view') || 'scan');
   // Logo oben links: zurück zur Startseite (Reiter Scan), ohne die Seite neu zu laden
   $('brandHome').addEventListener('click', e => {
