@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.67 – 2026-11-03
+
+- Live: the "Decodes" card is at the top of the right column again, the EiBi card "Shortwave – on air now" below it
+  (since 1.7.59 the EiBi card had pushed the decodes down).
+
+## 1.7.66 – 2026-11-03
+
+- Documentation: README feature list brought up to date (NAVTEX, weather fax, weather RTTY, EiBi in Live and in the
+  scan, WSJT-X output, station map with locator squares and fine zoom, last-run filter, new-network notice, antenna
+  profiles – where to edit them, blocked scan requests and lock holders, diagnostics contents);
+  `docs/testing.md` lists all self-test sections by area.
+
 ## 1.7.65 – 2026-11-03
 
 - **Hits of the last run only:** tapping "new in last run" (hits page) or the number on the "Hits" tab now filters

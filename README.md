@@ -33,7 +33,12 @@ PMSDR receiver (IW3AUT) for shortwave.
 - Decoders: **FT8/FT4** (via [ft8_lib](https://github.com/kgoba/ft8_lib)), **CW**, **RTTY**,
   **APRS** and **POCSAG** (via multimon-ng), **SSTV** on shortwave (14.230, 21.340, 28.680 USB,
   3.730 and 7.165 LSB) – including images whose start was missed and stations that are off-frequency.
-- Live listening with waterfall (tap to tune), seek function, signal-to-noise display and overload warning.
+- Live listening with waterfall (tap to tune), seek function, signal-to-noise display and overload warning;
+  live decoders also for **NAVTEX** (518/490/4209.5 kHz), **weather fax** (charts as images, e.g. DWD Pinneberg)
+  and **weather RTTY** (450/850 Hz shift), chosen automatically by frequency.
+- **Shortwave broadcasting with the [EiBi](http://www.eibispace.de/) schedule:** in Live the station on the tuned
+  frequency and a list of everything on air now (tap to listen); as chip *EiBi* in the scan a check of every
+  scheduled broadcast with carrier level – a log of what was heard per band.
 - FM broadcast with RDS: station name, radio text, artist/title (RT+), clock, alternative frequencies –
   live and for every scanned station (list of FM stations).
 - TMC traffic messages from RDS in plain text (road, direction, between which junctions, event,
@@ -46,8 +51,9 @@ PMSDR receiver (IW3AUT) for shortwave.
   bearing and last heard – exportable as an ADIF SWL log.
 - Watchlist: alerts for a frequency, a callsign (`DL*`), DX beyond N km or events such as SSTV from
   the ISS – in the log, on the hit card, by mail or as push to your phone (ntfy, Telegram).
-- Map of heard stations, activity overview by band and hour, optional reporting of FT8/FT4 spots
-  to [PSK Reporter](https://pskreporter.info).
+- Map of heard stations (per callsign or per locator square, fine zoom), overview per station,
+  activity overview by band and hour, optional reporting of FT8/FT4 spots to [PSK Reporter](https://pskreporter.info).
+- FT8/FT4 decodes on the network in the **WSJT-X UDP format** – for OpenHamClock, GridTracker, JTAlert & co.
 
 **Satellites (RTL-SDR)**
 - Switched on and off with the band chip *Satellites*; passes are only recorded while the RTL-SDR is the
@@ -67,7 +73,10 @@ PMSDR receiver (IW3AUT) for shortwave.
 **Dashboard**
 - Scan, hits, live, log and settings – mobile first, no page reloads.
 - Scan history with paging, a readable event log, scan duration estimate, adjustable scan raster,
-  satellite priorities, mail notifications.
+  satellite priorities, mail and push notifications (also when the Pi gets a new IP address or network).
+- Hits: "new in last run" counts the hits of the last completed run; tapping it (or the number on the *Hits*
+  tab) shows only those, "show all hits" goes back.
+- Antenna profiles, automatic backups, a rescue page and a diagnostics package for when something goes wrong.
 
 ## Screenshots
 
@@ -111,7 +120,7 @@ to date on every new entry, so the list and the map stay fast with hundreds of t
 map shows all stations whose locator is known, independent of the list page, for the period, band and search
 chosen above (periods from 30 minutes to 1 year or everything). It shows either one point per **callsign**
 (colour = SNR, border = mode) or the **locator squares** (4-character, 2° × 1°, stronger = more stations);
-details appear on mouse-over or tap. A station is placed in the locator square it sent **most often** (a single
+details appear on mouse-over or tap; zoom in half steps (buttons) or quarter steps (wheel, pinch) up to level 15. A station is placed in the locator square it sent **most often** (a single
 decoding error or a portable trip does not move it). **Open station** (search field, a callsign in the list or a
 point on the map) shows everything collected for one callsign: receptions, first/last heard, best SNR, every
 locator sent with count, period and an example message, bands and modes, and every single reception with message,
@@ -161,7 +170,8 @@ an unreachable target is logged once (`wsjtx_udp_failed` / `wsjtx_udp_resumed`),
 are sent afterwards, older ones are dropped (useless for a live display). "Save and send test packet" checks a
 target right away.
 
-**Antenna profiles:** under *System → Devices → Antennas* each antenna is created once (name, frequency range,
+**Antenna profiles:** under *System → Devices → Antennas* (a collapsible section at the top of the card – edit the
+fields in place, "+ Antenna" adds one, ✕ deletes, then "Save") each antenna is created once (name, frequency range,
 and for directional antennas direction, beamwidth, elevation – the existing entries become the first profiles).
 When switching antennas, just choose the profile in the scan box ("Antenna ▾") or at the main stick / HF receiver
 – it is saved immediately, the pass planning uses its range and beam, and the change is logged. Editing a profile
@@ -195,8 +205,12 @@ dashboard itself does not answer, the **rescue page** on port 8081 (`http://<pi>
 same password) does the same and shows memory and the latest log lines. Restarting needs root: the update
 installs `/etc/sudoers.d/hamscanpi`, which allows exactly `systemctl --no-block restart hamscanpi-web |
 hamscanpi-scheduler | hamscanpi-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
-*Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs, kernel and service
-messages of the last 2 days, the system history and the settings without credentials into one file.
+*Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs (including the output of
+the scan runs and the scheduler), kernel and service messages of the last 2 days, the system history, which
+processes hold the scan locks, and the settings without credentials into one file.
+If a requested scan cannot start because the receiver or a run is still busy, the scan box says so with the
+process holding the lock (`scan_start_rejected` in the log; `python3 bin/lockinfo.py` shows it any time); a
+request that has not started after 3 minutes is reset, so the dashboard never stays at "Scan requested 0 %".
 
 **Band plan by country:** *Settings → Station → Country / band plan* selects the band plan used for scanning and
 classifying hits. **Germany (IARU Region 1)** is the default and unchanged. **Austria**, **Switzerland** and the **United Kingdom** (Region 1) and **Canada** (Region 2) are
@@ -375,9 +389,10 @@ the bands you enable.
 
 ## Testing without hardware
 
-`devtools/selftest.sh` runs the satellite and SSTV chain against simulated signals (ISS pass with
-Doppler, three satellites in one recording, APRS, shortwave SSTV) in a temporary copy – your own
-installation is not touched. See [docs/testing.md](docs/testing.md).
+`devtools/selftest.sh` checks about 40 areas against simulated signals and fake receivers – satellite passes
+with Doppler, SSTV, FT8, APRS, RDS/TMC, NAVTEX, weather fax, EiBi, the scan/satellite/live sharing of the stick,
+backups, notifications – in a temporary copy; your own installation is not touched. See
+[docs/testing.md](docs/testing.md).
 
 ## Credits
 
