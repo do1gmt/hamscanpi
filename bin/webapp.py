@@ -459,7 +459,15 @@ def stop_scan_or_pass():
 
 
 def scan_running():
+    """Ist der Stick belegt (Scan-Phase eines Laufs oder ein Überflug)?"""
     r = subprocess.run(["/usr/bin/flock", "-n", str(LOCKFILE), "/usr/bin/true"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return r.returncode != 0
+
+
+def cycle_running():
+    """Läuft ein Scanlauf (Scannen oder Auswertung, run_cycle.sh hält cycle.lock)?"""
+    r = subprocess.run(["/usr/bin/flock", "-n", str(BASE / "data" / "cycle.lock"), "/usr/bin/true"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return r.returncode != 0
 
@@ -473,7 +481,7 @@ def load_status():
         st = {"state": "idle", "phase": "idle", "progress": 0, "message": "Bereit",
               "run_id": None, "started_at": None, "updated_at": None}
     # Hängender Status (Prozess tot, Datei sagt running)?
-    if st.get("state") in ("running",) and not scan_running():
+    if st.get("state") in ("running",) and not scan_running() and not cycle_running():
         st["state"] = "error"
         st["phase"] = "error"
         st["message"] = "Scanlauf wurde unterbrochen"
@@ -510,7 +518,7 @@ def load_status():
         st["meter"] = m
     settings = load_settings()
     st["scan_interval_minutes"] = settings["scan_interval_minutes"]
-    st["scan_running"] = scan_running()
+    st["scan_running"] = scan_running() or cycle_running()       # auch während der Auswertung
     st["live_active"] = LIVE.live_active()
     w = _watch_cfg()
     st["live_watch"] = ({"freq_hz": w.get("freq_hz"), "mode": w.get("mode"), "until": w.get("until"),
@@ -828,6 +836,10 @@ def scan_estimate(settings=None):
         total += sec
         parts.append({"band": p["name"], "tunes": len(p["centers_hz"]), "seconds": round(sec),
                       "measured": p["name"] in m["per_band"]})
+    try:                                         # für den Scheduler: Überflüge so planen, dass kein Scan abbricht
+        write_json(BASE / "data" / "scan_estimate.json", {"t": time.time(), "seconds": round(total)})
+    except Exception:
+        pass
     return {"seconds": round(total), "parts": parts, "overhead": round(m["overhead"]), "based_on_runs": m["runs"]}
 
 
@@ -1632,6 +1644,10 @@ def sat_passes():
                 res = {"passes": [], "problem": f"{type(e).__name__}: {e}"}
             res["enabled"] = on
             res["preview"] = not on                                      # nur anzeigen, nicht aufnehmen
+            try:
+                res["arm_until"] = float((read_json(BASE / "data" / "sat_arm.json", {}) or {}).get("until", 0)) or None
+            except Exception:
+                res["arm_until"] = None
             res["chip"] = chip
             res["paused_device"] = chip and not on
             res["satellites"] = [{"id": x["id"], "name": x["name"], "label": x["label"], "center_hz": x["center_hz"],
@@ -2239,7 +2255,20 @@ class Handler(BaseHTTPRequestHandler):
                 AUTH.set_trusted(AUTH.parse_networks(data.get("networks", "")))
                 return self.send_json({"ok": True, "auth": AUTH.status()})
             if path == "/api/settings":
-                return self.send_json({"ok": True, "settings": save_settings(data)})
+                res = save_settings(data)
+                # Satelliten eingeschaltet oder Auswahl/Prioritäten geändert: 60 s Bedenkzeit, bevor ein Überflug
+                # startet und dafür womöglich einen Scan unterbricht
+                tb = data.get("toggle_band") if isinstance(data.get("toggle_band"), dict) else {}
+                if (tb.get("name") == "Satelliten" and tb.get("on")) or "Satelliten" in (data.get("selected_segments") or {}) \
+                        or "sat_prio" in data or (data.get("toggle_segment") or {}).get("band") == "Satelliten":
+                    write_json(BASE / "data" / "sat_arm.json", {"until": time.time() + 60})
+                    APPLOG.log("INFO", "webapp", "satellites_arming", wait_s=60)
+                return self.send_json({"ok": True, "settings": res})
+            if path == "/api/sat/arm":
+                # „sofort“: Bedenkzeit beenden
+                write_json(BASE / "data" / "sat_arm.json", {"until": 0})
+                APPLOG.log("INFO", "webapp", "satellites_armed_now")
+                return self.send_json({"ok": True})
             if path == "/api/scan-now":
                 if live_status().get("active"):
                     return self.send_json({"ok": False, "error": "Live-Empfang läuft – erst stoppen"}, 409)
@@ -2256,7 +2285,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Scheduler tot -> Scan direkt starten, damit der Knopf immer funktioniert
                 APPLOG.log("WARN", "webapp", "scheduler_dead_fallback", note="run_cycle.sh direkt gestartet")
                 with open(BASE / "log" / "scan-cycle.log", "a", encoding="utf-8") as out:
-                    subprocess.Popen(["/usr/bin/flock", "-n", str(LOCKFILE), str(BASE / "bin" / "run_cycle.sh")],
+                    subprocess.Popen([str(BASE / "bin" / "run_cycle.sh")],                 # nimmt seine Sperren selbst
                                      stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
                 return self.send_json({"ok": True, "fallback": True})
             if path == "/api/scan-stop":

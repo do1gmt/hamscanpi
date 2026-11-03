@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.7.48 – 2026-11-03
+
+- **Mixed HF/satellite operation, clean hand-over of the stick.**
+  - **Scan and analysis separated:** `run_cycle.sh` holds the stick lock (`scan.lock`) only while the scanner
+    runs and a new `cycle.lock` for the whole run; the analysis no longer blocks passes (before, a pass waited
+    until all recordings were analysed).
+  - **Yield instead of kill:** when a pass needs the stick, the scheduler writes `data/scan_yield`; the scanner
+    checks it between windows, while following a QSO or packets, while keep-recording HF and in long HF captures
+    and stops within 1–2 s, keeping what it already recorded (exit code 3, run "interrupted for a satellite pass",
+    analysis still runs). Only after 20 s: SIGTERM/SIGKILL to the run's process group, then leftover `rtl_sdr`
+    are killed (before: SIGTERM to the shell only – child processes and `rtl_sdr` could keep the stick).
+  - **Planning:** the expected scan duration is now the longest of the last 5 runs (+15 %) or the dashboard's
+    estimate for the current band selection (+20 %), not the median – long HF scans no longer collide with
+    passes. A pass that is already more than half over does not interrupt a running scan.
+  - **Scan watchdog:** no sign of life from the scanner (`data/scanner.heartbeat`, per window/step) for
+    10 minutes while it holds the stick → the run is ended, notice "Hanging scan ended" with where it stood.
+  - **60 s grace period** after switching on "Satellites" or changing the satellite selection/priorities: no pass
+    starts (countdown and "now" button in the pass list) – browsing no longer throws out a running scan.
+  - Logged: `scan_yield_requested`, `scan_yielded`, `scan_stopped` (forced), `scan_yielded_for_pass`,
+    `run_yielded`, `scan_hung`, `satellites_arming`, `satellite_arming`, `satellite_skipped` (half over).
+- README: scans and passes share the stick. Self-test section 30.
+
 ## 1.7.47 – 2026-11-03
 
 - **Self-healing:** systemd watchdog for the web server (checks itself every 30 s with a request to itself;

@@ -854,5 +854,68 @@ html = urllib.request.build_opener(urllib.request.ProxyHandler({})).open("http:/
 assert "Notfall-Seite" in html and "Pi neu starten" in html and "Diagnose herunterladen" in html
 h.shutdown()
 PY
+echo "== 30 Mischbetrieb: Stick sauber freigeben, hängender Scan, Bedenkzeit"
+(cd bin && timeout 200 python3 - <<'PY') && ok "Scan gibt den Stick binnen Sekunden frei, Zwangsende greift, Wächter erkennt hängenden Scan, Bedenkzeit" || bad "Mischbetrieb"
+import ast, json, os, subprocess, sys, tempfile, time
+from pathlib import Path
+import devices as DV
+# 1) Freigabe nur im Scanner aktiv
+DV.YIELD_FILE.parent.mkdir(parents=True, exist_ok=True)
+DV.YIELD_FILE.write_text("x"); DV.check_yield()                     # nicht aktiv: kein Abbruch
+DV.enable_yield(); assert not DV.YIELD_FILE.exists()
+DV.YIELD_FILE.write_text("x")
+try:
+    DV.check_yield(); raise SystemExit("kein Abbruch")
+except DV.ScanYield:
+    pass
+DV.YIELD_FILE.unlink()
+# 2) Funktionen des Schedulers ohne seine Hauptschleife laden
+src = open("scheduler.py", encoding="utf-8").read()
+fns = [n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name in
+       ("scan_running", "cycle_running", "stop_running_scan", "scan_watchdog", "sat_arm_wait")]
+logs = []
+BASE = Path("..").resolve()
+g = {"BASE": BASE, "LOCK": BASE / "data" / "scan.lock", "time": time, "json": json, "subprocess": subprocess,
+     "applog": lambda lv, comp, ev, **d: logs.append(ev), "sat_pass_active": lambda: False, "SCAN_HANG_S": 600}
+exec(compile(ast.Module(fns, []), "sched", "exec"), g)
+# Scanner-Attrappe: hält Lauf- und Stick-Sperre, gibt bei scan_yield frei (wie der echte Scanner)
+dummy = f"""
+import fcntl, os, time
+a = open({str(BASE / 'data' / 'cycle.lock')!r}, 'a'); fcntl.flock(a, fcntl.LOCK_EX)
+b = open({str(BASE / 'data' / 'scan.lock')!r}, 'a'); fcntl.flock(b, fcntl.LOCK_EX)
+open({str(BASE / 'data' / 'scan.pid')!r}, 'w').write(str(os.getpid()))
+t0 = time.time()
+while time.time() - t0 < 60:
+    if os.environ.get('POLITE') and os.path.exists({str(DV.YIELD_FILE)!r}):
+        break
+    time.sleep(0.2)
+"""
+p = subprocess.Popen([sys.executable, "-c", dummy], env=dict(os.environ, POLITE="1"), start_new_session=True)
+time.sleep(1.0)
+assert g["scan_running"]() and g["cycle_running"]()
+t = time.time(); assert g["stop_running_scan"]("Überflug Test")
+assert time.time() - t < 5 and "scan_yielded" in logs and not DV.YIELD_FILE.exists(), (round(time.time() - t, 1), logs)
+p.wait(5)
+# 3) unhöflicher Scan: Zwangsende über die Prozessgruppe
+p = subprocess.Popen([sys.executable, "-c", dummy], start_new_session=True)
+time.sleep(1.0)
+t = time.time(); assert g["stop_running_scan"]("Überflug Test 2")
+assert "scan_stopped" in logs and time.time() - t < 40
+p.wait(5)
+# 4) Wächter: Lebenszeichen 11 min alt -> Lauf wird beendet, Hinweis
+import notices as NT
+NT.FILE = Path(tempfile.mkdtemp()) / "n.json"; NT.LOCK = NT.FILE.with_suffix(".lock")
+p = subprocess.Popen([sys.executable, "-c", dummy], env=dict(os.environ, POLITE="1"), start_new_session=True)
+time.sleep(1.0)
+DV.HEARTBEAT.touch(); old = time.time() - 660; os.utime(DV.HEARTBEAT, (old, old))
+g["scan_watchdog"]()
+assert "scan_hung" in logs and any(r["key"] == "scan_hang" for r in NT.listing()["items"]) and not g["scan_running"]()
+p.wait(5)
+# 5) Bedenkzeit
+(BASE / "data" / "sat_arm.json").write_text(json.dumps({"until": time.time() + 60}))
+assert 55 < g["sat_arm_wait"]() <= 60
+(BASE / "data" / "sat_arm.json").write_text(json.dumps({"until": 0}))
+assert g["sat_arm_wait"]() == 0
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

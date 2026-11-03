@@ -109,6 +109,17 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**Scans and satellite passes share the stick.** A scan is only started if it will be finished before the next
+important pass (estimated from the longest recent scans and the estimate for the current band selection). If a
+pass still needs the stick, the scanner is asked to give it up (`data/scan_yield`): it stops between two steps
+or inside a long recording within a second or two, keeps what it found, and the analysis runs afterwards
+without the stick – the pass is already recording meanwhile. Only if it does not respond within 20 s is the run
+ended by force and leftover `rtl_sdr` processes cleaned up. A pass that is already more than half over does not
+interrupt a scan. A scan without a sign of life for 10 minutes is ended and reported. After switching on
+"Satellites" or changing the satellite selection or priorities, no pass starts for **60 seconds** (countdown
+with a "now" button in the pass list), so looking around or choosing satellites does not throw out a running
+scan.
+
 **When something hangs:** the web server checks itself every 30 s and the scheduler reports every 10 s to
 systemd's watchdog – if one of them stops responding for 3 or 5 minutes, systemd restarts it (shown as a notice).
 Memory limits per service (web 500 MB, scheduler with scans and analysis 750 MB) make an outlier hit only its

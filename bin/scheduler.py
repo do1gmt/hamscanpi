@@ -91,19 +91,67 @@ def scan_running():
     return result.returncode != 0
 
 
+SCAN_HANG_S = 600
+
+
+def scan_watchdog():
+    """Hängender Scan: der Scanner meldet sich je Fenster/Schritt (data/scanner.heartbeat). Kam 10 min kein
+    Lebenszeichen, obwohl er den Stick hält, wird der Lauf beendet (sauber, sonst mit Gewalt) – mit Hinweis, wo
+    er stand. Gilt nur für die Scan-Phase (Überflüge haben ihren eigenen Wächter, die Auswertung braucht den
+    Stick nicht)."""
+    if not (cycle_running() and scan_running()) or sat_pass_active():
+        return
+    hb = BASE / "data" / "scanner.heartbeat"
+    try:
+        age = time.time() - hb.stat().st_mtime
+    except OSError:
+        return
+    if age < SCAN_HANG_S:
+        return
+    try:
+        st = json.loads((BASE / "data" / "runtime_status.json").read_text(encoding="utf-8"))
+        where = st.get("message") or st.get("phase")
+    except Exception:
+        where = None
+    applog("ERROR", "scheduler", "scan_hung", silent_min=round(age / 60), where=where)
+    ok = stop_running_scan("Scan hing")
+    try:
+        import notices as NT
+        NT.event("scan_hang", "warn", "scan", "Hängender Scan beendet",
+                 f"Der Scan gab {round(age / 60)} min kein Lebenszeichen ({where or 'unbekannt'}) und wurde "
+                 f"{'beendet' if ok else 'nicht vollständig beendet'}; der nächste startet planmäßig.",
+                 fix="Kommt das öfter vor: Diagnose herunterladen (System → Dienste) und mitschicken.")
+    except Exception:
+        pass
+
+
+def sat_arm_wait():
+    """Sekunden Bedenkzeit, die noch bleiben: nach dem Einschalten des Chips „Satelliten“ oder einer Änderung der
+    Auswahl/Prioritäten startet 60 s lang kein Überflug (der Webserver schreibt data/sat_arm.json) – man kann in
+    Ruhe durchklicken, ohne dass ein laufender Scan abgebrochen wird."""
+    try:
+        until = float(json.loads((BASE / "data" / "sat_arm.json").read_text(encoding="utf-8")).get("until", 0))
+    except Exception:
+        return 0.0
+    return max(0.0, until - time.time())
+
+
+def cycle_running():
+    """Läuft ein Scanlauf (Scannen oder Auswertung)? cycle.lock hält run_cycle.sh die ganze Zeit."""
+    r = subprocess.run(["/usr/bin/flock", "-n", str(BASE / "data" / "cycle.lock"), "/usr/bin/true"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return r.returncode != 0
+
+
 def run_scan():
-    if scan_running():
+    if cycle_running() or scan_running():
         log("Scan bereits aktiv - Start verworfen")
         return
 
     log("Scan gestartet")
 
-    cmd = [
-        "/usr/bin/flock",
-        "-n",
-        str(LOCK),
-        str(BASE / "bin" / "run_cycle.sh")
-    ]
+    # run_cycle.sh nimmt die Sperren selbst: cycle.lock für den ganzen Lauf, scan.lock (Stick) nur beim Scannen
+    cmd = [str(BASE / "bin" / "run_cycle.sh")]
 
     with open(BASE / "log" / "scan-cycle.log", "a", encoding="utf-8") as out:
         subprocess.Popen(
@@ -300,15 +348,27 @@ def next_passes():
 
 
 def typical_scan_seconds():
-    """Typische Dauer eines Scans: Median der letzten erfolgreichen Läufe (sonst 2 min)."""
+    """Wie lange dauert der nächste Scan? Damit kein wichtiger Überflug einen Scan abbrechen muss, vorsichtig
+    geschätzt: das Längste aus (a) dem längsten der letzten 5 Läufe (+15 %, das Weiter-Aufnehmen schwankt) und
+    (b) der Schätzung des Dashboards für die aktuelle Bandauswahl (data/scan_estimate.json, neu bei jeder Änderung).
+    Früher: Median der letzten 5 – nach einem Wechsel auf lange Kurzwellen-Scans viel zu kurz."""
+    best = 120.0
     try:
         db = sqlite3.connect(DB, timeout=5)
         rows = [r[0] for r in db.execute("SELECT duration_s FROM run WHERE status='success' AND duration_s > 0 "
                                          "ORDER BY id DESC LIMIT 5")]
         db.close()
-        return float(sorted(rows)[len(rows) // 2]) if rows else 120.0
+        if rows:
+            best = max(best, max(rows) * 1.15)
     except Exception:
-        return 120.0
+        pass
+    try:
+        est = json.loads((BASE / "data" / "scan_estimate.json").read_text(encoding="utf-8"))
+        if time.time() - float(est.get("t", 0)) < 7 * 86400 and est.get("seconds"):
+            best = max(best, float(est["seconds"]) * 1.2)
+    except Exception:
+        pass
+    return best
 
 
 def scan_starving(interval):
@@ -322,20 +382,49 @@ def scan_starving(interval):
 
 
 def stop_running_scan(reason):
-    pidf = BASE / "data" / "scan.pid"
+    """Stick für einen Überflug freimachen. Erst freundlich: data/scan_yield – der Scanner prüft das zwischen den
+    Schritten und in langen Aufnahmen und beendet sich binnen 1–2 s, das bisher Gefundene wird noch ausgewertet
+    (ohne Stick). Erst wenn er nach 20 s noch nicht frei ist: SIGTERM an die ganze Prozessgruppe des Laufs,
+    dann SIGKILL, dann übrig gebliebene rtl_sdr aufräumen."""
+    import os
+    import signal
+    yf = BASE / "data" / "scan_yield"
+    yf.write_text(reason, encoding="utf-8")
+    applog("INFO", "scheduler", "scan_yield_requested", reason=reason)
+    t0 = time.time()
     try:
-        pid = int(pidf.read_text())
-        import os
-        import signal
-        os.kill(pid, signal.SIGTERM)
-        applog("WARN", "scheduler", "scan_stopped", reason=reason)
-    except Exception:
-        pass
-    for _ in range(30):
-        if not scan_running():
-            return True
-        time.sleep(1)
-    return False
+        for _ in range(40):
+            if not scan_running():
+                applog("INFO", "scheduler", "scan_yielded", reason=reason, seconds=round(time.time() - t0, 1))
+                return True
+            time.sleep(0.5)
+        pid = None
+        try:
+            pid = int((BASE / "data" / "scan.pid").read_text())
+        except Exception:
+            pass
+        for sig, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+            if pid:
+                try:
+                    os.killpg(os.getpgid(pid), sig)          # run_cycle läuft in eigener Sitzung (start_new_session)
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+            for _ in range(wait * 2):
+                if not scan_running():
+                    break
+                time.sleep(0.5)
+            if not scan_running():
+                break
+        try:
+            import devices as DV
+            n = len(DV.kill_orphan_rtl() or [])
+        except Exception:
+            n = 0
+        applog("WARN", "scheduler", "scan_stopped", reason=reason, forced=True, orphans=n,
+               seconds=round(time.time() - t0, 1))
+        return not scan_running()
+    finally:
+        yf.unlink(missing_ok=True)
 
 
 def start_sat_pass(p):
@@ -372,6 +461,14 @@ def start_sat_pass(p):
     if scan_running():
         if p["prio"] <= SAT.OPPORTUNISTIC_PRIO:
             return False                # Bildsatelliten: nur bei freiem Stick, Scan nicht abbrechen
+        now = time.time()
+        if now > p["rec_start"] + 0.5 * (p["rec_end"] - p["rec_start"]):
+            # schon über die Hälfte vorbei: den laufenden Scan nicht für einen Rest opfern
+            _sat["started"].add(p["key"])
+            applog("INFO", "scheduler", "satellite_skipped", sat=p["name"], reason="Scan lief, Überflug schon zur Hälfte vorbei")
+            for k in p.get("keys", [p["key"]]):
+                SAT.write_result(k, state="skipped", error="Scan lief, Überflug schon zur Hälfte vorbei")
+            return True
         stop_running_scan(f"Überflug {p['name']}")
     if scan_running():
         return False
@@ -488,6 +585,7 @@ while True:
         # steht schon im Plan (satellites.make_plan).
         check_started_passes()
         sat_watchdog()
+        scan_watchdog()
         restore_if_pending()
         health_tick()
         for key, (bp, why) in list(_sat["blocked"].items()):       # Fenster vorbei, nie gestartet
@@ -509,6 +607,14 @@ while True:
             if p["key"] in _sat["started"]:
                 continue
             if p["rec_start"] <= now_t < p["rec_end"] - 60:
+                arm = sat_arm_wait()
+                if arm > 0:
+                    # Bedenkzeit nach dem Einschalten/Ändern der Satelliten: noch nichts unterbrechen
+                    if _sat.get("arm_note") != p["key"]:
+                        _sat["arm_note"] = p["key"]
+                        applog("INFO", "scheduler", "satellite_arming", sat=p["name"], wait_s=round(arm))
+                    _sat["blocked"][p["key"]] = (p, "Bedenkzeit nach Änderung der Satellitenauswahl")
+                    break
                 if not start_sat_pass(p):
                     # Stick noch belegt: Grund merken, damit „nicht aufgenommen“ nicht unerklärt bleibt
                     why = ("vorheriger Überflug nahm noch auf" if sat_pass_active()
@@ -555,7 +661,7 @@ while True:
 
         live_lock = BASE / "data" / "live.lock"
         live = live_lock.exists() and (time.time() - live_lock.stat().st_mtime) < 120
-        if due and not scan_running() and not live:
+        if due and not scan_running() and not cycle_running() and not live:
             (BASE / "data" / "scan_postponed.json").unlink(missing_ok=True)
             applog("INFO", "scheduler", "scan_start", reason="interval", interval_min=interval)
             run_scan()

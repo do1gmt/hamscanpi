@@ -266,6 +266,9 @@ def follow_qso(dev, center, chans, cfg, log=print):
         return {}
     try:
         while n_done / rate < max_s:
+            import devices as _DV
+            if _DV.yield_requested():              # Überflug wartet: mit dem bisher Verfolgten aufhören
+                break
             raw = p.stdout.read(rate * 2)          # 1 s
             if not raw or len(raw) < rate:
                 break
@@ -492,6 +495,9 @@ def hf_continue(dev, cfg, offs, bw_hz, min_s=0.0, max_s=60.0, hang_s=6.0, chunk_
     f = np.fft.fftshift(np.fft.fftfreq(nfft, 1.0 / rate))
     win = np.hanning(nfft).astype(np.float32)
     while total < max_s:
+        import devices as _DV
+        if _DV.yield_requested():                        # Überflug wartet: Aufgenommenes behalten, aufhören
+            break
         step = min_s if (total == 0 and min_s > 0) else chunk_s
         step = min(step, max_s - total)
         try:

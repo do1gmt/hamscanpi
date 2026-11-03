@@ -1443,6 +1443,17 @@
     if ($('ssNext')) renderNextPass();
     if (!document.activeElement || !document.activeElement.dataset || !document.activeElement.dataset.satprio) renderSatPrio();
   }
+  // Bedenkzeit nach dem Einschalten/Ändern der Satelliten (der Scheduler startet 60 s lang keinen Überflug)
+  let satArmUntil = 0, satArmTimer = null;
+  function satArmTick() {
+    const left = Math.round(satArmUntil - Date.now() / 1000);
+    $('satArm').hidden = !(left > 0 && satData && satData.enabled);
+    if (left > 0) {
+      $('satArmText').textContent = `Satelliten aktiv in 0:${String(left).padStart(2, '0')} – Auswahl jetzt anpassen, bis dahin wird kein Scan unterbrochen.`;
+      if (!satArmTimer) satArmTimer = setInterval(satArmTick, 1000);
+    } else if (satArmTimer) { clearInterval(satArmTimer); satArmTimer = null; }
+  }
+  $('satArmNow').addEventListener('click', async () => { try { await post('/api/sat/arm', {}); satArmUntil = 0; satArmTick(); } catch (e) { toast(e.message); } });
   // Überflugliste ein-/ausklappen (je Browser gemerkt)
   function satCollapse(set) {
     let c = false; try { c = localStorage.getItem('satCollapsed') === '1'; } catch (e) { }
@@ -1453,6 +1464,7 @@
   satCollapse();
   function renderSatPasses() {
     const d = satData; if (!d) return; const root = $('satPasses');
+    satArmUntil = d.arm_until || 0; satArmTick();
     const hint = $('satHint');
     const now = Date.now() / 1000;
     const future = (d.passes || []).filter(p => p.los > now);

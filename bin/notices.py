@@ -248,6 +248,12 @@ EN_RX = [
     (r"^(.+) liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht$", r"\1 is on the same drive as HamScanPi – a backup there does not help if the card fails"),
     (r"^kein Zielordner eingetragen$", "no target folder set"),
     (r"^Kein Internet seit (.+)$", r"No internet since \1"),
+    (r"^Hängender Scan beendet$", "Hanging scan ended"),
+    (r"^Der Scan gab (\d+) min kein Lebenszeichen \((.*)\) und wurde (beendet|nicht vollständig beendet); der nächste startet planmäßig\.$",
+     lambda m: f"The scan gave no sign of life for {m.group(1)} min ({m.group(2)}) and was "
+               f"{'ended' if m.group(3) == 'beendet' else 'not fully ended'}; the next one starts as planned."),
+    (r"^Kommt das öfter vor: Diagnose herunterladen \(System → Dienste\) und mitschicken\.$",
+     "If this happens often: download the diagnostics (System → Services) and send them along."),
     (r"^Notfall-Seite wurde neu gestartet$", "Rescue page was restarted"),
     (r"^Dauerwache ([\d.]+) MHz (\S+)( bis (.+))?$", lambda m: f"Continuous watch {m.group(1)} MHz {m.group(2)}" + (f" until {m.group(4)}" if m.group(4) else "")),
     (r"^Live läuft ohne Browser weiter .*$", "Live keeps running without a browser (decoders only). Scans pause meanwhile; satellite passes "

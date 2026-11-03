@@ -1525,6 +1525,9 @@ def main():
 
     args = parser.parse_args()
 
+    import devices as _DV
+    _DV.enable_yield()                                   # Überflug kann den Stick anfordern (scan_yield)
+    _DV.heartbeat()
     base_cfg = load_config()
     cfg = base_cfg
     print("HamScanPi Scanner")
@@ -1680,6 +1683,9 @@ def main():
             # PASS 1:
             # komplettes Band aufnehmen und Basisbandmuster lernen
             for center in centers:
+                import devices as _DV
+                _DV.check_yield()                        # Überflug wartet: Stick sofort freigeben
+                _DV.heartbeat()
 
                 dev_obj.tune(center)
 
@@ -2199,8 +2205,14 @@ def main():
 
 
 if __name__ == "__main__":
+    from devices import ScanYield
     try:
         main()
+    except ScanYield as e:
+        # sauber beendet, damit der Überflug den Stick bekommt – die bisherigen Treffer sind gespeichert
+        applog("INFO", "scanner", "scan_yielded", reason=str(e))
+        print(f"\nScan unterbrochen: {e}")
+        sys.exit(3)
     except KeyboardInterrupt:
         print("\nAbgebrochen.")
         sys.exit(130)

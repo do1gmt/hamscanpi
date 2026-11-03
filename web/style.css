@@ -603,3 +603,4 @@ body.practice .hit:not(.revealed) .px { display: none !important; }
 .live-dec-ev { padding: .15rem 0; border-bottom: 1px solid var(--line); word-break: break-word; }
 .live-sstv { max-width: 320px; width: 100%; image-rendering: auto; border-radius: 6px; margin-top: .3rem; }
 input[type=time] { color-scheme: dark; min-width: 7.5rem; }
+.sat-arm { background: var(--panel-2); border-left: 4px solid var(--amber); border-radius: 6px; padding: .45rem .6rem; margin: .4rem 0; font-size: .9rem; }

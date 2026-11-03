@@ -26,6 +26,41 @@ from scipy.signal import resample_poly
 BASE = Path(__file__).resolve().parent.parent
 RECDIR = BASE / "recordings"
 
+# Ein Überflug braucht den Stick: der Scheduler legt diese Datei an, der Scan prüft sie zwischen den Schritten und
+# in langen Aufnahmen und gibt den Stick binnen 1–2 s frei (statt erst nach SIGTERM und Aufräumen)
+YIELD_FILE = BASE / "data" / "scan_yield"
+HEARTBEAT = BASE / "data" / "scanner.heartbeat"
+
+
+class ScanYield(Exception):
+    """Scan bricht ab, weil ein Satellitenüberflug den Stick braucht."""
+
+
+_yield_active = [False]                    # nur im Scanner (Live, Überflüge, Prüfungen sind nicht betroffen)
+
+
+def enable_yield():
+    """Im Scanner beim Start aufrufen: Prüfung einschalten, eine liegengebliebene Anforderung entfernen."""
+    _yield_active[0] = True
+    YIELD_FILE.unlink(missing_ok=True)
+
+
+def yield_requested():
+    return _yield_active[0] and YIELD_FILE.exists()
+
+
+def check_yield():
+    if _yield_active[0] and YIELD_FILE.exists():
+        raise ScanYield("Stick für einen Satellitenüberflug freigegeben")
+
+
+def heartbeat():
+    """Lebenszeichen des Scanners (je Fenster/Schritt) – der Scheduler erkennt daran einen hängenden Scan."""
+    try:
+        HEARTBEAT.touch()
+    except OSError:
+        pass
+
 # Parameter, die je Gerät andere Vorgaben brauchen (band-"overrides" gewinnen)
 DEVICE_DEFAULTS = {
     "pmsdr": {
@@ -390,6 +425,8 @@ class RtlDevice:
         n = int(self.rate * seconds)
         cmd = [self.binary, "-f", str(int(center)), "-s", str(self.rate), "-n", str(n),
                "-d", str(self.index), "-p", str(self.ppm)]
+        check_yield()
+        heartbeat()
         ds = list(getattr(self, "ds_flags", None) or [])
         cmd += ds                                  # Kurzwelle: Direktabtastung (Tuner umgangen, keine Verstärkung)
         if self.gain and not ds:
@@ -548,6 +585,8 @@ class RtlHfDevice:
         w = 2.0 * np.pi * self.OFFSET / rate                  # Fenstermitte liegt OFFSET unter der Abstimmung
         try:
             while n_done < n_total:
+                if yield_requested():                 # Überflug wartet: das bisher Aufgenommene behalten
+                    break
                 r, _, _ = select.select([fd], [], [], 6.0)
                 if not r:
                     raise RuntimeError("Stick liefert keine Daten mehr (Kurzwelle)")
@@ -600,6 +639,7 @@ class RtlHfDevice:
             parts, total = [first], len(first) // 2
             end = T + slot_s + 0.3
             while t0 + total / rate < end:
+                check_yield()
                 b = p.stdout.read(block * 2)
                 if not b:
                     raise RuntimeError("rtl_sdr abgebrochen")

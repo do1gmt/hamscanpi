@@ -9,6 +9,20 @@ STATUSFILE="$BASE/data/runtime_status.json"
 
 mkdir -p "$LOG"
 
+# Zwei Sperren: cycle.lock für den ganzen Lauf (nie zwei Läufe gleichzeitig), scan.lock (= der Stick) nur, solange
+# der Scanner läuft – die Auswertung danach braucht den Stick nicht, ein Überflug kann dann schon aufnehmen
+exec 8>>"$BASE/data/cycle.lock"
+if ! flock -n 8; then
+    echo "Ein Scanlauf läuft bereits – nicht doppelt starten"
+    exit 75
+fi
+exec 9>>"$BASE/data/scan.lock"
+if ! flock -w 30 9; then
+    echo "Stick belegt (Überflug oder Live) – Scan übersprungen"
+    python3 "$BASE/bin/applog.py" WARN cycle stick_busy
+    exit 75
+fi
+
 START_ISO="$(date -u --iso-8601=seconds)"
 LOGT="$BASE/bin/applog.py"
 echo $$ > "$BASE/data/scan.pid"
@@ -97,6 +111,9 @@ WHERE id=$RUN_ID;
     if [ "$RC" -eq 0 ]; then
         write_status "done" "done" 100 "Scan fertig"
         python3 "$LOGT" INFO cycle run_done run_id="$RUN_ID" peaks="$PEAKS" rejected="$REJECTED" duration_s="$DUR"
+    elif [ "$CANCELLED" -eq 1 ] && [ "$RC" -eq 3 ]; then
+        write_status "cancelled" "cancelled" 100 "Für einen Satellitenüberflug unterbrochen – das Gefundene ist ausgewertet"
+        python3 "$LOGT" INFO cycle run_yielded run_id="$RUN_ID" duration_s="$DUR"
     elif [ "$CANCELLED" -eq 1 ]; then
         write_status "cancelled" "cancelled" 100 "Scan abgebrochen"
         python3 "$LOGT" WARN cycle run_cancelled run_id="$RUN_ID"
@@ -215,9 +232,17 @@ SCANNER_RC=$?
 kill "$PROGRESS_PID" 2>/dev/null || true
 wait "$PROGRESS_PID" 2>/dev/null || true
 
+# Stick freigeben: ab hier nur noch Auswertung
+flock -u 9
+exec 9>&-
+
 cat "$TMP"
 
-if [ "$SCANNER_RC" -ne 0 ]; then
+if [ "$SCANNER_RC" -eq 3 ]; then
+    # für einen Satellitenüberflug sauber unterbrochen: das bisher Gefundene trotzdem auswerten
+    CANCELLED=1
+    python3 "$LOGT" INFO cycle scan_yielded_for_pass run_id="$RUN_ID"
+elif [ "$SCANNER_RC" -ne 0 ]; then
     exit "$SCANNER_RC"
 fi
 
@@ -267,3 +292,4 @@ write_status "running" "report" 98 "Ergebnisse werden bereitgestellt"
 echo
 echo "Zyklus beendet:"
 date -u --iso-8601=seconds
+[ "${CANCELLED:-0}" -eq 1 ] && exit 3
