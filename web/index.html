@@ -271,12 +271,32 @@
       <div class="wf-scale"><span id="wfLo"></span><span id="wfMid"></span><span id="wfHi"></span></div>
     </div>
     <div class="hint" id="liveText">aus</div>
+    <div class="eibi-now" id="liveEibi" hidden></div>
     <div class="hint" id="liveSsbHint" hidden>SSB: Sprache unter 10 MHz meist <b>LSB</b>, darüber <b>USB</b> – FT8 und andere Digitalbetriebsarten immer USB. Klingt es wie „Gequake“, ist meist das Seitenband falsch.</div>
     <label class="check"><input type="checkbox" id="liveFallback"> einfacher Player (falls kein Ton kommt)</label>
     <audio id="liveAudio" controls hidden></audio>
   </section>
     </div>
     <div class="col">
+  <section class="panel" id="panel-eibi">
+    <h2>Kurzwelle – jetzt auf Sendung <small class="muted">EiBi</small> <small class="muted" id="eibiCount"></small></h2>
+    <div class="filter-grid eibi-filters">
+      <label class="field"><span>Band</span><select id="eibiBand"><option value="">alle Rundfunkbänder</option></select></label>
+      <label class="field"><span>Sprache</span><select id="eibiLang"><option value="">alle</option></select></label>
+      <label class="field"><span>Land</span><select id="eibiCountry"><option value="">alle</option></select></label>
+      <label class="field"><span>Station</span><input id="eibiQ" type="search" placeholder="z. B. Romania" autocomplete="off"></label>
+    </div>
+    <div class="table-wrap eibi-wrap"><table class="table eibi-table"><thead><tr><th>kHz</th><th>Station</th><th>Sprache</th><th>Ziel</th><th>Sender</th><th>bis (UTC)</th></tr></thead>
+      <tbody id="eibiList"><tr><td colspan="6" class="muted">–</td></tr></tbody></table></div>
+    <p class="hint" id="eibiStatus"></p>
+    <details class="eibi-more"><summary>Liste verwalten</summary>
+      <p class="hint">Sendeplan von <a href="http://www.eibispace.de/" target="_blank" rel="noopener">EiBi (Eike Bierwirth)</a>, frei nutzbar. HamScanPi holt ihn selbst – beim Saisonwechsel (Ende März / Ende Oktober) und alle 14 Tage; ohne Internet bleibt die zuletzt geholte Liste. Eine Zeile antippen stimmt Live in AM darauf ab.</p>
+      <div class="actions"><button type="button" class="btn" id="eibiRefresh">Jetzt neu holen</button>
+        <label class="btn" title="sked-….csv von eibispace.de">CSV hochladen<input type="file" id="eibiFile" accept=".csv,.txt" hidden></label>
+        <label class="btn" title="README.TXT von eibispace.de (Sprachen, Länder, Senderstandorte)">README hochladen<input type="file" id="eibiReadme" accept=".txt,.TXT" hidden></label></div>
+      <div class="save-note" id="eibiNote" aria-live="polite"></div>
+    </details>
+  </section>
   <section class="panel" id="panel-livedec">
     <h2>Dekodierungen <small class="muted" id="liveDecCount"></small></h2>
     <div class="live-dec-list" id="liveDecList"><div class="muted">Noch nichts dekodiert – den Dekoder unter den Live-Reglern wählen.</div></div>

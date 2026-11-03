@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.59 – 2026-11-03
+
+- **EiBi shortwave schedule in Live** (`bin/eibi.py`):
+  - Below the frequency (below 30 MHz): what EiBi lists on air right now within ±5 kHz – station, language,
+    target area, transmitter site with distance, end time; most likely first (exact frequency, target Europe,
+    nearest transmitter), further candidates below. Updated when the frequency changes and every minute.
+  - Card **"Shortwave – on air now"**: everything scheduled now in the broadcast bands 120 m … 11 m, filter by
+    band, language, country, station; tapping a row tunes Live to it in AM.
+  - Rules: times across midnight (day of the start counts), days of week (`Mo-Fr`, `1245`, `SaSu`, `Tu,Fr`),
+    single dates (`15Sep`), entries valid only between two dates (persistence 6), inactive entries skipped;
+    irregular/special days marked "irregular". Transmitter sites (`k`, `/D-k`, `/D`, country default) with
+    coordinates from README.TXT; target areas composed from prefix + area (CEu = Central Europe).
+  - Download: `sked-<current season>.csv`, else `sked-latest.csv`, else the previous season, plus README.TXT;
+    at season change and every 14 days (checked daily); failures never touch the existing list, logged once
+    (`eibi_download_failed`); manual upload of CSV and README; "Fetch now".
+- Self-test section 35 (fixtures in `devtools/fixtures/`). README: EiBi.
+
 ## 1.7.58 – 2026-11-03
 
 - **Share decodes on the network like WSJT-X** (`bin/wsjtx_udp.py`; Settings → Station → "Share on the network

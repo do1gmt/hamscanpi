@@ -2161,6 +2161,16 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/wsjtx-udp":
                 import wsjtx_udp as WX
                 return self.send_json({"config": WX.cfg(), "state": WX.state()})
+            if path == "/api/eibi/now":
+                import eibi as EI
+                return self.send_json({"items": EI.on_air(float(qs.get("khz", 0) or 0), float(qs.get("tol", 5) or 5))[:12],
+                                       "status": EI.status()})
+            if path == "/api/eibi/list":
+                import eibi as EI
+                d = EI.now_list(qs.get("band", ""), qs.get("lang", ""), qs.get("country", ""), qs.get("q", ""),
+                                qs.get("all", "") == "1")
+                d["status"] = EI.status()
+                return self.send_json(d)
             if path == "/api/pskreporter":
                 import pskreporter as PSK
                 st = load_settings()
@@ -2311,6 +2321,19 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.gate(path):
                 return
+            if path == "/api/eibi/upload":
+                import eibi as EI
+                qs = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+                length = int(self.headers.get("Content-Length") or 0)
+                if not 0 < length <= 20_000_000:
+                    raise ValueError("Datei fehlt oder ist zu groß")
+                n = EI.upload(self.rfile.read(length), readme=qs.get("readme", "") == "1")
+                APPLOG.log("INFO", "webapp", "eibi_uploaded", entries=n, readme=qs.get("readme", "") == "1")
+                return self.send_json({"ok": True, "count": n, "status": EI.status()})
+            if path == "/api/eibi/refresh":
+                import eibi as EI
+                st = EI.refresh(force=True)
+                return self.send_json({"ok": not st.get("error"), "status": EI.status()})
             if path == "/api/backup/upload":
                 # Sicherungsdatei stückweise auf die Karte (kann groß sein), dann prüfen
                 length = int(self.headers.get("Content-Length") or 0)
@@ -2692,6 +2715,17 @@ def main():
     threading.Thread(target=watch_loop, daemon=True).start()
     threading.Thread(target=watch_loop_live, daemon=True).start()
     threading.Thread(target=watchdog_loop, args=(port,), daemon=True).start()
+
+    def eibi_loop():                                   # EiBi-Sendeplan: nach dem Start und täglich prüfen, ob neu zu holen
+        time.sleep(90)
+        while True:
+            try:
+                import eibi as EI
+                EI.refresh()
+            except Exception as e:
+                APPLOG.log("WARN", "webapp", "eibi_refresh_failed", error=f"{type(e).__name__}: {e}")
+            time.sleep(86400)
+    threading.Thread(target=eibi_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()

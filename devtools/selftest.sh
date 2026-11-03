@@ -1044,5 +1044,39 @@ assert sorted(texts) == sorted(["CQ DL1ABC JO31", "DL1ABC OE3XYZ R-12", "CQ K1AB
 assert any(g["typ"] == 1 and g["dial"] == 14074000 for g in got)
 assert not WX._get().pending
 PY
+echo "== 35 EiBi-Sendeplan (Kurzwellen-Rundfunk)"
+(cd bin && python3 - <<'PY') && ok "Saison, Sendezeiten und Tage, Senderstandorte, Sortierung, Hochladen, ohne Internet bleibt die Liste" || bad "EiBi"
+import json, tempfile
+from datetime import datetime, date, timezone
+from pathlib import Path
+import eibi as E
+assert E.season(date(2026, 11, 3)) == "b26" and E.season(date(2026, 7, 1)) == "a26" and E.season(date(2027, 1, 10)) == "b26"
+assert E.season(date(2027, 3, 28)) == "a27" and E.season(date(2027, 3, 27)) == "b26" and E.previous_season("a27") == "b26"
+E.DIR = Path(tempfile.mkdtemp()); E.CSV = E.DIR / "sked.csv"; E.README = E.DIR / "README.TXT"; E.STATE = E.DIR / "state.json"
+E._home = lambda: (49.31, 10.625)                                   # JN59HH
+csv = open("../devtools/fixtures/eibi_sked_sample.csv", "rb").read()
+rd = open("../devtools/fixtures/eibi_readme_sample.txt", "rb").read()
+try:
+    E.upload(b"irgendwas"); raise SystemExit("falsche Datei angenommen")
+except ValueError:
+    pass
+assert E.upload(csv) == 8 and E.upload(rd, readme=True) == 8
+names = lambda t: [d["station"] for d in E.now_list(all_freqs=True, now=t)["items"]]
+assert names(datetime(2026, 11, 4, 0, 30, tzinfo=timezone.utc)) == ["Radio Channel 292", "China Radio Int."]   # Mi 00:30, über Mitternacht
+assert "China Radio Int." not in names(datetime(2026, 11, 8, 0, 30, tzinfo=timezone.utc))                    # So (Beginn Sa): nicht Mo-Fr
+assert "Radio Gloria" in names(datetime(2026, 11, 7, 13, 30, tzinfo=timezone.utc))                           # nur samstags
+assert "Aqui Andorra" in names(datetime(2026, 12, 7, 17, 10, tzinfo=timezone.utc))                           # nur am 7. Dezember
+assert "Aqui Andorra" not in names(datetime(2026, 12, 8, 17, 10, tzinfo=timezone.utc))
+oa = E.on_air(6070, 5, now=datetime(2026, 11, 7, 13, 30, tzinfo=timezone.utc))
+assert [d["station"] for d in oa][:2] == ["Radio Gloria", "Radio Channel 292"] or [d["station"] for d in oa][:2] == ["Radio Channel 292", "Radio Gloria"]
+top = oa[0]
+assert top["site_name"] == "Rohrbach" and 90 < top["distance_km"] < 130 and top["lang_name"] == "German", top
+k = [d for d in E.on_air(6005, 1, now=datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)) if "Kall" in d["station"]][0]
+assert k["site_name"] == "Kall-Krekel" and k["target_name"] == "Central Europe"
+# ohne Internet: Fehler wird vermerkt, die vorhandene Liste bleibt
+E._get = lambda url, timeout=25: (_ for _ in ()).throw(OSError("Network is unreachable"))
+st = E.refresh(force=True)
+assert st.get("error") and E.load()["count"] == 8 and E.status()["count"] == 8
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

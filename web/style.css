@@ -625,3 +625,8 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .st-detail-box h3 { margin: 1rem 0 .4rem; font-size: 1rem; }
 .st-detail-box tr.sel td { background: rgba(45, 212, 191, .12); }
 .st-recs td { font-size: .85rem; white-space: nowrap; } .st-recs td.mono { white-space: normal; }
+.eibi-now { margin: .35rem 0; padding: .45rem .6rem; border-left: 3px solid var(--accent, #2dd4bf); background: var(--panel-2); border-radius: 6px; font-size: .9rem; }
+.eibi-now .eibi-alt { font-size: .8rem; margin-top: .2rem; }
+.eibi-wrap { max-height: 420px; overflow-y: auto; } .eibi-row { cursor: pointer; } .eibi-row:hover td { background: rgba(45,212,191,.08); }
+.eibi-table td { font-size: .85rem; } .eibi-filters { margin-bottom: .4rem; }
+.eibi-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }

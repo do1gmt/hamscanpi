@@ -122,6 +122,17 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**Shortwave broadcast schedule (EiBi):** in Live, below the frequency, HamScanPi shows what the
+[EiBi](http://www.eibispace.de/) schedule (Eike Bierwirth, free to use) lists **on air right now** on that
+frequency (±5 kHz): station, language, target area, transmitter site with distance, until when – the most likely
+one first (exact frequency, target area Europe, nearest transmitter), others below. The card **"Shortwave – on air
+now"** lists everything currently scheduled in the broadcast bands (120 m … 11 m), filterable by band, language,
+country and station; tapping a row tunes Live to it in AM. The schedule (`sked-<season>.csv` plus `README.TXT`
+for languages, countries and transmitter sites) is fetched automatically at the season change (A = summer from
+the last Sunday in March, B = winter from the last Sunday in October) and every 14 days; if the new season's list
+is not published yet, the latest/previous one is used; without internet the last fetched list stays in use. Both
+files can also be uploaded by hand (Live → "Manage list").
+
 **Share decodes on the network (WSJT-X protocol):** under *Settings → Station → Share on the network* every FT8/FT4
 decode (scan and Live) is sent as UDP packets in the WSJT-X "UDP Server" format (heartbeat, status with dial
 frequency, decode) – **OpenHamClock**, GridTracker, JTAlert and other programs show the stations HamScanPi hears.

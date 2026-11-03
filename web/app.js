@@ -938,6 +938,7 @@
     $('liveText').textContent = st.text || (on ? 'läuft' : 'aus');
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
     if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
+    if (on) eibiNow();                                     // EiBi: nur neu fragen, wenn sich die Frequenz geändert hat
     if (on && st.scan && st.active_hz) $('liveText').textContent = st.text;
     if (on && st.mode && Date.now() - liveTouched > 2000 && document.activeElement !== $('liveMode') && $('liveMode').value !== st.mode) $('liveMode').value = st.mode;
     const lvl = Math.max(0, Math.min(100, (Number(st.level_db ?? -120) + 60) * 2));
@@ -1331,6 +1332,7 @@
       .forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
   }
   function showView(name) {
+    if (name === 'live') setTimeout(() => { eibiList(); eibiNow(true); }, 0);
     if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); loadInterf(); }, 0);   // nach dem Start des Skripts
     document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== name);
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
@@ -2080,6 +2082,69 @@
     try { await post('/api/services/restart', { unit: 'reboot' }); note($('svcNote'), 'Der Pi startet neu – die Seite lädt in 90 s neu'); setTimeout(() => location.reload(), 90000); }
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
   });
+
+  // ---------- EiBi: was sendet hier, was ist jetzt auf Sendung (bin/eibi.py) ----------
+  let eibiKhz = null, eibiT = null;
+  function eibiSite(x) { return x.site_name ? `${x.site_name}${x.site_country && x.site_country !== x.country ? ', ' + x.site_country : ''}${x.distance_km != null ? ` · ${x.distance_km.toLocaleString(I18N.locale)} km` : ''}` : (x.site_country || ''); }
+  async function eibiNow(force) {
+    const f = lf(), on = live.active || true;
+    if (!f || f >= 30e6) { $('liveEibi').hidden = true; eibiKhz = null; return; }
+    const khz = Math.round(f / 100) / 10;
+    if (!force && khz === eibiKhz) return;
+    eibiKhz = khz;
+    let d; try { d = await api(`/api/eibi/now?khz=${khz}&tol=5`); } catch (e) { return; }
+    if (!d.status.count) { $('liveEibi').hidden = false; $('liveEibi').innerHTML = '<span class="muted">EiBi-Sendeplan noch nicht geladen (Kurzwelle → „Liste verwalten“).</span>'; return; }
+    if (!d.items.length) { $('liveEibi').hidden = false; $('liveEibi').innerHTML = `<span class="muted">EiBi: auf ${khz.toLocaleString(I18N.locale)} kHz (±5) laut Plan gerade nichts.</span>`; return; }
+    const top = d.items[0], rest = d.items.slice(1, 6);
+    $('liveEibi').hidden = false;
+    $('liveEibi').innerHTML = `<b>EiBi ${top.khz} kHz:</b> <b class="no-i18n">${esc(top.station)}</b> · ${esc(top.lang_name || top.lang || '')} → ${esc(top.target_name || top.target)} · <span class="muted">${esc(eibiSite(top))} · ${EN ? 'until' : 'bis'} ${top.until} UTC${top.unsure ? (EN ? ' · irregular' : ' · unregelmäßig') : ''}</span>`
+      + (rest.length ? `<div class="muted eibi-alt">${EN ? 'also' : 'auch'}: ${rest.map(x => `${x.khz} <span class="no-i18n">${esc(x.station)}</span> (${esc(x.lang_name || x.lang || '')})`).join(' · ')}</div>` : '');
+  }
+  setInterval(() => { if (!$('liveEibi').hidden || lf() < 30e6) eibiNow(true); }, 60000);
+  $('liveFreq').addEventListener('input', () => { clearTimeout(eibiT); eibiT = setTimeout(() => eibiNow(), 600); });
+
+  let eibiTimer = null;
+  async function eibiList() {
+    const p = new URLSearchParams({ band: $('eibiBand').value, lang: $('eibiLang').value, country: $('eibiCountry').value, q: $('eibiQ').value.trim() });
+    let d; try { d = await api(`/api/eibi/list?${p}`); } catch (e) { return; }
+    const fill = (sel, items, all) => { const v = sel.value; sel.innerHTML = `<option value="">${all}</option>` + items.map(([c, n]) => `<option value="${esc(c)}">${esc(n)}</option>`).join(''); sel.value = v; };
+    if ($('eibiBand').options.length <= 1) $('eibiBand').innerHTML = '<option value="">alle Rundfunkbänder</option>' + d.bands.map(b => `<option>${b}</option>`).join('');
+    if (!$('eibiLang').value) fill($('eibiLang'), d.langs, 'alle');
+    if (!$('eibiCountry').value) fill($('eibiCountry'), d.countries, 'alle');
+    $('eibiCount').textContent = d.items.length ? `· ${d.items.length}` : '';
+    $('eibiList').innerHTML = d.items.slice(0, 400).map(x => `<tr class="eibi-row" data-khz="${x.khz}" title="antippen: Live in AM auf ${x.khz} kHz">`
+      + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)}${x.unsure ? ' <small class="muted">(unregelmäßig)</small>' : ''}</td>`
+      + `<td>${esc(x.lang_name || x.lang || '')}</td><td>${esc(x.target_name || x.target || '')}</td><td>${esc(eibiSite(x))}</td><td class="mono-num">${x.until}</td></tr>`).join('')
+      || `<tr><td colspan="6" class="muted">${d.status.count ? 'Gerade nichts für diese Auswahl.' : 'EiBi-Sendeplan noch nicht geladen – „Liste verwalten“ → „Jetzt neu holen“.'}</td></tr>`;
+    const S = d.status;
+    $('eibiStatus').textContent = S.count ? `Saison ${String(S.season || '').toUpperCase()} · ${S.count} Einträge · ${S.sites} Senderstandorte · geholt ${S.fetched ? new Date(S.fetched * 1000).toLocaleDateString(I18N.locale) : '–'}`
+      + (S.season && S.current_season && S.season !== S.current_season ? ` · noch Liste der vorigen Saison (${S.current_season.toUpperCase()} noch nicht erschienen)` : '')
+      + (S.error ? ` · letzter Versuch fehlgeschlagen` : '') : (S.error ? `Noch keine Liste – Herunterladen fehlgeschlagen: ${S.error}` : '');
+  }
+  ['eibiBand', 'eibiLang', 'eibiCountry'].forEach(id => $(id).addEventListener('change', eibiList));
+  $('eibiQ').addEventListener('input', () => { clearTimeout(eibiTimer); eibiTimer = setTimeout(eibiList, 300); });
+  $('eibiList').addEventListener('click', e => {
+    const r = e.target.closest('[data-khz]'); if (!r) return;
+    const f = Math.round(Number(r.dataset.khz) * 1000);
+    $('liveFreq').value = (f / 1e6).toFixed(4); $('liveMode').value = 'am';
+    liveStart({ freq_hz: f, mode: 'am', squelch_db: Number($('liveSquelch').value) });
+    eibiNow(true);
+  });
+  $('eibiRefresh').addEventListener('click', async () => {
+    note($('eibiNote'), 'hole …');
+    try { const d = await post('/api/eibi/refresh', {}); note($('eibiNote'), d.ok ? `✓ ${d.status.count} Einträge` : 'Fehler: ' + (d.status.error || '?'), !d.ok); eibiList(); eibiNow(true); }
+    catch (err) { note($('eibiNote'), 'Fehler: ' + err.message, true); }
+  });
+  async function eibiUpload(file, readme) {
+    try {
+      const r = await fetch(`/api/eibi/upload${readme ? '?readme=1' : ''}`, { method: 'POST', body: file, credentials: 'same-origin' });
+      const d = await r.json(); if (!r.ok || d.error) throw new Error(d.error || r.status);
+      note($('eibiNote'), `✓ ${d.count} Einträge`); eibiList(); eibiNow(true);
+    } catch (err) { note($('eibiNote'), 'Fehler: ' + err.message, true); }
+  }
+  $('eibiFile').addEventListener('change', e => e.target.files[0] && eibiUpload(e.target.files[0], false));
+  $('eibiReadme').addEventListener('change', e => e.target.files[0] && eibiUpload(e.target.files[0], true));
+  setInterval(() => { if (document.querySelector('section.view[data-view="live"]:not([hidden])')) eibiList(); }, 60000);
 
   // ---------- Netzwerk-Ausgabe im WSJT-X-Protokoll (bin/wsjtx_udp.py) ----------
   async function loadWx() {

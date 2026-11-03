@@ -1,0 +1,9 @@
+kHz:75;Time(UTC):93;Days:59;ITU:49;Station:201;Lng:49;Target:62;Remarks:135;P:35;Start:60;Stop:60;
+6000;0100-0300;;TUR;Voice of Turkey;TU;CAs;e;0;;
+6005;1000-1700;;D;Shortwave Service Kall;;CEu;k;6;3010;3011
+6005;1700-1800;7Dec;AND;Aqui Andorra;F;CEu;/D-k;6;3011;0712
+6070;0000-2400;;D;Radio Channel 292;D;CEu;r;1;;
+6070;1300-1400;Sa;D;Radio Gloria;D;Eu;r;1;;
+7220;1700-1800;;ROU;Radio Romania Int.;F;Eu;t;1;;
+7220;1800-1900;;ROU;Radio Romania Int.;R;Eu;t;1;;
+9420;2300-0100;Mo-Fr;CHN;China Radio Int.;M;FE;k;1;;
