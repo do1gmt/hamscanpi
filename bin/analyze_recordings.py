@@ -82,24 +82,26 @@ def demod_ssb(bb, rate, mode):
 
 
 def make_spectrum(z, rate, rf_center, rf_hit, outfile):
-    n = min(len(z), rate * 5)
+    """Spektrumbild ±6 kHz um den Treffer. z ist das Basisband mit dem Treffer bei 0 Hz (12 kHz Abtastrate) –
+    früher die volle Aufnahmerate: bei Stick-Aufnahmen (bis 2,4 MS/s) waren das 5 s mit Millionen Punkten in
+    doppelter Genauigkeit plus Kurve mit Millionen Punkten – 450–620 MB für ein einziges Bild."""
+    n = min(len(z), int(rate * 5))
+    z = z[:n].astype(np.complex64)
+    z = z - z.mean()
+    win = np.hanning(len(z)).astype(np.float32)
+    spec = np.fft.fftshift(np.fft.fft(z * win))
+    freq = np.fft.fftshift(np.fft.fftfreq(len(z), 1 / rate))
+    keep = np.abs(freq) <= 6000
+    spec, freq = spec[keep], freq[keep]
+    if len(spec) > 6000:                               # für die Kurve reichen ~6000 Punkte (Höchstwert je Gruppe)
+        k = len(spec) // 6000
+        m = (len(spec) // k) * k
+        mag = 20 * np.log10(np.maximum(np.abs(spec[:m]).reshape(-1, k).max(axis=1), 1e-12))
+        freq = freq[:m].reshape(-1, k).mean(axis=1)
+    else:
+        mag = 20 * np.log10(np.maximum(np.abs(spec), 1e-12))
 
-    z = z[:n]
-
-    win = np.hanning(len(z))
-    spec = np.fft.fftshift(
-        np.fft.fft(z * win)
-    )
-
-    freq = np.fft.fftshift(
-        np.fft.fftfreq(len(z), 1 / rate)
-    )
-
-    mag = 20 * np.log10(
-        np.maximum(np.abs(spec), 1e-12)
-    )
-
-    rf = (rf_center + freq) / 1e6
+    rf = (rf_hit + freq) / 1e6
 
     fig = plt.figure(figsize=(10, 5))
     ax = fig.add_subplot(111)
@@ -201,20 +203,21 @@ for peak_id, rf_hz, recpath, center_hz, band, mode, sideband in rows:
     cc = corrected_center(center_hz)
     offset = rf_hz - cc
     try:
-        if need_usb or need_lsb:
-            # Stückweise laden, auf die Trefferfrequenz mischen, auf 12 kHz – Speicher ~15 MB statt bis 500 MB
+        bb = None
+        if need_usb or need_lsb or not pngfile.exists():
+            # Stückweise laden, auf die Trefferfrequenz mischen, auf 12 kHz – Speicher ~15 MB statt bis 500 MB;
+            # dasselbe Basisband dient auch dem Spektrumbild (±6 kHz um den Treffer)
             bb, brate = IQ.baseband(src, offset, 12000, CONJ)
+        if need_usb or need_lsb:
             if need_usb:
                 usb, arate = demod_ssb(bb, brate, "USB")
                 sf.write(usbfile, usb, arate, subtype="PCM_16")
             if need_lsb:
                 lsb, arate = demod_ssb(bb, brate, "LSB")
                 sf.write(lsbfile, lsb, arate, subtype="PCM_16")
-            del bb
         if not pngfile.exists():
-            z, rate = IQ.head(src, 5.0, CONJ)               # das Spektrumbild braucht nur die ersten 5 s
-            make_spectrum(z, rate, cc, rf_hz, pngfile)
-            del z
+            make_spectrum(bb, brate, cc, rf_hz, pngfile)
+        del bb
     except MemoryError:
         print("ZU WENIG SPEICHER, übersprungen:", src.name)
         _skip(src, pngfile, "memory")

@@ -24,7 +24,7 @@ CHUNK_S = 2.0
 def _dc(path, rate, conj):
     """Gleichanteil über die ganze Datei (zweiter, billiger Durchgang in Stücken)."""
     s, n = np.zeros(2, dtype=np.float64), 0
-    for blk in sf.blocks(str(path), blocksize=int(rate * CHUNK_S), dtype="float32", always_2d=True):
+    for blk in sf.blocks(str(path), blocksize=_block(rate), dtype="float32", always_2d=True):
         s += blk[:, :2].sum(axis=0, dtype=np.float64)
         n += len(blk)
     if not n:
@@ -40,6 +40,12 @@ def info(path):
     return i.samplerate, i.frames
 
 
+def _block(rate):
+    """Blockgröße: 2 s, aber höchstens 256 k Abtastwerte – bei Stick-Aufnahmen (1–2,4 MS/s) wären 2 s sonst
+    Blöcke von 50–100 MB samt Zwischenergebnissen (gemessen: 200 MB mehr für eine 1-MS/s-Aufnahme)."""
+    return int(min(rate * CHUNK_S, 262144))
+
+
 def baseband(path, offset_hz, out_rate=12000, conj=False):
     """Aufnahme -> komplexes Basisband bei out_rate (complex64), offset_hz (Ablage der Trefferfrequenz von der
     Aufnahmemitte) liegt danach bei 0 Hz. out_rate >= Aufnahmerate: nur mischen, nicht herunterrechnen."""
@@ -51,7 +57,7 @@ def baseband(path, offset_hz, out_rate=12000, conj=False):
     pad = 20 * down
     w = 2.0 * np.pi * float(offset_hz) / rate
     out, tail, n0 = [], None, 0
-    for blk in sf.blocks(str(path), blocksize=int(rate * CHUNK_S), dtype="float32", always_2d=True):
+    for blk in sf.blocks(str(path), blocksize=_block(rate), dtype="float32", always_2d=True):
         q = -blk[:, 1] if conj else blk[:, 1]
         z = (blk[:, 0] + 1j * q).astype(np.complex64) - np.complex64(dc)
         n = np.arange(n0, n0 + len(z), dtype=np.float64)

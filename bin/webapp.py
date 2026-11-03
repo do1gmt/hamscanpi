@@ -1689,6 +1689,25 @@ def _watch_start(w):
 STALL_FILE = BASE / "log" / "webapp_stall.txt"
 
 
+def trim_loop():
+    """Freigegebenen Speicher ans System zurückgeben: Python/glibc behalten große freigegebene Bereiche (Wasserfall,
+    Dekoder-Puffer nach dem Live-Empfang) sonst im Prozess – das Dashboard blieb nach Live bei 250+ MB stehen.
+    Alle 5 min gc.collect() + malloc_trim(0)."""
+    import ctypes
+    import gc
+    try:
+        libc = ctypes.CDLL("libc.so.6")
+    except OSError:
+        return
+    while True:
+        time.sleep(300)
+        try:
+            gc.collect()
+            libc.malloc_trim(0)
+        except Exception:
+            pass
+
+
 def stall_loop(port, first_wait=60, limit=15, every=10, rounds=None):
     """Aussetzer des Dashboards festhalten: alle 10 s eine Anfrage an sich selbst. Davor wird faulthandler scharf
     gemacht – er läuft ohne Python-Sperre (GIL) in eigenem C-Faden: antwortet der Server 15 s lang nicht (egal ob
@@ -2020,6 +2039,17 @@ def live_stop(keep_watch=False):
             _live.stop()
             _live = None
             APPLOG.log("INFO", "live", "stop")
+
+    def _trim():                                       # Puffer des Live-Empfangs gleich zurückgeben
+        time.sleep(5)
+        try:
+            import ctypes
+            import gc
+            gc.collect()
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+    threading.Thread(target=_trim, daemon=True).start()
     return {"active": False}
 
 
@@ -2872,6 +2902,7 @@ def main():
     threading.Thread(target=watch_loop_live, daemon=True).start()
     threading.Thread(target=watchdog_loop, args=(port,), daemon=True).start()
     threading.Thread(target=stall_loop, args=(port,), daemon=True).start()
+    threading.Thread(target=trim_loop, daemon=True).start()
 
     def eibi_loop():                                   # EiBi-Sendeplan: nach dem Start und täglich prüfen, ob neu zu holen
         time.sleep(90)

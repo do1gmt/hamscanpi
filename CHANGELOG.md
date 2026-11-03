@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.70 – 2026-11-03
+
+- **Memory:** the analysis after a scan (`analyze_recordings.py`) needed 450–620 MB again and again (system history):
+  the spectrum picture was computed from the first 5 s at the full recording rate – with stick recordings up to
+  millions of points in double precision, plus a curve with millions of points. It now uses the 12-kHz baseband
+  (hit at 0 Hz) that is computed anyway, keeps only ±6 kHz and draws ~6000 points. `iqload` reads at most 256 k
+  samples per block (2 s at 1 MS/s were 50–100 MB blocks). Measured with a 1-MS/s recording: 679 → 154 MB
+  (127 MB of it Python/matplotlib itself).
+- The web server returns freed memory to the system (gc + `malloc_trim`) every 5 min and 5 s after Live stops;
+  after Live it used to stay at 250+ MB.
+- Self-test section 42.
+
 ## 1.7.69 – 2026-11-03
 
 - **Dashboard stalls are recorded:** the web server asks itself every 10 s; before that `faulthandler` is armed

@@ -1293,5 +1293,28 @@ txt = W.STALL_FILE.read_text()
 assert "blockiert_hier" in txt and "do_GET" in txt, txt[-800:]
 assert logs and logs[0][0][2] == "webapp_stall" and logs[0][1]["dumped"]
 PY
+echo "== 42 Spektrumbild einer schnellen Stick-Aufnahme (1 MS/s): Speicher"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Spektrum aus dem 12-kHz-Basisband, Speicher begrenzt" || bad "Spektrum-Speicher"
+import resource, tempfile
+import numpy as np, soundfile as sf
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import iqload as IQ
+r, n = 1024000, 1024000 * 8
+t = np.arange(n, dtype=np.float32) / r
+noise = 0.01 * np.random.default_rng(1).standard_normal(n).astype(np.float32)
+d = tempfile.mkdtemp()
+sf.write(f"{d}/rec.wav", np.stack([noise + 0.2 * np.cos(2 * np.pi * 150000 * t), noise + 0.2 * np.sin(2 * np.pi * 150000 * t)], 1).astype(np.float32), r, subtype="FLOAT")
+del t, noise
+base = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+src = open("analyze_recordings.py", encoding="utf-8").read()
+g = {}
+exec("import numpy as np\nimport matplotlib.pyplot as plt\n" + src[src.index("def make_spectrum"):src.index("db = sqlite3.connect(DB)")], g)
+bb, br = IQ.baseband(f"{d}/rec.wav", 150000, 12000, False)
+assert abs(np.fft.fftfreq(len(bb), 1 / br)[np.argmax(np.abs(np.fft.fft(bb)))]) < 1         # Treffer bei 0 Hz
+g["make_spectrum"](bb, br, 145e6, 145.15e6, f"{d}/spec.png")
+peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+assert peak - base < 120, (base, peak)
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi
