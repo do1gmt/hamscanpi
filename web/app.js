@@ -2149,14 +2149,16 @@
   setInterval(() => { if (!$('liveEibi').hidden || lf() < 30e6) eibiNow(true); }, 60000);
   $('liveFreq').addEventListener('input', () => { clearTimeout(eibiT); eibiT = setTimeout(() => eibiNow(), 600); });
 
-  let eibiTimer = null;
+  let eibiTimer = null, eibiSeq = 0;
   async function eibiList() {
     const p = new URLSearchParams({ band: $('eibiBand').value, lang: $('eibiLang').value, country: $('eibiCountry').value, q: $('eibiQ').value.trim() });
+    const my = ++eibiSeq;                              // nur die Antwort auf die jüngste Anfrage zeigen
     let d; try { d = await api(`/api/eibi/list?${p}`); } catch (e) { return; }
+    if (my !== eibiSeq) return;                        // eine spätere Anfrage (Tippen, anderer Filter) ist schon unterwegs
     const fill = (sel, items, all) => { const v = sel.value; sel.innerHTML = `<option value="">${all}</option>` + items.map(([c, n]) => `<option value="${esc(c)}">${esc(n)}</option>`).join(''); sel.value = v; };
     if ($('eibiBand').options.length <= 1) $('eibiBand').innerHTML = '<option value="">alle Rundfunkbänder</option>' + d.bands.map(b => `<option>${b}</option>`).join('');
-    if (!$('eibiLang').value) fill($('eibiLang'), d.langs, 'alle');
-    if (!$('eibiCountry').value) fill($('eibiCountry'), d.countries, 'alle');
+    fill($('eibiLang'), d.langs, EN ? 'all' : 'alle');          // Auswahl bleibt erhalten (alle laufenden Sprachen/Länder)
+    fill($('eibiCountry'), d.countries, EN ? 'all' : 'alle');
     $('eibiCount').textContent = d.items.length ? `· ${d.items.length}` : '';
     $('eibiList').innerHTML = d.items.slice(0, 400).map(x => `<tr class="eibi-row" data-khz="${x.khz}" title="antippen: Live in AM auf ${x.khz} kHz">`
       + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)}${x.unsure ? ' <small class="muted">(unregelmäßig)</small>' : ''}</td>`

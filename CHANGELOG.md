@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.68 – 2026-11-03
+
+- Fix: EiBi card in Live – filters and search could appear not to work: answers to earlier requests (e.g. the
+  minute refresh without the search text, or the full list while typing) arrived after the filtered one and
+  overwrote it. Only the answer to the latest request is shown now.
+- The list of broadcasts on air is computed once per minute; filters and search then run over it (fast on the Pi
+  even with ~9000 EiBi entries).
+- Search also finds country, language, transmitter site, target area and frequency ("6070", "607"); several
+  words must all match ("rohrbach gloria"). Language and country lists always show all languages/countries on air.
+- Self-test section 35 extended.
+
 ## 1.7.67 – 2026-11-03
 
 - Live: the "Decodes" card is at the top of the right column again, the EiBi card "Shortwave – on air now" below it

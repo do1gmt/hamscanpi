@@ -416,23 +416,22 @@ def on_air(khz, tol=5.0, now=None):
     return out
 
 
-def now_list(band="", lang="", country="", q="", all_freqs=False, now=None, limit=2000):
-    now = now or datetime.now(timezone.utc)
+_active_cache = {}
+
+
+def _active_all(now, all_freqs):
+    """Alle jetzt laufenden Sendungen (aufbereitet) – je Minute einmal berechnet, die Filter laufen dann nur noch über
+    diese Liste. Auf dem Pi dauert das Durchgehen aller ~9000 Einträge sonst bei jedem Tastendruck in der Suche."""
     data = load()
+    key = (now.strftime("%Y%m%d%H%M"), all_freqs, _cache.get("key"))
+    hit = _active_cache.get("v")
+    if hit and hit[0] == key:
+        return hit[1]
     ref, home = data["ref"], _home()
-    qq = q.strip().lower()
     out = []
     for r in data["rows"]:
         b = band_of(r["khz"])
         if not all_freqs and not b:
-            continue
-        if band and b != band:
-            continue
-        if lang and r["lang"] != lang:
-            continue
-        if country and r["itu"] != country:
-            continue
-        if qq and qq not in r["station"].lower():
             continue
         ok, unsure = active(r, now)
         if not ok:
@@ -440,11 +439,29 @@ def now_list(band="", lang="", country="", q="", all_freqs=False, now=None, limi
         d = _describe(r, ref, home, now)
         d["unsure"] = unsure
         out.append(d)
-        if len(out) >= limit:
-            break
     out.sort(key=lambda d: d["khz"])
-    langs = sorted({(d["lang"], d["lang_name"]) for d in out if d["lang"]}, key=lambda x: x[1])
-    ctrs = sorted({(d["itu"], d["country"]) for d in out if d["itu"]}, key=lambda x: x[1])
+    _active_cache["v"] = (key, out)
+    return out
+
+
+def _matches(d, qq):
+    """Suche: Station, Land, Sprache, Senderstandort, Zielgebiet oder Frequenz (Anfang, z. B. „607“ für 6070 kHz)."""
+    if qq.replace(",", ".").replace(".", "").isdigit():
+        return f"{d['khz']:g}".startswith(qq.replace(",", "."))
+    hay = " ".join(str(d.get(k) or "") for k in ("station", "country", "lang_name", "lang", "site_name", "site_country",
+                                                 "target_name", "itu")).lower()
+    return all(w in hay for w in qq.split())
+
+
+def now_list(band="", lang="", country="", q="", all_freqs=False, now=None, limit=2000):
+    now = now or datetime.now(timezone.utc)
+    qq = q.strip().lower()
+    base = _active_all(now, all_freqs)
+    out = [d for d in base
+           if (not band or d["band"] == band) and (not lang or d["lang"] == lang)
+           and (not country or d["itu"] == country) and (not qq or _matches(d, qq))][:limit]
+    langs = sorted({(d["lang"], d["lang_name"] or d["lang"]) for d in base if d["lang"]}, key=lambda x: str(x[1]))
+    ctrs = sorted({(d["itu"], d["country"] or d["itu"]) for d in base if d["itu"]}, key=lambda x: str(x[1]))
     return {"items": out, "langs": langs, "countries": ctrs, "bands": [b[0] for b in BC_BANDS]}
 
 

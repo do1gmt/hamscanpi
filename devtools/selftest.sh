@@ -1073,6 +1073,11 @@ top = oa[0]
 assert top["site_name"] == "Rohrbach" and 90 < top["distance_km"] < 130 and top["lang_name"] == "German", top
 k = [d for d in E.on_air(6005, 1, now=datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)) if "Kall" in d["station"]][0]
 assert k["site_name"] == "Kall-Krekel" and k["target_name"] == "Central Europe"
+t = datetime(2026, 11, 7, 13, 30, tzinfo=timezone.utc)
+assert [d["station"] for d in E.now_list(q="6070", now=t)["items"]] == ["Radio Channel 292", "Radio Gloria"]   # Frequenz
+assert {d["station"] for d in E.now_list(q="german", now=t)["items"]} >= {"Radio Channel 292", "Radio Gloria"}  # Sprache
+assert [d["station"] for d in E.now_list(q="rohrbach gloria", now=t)["items"]] == ["Radio Gloria"]             # Standort + Name
+assert [d["station"] for d in E.now_list(lang="D", band="49m", now=t)["items"]] == ["Radio Channel 292", "Radio Gloria"]
 # ohne Internet: Fehler wird vermerkt, die vorhandene Liste bleibt
 E._get = lambda url, timeout=25: (_ for _ in ()).throw(OSError("Network is unreachable"))
 st = E.refresh(force=True)
