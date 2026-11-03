@@ -1443,7 +1443,7 @@
     $('liveRec').disabled = !d;
     if (!d) { $('liveDecNote').textContent = ''; return; }
     if (document.activeElement !== $('liveDecKind')) $('liveDecKind').value = d.kind;
-    const act = { ft8: 'FT8', ft4: 'FT4', packet: 'APRS/Packet', pocsag: 'POCSAG', cw: 'CW', rtty: 'RTTY', sstv: 'SSTV' }[d.active];
+    const act = { ft8: 'FT8', ft4: 'FT4', packet: 'APRS/Packet', pocsag: 'POCSAG', cw: 'CW', rtty: 'RTTY', sstv: 'SSTV', navtex: 'NAVTEX', wefax: EN ? 'Weather fax' : 'Wetterfax' }[d.active];
     $('liveDecNote').textContent = d.note || (act ? act + ' läuft' : (d.kind === 'auto' ? 'kein Dekoder für diese Frequenz/Betriebsart' : ''));
     $('liveRec').textContent = d.recording ? `■ Mitschnitt beenden (${d.rec_s} s)` : '● Mitschneiden';
     $('liveRec').classList.toggle('btn-danger', !!d.recording);

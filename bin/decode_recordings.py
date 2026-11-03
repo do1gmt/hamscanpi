@@ -1085,10 +1085,11 @@ def find_rtty_pair(
                 f1 - f2
             )
 
+            # übliche Ablagen: 170 Hz (Amateurfunk, NAVTEX), 425/450 Hz (DWD-Wetterfunk), 850 Hz (Seefunk/Wetter)
             if (
-                145 <=
-                shift <=
-                205
+                145 <= shift <= 205
+                or 400 <= shift <= 500
+                or 800 <= shift <= 900
             ):
                 score = (
                     s1 + s2

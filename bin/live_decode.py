@@ -33,7 +33,13 @@ import numpy as np
 BASE = Path(__file__).resolve().parent.parent
 LIVE_DIR = BASE / "recordings" / "live"
 RATE = 24000
-KINDS = ("auto", "ft8", "ft4", "packet", "pocsag", "cw", "rtty", "sstv", "off")
+KINDS = ("auto", "ft8", "ft4", "packet", "pocsag", "cw", "rtty", "sstv", "navtex", "wefax", "off")
+# Betriebsfunk mit festen Frequenzen (Dial in USB, ±2 kHz): automatisch der passende Dekoder
+UTILITY = [
+    ("navtex", (490_000, 518_000, 4_209_500)),
+    ("wefax", (3_855_000, 7_880_000, 13_882_500, 2_618_500, 4_610_000, 8_040_000, 11_086_500)),    # DWD, Northwood
+    ("rtty", (147_300, 4_583_000, 7_646_000, 10_100_800, 11_039_000, 14_467_300)),               # DWD-Wetterfunk
+]
 REPORTS = BASE / "reports"
 DB = BASE / "data" / "scanner.db"
 REC_MAX_S = 600
@@ -74,7 +80,18 @@ def band_of(freq_hz):
     return "Live"
 
 
+def utility_kind(freq_hz):
+    for kind, freqs in UTILITY:
+        for f in freqs:
+            if abs(freq_hz - f) <= 2500:
+                return kind
+    return None
+
+
 def auto_kind(freq_hz, mode):
+    u = utility_kind(freq_hz) if mode in ("usb", "lsb") else None
+    if u:
+        return u
     m = _segment_mode(int(freq_hz))
     if m in ("ft8", "ft4") and mode in ("usb", "lsb"):
         return m
@@ -247,6 +264,13 @@ class LiveDecoders:
             self.note = "RTTY: alle 8 s wird der letzte Abschnitt dekodiert (45,45/50/75 Bd)"
         elif kind == "sstv":
             self.note = "SSTV: wartet auf ein Bild – es baut sich alle 15 s weiter auf"
+        elif kind == "navtex":
+            self.note = "NAVTEX: alle 10 s werden die letzten 60 s dekodiert (100 Bd, 170 Hz) – fertige Meldungen erscheinen einzeln"
+            self._nav = {"seen": set(), "seq": None}
+        elif kind == "wefax":
+            import wefax as WF
+            self._fax = {"dec": WF.Decoder(), "img": None, "seq": None, "saved": 0.0, "acc": []}
+            self.note = "Wetterfax: wartet auf den Startton bzw. zeichnet sofort – das Bild wächst mit"
         if kind in ("packet", "pocsag"):
             self._start_mm(kind)
         elif kind in ("ft8", "ft4"):
@@ -372,8 +396,18 @@ class LiveDecoders:
 
     # ---------------- CW / RTTY (Abschnitte) und SSTV (wachsendes Bild)
     def _block_feed(self, t, x):
+        if self.active == "wefax":
+            return self._fax_feed(t, x)
         self._blk.append(x)
         self._blk_n += len(x)
+        if self.active == "navtex":
+            while self._blk_n > RATE * 60 and len(self._blk) > 1:
+                self._blk_n -= len(self._blk.pop(0))
+            if t - getattr(self, "_nav_last", 0) >= 10 and not self._busy and self._blk_n >= RATE * 10:
+                self._nav_last = t
+                self._busy = True
+                threading.Thread(target=self._navtex_run, args=(np.concatenate(self._blk), t), daemon=True).start()
+            return
         if self.active == "sstv":
             while self._blk_n > RATE * 150 and len(self._blk) > 1:
                 self._blk_n -= len(self._blk.pop(0))
@@ -444,6 +478,79 @@ class LiveDecoders:
             self.note = f"{kind.upper()}-Dekoder: {type(e).__name__}: {e}"
         finally:
             self._busy = False
+
+    def _navtex_run(self, a, t):
+        """Die letzten 60 s dekodieren: der laufende Text als ein Eintrag (wird aufgefrischt), jede vollständige
+        Meldung (ZCZC … NNNN) als eigener Eintrag."""
+        try:
+            from scipy.signal import resample_poly, hilbert
+            import navtex as NX
+            y = resample_poly(a.astype(np.float64), 1, 3)
+            r = 8000
+            z = hilbert(y) * np.exp(-2j * np.pi * 1500.0 * np.arange(len(y)) / r)
+            res = NX.decode(z, r)
+            if not res or not res["text"]:
+                return
+            st = self._nav
+            for m in res["messages"]:
+                key = (m["header"], m["body"][:80])
+                if key in st["seen"]:
+                    continue
+                st["seen"].add(key)
+                subj = m.get("subject_de") or m.get("subject_name") or ""
+                self._add("NAVTEX", m["body"], detail=f"{m['header']} · {subj}" + (f" · Sender {m['station']}" if m.get("station") else ""))
+            tail = res["text"][-600:]
+            ev = None
+            with self.lock:
+                if st["seq"] is not None:
+                    ev = next((e for e in self.events if e["seq"] == st["seq"]), None)
+                if ev:
+                    ev.update(text=tail, detail=f"laufend · Qualität {res['quality']} %", t=time.time())
+                    self.seq += 1
+            if not ev:
+                self._add("NAVTEX", tail, detail=f"laufend · Qualität {res['quality']} %")
+                st["seq"] = self.seq
+        except Exception as e:
+            self.note = f"NAVTEX-Dekoder: {type(e).__name__}: {e}"
+        finally:
+            self._busy = False
+
+    def _fax_feed(self, t, x):
+        """Wetterfax läuft fortlaufend mit (0,5-s-Stücke, 8 kHz); alle 10 s das Bild speichern und den Eintrag
+        auffrischen, ab einem Startton ein neues Bild."""
+        from scipy.signal import resample_poly
+        F = self._fax
+        F["acc"].append(x)
+        if sum(len(v) for v in F["acc"]) < RATE // 2:
+            return
+        a = np.concatenate(F["acc"]).astype(np.float64)
+        F["acc"] = []
+        evs = F["dec"].feed(resample_poly(a, 1, 3).astype(np.float32))
+        if "start" in evs:
+            F["img"], F["seq"] = None, None
+        if (t - F["saved"] >= 10 or "stop" in evs) and F["dec"].lines:
+            F["saved"] = t
+            try:
+                import wefax as WF
+                if F["img"] is None:
+                    F["img"] = f"live_wefax_{time.strftime('%Y%m%d_%H%M%S', time.gmtime(t))}.png"
+                REPORTS.mkdir(parents=True, exist_ok=True)
+                WF.save_png(F["dec"].image(), REPORTS / F["img"])
+                n = len(F["dec"].lines)
+                text = f"Wetterfax · {n} Zeilen ({n // 2 // 60} min {n // 2 % 60} s)" + (" · fertig" if "stop" in evs else "")
+                img = f"/files/{F['img']}?v={int(t)}"
+                ev = None
+                with self.lock:
+                    if F["seq"] is not None:
+                        ev = next((e for e in self.events if e["seq"] == F["seq"]), None)
+                    if ev:
+                        ev.update(text=text, img=img, t=time.time())
+                        self.seq += 1
+                if not ev:
+                    self._add("WEFAX", text, img=img)
+                    F["seq"] = self.seq
+            except Exception as e:
+                self.note = f"Wetterfax: {type(e).__name__}: {e}"
 
     def _sstv_run(self, a, t):
         try:

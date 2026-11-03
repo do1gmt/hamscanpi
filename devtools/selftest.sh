@@ -1078,5 +1078,72 @@ E._get = lambda url, timeout=25: (_ for _ in ()).throw(OSError("Network is unrea
 st = E.refresh(force=True)
 assert st.get("error") and E.load()["count"] == 8 and E.status()["count"] == 8
 PY
+echo "== 36 Betriebsfunk: NAVTEX, Wetterfax, Wetter-RTTY (450 Hz)"
+(cd bin && timeout 400 python3 - <<'PY') && ok "NAVTEX mit Fehlerschutz, Wetterfax mit Phasing, DWD-RTTY 50 Bd/450 Hz, automatische Wahl nach Frequenz" || bad "Betriebsfunk"
+import tempfile, time
+from pathlib import Path
+import numpy as np
+from scipy.signal import resample_poly, hilbert
+import live_decode as LD, navtex as NX, wefax as WF, decode_recordings as DR
+R = 24000
+def fsk(bits, baud, f0, f1, rate=R):
+    sps = rate / baud; ph = 0.0; out = []
+    for k, b in enumerate(bits):
+        n = int(round((k + 1) * sps)) - int(round(k * sps)); f = f1 if b else f0
+        w = ph + 2 * np.pi * f / rate * np.arange(1, n + 1); ph = w[-1]; out.append(np.sin(w))
+    return np.concatenate(out) * 0.4
+def live(kind, a, freq):
+    LD.REPORTS = Path(tempfile.mkdtemp())
+    d = LD.LiveDecoders(); d.running = False; d.freq_hz = freq; d.mode = "usb"; d._switch(kind)
+    tt = 1_800_000_000.0
+    for i in range(0, len(a), 2400):
+        tt += 0.1; d._block_feed(tt, a[i:i + 2400].astype(np.float32))
+        while d._busy:
+            time.sleep(0.02)
+    return d
+assert LD.auto_kind(518000, "usb") == "navtex" and LD.auto_kind(7878100, "usb") == "wefax" and LD.auto_kind(10099300, "usb") == "rtty"
+msg = "ZCZC SE42\nGERMAN BIGHT WIND SW 5 TO 6, LATER 7.\nNNNN\n"
+codes = NX.fec_stream(NX.encode(msg))
+bad = list(codes)
+for i in range(1, len(bad), 26):
+    bad[i] = 0x00                                                    # jede 13. Erstsendung zerstört
+assert "GERMAN BIGHT WIND SW 5 TO 6, LATER 7." in NX.to_text(NX.defec(bad))
+a = fsk(NX.bits_of(codes), 100, 1000, 1170)
+a = np.concatenate([np.zeros(R * 2), a, np.zeros(R * 40)]) + 0.02 * np.random.default_rng(1).standard_normal(len(a) + R * 42)
+d = live("navtex", a, 518000)
+ev = [e for e in d.status()["events"] if e["type"] == "NAVTEX" and "laufend" not in (e.get("detail") or "")]
+assert ev and "GERMAN BIGHT" in ev[0]["text"] and "Wettervorhersage" in ev[0]["detail"], d.status()["events"]
+assert NX.decode((0.02 * np.random.default_rng(5).standard_normal(8000 * 30)).astype(complex), 8000) is None
+H, W = 120, 600
+y, x = np.mgrid[0:H, 0:W]
+img = ((x // 40 + y // 20) % 2).astype(float) * 0.8 + 0.1
+for off in (0.137, 0.41):
+    f = WF.synth(img)
+    f = np.concatenate([np.zeros(int(8000 * off), np.float32), f]) + 0.05 * np.random.default_rng(2).standard_normal(len(f) + int(8000 * off)).astype(np.float32)
+    dd = WF.Decoder(); evs = []
+    for i in range(0, len(f), 800):
+        evs += [e for e in dd.feed(f[i:i + 800]) if e != "line"]
+    im = dd.image(); ref = np.stack([np.interp(np.linspace(0, W - 1, WF.WIDTH), np.arange(W), r) * 255 for r in img])
+    n = min(len(im), len(ref))
+    assert evs == ["start", "stop"] and abs(len(im) - H) <= 4 and np.corrcoef(im[:n].astype(float).ravel(), ref[:n].ravel())[0, 1] > 0.85, (evs, im.shape)
+d = live("wefax", resample_poly(WF.synth(np.tile(np.linspace(0, 1, 300), (60, 1))).astype(np.float64), 3, 1), 7880000)
+assert any(e["type"] == "WEFAX" and e.get("img") for e in d.status()["events"]) and list(LD.REPORTS.glob("live_wefax_*.png"))
+inv = {v: k for k, v in DR.ITA2_LETTERS.items() if v}
+bits = [1] * 40
+for ch in "RYRYRY DWD SEEWETTERBERICHT DEUTSCHE BUCHT ":
+    c = inv[ch]; bits += [0] + [(c >> b) & 1 for b in range(5)] + [1, 1]
+bits += [1] * 20
+a = np.concatenate([fsk(bits, 50, 1725, 1275), np.zeros(R * 9)]) + 0.01 * np.random.default_rng(3).standard_normal(len(bits) * 480 + R * 9 + 100)[:len(bits) * 480 + R * 9]
+d = LD.LiveDecoders(); d.set_kind("rtty")
+pcm = (a * 32767).astype("<i2")
+for i in range(0, len(pcm), 480):
+    d.feed(pcm[i:i + 480].tobytes(), 10_099_300, "usb"); time.sleep(0.0003)
+for _ in range(60):
+    time.sleep(0.2)
+    if d.status()["events"] and not d._busy:
+        break
+txt = " ".join(e["text"] for e in d.status()["events"]); d.stop()
+assert "SEEWETTERBERICHT" in txt, txt
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

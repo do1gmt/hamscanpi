@@ -630,3 +630,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .eibi-wrap { max-height: 420px; overflow-y: auto; } .eibi-row { cursor: pointer; } .eibi-row:hover td { background: rgba(45,212,191,.08); }
 .eibi-table td { font-size: .85rem; } .eibi-filters { margin-bottom: .4rem; }
 .eibi-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }
+.live-dec-list .no-i18n { white-space: pre-wrap; }

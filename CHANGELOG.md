@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.60 – 2026-11-03
+
+- **NAVTEX in Live** (`bin/navtex.py`): SITOR-B, 100 Bd, 170 Hz shift; character table CCIR 476 (ITU-R M.476),
+  frame, bit order and polarity found automatically, FEC (every character twice, copy 5 places later) – a damaged
+  first transmission is replaced by its copy; noise between messages is suppressed. Every 10 s the last 60 s are
+  decoded (running text, updated in place); complete messages `ZCZC B1B2B3B4 … NNNN` appear separately with station,
+  subject (weather forecast, navigational warning, SAR …) and number.
+- **Weather fax in Live** (`bin/wefax.py`): HF fax 120 lpm / IOC 576 (1500 Hz black … 2300 Hz white), continuous
+  decoding; start tone (300 Hz) begins a new chart, phasing lines fix the horizontal position, stop tone (450 Hz)
+  ends it; without start it draws anyway. The chart grows in the decode list (saved every 10 s as
+  `reports/live_wefax_*.png`, deleted after 30 days).
+- **Weather RTTY:** the RTTY tone-pair search also accepts 400–500 Hz and 800–900 Hz shifts (DWD 50 Bd / 450 Hz),
+  in Live and for scan hits.
+- **Automatic decoder by frequency** for utility stations: NAVTEX 490/518/4209.5 kHz, weather fax DWD
+  3855/7880/13882.5 kHz and Northwood, DWD RTTY 147.3/4583/7646/10100.8/11039/14467.3 kHz (±2.5 kHz, USB).
+- Self-test section 36 (synthetic NAVTEX with destroyed characters, fax with phasing at two offsets, DWD RTTY,
+  noise-only must give nothing). README: utility decoders.
+
 ## 1.7.59 – 2026-11-03
 
 - **EiBi shortwave schedule in Live** (`bin/eibi.py`):

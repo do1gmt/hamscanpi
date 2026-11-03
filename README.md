@@ -122,6 +122,14 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**Utility decoders in Live:** besides FT8/FT4, APRS, POCSAG, CW, RTTY and SSTV, Live decodes **NAVTEX**
+(SITOR-B, 518/490/4209.5 kHz: CCIR 476 with the FEC repetition, complete messages `ZCZC … NNNN` with station,
+subject and number appear as their own entries), **weather fax** (HF fax 120 lpm/IOC 576, e.g. DWD Pinneberg
+3855/7880/13882.5 kHz; start tone, phasing and stop tone are detected, the chart grows in the list and is saved as
+PNG) and **weather RTTY** with 450/850 Hz shift (DWD 50 Bd). In "automatic" the decoder is chosen by frequency
+(NAVTEX, DWD fax/RTTY, Northwood fax). Tune in USB, the dial about 1.9 kHz (fax) or 1.5 kHz below the listed
+frequency.
+
 **Shortwave broadcast schedule (EiBi):** in Live, below the frequency, HamScanPi shows what the
 [EiBi](http://www.eibispace.de/) schedule (Eike Bierwirth, free to use) lists **on air right now** on that
 frequency (±5 kHz): station, language, target area, transmitter site with distance, until when – the most likely
