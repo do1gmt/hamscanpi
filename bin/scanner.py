@@ -2211,6 +2211,11 @@ def main():
     print(f"Verworfen    : {total_rejected}")
     print(f"Datenbank    : {DB_FILE}")
     print("Scan beendet")
+    try:                                                   # Netzwerk-Ausgabe (WSJT-X-Protokoll) noch abschicken
+        import wsjtx_udp as WX
+        WX.flush()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

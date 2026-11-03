@@ -2081,6 +2081,31 @@
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
   });
 
+  // ---------- Netzwerk-Ausgabe im WSJT-X-Protokoll (bin/wsjtx_udp.py) ----------
+  async function loadWx() {
+    let d; try { d = await api('/api/wsjtx-udp'); } catch (e) { return; }
+    const c = d.config || {}, st = d.state || {};
+    if (!document.activeElement || !document.activeElement.closest('#wxBox')) {
+      $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || 'HamScanPi';
+    }
+    $('wxSum').textContent = c.enabled ? `· an ${c.targets}` : '· aus';
+    const ago = t => t ? new Date(t * 1000).toLocaleString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
+    const bad = Object.entries(st.targets || {}).filter(([k, v]) => v.error).map(([k, v]) => `${k}: ${v.error}`);
+    $('wxState').textContent = c.enabled ? `Gesendet: ${st.sent || 0} Pakete · zuletzt ${ago(st.last_ok)}${st.pending ? ` · wartend ${st.pending}` : ''}${st.dropped ? ` · verworfen ${st.dropped}` : ''}`
+      + (bad.length ? ` · nicht erreichbar: ${bad.join('; ')}` : '') : '';
+  }
+  async function saveWx(test) {
+    try {
+      const d = await post('/api/wsjtx-udp', { enabled: $('wxOn').checked, targets: $('wxTargets').value, ident: $('wxIdent').value, test: !!test });
+      note($('wxNote'), test && d.test ? d.test.map(r => r.ok ? `✓ ${r.target}` : `✗ ${r.target}: ${r.error}`).join(' · ') : '✓ gespeichert', !!(d.test && d.test.some(r => !r.ok)));
+      loadWx();
+    } catch (e) { note($('wxNote'), 'Fehler: ' + e.message, true); }
+  }
+  $('wxSave').addEventListener('click', () => saveWx(false));
+  $('wxTest').addEventListener('click', () => saveWx(true));
+  $('wxBox').addEventListener('toggle', () => { if ($('wxBox').open) loadWx(); });
+  loadWx();
+
   // ---------- System: zuletzt an PSK Reporter gemeldet ----------
   async function loadPsk() {
     let d; try { d = await api('/api/pskreporter'); } catch (e) { return; }

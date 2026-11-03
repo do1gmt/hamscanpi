@@ -1000,5 +1000,49 @@ for code in 0 3; do
 done
 rm -rf "$RCT"
 [ "$RCOK" -eq 1 ] && ok "erfolgreicher Lauf 0, unterbrochener Lauf 3" || bad "Rückgabewert run_cycle"
+echo "== 34 Netzwerk-Ausgabe im WSJT-X-Protokoll (OpenHamClock)"
+(cd bin && timeout 60 python3 - <<'PY') && ok "Pakete nach WSJT-X-Spezifikation, Empfang über UDP, ohne Netz aufgehoben und nachgeschickt" || bad "WSJT-X-Ausgabe"
+import json, socket, sys, time
+sys.path.insert(0, "../devtools")
+import wsjtx_read as RD, wsjtx_udp as WX
+d = RD.read(WX.decode("HamScanPi", 1793710815.0, -12, 0.3, 1997, "FT8", "CQ DL1ABC JO31"))
+assert d["typ"] == 2 and d["ms"] == 46815000 and d["snr"] == -12 and d["df"] == 1997 and d["mode"] == "~" and d["msg"] == "CQ DL1ABC JO31" and d["rest"] == 0, d
+s = RD.read(WX.status("HamScanPi", 7074000, "FT8", "DO1GMT", "JN59HH"))
+assert s["dial"] == 7074000 and s["decall"] == "DO1GMT" and s["rest"] == 0, s
+assert WX.parse_targets("192.168.178.50, 224.0.0.1:2237; ohc.local:2238") == [("192.168.178.50", 2237), ("224.0.0.1", 2237), ("ohc.local", 2238)]
+try:
+    WX.parse_targets("rechner:99999"); raise SystemExit("falscher Port angenommen")
+except ValueError:
+    pass
+rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); rx.bind(("127.0.0.1", 0)); rx.settimeout(5)
+port = rx.getsockname()[1]
+WX.cfg = lambda: {"enabled": True, "targets": f"127.0.0.1:{port}", "ident": "HamScanPi", "my_call": "DO1GMT", "my_locator": "JN59HH"}
+WX.STATE = __import__("pathlib").Path(__import__("tempfile").mkdtemp()) / "st.json"
+# Netzausfall nachstellen: die ersten Sendeversuche scheitern
+real = WX.Sender._send
+fail = {"n": 3}
+def flaky(self, tg, pkt):
+    if fail["n"] > 0:
+        fail["n"] -= 1
+        raise OSError(101, "Network is unreachable")
+    return real(self, tg, pkt)
+WX.Sender._send = flaky
+msgs = [{"text": "CQ DL1ABC JO31", "snr": -10, "audio_hz": 1200}, {"text": "DL1ABC OE3XYZ R-12", "snr": -3, "audio_hz": 800}]
+assert WX.publish(14074000, "FT8", time.time() // 15 * 15, msgs)
+time.sleep(1.5)
+assert WX._get().pending, "nichts aufgehoben"
+WX.publish(14074000, "FT8", time.time() // 15 * 15, [{"text": "CQ K1ABC FN42", "snr": -15, "audio_hz": 500}])   # Netz wieder da
+got = []
+t0 = time.time()
+while time.time() - t0 < 6 and len([g for g in got if g["typ"] == 2]) < 3:
+    try:
+        got.append(RD.read(rx.recv(4096)))
+    except socket.timeout:
+        break
+texts = [g["msg"] for g in got if g["typ"] == 2]
+assert sorted(texts) == sorted(["CQ DL1ABC JO31", "DL1ABC OE3XYZ R-12", "CQ K1ABC FN42"]), texts
+assert any(g["typ"] == 1 and g["dial"] == 14074000 for g in got)
+assert not WX._get().pending
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

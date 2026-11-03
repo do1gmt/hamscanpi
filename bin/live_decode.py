@@ -533,6 +533,11 @@ class LiveDecoders:
         for m in sorted(msgs, key=lambda m: -m["snr"]):
             self._add(proto.upper(), m["text"], snr=round(m["snr"]), audio_hz=m["audio_hz"], slot=stamp,
                       rf_hz=dial + m["audio_hz"])
+        try:                                                          # im Netz bereitstellen (WSJT-X-Protokoll)
+            import wsjtx_udp as WX
+            WX.publish(dial, proto.upper(), T, msgs)
+        except Exception:
+            pass
         try:                                                          # Stationsliste und PSK Reporter
             import stations as ST
             self._heard([(c, g, sn, txt, proto.upper(), dial + (ah or 0))

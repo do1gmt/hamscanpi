@@ -122,6 +122,16 @@ frequency and reduced to 12 kHz while reading, in single precision), so even 120
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
 
+**Share decodes on the network (WSJT-X protocol):** under *Settings → Station → Share on the network* every FT8/FT4
+decode (scan and Live) is sent as UDP packets in the WSJT-X "UDP Server" format (heartbeat, status with dial
+frequency, decode) – **OpenHamClock**, GridTracker, JTAlert and other programs show the stations HamScanPi hears.
+Targets: `host:port`, several separated by commas, port usually 2237; a multicast group such as `224.0.0.1:2237`
+can be heard by several programs at once. For OpenHamClock on another computer set `HOST=0.0.0.0` there (and
+`WSJTX_MULTICAST_ADDRESS` when using multicast). Sending runs in the background: without a network nothing waits,
+an unreachable target is logged once (`wsjtx_udp_failed` / `wsjtx_udp_resumed`), decodes of the last 2 minutes
+are sent afterwards, older ones are dropped (useless for a live display). "Save and send test packet" checks a
+target right away.
+
 **Antenna profiles:** under *System → Devices → Antennas* each antenna is created once (name, frequency range,
 and for directional antennas direction, beamwidth, elevation – the existing entries become the first profiles).
 When switching antennas, just choose the profile in the scan box ("Antenna ▾") or at the main stick / HF receiver

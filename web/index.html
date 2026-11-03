@@ -485,6 +485,16 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
         </label>
         <label class="check"><input type="checkbox" id="pskOn"> FT8/FT4-Spots an PSK Reporter melden</label>
         <p class="hint">Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf <a href="https://pskreporter.info/pskmap.html" target="_blank" rel="noopener">pskreporter.info</a> – mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.</p>
+        <details class="wsjtx-box" id="wxBox"><summary><b>Im Netzwerk bereitstellen (WSJT-X-Protokoll)</b> <small class="muted" id="wxSum"></small></summary>
+          <p class="hint">Wie WSJT-X: jede FT8/FT4-Dekodierung (Scan und Live) geht als UDP-Paket an die eingetragenen Ziele – für <b>OpenHamClock</b>, GridTracker, JTAlert und andere Programme, die den „UDP Server“ von WSJT-X lesen. Ziel = Rechner, auf dem das Programm läuft, Port meist 2237 (bei OpenHamClock: WSJTX_UDP_PORT). Mehrere Ziele mit Komma; eine Multicast-Gruppe wie 224.0.0.1:2237 können mehrere Programme gleichzeitig hören.</p>
+          <label class="check"><input type="checkbox" id="wxOn"> Dekodierungen senden</label>
+          <label class="field"><span>Ziele (Rechner:Port)</span><input id="wxTargets" type="text" placeholder="z. B. 192.168.178.50:2237, 224.0.0.1:2237" autocomplete="off"></label>
+          <label class="field" title="So erscheint HamScanPi im Empfänger (WSJT-X: „Id“)"><span>Kennung</span><input id="wxIdent" type="text" maxlength="32" placeholder="HamScanPi"></label>
+          <div class="actions"><button type="button" class="btn" id="wxSave">Speichern</button><button type="button" class="btn" id="wxTest">Speichern und Testpaket senden</button></div>
+          <div class="save-note" id="wxNote" aria-live="polite"></div>
+          <p class="hint" id="wxState"></p>
+          <p class="hint">Ohne Netz läuft alles weiter: Senden passiert im Hintergrund, ein nicht erreichbares Ziel wird einmal im Protokoll vermerkt, die Dekodierungen der letzten 2 Minuten werden nachgeschickt, sobald es wieder geht (ältere wären für eine Live-Anzeige wertlos).</p>
+        </details>
         <label class="field" title="Bandgrenzen, Relaisablagen, APRS, Jedermannfunk und Rundfunk unterscheiden sich je Land und IARU-Region. Wählt den Bandplan, nach dem gescannt und eingeordnet wird."><span>Land / Bandplan</span>
           <select id="country"></select>
         </label>

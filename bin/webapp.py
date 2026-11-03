@@ -2158,6 +2158,9 @@ class Handler(BaseHTTPRequestHandler):
                 diag.write(self.wfile, stream=True)
                 APPLOG.log("INFO", "webapp", "diagnose_downloaded", ip=self.client_ip())
                 return
+            if path == "/api/wsjtx-udp":
+                import wsjtx_udp as WX
+                return self.send_json({"config": WX.cfg(), "state": WX.state()})
             if path == "/api/pskreporter":
                 import pskreporter as PSK
                 st = load_settings()
@@ -2376,6 +2379,24 @@ class Handler(BaseHTTPRequestHandler):
                     write_json(BASE / "data" / "sat_arm.json", {"until": time.time() + 60})
                     APPLOG.log("INFO", "webapp", "satellites_arming", wait_s=60)
                 return self.send_json({"ok": True, "settings": res})
+            if path == "/api/wsjtx-udp":
+                import wsjtx_udp as WX
+                st = read_json(SETTINGS, {})
+                c = dict(st.get("wsjtx_udp") or {})
+                if "enabled" in data:
+                    c["enabled"] = bool(data["enabled"])
+                if "targets" in data:
+                    tl = WX.parse_targets(data["targets"])                 # prüft die Schreibweise
+                    c["targets"] = ", ".join(f"{h}:{p}" for h, p in tl)
+                if data.get("ident"):
+                    c["ident"] = str(data["ident"]).strip()[:32]
+                if c.get("enabled") and not c.get("targets"):
+                    raise ValueError("Mindestens ein Ziel eintragen, z. B. 192.168.178.50:2237")
+                st["wsjtx_udp"] = c
+                write_json(SETTINGS, st)
+                APPLOG.log("INFO", "webapp", "wsjtx_udp_set", enabled=c.get("enabled"), targets=c.get("targets"))
+                res = WX.test(c["targets"], c.get("ident") or "HamScanPi") if data.get("test") and c.get("targets") else None
+                return self.send_json({"ok": True, "config": WX.cfg(), "test": res})
             if path == "/api/sat/arm":
                 # „sofort“: Bedenkzeit beenden
                 write_json(BASE / "data" / "sat_arm.json", {"until": 0})

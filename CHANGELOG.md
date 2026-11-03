@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.58 – 2026-11-03
+
+- **Share decodes on the network like WSJT-X** (`bin/wsjtx_udp.py`; Settings → Station → "Share on the network
+  (WSJT-X protocol)"): every FT8/FT4 decode from scans and Live goes out as UDP packets in the WSJT-X "UDP Server"
+  format (schema 2: heartbeat every 15 s, status with dial frequency and own call/locator before each cycle,
+  one decode per message with time, SNR, DT, offset, mode and text) to one or more targets (`host:port`, multicast
+  possible) – for OpenHamClock, GridTracker, JTAlert & co. Configurable id, "Save and send test packet" with a
+  result per target, counters and errors shown.
+- **Without network:** sending happens in a background thread with a queue (scan and Live never wait); host names
+  are resolved with a 3 s limit and cached; an unreachable target is logged once and "resumed" when it works again;
+  decodes of the last 2 minutes are kept and sent afterwards, older ones dropped.
+- Self-test section 34 (packets read back field by field with an independent reader `devtools/wsjtx_read.py`,
+  reception over UDP, outage and catch-up). README: share decodes.
+
 ## 1.7.57 – 2026-11-03
 
 - Fix: choosing an HF antenna profile (e.g. Sigma HF-360, 0.1–30 MHz) for the stick failed with "Frequency from

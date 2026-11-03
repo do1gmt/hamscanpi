@@ -133,6 +133,11 @@ def watch_ft8(dev, band, seg, cfg, log=print):
         }
         (REPORTS / f"{path.stem}_decode.json").write_text(json.dumps(data, ensure_ascii=False, indent=2),
                                                           encoding="utf-8")
+        try:                                                   # im Netz bereitstellen (WSJT-X-Protokoll)
+            import wsjtx_udp as WX
+            WX.publish(dial, label, t_slot, msgs)
+        except Exception:
+            pass
         log(f"   {label} {dial/1e6:.3f} MHz, Takt {stamp} UTC: {len(msgs)} Nachrichten"
             + (f" (Takt {cycle + 1})" if cycle else ""))
         for m in msgs[:8]:
