@@ -1679,7 +1679,11 @@
     });
     return leafletLoading;
   }
-  async function drawMap() {
+  let mapKey = null;
+  async function drawMap(force) {
+    // Blättern in der Liste ändert die Karte nicht (sie zeigt alle Stationen): nur bei neuen Filtern neu laden
+    if (!force && map && mapKey === stParams()) return;
+    mapKey = stParams();
     try { await loadLeaflet(); } catch (e) { $('mapNote').textContent = 'Karte nicht verfügbar – der Browser erreicht cdnjs.cloudflare.com bzw. OpenStreetMap nicht.'; return; }
     if (!map) {
       map = L.map('stMap', { worldCopyJump: true }).setView([50, 10], 3);
@@ -1690,29 +1694,38 @@
       mapLayer = L.layerGroup().addTo(map);
     }
     mapLayer.clearLayers();
-    const d = stLast || { stations: [] }; const pts = [];
+    // alle Stationen mit Locator (nicht nur die aktuelle Tabellenseite) – Zeichnen auf einer Leinwand, damit
+    // auch Tausende Punkte flüssig bleiben; Linien und feste Beschriftungen nur bei überschaubarer Zahl
+    let d; try { d = await api(`/api/stations/map?${stParams()}`); } catch (e) { $('mapNote').textContent = 'Karte: ' + e.message; return; }
+    const pts = [], P = d.points || [];
     const color = m => /FT8|FT4/.test(m || '') ? '#38bdf8' : /APRS/.test(m || '') ? '#f5b942' : '#2dd4bf';
     // Füllfarbe nach SNR: blau (schwach, ≤ −20 dB) → grün → gelb → rot (stark, ≥ +10 dB)
     const snrColor = v => { if (v == null) return '#94a3b8'; const t = Math.max(0, Math.min(1, (v + 20) / 30));
       const stops = [[59, 130, 246], [34, 197, 94], [234, 179, 8], [239, 68, 68]], x = t * 3, i = Math.min(2, Math.floor(x)), f = x - i;
       const c = stops[i].map((a, k) => Math.round(a + (stops[i + 1][k] - a) * f)); return `rgb(${c.join(',')})`; };
-    const labels = $('mapLabels').checked;
+    const many = P.length > 300;
+    const labels = $('mapLabels').checked && !many;
     const snrTxt = v => v == null ? '' : `${v > 0 ? '+' : ''}${Math.round(v)} dB`;
-    if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }).bindTooltip('QTH').addTo(mapLayer); pts.push(d.home); }
-    for (const r of d.stations) {
-      if (r.lat == null) continue;
-      const p = [r.lat, r.lon]; pts.push(p);
-      if (d.home) L.polyline([d.home, p], { color: color(r.modes), weight: 1, opacity: .35 }).addTo(mapLayer);
-      const mk = L.circleMarker(p, { radius: 6, color: color(r.modes), fillColor: snrColor(r.best_snr), fillOpacity: .9, weight: 2 })
-        .bindPopup(`<b>${esc(r.call)}</b> ${esc(r.grid || '')}${r.best_snr != null ? ` · <b>SNR ${snrTxt(r.best_snr)}</b>` : ''}<br>${r.distance_km != null ? r.distance_km + ' km, ' + r.bearing + '°<br>' : ''}${esc((r.modes || '').replace(/,/g, ', '))} · ${esc((r.bands || '').replace(/,/g, ', '))}<br>${fmtTime(r.last)}`).addTo(mapLayer);
-      if (labels) mk.bindTooltip(`${esc(r.call)} ${snrTxt(r.best_snr)}`, { permanent: true, direction: 'right', offset: [6, 0], className: 'map-lbl' });
+    const rad = Math.PI / 180;
+    const dist = (a, b) => { const p1 = a[0] * rad, p2 = b[0] * rad, dl = (b[1] - a[1]) * rad;
+      return Math.round(6371 * Math.acos(Math.max(-1, Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dl))))); };
+    const rend = L.canvas({ padding: 0.3 });
+    if (d.home) { L.circleMarker(d.home, { radius: 7, color: '#ffffff', fillColor: '#ef4444', fillOpacity: 1, weight: 2, renderer: rend }).bindTooltip('QTH').addTo(mapLayer); pts.push(d.home); }
+    for (const [call, lat, lon, grid, snr, modes, bands, last] of P) {
+      const p = [lat, lon]; pts.push(p);
+      if (d.home && !many) L.polyline([d.home, p], { color: color(modes), weight: 1, opacity: .35, renderer: rend }).addTo(mapLayer);
+      const mk = L.circleMarker(p, { radius: many ? 4 : 6, color: color(modes), fillColor: snrColor(snr), fillOpacity: .9, weight: many ? 1 : 2, renderer: rend })
+        .bindPopup(`<b>${esc(call)}</b> ${esc(grid || '')}${snr != null ? ` · <b>SNR ${snrTxt(snr)}</b>` : ''}<br>${d.home ? dist(d.home, p) + ' km<br>' : ''}${esc((modes || '').replace(/,/g, ', '))} · ${esc((bands || '').replace(/,/g, ', '))}<br>${fmtTime(last)}`).addTo(mapLayer);
+      if (labels) mk.bindTooltip(`${esc(call)} ${snrTxt(snr)}`, { permanent: true, direction: 'right', offset: [6, 0], className: 'map-lbl' });
     }
+    $('mapNote').textContent = `${P.length} von ${d.total_stations} Stationen auf der Karte – nur Stationen, deren Locator bekannt ist (FT8 sendet ihn meist nur beim CQ-Ruf, APRS mit Position).`
+      + (many ? ' Bei so vielen Punkten ohne Verbindungslinien und feste Beschriftung – Punkt antippen zeigt die Station.' : '');
     setTimeout(() => map.invalidateSize(), 50);
     if (pts.length > 1) map.fitBounds(pts, { padding: [20, 20], maxZoom: 7 });
   }
-  $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(); });
+  $('mapBox').addEventListener('toggle', () => { if ($('mapBox').open) drawMap(true); });
   try { $('mapLabels').checked = localStorage.getItem('mapLabels') !== '0'; } catch (e) { $('mapLabels').checked = true; }
-  $('mapLabels').addEventListener('change', () => { try { localStorage.setItem('mapLabels', $('mapLabels').checked ? '1' : '0'); } catch (e) { } if ($('mapBox').open) drawMap(); });
+  $('mapLabels').addEventListener('change', () => { try { localStorage.setItem('mapLabels', $('mapLabels').checked ? '1' : '0'); } catch (e) { } if ($('mapBox').open) drawMap(true); });
 
   // ---------- Bildanzeige im Fenster (Wasserfall, SSTV …) ----------
   function openLightbox(src, title) {

@@ -52,6 +52,13 @@ def ensure_tables(db):
         db.execute("ALTER TABLE heard ADD COLUMN antenna TEXT")        # gehört mit welcher Antenne (PSK Reporter)
     db.execute("CREATE INDEX IF NOT EXISTS heard_call ON heard(call)")
     db.execute("CREATE INDEX IF NOT EXISTS heard_time ON heard(time)")
+    db.execute("CREATE INDEX IF NOT EXISTS heard_band_time ON heard(band, time)")
+    # Übersicht je Rufzeichen – beim Eintragen mitgeführt, damit Liste und Karte auch bei Hunderttausenden
+    # Einträgen in heard schnell bleiben (heard bleibt die vollständige Aufzeichnung für ADIF und Details)
+    db.execute("""CREATE TABLE IF NOT EXISTS station (
+        call TEXT PRIMARY KEY, first TEXT, last TEXT, n INTEGER, bands TEXT, modes TEXT, best_snr REAL,
+        grid TEXT, lat REAL, lon REAL)""")
+    db.execute("CREATE INDEX IF NOT EXISTS station_last ON station(last)")
     db.execute("""CREATE TABLE IF NOT EXISTS watch_hit (
         id INTEGER PRIMARY KEY, peak_id INTEGER, rule_id TEXT, label TEXT, time TEXT, detail TEXT,
         UNIQUE(peak_id, rule_id))""")
@@ -71,6 +78,61 @@ def ensure_tables(db):
         db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('watch_skip_until', ?)", (str(mx),))
         db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('heard_parser', ?)", (str(PARSER_VERSION),))
         db.commit()
+
+
+def _latlon(grid):
+    if not grid:
+        return None, None
+    try:
+        import satellites as SAT
+        la, lo = SAT.locator_to_latlon(grid)
+        return round(la, 3), round(lo, 3)
+    except Exception:
+        return None, None
+
+
+def _merge_list(cur, val):
+    items = [x for x in (cur or "").split(",") if x]
+    if val and val not in items:
+        items.append(val)
+    return ",".join(items)
+
+
+def upsert_station(db, call, t, band, mode, grid, snr):
+    """Übersicht je Rufzeichen nachführen (nach jedem neu eingetragenen heard-Eintrag)."""
+    r = db.execute("SELECT first, last, n, bands, modes, best_snr, grid, lat, lon FROM station WHERE call=?", (call,)).fetchone()
+    if r is None:
+        la, lo = _latlon(grid)
+        db.execute("INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (call, t, t, 1, band or "", mode or "", snr, grid, la, lo))
+        return
+    first, last, n, bands, modes, best, g, la, lo = r
+    if grid and (not g or len(grid) > len(g) or (len(grid) == len(g) and grid != g and (t or "") >= (last or ""))):
+        g = grid                                           # genauerer oder neuerer Locator gewinnt
+        la, lo = _latlon(g)
+    best = snr if best is None else (best if snr is None else max(best, snr))
+    db.execute("""UPDATE station SET first=?, last=?, n=?, bands=?, modes=?, best_snr=?, grid=?, lat=?, lon=? WHERE call=?""",
+               (min(first or t, t or first), max(last or t, t or last), (n or 0) + 1, _merge_list(bands, band),
+                _merge_list(modes, mode), best, g, la, lo, call))
+
+
+def rebuild_stations(db):
+    """Übersicht einmalig aus heard aufbauen (erste Version mit Übersicht, oder auf Wunsch neu)."""
+    db.execute("DELETE FROM station")
+    rows = db.execute("""SELECT call, MIN(time), MAX(time), COUNT(*), group_concat(DISTINCT band),
+                                group_concat(DISTINCT mode), MAX(snr), MAX(grid) FROM heard GROUP BY call""").fetchall()
+    for call, first, last, n, bands, modes, best, grid in rows:
+        la, lo = _latlon(grid)
+        db.execute("INSERT INTO station (call, first, last, n, bands, modes, best_snr, grid, lat, lon) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (call, first, last, n, bands or "", modes or "", best, grid, la, lo))
+    db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('station_summary', '1')")
+    db.commit()
+    return len(rows)
+
+
+def ensure_summary(db):
+    if not db.execute("SELECT v FROM meta WHERE k='station_summary'").fetchone():
+        rebuild_stations(db)
 
 
 def is_call(tok):
@@ -207,9 +269,11 @@ def ingest(db, limit=2000):
         calls = []
         if dec:
             for call, grid, s, text, typ, f in senders_for(dec):
-                db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
+                cur = db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
                               VALUES (?,?,?,?,?,?,?,?,?,?)""", (pid, t, call, band, f or rf, typ, grid,
                                                                 s if s is not None else snr, text[:200], antenna))   # SNR: FT8 je Nachricht, sonst Treffer
+                if cur.rowcount == 1:
+                    upsert_station(db, call, t, band, typ, grid, s if s is not None else snr)
                 calls.append({"call": call, "grid": grid, "mode": typ})
         for d in (dec or {}).get("decoders", []):
             if d.get("type") == "RDS" and d.get("rds"):

@@ -345,10 +345,19 @@ class LiveDecoders:
                 if "antenna" not in {r[1] for r in db.execute("PRAGMA table_info(heard)")}:
                     db.execute("ALTER TABLE heard ADD COLUMN antenna TEXT")
                 for call, grid, snr, text, typ, f in rows:
-                    db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
+                    cur = db.execute("""INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info, antenna)
                                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                                (-int(t), ts, call, band, float(f or self.freq_hz), typ, grid, snr,
                                 ("Live: " + str(text or ""))[:200], self.antenna))
+                    if cur.rowcount == 1:
+                        try:
+                            import stations as ST
+                            db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+                            db.execute("""CREATE TABLE IF NOT EXISTS station (call TEXT PRIMARY KEY, first TEXT, last TEXT,
+                                n INTEGER, bands TEXT, modes TEXT, best_snr REAL, grid TEXT, lat REAL, lon REAL)""")
+                            ST.upsert_station(db, call, ts, band, typ, grid, snr)
+                        except Exception:
+                            pass
                 db.commit()
             finally:
                 db.close()

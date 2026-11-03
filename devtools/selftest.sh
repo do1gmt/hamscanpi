@@ -917,5 +917,35 @@ assert 55 < g["sat_arm_wait"]() <= 60
 (BASE / "data" / "sat_arm.json").write_text(json.dumps({"until": 0}))
 assert g["sat_arm_wait"]() == 0
 PY
+echo "== 31 Stationen: Übersicht je Rufzeichen, Karte mit allen"
+(cd bin && timeout 200 python3 - <<'PY') && ok "Übersicht stimmt mit der Aufzeichnung überein, Karte zeigt alle mit Locator, nicht nur eine Seite" || bad "Stationen"
+import random, sqlite3, time
+import webapp as W, stations as ST
+db = W.db_connect(); ST.ensure_tables(db)
+rnd = random.Random(3)
+calls = [f"T{i:03d}AB" for i in range(400)]
+rows = []
+for k in range(4000):
+    c = rnd.choice(calls)
+    rows.append((-(10_000_000 + k), time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - rnd.randint(0, 40 * 86400))),
+                 c, rnd.choice(["40m", "20m"]), 14074000, "FT8", ("JO31" if int(c[1:4]) % 2 else None), rnd.randint(-20, 5), "t"))
+db.executemany("INSERT INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info) VALUES (?,?,?,?,?,?,?,?,?)", rows)
+db.execute("DELETE FROM meta WHERE k='station_summary'"); db.commit(); db.close()
+d = W.stations(0, "", "", 100, 0)                                  # baut die Übersicht auf
+db = W.db_connect()
+a = dict(db.execute("SELECT call, COUNT(*) FROM heard WHERE call LIKE 'T%AB' GROUP BY call").fetchall())
+b = dict(db.execute("SELECT call, n FROM station WHERE call LIKE 'T%AB'").fetchall())
+assert a == b and len(a) == 400, (len(a), len(b))
+# neuer Eintrag über den normalen Weg: Übersicht wird mitgeführt
+cur = db.execute("INSERT OR IGNORE INTO heard (peak_id, time, call, band, freq_hz, mode, grid, snr, info) VALUES (?,?,?,?,?,?,?,?,?)",
+                 (-99999999, "2026-11-03T10:00:00+00:00", "T001AB", "80m", 3573000, "FT4", "JO31AB", 7, "t"))
+ST.upsert_station(db, "T001AB", "2026-11-03T10:00:00+00:00", "80m", "FT4", "JO31AB", 7); db.commit()
+r = db.execute("SELECT n, bands, modes, grid, best_snr FROM station WHERE call='T001AB'").fetchone()
+assert r[0] == a["T001AB"] + 1 and "80m" in r[1] and "FT4" in r[2] and r[3] == "JO31AB" and r[4] >= 7, r
+db.close()
+m = W.stations_map(0)
+assert len([p for p in m["points"] if p[0].startswith("T") and p[0].endswith("AB")]) == 200, len(m["points"])   # alle mit Locator
+assert len(d["stations"]) == 100                                    # Liste bleibt seitenweise
+PY
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

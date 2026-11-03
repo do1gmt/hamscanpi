@@ -104,6 +104,13 @@ also covers HF via direct sampling.
 | Antenna | a discone or a vertical works for strong passes; a turnstile or QFH is better for satellites |
 | PMSDR (optional) | shortwave 160–10 m, needs a USB sound card for I/Q and its control program – see [docs/pmsdr.md](docs/pmsdr.md) |
 
+**Stations:** every heard callsign is kept (FT8/FT4, APRS, CW, RTTY – scan and Live), nothing is deleted. The full
+record (`heard`, one row per reception) stays for ADIF and details; a summary per callsign (`station`) is kept up
+to date on every new entry, so the list and the map stay fast with hundreds of thousands of entries (measured:
+300 000 receptions of 20 000 callsigns – list 0.01 s, map 0.07 s, filtered by period and band 0.2 s on a PC). The
+map shows all stations whose locator is known, independent of the list page; with more than 300 points it is
+drawn without connecting lines and fixed labels.
+
 **Memory:** HamScanPi runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
 frequency and reduced to 12 kHz while reading, in single precision), so even 120 s shortwave recordings need
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the

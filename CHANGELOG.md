@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.49 – 2026-11-03
+
+- **Station map shows all stations with a locator**, not only the 100 of the current list page (that was why it
+  looked like far fewer than the 1,100+ stations). New `/api/stations/map` (compact, all matching the filters),
+  drawn on a canvas so thousands of points stay smooth; above 300 points without connecting lines and fixed
+  labels; paging the list no longer reloads/re-zooms the map. The note says how many of how many stations are
+  shown and why stations without a locator are missing.
+- **Summary per callsign** (`station` table): kept up to date on every new reception (scan and Live), built once
+  from `heard` on first use. List without period/band filter reads it directly; with filters the full record is
+  used with new indexes (band, time). Nothing is deleted – `heard` stays the complete record. Measured with
+  300,000 receptions of 20,000 callsigns: list 0.01 s, map 0.07 s, filtered 0.2 s (PC).
+- New README screenshot of the scan page. README: stations. Self-test section 31.
+
 ## 1.7.48 – 2026-11-03
 
 - **Mixed HF/satellite operation, clean hand-over of the stick.**

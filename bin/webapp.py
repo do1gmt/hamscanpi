@@ -936,35 +936,40 @@ def clean_watchlist(items):
 
 
 def stations(days=30, q="", band="", limit=100, offset=0):
-    """Gehörte Stationen, je Rufzeichen zusammengefasst, mit Entfernung und Richtung."""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+    """Gehörte Stationen, je Rufzeichen zusammengefasst, mit Entfernung und Richtung.
+    Ohne Zeitraum und Band aus der Übersichtstabelle (schnell, auch bei Hunderttausenden Einträgen), mit Filter
+    aus der vollständigen Aufzeichnung (heard, Indizes auf Zeit und Band)."""
     db = db_connect()
     ST.ensure_tables(db)
-    where, args = ["time >= ?"], [since]
-    if q:
-        where.append("call LIKE ?"); args.append(q.upper().replace("*", "%") + ("%" if "*" not in q else ""))
-    if band:
-        where.append("band = ?"); args.append(band)
-    w = " AND ".join(where)
-    total = db.execute(f"SELECT COUNT(DISTINCT call) FROM heard WHERE {w}", args).fetchone()[0]
-    rows = db.execute(f"""SELECT call, COUNT(*) n, MIN(time) first, MAX(time) last,
-                                 group_concat(DISTINCT band) bands, group_concat(DISTINCT mode) modes,
-                                 MAX(snr) best_snr, MAX(grid) grid
-                          FROM heard WHERE {w} GROUP BY call ORDER BY last DESC LIMIT ? OFFSET ?""",
-                       args + [limit, offset]).fetchall()
+    ST.ensure_summary(db)
+    like = (q.upper().replace("*", "%") + ("%" if "*" not in q else "")) if q else None
+    if not days and not band:
+        w, args = ("call LIKE ?", [like]) if like else ("1=1", [])
+        total = db.execute(f"SELECT COUNT(*) FROM station WHERE {w}", args).fetchone()[0]
+        rows = db.execute(f"""SELECT call, n, first, last, bands, modes, best_snr, grid, lat, lon FROM station
+                              WHERE {w} ORDER BY last DESC LIMIT ? OFFSET ?""", args + [limit, offset]).fetchall()
+    else:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+        where, args = ["time >= ?"], [since]
+        if like:
+            where.append("call LIKE ?"); args.append(like)
+        if band:
+            where.append("band = ?"); args.append(band)
+        w = " AND ".join(where)
+        total = db.execute(f"SELECT COUNT(DISTINCT call) FROM heard WHERE {w}", args).fetchone()[0]
+        rows = db.execute(f"""SELECT call, COUNT(*) n, MIN(time) first, MAX(time) last,
+                                     group_concat(DISTINCT band) bands, group_concat(DISTINCT mode) modes,
+                                     MAX(snr) best_snr, MAX(grid) grid, NULL lat, NULL lon
+                              FROM heard WHERE {w} GROUP BY call ORDER BY last DESC LIMIT ? OFFSET ?""",
+                           args + [limit, offset]).fetchall()
     db.close()
     loc = load_settings().get("my_locator", "")
     out = []
     for r in rows:
         d = dict(r)
         d["distance_km"], d["bearing"] = ST.distance_bearing(r["grid"], loc) if r["grid"] and loc else (None, None)
-        d["lat"] = d["lon"] = None
-        if r["grid"]:
-            try:
-                import satellites as SAT
-                d["lat"], d["lon"] = (round(x, 3) for x in SAT.locator_to_latlon(r["grid"]))
-            except Exception:
-                pass
+        if r["grid"] and d.get("lat") is None:
+            d["lat"], d["lon"] = ST._latlon(r["grid"])
         out.append(d)
     home = None
     try:
@@ -973,6 +978,43 @@ def stations(days=30, q="", band="", limit=100, offset=0):
     except Exception:
         pass
     return {"stations": out, "total": total, "offset": offset, "limit": limit, "home": home}
+
+
+def stations_map(days=0, q="", band=""):
+    """Alle Stationen mit Locator für die Karte (unabhängig von der Seitenaufteilung der Liste), kompakt:
+    [Rufzeichen, Breite, Länge, Locator, bestes SNR, Betriebsarten, Bänder, zuletzt]."""
+    db = db_connect()
+    ST.ensure_tables(db)
+    ST.ensure_summary(db)
+    like = (q.upper().replace("*", "%") + ("%" if "*" not in q else "")) if q else None
+    if not days and not band:
+        w, args = ("lat IS NOT NULL" + (" AND call LIKE ?" if like else ""), [like] if like else [])
+        rows = [tuple(r) for r in db.execute(
+            f"SELECT call, lat, lon, grid, best_snr, modes, bands, last FROM station WHERE {w}", args).fetchall()]
+    else:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds") if days else ""
+        where, args = ["time >= ?", "grid IS NOT NULL", "grid != ''"], [since]
+        if like:
+            where.append("call LIKE ?"); args.append(like)
+        if band:
+            where.append("band = ?"); args.append(band)
+        q2 = db.execute(f"""SELECT call, MAX(grid), MAX(snr), group_concat(DISTINCT mode), group_concat(DISTINCT band), MAX(time)
+                            FROM heard WHERE {' AND '.join(where)} GROUP BY call""", args).fetchall()
+        rows = []
+        for call, grid, snr, modes, bands, last in q2:
+            la, lo = ST._latlon(grid)
+            if la is not None:
+                rows.append((call, la, lo, grid, snr, modes, bands, last))
+    total = db.execute("SELECT COUNT(*) FROM station").fetchone()[0]
+    db.close()
+    loc = load_settings().get("my_locator", "")
+    home = None
+    try:
+        import satellites as SAT
+        home = [round(x, 3) for x in SAT.locator_to_latlon(loc)] if loc else None
+    except Exception:
+        pass
+    return {"points": rows, "home": home, "total_stations": total}
 
 
 def activity(days=30):
@@ -1998,6 +2040,8 @@ class Handler(BaseHTTPRequestHandler):
                                                 max(0, int(qs.get("offset", 0)))))
             if path == "/api/scan-estimate":
                 return self.send_json(scan_estimate() or {})
+            if path == "/api/stations/map":
+                return self.send_json(stations_map(int(qs.get("days", 0) or 0), qs.get("q", ""), qs.get("band", "")))
             if path == "/api/stations":
                 return self.send_json(stations(int(qs.get("days", 30) or 0), qs.get("q", ""), qs.get("band", ""),
                                                max(1, min(int(qs.get("limit", 100)), 1000)), max(0, int(qs.get("offset", 0)))))
