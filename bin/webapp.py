@@ -300,6 +300,8 @@ def load_settings():
         "devices": device_labels(),
         "antennas": antennas_effective(),
         "rtl_caps": (_main_stick() or {}).get("caps"),
+        "rtl_serial": (_main_stick() or {}).get("serial"),
+        "version": (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "?",
         "live_state": live_state(),
         "follow": {k: scanner_config().get(k) for k in FOLLOW_KEYS},
         "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
@@ -548,7 +550,12 @@ def load_status():
     # Pegelanzeige: stärkstes Signal im aktuellen Scanfenster bzw. Kanalpegel des laufenden Überflugs
     # (auch etwas ältere Werte: zwischen zwei Fenstern bzw. Bändern bleibt die Anzeige stehen statt zu verschwinden)
     m = read_json(BASE / "data" / "meter.json", {})
-    if m and st.get("state") == "running" and time.time() - float(m.get("t", 0)) < 180:
+    try:                                                 # nur Werte aus dem laufenden Lauf (nicht vom vorigen)
+        run_t0 = datetime.fromisoformat(st["started_at"]).timestamp() if st.get("started_at") else 0
+    except Exception:
+        run_t0 = 0
+    if m and st.get("state") == "running" and time.time() - float(m.get("t", 0)) < 180 \
+            and (m.get("src") != "scan" or float(m.get("t", 0)) >= run_t0):
         m["age_s"] = round(time.time() - float(m.get("t", 0)), 1)
         st["meter"] = m
     settings = load_settings()
@@ -2380,7 +2387,9 @@ class Handler(BaseHTTPRequestHandler):
                 import pskreporter as PSK
                 st = load_settings()
                 return self.send_json(dict(PSK.last_report(), enabled=bool(st.get("pskreporter")),
-                                           ready=bool(st.get("my_call") and st.get("my_locator"))))
+                                           ready=bool(st.get("my_call") and st.get("my_locator")),
+                                           now={"receiver": st.get("my_call", ""), "locator": st.get("my_locator", ""),
+                                                "software": PSK.software()}))
             if path == "/api/notices":
                 import notices as NT
                 return self.send_json(NT.listing())

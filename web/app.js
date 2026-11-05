@@ -169,7 +169,9 @@
   // Zurück zur Seite (anderer Tab, Handy aus dem Standby): aktuellen Stand holen
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSettings().catch(() => {}); });
 
+  function showVersion() { if (settings && settings.version) { $('appVer').textContent = 'v' + settings.version; $('appVer').title = 'HamScanPi ' + settings.version; } }
   function renderDeviceSwitch() {
+    showVersion();
     const root = $('deviceSwitch'); root.innerHTML = '';
     const names = settings.devices || { pmsdr: 'PMSDR', rtlsdr: 'RTL-SDR' };
     const rc = settings && settings.rtl_caps;
@@ -188,7 +190,7 @@
         state = hw.pmsdr.usb ? 'Soundkarte (Aureon) fehlt' : 'PMSDR-Platine fehlt';
       if (present && id === 'pmsdr' && hw.pmsdr.control && !['active', 'unbekannt'].includes(hw.pmsdr.control))
         state = `<span class="warn-text">steckt – Steuerung läuft nicht (${esc(hw.pmsdr.control)})</span>`;
-      b.innerHTML = `<b>${esc(short(id))}</b>${state}`;
+      b.innerHTML = `<b>${esc(short(id))}${id === 'rtlsdr' && settings.rtl_serial ? ` <small class="stick-sn no-i18n">SN ${esc(settings.rtl_serial)}</small>` : ''}</b>${state}`;
       b.addEventListener('click', async () => {
         if (settings.active_device === id || !present) return;
         try { const d = await post('/api/settings', { active_device: id }); settings = Object.assign(settings, d.settings); note($('scanSaveNote'), '✓ Gerät umgestellt – Antenne am ' + short(id) + ' anschließen'); }
@@ -2292,7 +2294,15 @@
     if (!d.enabled) parts.push('Melden ist aus – Einstellungen → Station → „FT8/FT4-Spots an PSK Reporter melden“.');
     else if (!d.ready) parts.push('Rufzeichen und Locator fehlen (Einstellungen → Station).');
     if (d.offline_since) parts.push(`Kein Internet seit ${new Date(d.offline_since * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })} – die Spots werden nachgemeldet.`);
-    if (L) parts.push(`Empfänger ${L.receiver} · ${L.locator} · ${L.software} · ${L.packets} Paket(e). Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
+    if (L) {
+      parts.push(`Zuletzt gemeldet als ${L.receiver} · ${L.locator} · ${L.software} · ${L.packets} Paket(e). Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
+      // seither geändert (Locator, Rufzeichen, Version): gilt ab der nächsten Meldung
+      const N = d.now || {}, diff = [];
+      if (N.receiver && N.receiver !== L.receiver) diff.push(N.receiver);
+      if (N.locator && N.locator !== L.locator) diff.push(N.locator);
+      if (N.software && N.software !== L.software) diff.push(N.software);
+      if (diff.length) parts.push(`Ab der nächsten Meldung: ${diff.join(' · ')}.`);
+    }
     $('pskHint').textContent = parts.join(' ');
   }
   setInterval(() => { if (sysVisible()) loadPsk(); }, 60000);

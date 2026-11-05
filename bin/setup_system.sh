@@ -91,6 +91,7 @@ asuser mkdir -p "$DIR/data" "$DIR/log" "$DIR/recordings" "$DIR/reports" "$DIR/ba
 [ -f "$DIR/config/web_settings.json" ] || asuser cp "$DIR/config/web_settings.example.json" "$DIR/config/web_settings.json"
 chmod 600 "$DIR/config/web_settings.json"
 chmod +x "$DIR"/bin/*.py "$DIR"/bin/*.sh "$DIR"/install.sh 2>/dev/null || true
+[ -d "$DIR/.git" ] && asuser git -C "$DIR" config core.fileMode false    # Rechte zählen nicht als lokale Änderung
 # Sprache des Dashboards (nur bei ausdrücklicher Wahl oder wenn noch keine eingestellt ist)
 asuser python3 - "$DIR/config/web_settings.json" "$LNG" <<'PY'
 import json, sys

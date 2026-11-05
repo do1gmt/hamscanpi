@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.79 – 2026-11-06
+
+- System → PSK Reporter: the line under the spots says "Last reported as <call> · <locator> · <version>" (it showed
+  the values of the last report, which looked like a wrong locator after a change) and, if call, locator or
+  version have changed since, "From the next report on: …".
+
+## 1.7.78 – 2026-11-06
+
+- Fix: the update stopped with "local changes to versioned files" although nothing had been changed – 18 program
+  files were in the repository without the executable bit, the set-up makes them executable, and git counted
+  that as a change. The files are executable in the repository now, and `bin/update.sh` / the set-up switch
+  git's file-mode tracking off for the installation (`core.fileMode false`). Self-test section 45 extended.
+
+## 1.7.77 – 2026-11-06
+
+- Fix: the scan progress counted the satellite band ("80m scans 0/18" with 13 windows to scan) – satellite
+  passes are recorded by the scheduler, not by the scan run, so they are no longer counted; the progress now
+  reaches 100 %.
+- Fix: at the start of a run the level meter showed the last value of the previous run (e.g. "70cm · strongest
+  signal …" while 80 m was being scanned) – only values of the running run are shown now.
+- The **version** is shown next to the name at the top of every page; the scan box shows the **serial number**
+  of the main stick.
+
 ## 1.7.76 – 2026-11-06
 
 - **Updates from GitHub, also from the dashboard:** System → Status → **"Update now"** (service `hamscanpi-update`):

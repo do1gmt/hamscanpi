@@ -433,6 +433,9 @@ def main():
     plan = make_plan()
 
     if args.tsv:
+        # Satelliten nimmt der Scheduler bei jedem Überflug auf, nicht der Scanlauf – nicht mitzählen
+        # (sonst stimmte „… scannt 3/18“ nicht und der Fortschritt erreichte nie 100 %)
+        plan = [p for p in plan if p["name"] != "Satelliten" and not p.get("satellite")]
         for p in plan:
             print(
                 f"{p['name']}\t"

@@ -39,6 +39,8 @@ applog() { asuser python3 bin/applog.py "$@" >/dev/null 2>&1 || true; }
 echo "== $(date '+%Y-%m-%d %H:%M:%S') HamScanPi update"
 [ -d .git ] || { echo "$(t "Kein Git-Repository in $DIR – bitte mit git clone installieren." "No git repository in $DIR – please install with git clone.")"; exit 1; }
 OLD="$(cat VERSION 2>/dev/null || echo ?)"
+# Dateirechte (chmod +x bei der Einrichtung) sind keine lokalen Änderungen – sonst blockierten sie jedes Update
+asuser git config core.fileMode false
 if ! asuser git diff --quiet || ! asuser git diff --cached --quiet; then
     echo "$(t "Lokale Änderungen an versionierten Dateien:" "Local changes to versioned files:")"
     asuser git status --short | grep -v '^??' || true

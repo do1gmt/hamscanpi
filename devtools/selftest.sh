@@ -1402,10 +1402,11 @@ upd45() {
     git config --global user.email >/dev/null || git config --global user.email t@x
     git init -q --bare -b main "$G/remote.git" || return 1
     mkdir -p "$G/src" "$G/pub" "$G/fake" && cp -r "$SRC/." "$G/src/" && rm -rf "$G/src/.git" "$G/src/data" "$G/src/log" || return 1
-    echo 9.9.1 > "$G/src/VERSION"
+    echo 9.9.1 > "$G/src/VERSION"; chmod 644 "$G/src/bin/eibi.py"
     (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.1" >/dev/null) || return 1
     (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
     git clone -q "$G/remote.git" "$G/pi" 2>/dev/null || return 1
+    git -C "$G/pi" config core.fileMode true && chmod +x "$G/pi/bin/eibi.py"   # nur Rechte geändert (im Repo 644)
     echo 9.9.2 > "$G/src/VERSION"
     (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.2" >/dev/null) || return 1
     (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
