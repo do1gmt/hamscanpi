@@ -382,6 +382,7 @@
           <tbody id="svcList"><tr><td colspan="5" class="muted">–</td></tr></tbody></table></div>
         <div class="actions"><button type="button" class="btn btn-danger" id="svcReboot">Pi neu starten</button><a class="btn" id="svcDiag" href="/api/diagnose" download>↓ Diagnose herunterladen</a></div>
         <div class="save-note" id="svcNote" aria-live="polite"></div>
+        <p class="hint" id="svcMdns"></p>
         <p class="hint" id="svcHint">Hängt das Dashboard, hilft die <a id="svcRescue" href="#" target="_blank" rel="noopener">Notfall-Seite</a> (eigener Dienst, Port 8081): dort lassen sich die Dienste und der Pi ebenso neu starten und die Diagnose herunterladen. Zusätzlich starten Webserver und Zeitplaner von selbst neu, wenn sie 3 bzw. 5 Minuten nicht mehr reagieren. Die Diagnose (Protokolle, Kernel- und Dienstmeldungen der letzten 2 Tage, Systemverlauf, Einstellungen ohne Zugangsdaten) hilft bei der Fehlersuche.</p>
       </section>
       <section class="panel" id="panel-sticks">
@@ -429,6 +430,11 @@
         <h2>Zustand</h2>
         <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
         <p class="hint" id="sysNote"></p>
+        <div class="update-box" id="updBox" hidden>
+          <div class="actions"><button type="button" class="btn btn-primary" id="updRun">Jetzt aktualisieren</button><button type="button" class="btn btn-small" id="updCheck">Auf neue Version prüfen</button></div>
+          <p class="hint" id="updHint">Holt den neuen Stand von GitHub, richtet das System ein und startet die Dienste neu. Wartet vorher, bis kein Scan und kein Überflug läuft. Das Dashboard ist danach kurz nicht erreichbar.</p>
+          <pre class="update-log" id="updLog" hidden></pre>
+        </div>
       </section>
       <section class="panel" id="panel-psk">
         <h2>PSK Reporter – letzte Meldung <small class="muted" id="pskWhen"></small></h2>
@@ -605,6 +611,11 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
         <label class="check" title="Überflüge, die durch die Keule der Richtantenne laufen, werden bei Überschneidungen vorgezogen; andere zurückgestellt."><input type="checkbox" id="satBeamPrefer"> Überflüge im Strahl der Richtantenne bevorzugen</label>
         <p class="hint">Gilt nur, wenn beim Haupt-Stick unter System → Geräte eine Richtung eingetragen ist: Überflüge, die mindestens 1 min durch die Keule laufen, bekommen bis zu 15 Punkte dazu, die übrigen und Frequenzen außerhalb des Antennenbereichs 20 Punkte weniger. „Immer zuerst“ bleibt davon unberührt.</p>
         <p class="hint">Satelliten sind viel schwächer als Ortssender: 35–45 dB sind üblich. „Wie Haupt-Stick“ nimmt den Wert aus System → Geräte, der auch für Scan und Live gilt – so kann der Scan niedrig bleiben (weniger Übersteuerung) und die Satelliten trotzdem empfindlich aufgenommen werden.</p>
+        <div class="filter-grid sat-limits">
+          <label class="field" title="Unterhalb dieser Höhe verdecken Gelände oder Gebäude den Himmel – rundherum gleich. Aufgenommen wird nur der Teil eines Überflugs darüber."><span>Horizont (Mindesthöhe rundherum)</span><select id="satHorizon"><option value="0">0° (freie Sicht)</option><option value="5">5°</option><option value="10">10°</option><option value="15">15°</option><option value="20">20°</option><option value="25">25°</option><option value="30">30°</option></select></label>
+          <label class="field" title="Niedrigere Überflüge stehen ausgegraut in der Liste und werden nicht aufgenommen"><span>Nur Überflüge ab … höchster Höhe</span><select id="satMinEl"><option value="10">10°</option><option value="20">20°</option><option value="30">30°</option><option value="45">45°</option><option value="60">60°</option></select></label>
+        </div>
+        <p class="hint">Horizont: Liegt der Pi in einem Tal, zwischen Häusern oder hinter einem Hang, ist der Himmel unten verdeckt. Aufgenommen wird dann nur, solange der Satellit darüber steht – kürzere Aufnahmen, weniger Rauschen, der Stick ist früher wieder frei. Überflüge, die nie darüber kommen, entfallen. Mindesthöhe: Flache Überflüge sind kurz und schwach; mit 30° oder mehr bleiben die guten.</p>
         <div class="table-wrap"><table class="table satprio-table"><thead><tr><th>Kanal</th><th>Priorität</th><th>Zuletzt (14 Tage)</th></tr></thead><tbody id="satPrio"></tbody></table></div>
         <div class="save-note" id="satPrioNote" aria-live="polite"></div>
       </section>
@@ -688,6 +699,16 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
 
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="st-detail-bg" id="locCheck" hidden>
+  <div class="st-detail-box loc-box" role="dialog" aria-modal="true" aria-labelledby="locTitle">
+    <h2 id="locTitle">Neuer Standort?</h2>
+    <p id="locText"></p>
+    <p class="hint">Der Locator bestimmt Überflugzeiten und -richtungen, Entfernungen zu Stationen und Sendern und den Standort, den PSK Reporter für deine Spots zeigt.</p>
+    <label class="field"><span>Locator</span><input id="locInput" type="text" maxlength="6" autocomplete="off" spellcheck="false"></label>
+    <div class="actions"><button type="button" class="btn" id="locSame">Stimmt noch</button><button type="button" class="btn btn-primary" id="locSave">Speichern</button></div>
+    <div class="save-note" id="locNote" aria-live="polite"></div>
+  </div>
+</div>
 <div class="st-detail-bg" id="stDetail" hidden>
   <div class="st-detail-box" role="dialog" aria-modal="true" aria-labelledby="stdCall">
     <div class="st-detail-head"><h2 id="stdCall" class="no-i18n">–</h2><a id="stdQrz" target="_blank" rel="noopener" class="btn btn-small">QRZ.com ↗</a><button type="button" class="btn btn-small" id="stdClose" aria-label="Schließen">✕</button></div>

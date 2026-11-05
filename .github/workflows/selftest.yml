@@ -19,7 +19,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q multimon-ng
-          python -m pip install numpy scipy sgp4 pillow pysstv soundfile
+          python -m pip install numpy scipy sgp4 pillow soundfile matplotlib
       - name: Python syntax
         run: python -m py_compile bin/*.py devtools/*.py
       - name: Self test (satellites, SSTV, APRS, memory)

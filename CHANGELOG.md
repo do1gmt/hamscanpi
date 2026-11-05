@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.7.76 – 2026-11-06
+
+- **Updates from GitHub, also from the dashboard:** System → Status → **"Update now"** (service `hamscanpi-update`):
+  waits until no scan and no satellite pass is running, `git pull`, set-up, restart; the output appears in the
+  dashboard and in `log/update.log`. `bin/update.sh` does the same by SSH (`--now` without waiting); it copies
+  itself before `git pull` so the running script is never half old, half new.
+- **One set-up script for everything** (`bin/setup_system.sh`, run by the installer and by every update): packages,
+  DVB-T blacklist, **udev rule for RTL-SDR sticks** (fresh Raspberry Pi OS: `rtl_sdr` failed with
+  `usb_open error -3` – no access for a service without a desktop login), configuration (`bin/migrate_config.py`
+  now also removes bands that no longer exist, e.g. LPD), ft8_lib, the services web/scheduler/rescue/mdns/update,
+  sudo rule (now also for starting the update), persistent journal, Wi-Fi power saving off, PMSDR service.
+  Before, an update by git only pulled and restarted two services – new services, rules and packages were missing.
+- **Installer:** asks once for the language (Deutsch / English, default from the system language; `--lang de`
+  asks nothing) – its messages and the dashboard are set to it; `--port 8090` for another port.
+- **No access to the stick** now gives a clear notice "No access rights to the stick" (checked every minute) and
+  the scan error says so, instead of "RTL-SDR delivers no data".
+- System → Devices shows the **serial number** next to the stick name (two sticks of the same model).
+- **Publishing (maintainers):** `hamscanpi-publish.sh` (built with `devtools/build_publish.sh`) runs on a PC with
+  git and a GitHub SSH key: working copy next to it, new files, check for personal files, commit, tag, push.
+- Self-test section 45. README: installation (language, udev rule, update service), updates, publishing.
+
+## 1.7.75 – 2026-11-06
+
+- **Installer without questions:** ft8_lib is always built (FT8/FT4 exists on shortwave, 6 m, 2 m and 70 cm – the
+  old question said "shortwave only"; a failed build only gives a warning); no password prompt (set it in the
+  dashboard, the installer reminds you); the PMSDR service is set up automatically when its program exists.
+  Also installs build tools and `iw`. Final message: re-plug the stick, both addresses, the next steps.
+- **Self test needs nothing extra:** pysstv (MIT, pure Python, only generates SSTV test signals) is bundled in
+  `devtools/vendor/` – no pip on Raspberry Pi OS (where pip refuses system installs). GitHub workflow no longer
+  installs it.
+- **Documentation:** quick start at the top of the README; Installation rewritten – requirements (Pi, Raspberry Pi
+  OS Lite 64 bit, sudo user, network), `apt update/full-upgrade`, **installing git first** (not in the Lite image),
+  everything the installer installs and changes, re-plugging the stick, first steps in the dashboard, self test,
+  updates. Intro mentions shortwave with direct-sampling sticks. docs/testing.md updated.
+
+## 1.7.74 – 2026-11-05
+
+- **Satellites: horizon and minimum elevation** (Settings → Satellite priorities), both general settings:
+  *Horizon (minimum elevation all around)* 0–30° – only the part of a pass above it is recorded (pre-roll before
+  it), passes that never rise more than 1° above it are dropped; *Only passes reaching at least …* 10–60° – lower
+  passes stay in the list greyed out ("too low", also in the preview) and are not recorded. Defaults 0° / 10° =
+  as before. Applies to planning, the pass list, the update's wait for a free window and the "in the sky" tile.
+- **Location check after a network change:** when HamScanPi is in a different network (other gateway), the
+  dashboard asks on every visit until answered whether the locator is still right ("Still right" / "Save").
+- **`hamscanpi.local`:** new service `hamscanpi-mdns` announces the name with the current IPv4 address via avahi
+  (`avahi-publish -a`) unless the host name already is "hamscanpi"; follows address changes; a name collision
+  (second HamScanPi) gives a notice. The update installs avahi-daemon/avahi-utils if missing; System → Services
+  shows the address; the new-network notice links to it.
+- **Stick plugged in again:** the earlier "Stick removed" notice of the same stick is acknowledged automatically,
+  one notice "Stick plugged in again: … back after N min" remains.
+- **Band LPD removed** – it is a segment of the 70 cm band (same 69 channels). The update removes it from
+  `scanner.json`, the band selection and schedules; old hits keep their band name.
+- GitHub workflow: matplotlib installed (self-test section 42 needs it – the only failing section there).
+- Self-test sections 43, 44. README: horizon/minimum elevation, hamscanpi.local, location check.
+
 ## 1.7.73 – 2026-11-03
 
 - **"Server not reachable" and stuttering Live over Wi-Fi:** the diagnostics showed the server answering its own

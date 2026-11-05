@@ -1,214 +1,82 @@
 #!/bin/bash
 # HamScanPi – installation on a Raspberry Pi (Raspberry Pi OS / Debian).
-# Run as your normal user from the cloned repository:   ./install.sh [port]
-#
-# What it does:
-#   1. installs the Debian packages (Python, rtl-sdr, multimon-ng, …)
-#   2. blacklists the DVB-T kernel driver so rtl_sdr can use the stick
-#   3. creates the local config files and data directories
-#   4. optionally builds ft8_lib (FT8/FT4 decoding on shortwave)
-#   5. installs and starts two systemd services: hamscanpi-web and hamscanpi-scheduler
+# Run as your normal user from the cloned repository:
+#   ./install.sh                 asks for the language (Deutsch / English), everything else runs on its own
+#   ./install.sh --lang de       without any question;  --port 8090 for another port (rescue page: port + 1)
+# Everything that is set up on the system is in bin/setup_system.sh (the same script runs on every update):
+# packages, DVB-T driver blacklist, access rights for RTL-SDR sticks, configuration, ft8_lib, the services
+# hamscanpi-web/-scheduler/-rescue/-mdns/-update, a sudo rule for the dashboard buttons, persistent system journal,
+# Wi-Fi without power saving. Locator, callsign, password, notifications … are set later in the dashboard.
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
-PORT="${1:-8080}"
-USER_NAME="$(id -un)"
-bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
-ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
-warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
-
-[ "$(id -u)" = 0 ] && { echo "Please run as your normal user, not as root (sudo is used where needed)."; exit 1; }
-command -v apt-get >/dev/null || { echo "This installer needs a Debian-based system (Raspberry Pi OS)."; exit 1; }
-
-bold "1/5 Packages"
-sudo apt-get update -q
-sudo apt-get install -y -q python3 python3-numpy python3-scipy python3-matplotlib python3-pil \
-    python3-soundfile python3-sgp4 rtl-sdr multimon-ng sqlite3 alsa-utils util-linux curl git
-ok "packages installed"
-
-bold "2/5 RTL-SDR driver"
-if ! grep -rqs "dvb_usb_rtl28xxu" /etc/modprobe.d/; then
-    echo "blacklist dvb_usb_rtl28xxu" | sudo tee /etc/modprobe.d/blacklist-rtl-sdr.conf >/dev/null
-    sudo modprobe -r dvb_usb_rtl28xxu 2>/dev/null || true
-    ok "DVB-T driver blacklisted (re-plug the stick)"
-else
-    ok "DVB-T driver already blacklisted"
-fi
-
-bold "3/5 Configuration"
-mkdir -p "$DIR/data" "$DIR/log" "$DIR/recordings" "$DIR/reports"
-[ -f "$DIR/config/scanner.json" ] || { cp "$DIR/config/scanner.default.json" "$DIR/config/scanner.json"; ok "config/scanner.json created (band plan, receiver settings)"; }
-[ -f "$DIR/config/web_settings.json" ] || { cp "$DIR/config/web_settings.example.json" "$DIR/config/web_settings.json"; ok "config/web_settings.json created"; }
-chmod 600 "$DIR/config/web_settings.json"      # may hold the SMTP password later
-chmod +x "$DIR"/bin/*.py "$DIR"/bin/*.sh
-
-bold "4/5 FT8/FT4 decoder (optional, shortwave only)"
-if [ -x "$HOME/ft8_lib/decode_ft8" ]; then
-    ok "ft8_lib already built"
-else
-    read -r -p "  Build ft8_lib for FT8/FT4 decoding? Only needed with a shortwave receiver. [y/N] " a
-    if [[ "$a" =~ ^[yYjJ]$ ]]; then
-        sudo apt-get install -y -q build-essential
-        git clone --depth 1 https://github.com/kgoba/ft8_lib "$HOME/ft8_lib"
-        make -C "$HOME/ft8_lib" >/dev/null && ok "ft8_lib built: $HOME/ft8_lib/decode_ft8"
-    else
-        warn "skipped – FT8/FT4 segments will not be decoded"
-    fi
-fi
-
-bold "Dashboard password"
-if python3 "$DIR/bin/auth.py" status | grep -q "aktiv"; then
-    ok "password already set"
-else
-    read -r -p "  Protect the dashboard with a password? Recommended if the Pi is reachable from outside your home network. [Y/n] " a
-    if [[ ! "$a" =~ ^[nN]$ ]]; then
-        python3 "$DIR/bin/auth.py" set && ok "password set – change it later under Settings → Access protection"
-    else
-        warn "no password – everyone on your network can use the dashboard"
-    fi
-fi
-
-bold "PMSDR (optional)"
-if [ -x /usr/local/bin/pmsdr ] && ! systemctl cat pmsdr-control.service >/dev/null 2>&1; then
-    read -r -p "  /usr/local/bin/pmsdr found. Set up the pmsdr-control service with hotplug? [y/N] " a
-    if [[ "$a" =~ ^[yYjJ]$ ]]; then
-        sudo tee /etc/systemd/system/pmsdr-control.service >/dev/null <<UNIT
-[Unit]
-Description=PMSDR Control FIFO
-After=network.target
-
-[Service]
-Type=simple
-User=$USER_NAME
-ExecStart=/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
-Restart=on-failure
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-        sudo mkdir -p /etc/systemd/system/pmsdr-control.service.d
-        printf '[Unit]\nBindsTo=sys-subsystem-usb-pmsdr.device\nAfter=sys-subsystem-usb-pmsdr.device\n\n[Service]\nRestartSec=5\n' \
-            | sudo tee /etc/systemd/system/pmsdr-control.service.d/hotplug.conf >/dev/null
-        echo 'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04d8", ATTR{idProduct}=="000c", MODE="0666", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/sys/subsystem/usb/pmsdr", ENV{SYSTEMD_WANTS}+="pmsdr-control.service"' \
-            | sudo tee /etc/udev/rules.d/90-hamscanpi-pmsdr.rules >/dev/null
-        sudo systemctl daemon-reload
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=04d8 --action=add 2>/dev/null || true
-        ok "pmsdr-control set up – starts when the PMSDR is plugged in"
-    fi
-elif systemctl cat pmsdr-control.service >/dev/null 2>&1; then
-    ok "pmsdr-control service already present"
-else
-    ok "no PMSDR control program found (/usr/local/bin/pmsdr) – shortwave needs it, see docs/pmsdr.md"
-fi
-
-bold "5/5 Services"
-sudo tee /etc/systemd/system/hamscanpi-web.service >/dev/null <<UNIT
-[Unit]
-Description=HamScanPi web dashboard
-After=network.target
-
-[Service]
-User=$USER_NAME
-WorkingDirectory=$DIR
-ExecStart=/usr/bin/python3 $DIR/bin/webapp.py $PORT
-Restart=always
-RestartSec=3
-# Wächter: der Webserver prüft sich alle 30 s selbst; antwortet er 3 min nicht, startet systemd ihn neu
-NotifyAccess=main
-WatchdogSec=180
-# Speichergrenze: ein Ausreißer trifft nur den Webserver (Neustart) statt den ganzen Pi
-MemoryMax=500M
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-sudo tee /etc/systemd/system/hamscanpi-scheduler.service >/dev/null <<UNIT
-[Unit]
-Description=HamScanPi scheduler (scans and satellite passes)
-After=network.target
-
-[Service]
-User=$USER_NAME
-WorkingDirectory=$DIR
-ExecStart=/usr/bin/python3 $DIR/bin/scheduler.py
-Restart=always
-RestartSec=5
-# Wächter: Meldung bei jedem Durchlauf (10 s); hängt die Schleife 5 min, Neustart
-NotifyAccess=main
-WatchdogSec=300
-# Scans, Überflüge und Auswertung laufen in dieser Gruppe: bei Speichermangel trifft es den größten Prozess
-# (meist eine Auswertung), der Zeitplaner selbst läuft weiter
-MemoryMax=750M
-OOMPolicy=continue
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-sudo tee /etc/systemd/system/hamscanpi-rescue.service >/dev/null <<UNIT
-[Unit]
-Description=HamScanPi rescue page (restart services, reboot, diagnostics)
-After=network.target
-
-[Service]
-User=$USER_NAME
-WorkingDirectory=$DIR
-ExecStart=/usr/bin/python3 $DIR/bin/rescue.py $((PORT + 1))
-Restart=always
-RestartSec=3
-MemoryMax=120M
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-# sudo-Regel: genau diese Befehle ohne Passwort (Dienste neu starten, Pi neu starten) – vorher geprüft
-SYSTEMCTL_BIN="$(command -v systemctl || echo /usr/bin/systemctl)"
-SUDOERS_TMP="$(mktemp)"
-printf '# HamScanPi: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s reboot\n' \
-    "$USER_NAME" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" > "$SUDOERS_TMP"
-if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
-    sudo install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/hamscanpi
-else
-    echo "  sudo-Regel nicht gültig – Neustart-Knöpfe bleiben gesperrt"
-fi
-rm -f "$SUDOERS_TMP"
-# WLAN-Stromsparen aus: der Pi-WLAN-Chip schläft sonst zwischen den Paketen – Live ruckelt, das Dashboard meldet
-# immer wieder „Server nicht erreichbar“ (Antworten kommen gebündelt mit Sekunden Verspätung). Für einen Empfänger,
-# der dauernd erreichbar sein soll, die richtige Einstellung; gilt ab jetzt und nach jedem Neustart.
-if command -v nmcli >/dev/null 2>&1 && [ ! -f /etc/NetworkManager/conf.d/hamscanpi-wifi.conf ]; then
-    sudo mkdir -p /etc/NetworkManager/conf.d
-    printf '[connection]\nwifi.powersave = 2\n' | sudo tee /etc/NetworkManager/conf.d/hamscanpi-wifi.conf >/dev/null
-    echo "  WLAN-Stromsparen dauerhaft aus (ab der nächsten WLAN-Verbindung)"
-fi
-for w in $(ls /sys/class/net 2>/dev/null | grep '^wl'); do
-    sudo iw dev "$w" set power_save off 2>/dev/null && echo "  WLAN-Stromsparen auf $w jetzt aus"
+PORT=8080; LNG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --lang) LNG="$2"; shift 2;;
+        --port) PORT="$2"; shift 2;;
+        [0-9]*) PORT="$1"; shift;;            # alte Schreibweise: ./install.sh 8090
+        *) shift;;
+    esac
 done
-# Systemprotokoll über Neustarts hinweg behalten (sonst ist nach einem plötzlichen Neustart nicht mehr zu sehen,
-# warum – Stromversorgung, Absturz, Wächter); höchstens 64 MB, geschrieben wird gebündelt
-if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then
-    sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
-    printf '[Journal]\nStorage=persistent\nSystemMaxUse=64M\nSyncIntervalSec=5m\n' | sudo tee /etc/systemd/journald.conf.d/hamscanpi.conf >/dev/null
-    sudo systemctl restart systemd-journald 2>/dev/null || true
-    echo "  Systemprotokoll bleibt jetzt über Neustarts erhalten (höchstens 64 MB)"
-fi
-sudo systemctl daemon-reload
-sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler hamscanpi-rescue >/dev/null 2>&1
-sleep 3
-for i in 1 2 3 4 5 6 7 8; do
-    curl -fs "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && break; sleep 1
-done
-if curl -fs "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1; then
-    ok "dashboard: http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PORT/"
-else
-    warn "dashboard does not answer yet – check: journalctl -u hamscanpi-web -n 30"
-fi
+[ "$(id -u)" = 0 ] && { echo "Bitte als normaler Benutzer starten, nicht als root / Please run as your normal user, not as root."; exit 1; }
+command -v apt-get >/dev/null || { echo "Raspberry Pi OS / Debian nötig – needs Raspberry Pi OS / Debian."; exit 1; }
 
-cat <<EOF
+if [ -z "$LNG" ]; then
+    case "${LANG:-}" in de*) DEF=1;; *) DEF=2;; esac
+    echo
+    echo "  HamScanPi"
+    echo "  Sprache / Language:   [1] Deutsch   [2] English"
+    read -r -p "  [$DEF] > " a || a=""
+    case "${a:-$DEF}" in 1|d|D|de|DE) LNG=de;; *) LNG=en;; esac
+fi
+[ "$LNG" = de ] || LNG=en
+t() { if [ "$LNG" = de ]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
+echo
+echo "  $(t "Installation in $DIR – das dauert ein paar Minuten, es kommen keine weiteren Fragen." \
+             "Installing into $DIR – this takes a few minutes, no further questions.")"
+echo "  $(t "sudo fragt einmal nach deinem Passwort." "sudo asks for your password once.")"
+
+# Sprache gleich fürs Dashboard festlegen (auch bei einer erneuten Installation)
+[ -f "$DIR/config/web_settings.json" ] || cp "$DIR/config/web_settings.example.json" "$DIR/config/web_settings.json"
+python3 - "$DIR/config/web_settings.json" "$LNG" <<'PY'
+import json, sys
+p, lng = sys.argv[1], sys.argv[2]
+d = json.load(open(p, encoding="utf-8"))
+d["ui_lang"] = lng
+json.dump(d, open(p, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+PY
+
+sudo env HSP_USER="$(id -un)" HSP_DIR="$DIR" bash "$DIR/bin/setup_system.sh" --install --port "$PORT" --lang "$LNG"
+
+if ! python3 "$DIR/bin/auth.py" status 2>/dev/null | grep -q "aktiv"; then
+    printf '  \033[33m!\033[0m %s\n' "$(t "Noch kein Passwort fürs Dashboard – im Dashboard unter Einstellungen → Zugangsschutz setzen (empfohlen)." \
+                                        "No dashboard password yet – set one in the dashboard under Settings → Access protection (recommended).")"
+fi
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if [ "$LNG" = de ]; then cat <<EOF
+
+Nächste Schritte
+  1. Den RTL-SDR-Stick einmal ab- und wieder anstecken (oder den Pi neu starten).
+  2. Dashboard öffnen:  http://hamscanpi.local:$PORT/   oder   http://$IP:$PORT/
+     (Android-Handys kennen .local oft nicht – dort die IP-Adresse nehmen)
+  3. Einstellungen → Station: Locator (für Satelliten nötig), Rufzeichen.
+     Einstellungen → Zugangsschutz: Passwort setzen (empfohlen).
+     System → Geräte: den Stick zum Haupt-Stick machen (geschieht beim ersten Stick automatisch).
+  4. Scan → Bänder wählen, „Jetzt scannen“. Satelliten: den Chip „Satelliten“ einschalten.
+  Updates: im Dashboard unter System → Status („Jetzt aktualisieren“) oder  bin/update.sh
+  Alles prüfen:  bash devtools/selftest.sh   (simulierte Signale, die Installation bleibt unberührt)
+EOF
+else cat <<EOF
 
 Next steps
-  1. Open the dashboard, Settings → Station: enter your Maidenhead locator (needed for satellites)
-     and choose the language (English / Deutsch).
-  2. Scan → choose the receiver and the bands, press "Scan now".
-  3. Satellites: switch on the band "Satellites" – passes are recorded automatically.
-  PMSDR (shortwave): build the pmsdr control program first – see docs/pmsdr.md.
+  1. Unplug the RTL-SDR stick and plug it in again (or reboot the Pi).
+  2. Open the dashboard:  http://hamscanpi.local:$PORT/   or   http://$IP:$PORT/
+     (Android phones often do not resolve .local – use the IP address there)
+  3. Settings → Station: locator (needed for satellites), callsign.
+     Settings → Access protection: set a password (recommended).
+     System → Devices: make the stick the main stick (happens automatically for the first stick).
+  4. Scan → choose the bands, "Scan now". Satellites: switch on the chip "Satellites".
+  Updates: in the dashboard under System → Status ("Update now") or  bin/update.sh
+  Check everything:  bash devtools/selftest.sh   (simulated signals, does not touch your installation)
 EOF
+fi

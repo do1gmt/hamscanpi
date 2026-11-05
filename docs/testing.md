@@ -3,7 +3,6 @@
 ## Self test
 
 ```bash
-pip install pysstv          # only needed for the tests (generates SSTV test images)
 devtools/selftest.sh
 ```
 
@@ -18,9 +17,9 @@ The self test copies the repository to a temporary directory (your installation 
 | Stations | station overview per callsign and map with all stations (31), PSK Reporter packets (8), WSJT-X UDP output with outage and catch-up (34) |
 | EiBi | schedule: season, times and days, transmitter sites, upload, offline (35); EiBi chip in the scan with carrier measurement (38) |
 | Scan and receiver sharing | schedules (8), update waits for a free window (14), stick hangs / short glitches / FT8 false alarm (15), mixed operation: releasing the stick, hanging scan, arming delay (30), run exit codes (33), "new in last run" and the last-run filter (37), scan request blocked by a lock (40) |
-| System | system values and history (11), SDR sticks by serial number (12), backup and restore (17), notices and notification rules (19), band plan per country (21), offline notifications (26), unattended watch (27), watchdog, rescue page, diagnostics (29), antenna profiles (32), new network / IP address (39) |
+| System | update by git: publishing and `bin/update.sh` (45), system values and history (11), SDR sticks by serial number (12), backup and restore (17), notices and notification rules (19), band plan per country (21), offline notifications (26), unattended watch (27), watchdog, rescue page, diagnostics (29), antenna profiles (32), new network / IP address (39) |
 
-Some sections need `multimon-ng`, `ft8_lib` and `pysstv`; the GitHub workflow installs them.
+Some sections need `multimon-ng` and `ft8_lib` (both set up by `install.sh`). `pysstv` (MIT licence), which generates the SSTV test signals, is bundled in `devtools/vendor/` – nothing to install.
 
 ## Tools
 

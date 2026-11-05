@@ -12,7 +12,8 @@ import shutil
 import subprocess
 import time
 
-UNITS = {"hamscanpi-web": "Webserver", "hamscanpi-scheduler": "Zeitplaner", "hamscanpi-rescue": "Notfall-Seite"}
+UNITS = {"hamscanpi-web": "Webserver", "hamscanpi-scheduler": "Zeitplaner", "hamscanpi-rescue": "Notfall-Seite",
+         "hamscanpi-mdns": "Name im Netz"}
 SYSTEMCTL = shutil.which("systemctl") or "/usr/bin/systemctl"
 
 

@@ -103,6 +103,7 @@
       [19.7, 25.4, 29.7, 33.8, 37.2, 40.2, 42.1, 43.9, 49.6].map(g => `<option value="${g}">${String(g).replace('.', ',')} dB</option>`).join('');
     sg.value = settings.sat_gain == null ? '' : String(settings.sat_gain);
     $('satBeamPrefer').checked = settings.sat_beam_prefer !== false;
+    $('satHorizon').value = String(settings.sat_horizon ?? 0); $('satMinEl').value = String(settings.sat_min_el ?? 10);
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
@@ -1348,7 +1349,7 @@
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', e => {
     // die Zahl am Reiter „Treffer“ (neu im letzten Lauf) antippen: nur diese Treffer zeigen
@@ -1550,7 +1551,8 @@
       const ch = p.channels.map(c => MHz(c)).join(' + ');
       const dropped = (p.dropped || []).length ? `<br><small class="muted">nicht gleichzeitig: ${p.dropped.map(MHz).join(', ')}</small>` : '';
       let plan = '';
-      if (d.preview && !p.result) plan = `<span class="muted">${past ? 'nicht aufgenommen' : 'Vorschau – keine Aufnahme'}</span>`;
+      if (d.preview && !p.result) plan = `<span class="muted">${past ? 'nicht aufgenommen' : 'Vorschau – keine Aufnahme'}</span>`
+        + (p.below ? `<br><small class="muted">${esc(p.reason)}</small>` : '');
       else if (p.status === 'joined' && !p.result) plan = `<span class="ok">gemeinsam</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.result) {
         const r = p.result, cls = { done: 'ok', running: 'run', error: 'bad', skipped: 'bad', missed: 'muted', cancelled: 'muted' }[r.state] || '';
@@ -1584,15 +1586,16 @@
         const rig = (r.antenna || r.gain != null) && r.state !== 'running'
           ? `<br><small class="muted">${[r.antenna ? 'Antenne ' + esc(r.antenna) : '', r.gain != null && r.gain !== '' ? String(r.gain).replace('.', ',') + ' dB' : ''].filter(Boolean).join(' · ')}</small>` : '';
         plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}${rig}`;
-      } else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
+      } else if (p.status === 'skipped' && p.below) plan = `<span class="muted">${EN ? 'too low' : 'zu niedrig'}</span><br><small class="muted">${esc(p.reason)}</small>`;
+      else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';
       const when = past ? `vor ${fmtSpan(now - p.los)}` : live ? 'läuft gerade' : 'in ' + fmtSpan(p.aos - now);
-      if (p.score != null) {
+      if (p.score != null && !p.below) {
         const parts = Object.entries(p.score_parts || {}).filter(([, v]) => v).map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${v}`).join(', ');
         plan += `<br><small class="muted score" title="${esc(parts)}">${Math.round(p.score)} P${(p.why || []).length ? ' · ' + esc(p.why.join(' · ')) : ''}</small>`;
       }
-      return `<tr class="${live ? 'sat-now' : ''}${past ? ' sat-past' : ''}">
+      return `<tr class="${live ? 'sat-now' : ''}${past || p.below ? ' sat-past' : ''}">
         <td><b>${esc(p.name)}</b> <button type="button" class="track-btn" data-track="${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${esc(p.name)}" title="Flugbahn ansehen" aria-label="Flugbahn ansehen">🛰</button><br><small>${ch} MHz</small>${dropped}</td>
         <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
         <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}${beamTxt(p)}</small></td><td>${plan}</td></tr>`;
@@ -1626,6 +1629,10 @@
     try { const d = await post('/api/settings', { sat_beam_prefer: e.target.checked }); settings.sat_beam_prefer = d.settings.sat_beam_prefer; note($('satPrioNote'), '✓ gespeichert – der Plan wird neu berechnet'); setTimeout(loadSatPasses, 800); }
     catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
   });
+  [['satHorizon', 'sat_horizon'], ['satMinEl', 'sat_min_el']].forEach(([id, key]) => $(id).addEventListener('change', async e => {
+    try { const d = await post('/api/settings', { [key]: Number(e.target.value) }); settings[key] = d.settings[key]; note($('satPrioNote'), '✓ gespeichert – der Plan wird neu berechnet'); setTimeout(loadSatPasses, 800); }
+    catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
+  }));
   $('satGain').addEventListener('change', async e => {
     try { const d = await post('/api/settings', { sat_gain: e.target.value }); settings.sat_gain = d.settings.sat_gain; note($('satPrioNote'), '✓ gespeichert – gilt ab dem nächsten Überflug'); }
     catch (ex) { note($('satPrioNote'), 'Fehler: ' + ex.message, true); }
@@ -2010,11 +2017,33 @@
     }
     const v = s.version || {};
     tile(`${v.version}${v.commit ? ' <small class="muted">' + v.commit + '</small>' : ''}`, v.newer ? `Version – neu: ${v.latest}` : 'Version', v.newer ? 'warn' : '');
-    if (v.newer) warn.push(`Neue Version ${v.latest} verfügbar – auf dem Pi: bin/update.sh`);
+    if (v.newer) warn.push(`Neue Version ${v.latest} verfügbar – „Jetzt aktualisieren“ oder auf dem Pi: bin/update.sh`);
+    loadUpdate();
     $('sysGrid').innerHTML = tiles.join('');
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- Update per git (bin/update.sh über den Dienst hamscanpi-update) ----------
+  let updTimer = null;
+  async function loadUpdate(check) {
+    let d; try { d = await api('/api/update' + (check ? '?check=1' : '')); } catch (e) { return; }
+    $('updBox').hidden = !d.git;
+    const newer = d.latest && d.latest !== d.version;
+    $('updRun').disabled = d.running || !d.unit;
+    $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`) : (EN ? 'Update now' : 'Jetzt aktualisieren');
+    if (!d.unit) $('updHint').textContent = EN ? 'Run bin/update.sh once by SSH – afterwards updates work from here.' : 'Einmal per SSH bin/update.sh ausführen – danach geht das Update hier.';
+    $('updLog').hidden = !d.log; $('updLog').textContent = d.log || '';
+    $('updLog').scrollTop = $('updLog').scrollHeight;
+    clearTimeout(updTimer);
+    if (d.running) updTimer = setTimeout(() => loadUpdate(), 3000);
+  }
+  $('updRun').addEventListener('click', async () => {
+    if (!confirm(EN ? 'Update now? The dashboard restarts afterwards.' : 'Jetzt aktualisieren? Das Dashboard startet danach neu.')) return;
+    try { await post('/api/update', {}); toast(EN ? 'Update started' : 'Update gestartet'); setTimeout(() => loadUpdate(), 1500); }
+    catch (e) { toast(e.message, 6000); }
+  });
+  $('updCheck').addEventListener('click', () => loadUpdate(true));
+
   // ---------- Antennen-Profile (bin/antennas.py) ----------
   let antData = { profiles: [], current: {} };
   const antRange = p => (p.fmin != null && p.fmax != null) ? `${String(p.fmin).replace('.', ',')}–${String(p.fmax).replace('.', ',')}` : '';
@@ -2079,6 +2108,11 @@
       + `<td class="mono-num">${u.memory_mb != null ? u.memory_mb + ' MB' : '–'}</td><td class="mono-num">${u.restarts != null ? u.restarts + '×' : '–'}</td>`
       + `<td><button type="button" class="btn btn-small" data-svc="${esc(u.unit)}" ${d.sudo ? '' : 'disabled'}>Neu starten</button></td></tr>`).join('')
       || '<tr><td colspan="5" class="muted">–</td></tr>';
+    const M = d.mdns || {}, port = location.port || 80;
+    $('svcMdns').innerHTML = M.mode === 'alias' || M.mode === 'hostname'
+      ? `${EN ? 'In the network also reachable as' : 'Im Netz auch erreichbar unter'} <a href="http://${esc(M.name)}:${port}/" class="no-i18n">http://${esc(M.name)}:${port}</a>${EN ? ' (not on every Android phone – use the IP address there)' : ' (nicht auf jedem Android-Handy – dort die IP-Adresse nehmen)'}`
+      : M.mode === 'conflict' ? (EN ? `hamscanpi.local is already used by another device – this Pi: http://${esc(M.host)}.local:${port}` : `hamscanpi.local ist schon von einem anderen Gerät belegt – dieser Pi: http://${esc(M.host)}.local:${port}`)
+      : M.mode === 'missing' ? (EN ? 'Name in the network: avahi-utils missing – install the update again.' : 'Name im Netz: avahi-utils fehlt – Update noch einmal einspielen.') : '';
     $('svcReboot').disabled = !d.sudo;
     if (!d.sudo) note($('svcNote'), 'Neu starten ist noch nicht freigegeben – das Update legt die nötige sudo-Regel an.', true);
   }
@@ -2095,6 +2129,30 @@
     try { await post('/api/services/restart', { unit: 'reboot' }); note($('svcNote'), 'Der Pi startet neu – die Seite lädt in 90 s neu'); setTimeout(() => location.reload(), 90000); }
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
   });
+
+  // ---------- Standort nach einem Netzwechsel bestätigen (health.py schreibt data/location_check.json) ----------
+  async function checkLocation() {
+    if (!$('locCheck').hidden) return;
+    let d; try { d = await api('/api/location-check'); } catch (e) { return; }
+    if (!d.pending) return;
+    const since = d.since ? new Date(d.since * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    $('locText').textContent = EN
+      ? `Since ${since} HamScanPi has been in a different network (${d.ip}${d.old_ip ? ` instead of ${d.old_ip}` : ''}). Was the Pi moved? Is the locator ${d.locator || '(none)'} still right?`
+      : `HamScanPi hängt seit ${since} in einem anderen Netz (${d.ip}${d.old_ip ? ` statt ${d.old_ip}` : ''}). Wurde der Pi woanders hingestellt? Stimmt der Locator ${d.locator || '(keiner)'} noch?`;
+    $('locInput').value = d.locator || ''; $('locNote').textContent = '';
+    $('locCheck').hidden = false; $('locInput').focus();
+  }
+  async function answerLocation(action) {
+    try {
+      const d = await post('/api/location-check', { action, locator: $('locInput').value.trim() });
+      $('locCheck').hidden = true;
+      if (action === 'save') { settings.my_locator = d.locator; toast((EN ? 'Locator saved: ' : 'Locator gespeichert: ') + d.locator); loadSettings && loadSettings(); }
+    } catch (e) { note($('locNote'), 'Fehler: ' + e.message, true); }
+  }
+  $('locSame').addEventListener('click', () => answerLocation('ok'));
+  $('locSave').addEventListener('click', () => answerLocation('save'));
+  $('locInput').addEventListener('keydown', e => { if (e.key === 'Enter') answerLocation('save'); });
+  setTimeout(checkLocation, 1500); setInterval(checkLocation, 60000);
 
   // ---------- EiBi im Scan (Chip „EiBi“, Karte „Kurzwellen-Rundfunk im Scan“) ----------
   async function loadEibiScan() {
@@ -2416,7 +2474,7 @@
         body = '<p class="hint">Erkannt, aber HamScanPi kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.</p>';
       }
       return `<div class="stick-card${r.present ? '' : ' absent'}${role === '' && r.kind === 'rtl' && r.present ? ' pending' : ''}">
-        <div class="stick-head"><b class="no-i18n">${esc(r.label)}</b>${badge}</div>
+        <div class="stick-head"><b class="no-i18n">${esc(r.label)}</b>${r.serial ? ` <span class="stick-sn no-i18n" title="${EN ? 'serial number – tells two sticks of the same model apart' : 'Seriennummer – unterscheidet zwei Sticks gleicher Bauart'}">SN ${esc(r.serial)}</span>` : ''}${badge}</div>
         <div class="stick-sub">${where} · ${info}</div>
         ${warn.map(w => `<p class="hint warn-text">${esc(w)}</p>`).join('')}${body}</div>`;
     }).join('');

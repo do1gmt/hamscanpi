@@ -787,7 +787,49 @@ def write_result(key, **info):
         os.replace(tmp, RESULTS_FILE)
 
 
-def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=3 * 3600, prio=None):
+HORIZON_CHOICES = (0, 5, 10, 15, 20, 25, 30)
+MIN_EL_CHOICES = (10, 20, 30, 45, 60)
+
+
+def sat_limits(settings=None):
+    """Allgemeine Grenzen aus den Einstellungen: Horizont (Mindesthöhe rundherum, Gelände/Bebauung) und die
+    Mindest-Höchsthöhe eines Überflugs. Vorgabe 0° / 10° = wie früher."""
+    if settings is None:
+        try:
+            settings = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+        except Exception:
+            settings = {}
+    try:
+        hz = float(settings.get("sat_horizon", 0) or 0)
+    except (TypeError, ValueError):
+        hz = 0.0
+    try:
+        me = float(settings.get("sat_min_el", 10) or 10)
+    except (TypeError, ValueError):
+        me = 10.0
+    return max(0.0, min(30.0, hz)), max(10.0, min(60.0, me))
+
+
+def visible_window(tracker, p, horizon):
+    """Teil des Überflugs über dem Horizont (Höhe >= horizon): (Beginn, Ende) oder None, wenn er nie darüber kommt."""
+    if horizon <= 0:
+        return p["aos"], p["los"]
+    if p["max_el"] < horizon + 1:                    # höchstens gestreift: nichts Brauchbares
+        return None
+
+    def cross(lo, hi, rising):
+        for _ in range(14):
+            m = (lo + hi) / 2
+            above = tracker.look(m)[0] >= horizon
+            if above == rising:
+                hi = m
+            else:
+                lo = m
+        return hi if rising else lo
+    return cross(p["aos"], p["max_t"], True), cross(p["max_t"], p["los"], False)
+
+
+def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=3 * 3600, prio=None, settings=None):
     """Überflüge der gewählten Kanäle mit Aufnahmeplan. Ein Eintrag je Satellit und Überflug,
     dazu die geplanten Aufnahmen ('recordings'). prio: Prioritäten aus den Einstellungen.
     Probleme stehen als Text in 'problem' bzw. 'warnings' – nie eine Ausnahme nach außen."""
@@ -801,6 +843,7 @@ def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=
         return {"passes": [], "recordings": [], "problem": "Bahnrechnung fehlt (Paket python3-sgp4) – Update einspielen"}
     tles, st = load_tles(fetch=fetch)
     now = time.time()
+    horizon, min_max_el = sat_limits(settings)
     by_norad = {}
     for sid in selected_ids:
         if sid in BY_ID and eff_prio(sid, prio) > 0:      # Priorität 0 = nie aufnehmen
@@ -818,7 +861,14 @@ def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=
         chosen, dropped = channel_group(ids, prio)
         tr = Tracker(tles[norad], lat, lon)
         for p in passes(tr, now - past_s, hours + past_s / 3600, min_el):
-            raw.append(dict(p, key=f"{norad}_{int(p['aos']) // 60}", norad=norad, name=name,
+            vis = visible_window(tr, p, horizon)
+            if vis is None:                               # kommt nie über den Horizont: gar nicht erst zeigen
+                continue
+            p = dict(p, key=f"{norad}_{int(p['aos']) // 60}", geo_aos=p["aos"], geo_los=p["los"])
+            p["aos"], p["los"] = vis                     # aufgenommen wird nur, was über dem Horizont steht
+            if p["max_el"] < min_max_el:
+                p["below"] = min_max_el
+            raw.append(dict(p, norad=norad, name=name,
                             channels=chosen, dropped=dropped, prio=max(eff_prio(c, prio) for c in chosen),
                             base_prio=max(BY_ID[c]["prio"] for c in chosen),
                             labels=[BY_ID[c]["label"] for c in chosen], kind=BY_ID[chosen[0]]["kind"],
@@ -826,12 +876,18 @@ def upcoming(selected_ids, locator, hours=24.0, min_el=10.0, fetch=True, past_s=
             if beam:
                 raw[-1]["beam"] = dict(beam_window(tr, p, beam, BY_ID[chosen[0]]["center_hz"]),
                                        prefer=beam["prefer"], az=beam["az"], bw=beam["bw"])
-    plan, recs = make_plan(raw, now)
+    low = [p for p in raw if p.get("below")]
+    plan, recs = make_plan([p for p in raw if not p.get("below")], now)
+    for p in low:                                         # zu niedrig: sichtbar in der Liste, aber nicht geplant
+        p.update(rec=None, rec_start=None, rec_end=None, status="skipped", score=0, score_parts={}, why=[],
+                 reason=f"unter {p['below']:.0f}° (Einstellung „Nur Überflüge ab …“)")
+    plan = sorted(plan + low, key=lambda p: p["aos"])
     problem = None
     if no_data:
         why = "; ".join(f"{k}: {v}" for k, v in (st.get("errors") or {}).items())
         problem = "keine Bahndaten für " + ", ".join(no_data) + (f" – {why}" if why else "")
     return {"passes": plan, "recordings": recs, "problem": problem, "warnings": warnings,
+            "horizon": horizon, "min_max_el": min_max_el,
             "tle_age_h": round((now - st["fetched"]) / 3600, 1) if st["fetched"] else None,
             "tle_source": st.get("source", ""), "tle_errors": st.get("errors") or {},
             "lat": round(lat, 3), "lon": round(lon, 3)}

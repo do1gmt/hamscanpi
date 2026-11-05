@@ -37,6 +37,30 @@ for r in c.get("ranges", []):
                 if new:
                     sg.update(label=new["label"], frequencies_hz=new["frequencies_hz"], note=new["note"])
                     added.append("Wettersat (Meteor statt NOAA)")
+# Bänder, die es nicht mehr gibt (LPD steckt als Segment im 70-cm-Band): aus Bandplan, Auswahl und Zeitplänen
+GONE = ("LPD",)
+if any(r.get("name") in GONE for r in c.get("ranges", [])):
+    c["ranges"] = [r for r in c["ranges"] if r.get("name") not in GONE]
+    added.append("LPD entfernt (Segment im 70-cm-Band)")
+try:
+    _wp = BASE / "config" / "web_settings.json"
+    _ws = json.loads(_wp.read_text(encoding="utf-8"))
+    _ch = False
+    if any(b in GONE for b in _ws.get("selected_bands") or []):
+        _ws["selected_bands"] = [b for b in _ws["selected_bands"] if b not in GONE]; _ch = True
+    for g in GONE:
+        if g in (_ws.get("selected_segments") or {}):
+            _ws["selected_segments"].pop(g); _ch = True
+    for sc in _ws.get("schedules") or []:
+        if any(b in GONE for b in sc.get("bands") or []):
+            sc["bands"] = [b for b in sc["bands"] if b not in GONE]; _ch = True
+    if _ch:
+        _wp.write_text(json.dumps(_ws, indent=2, ensure_ascii=False), encoding="utf-8")
+except Exception:
+    pass
+c.setdefault("device_labels", {"pmsdr": "PMSDR", "rtlsdr": "RTL-SDR"})
+c.setdefault("antennas", {"pmsdr": "", "rtlsdr": ""})
+c.setdefault("allow_restricted_bands", False)
 names = {r["name"] for r in c.get("ranges", [])}
 new_bands = [r for r in d.get("ranges", []) if r["name"] not in names]
 c.setdefault("ranges", []).extend(new_bands)

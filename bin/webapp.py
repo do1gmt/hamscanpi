@@ -286,6 +286,7 @@ def load_settings():
         "sat_prio": {k: v for k, v in (data.get("sat_prio") or {}).items() if v == "pin" or str(v).isdigit()},
         "sat_gain": data.get("sat_gain"),
         "sat_beam_prefer": data.get("sat_beam_prefer", True),
+        "sat_horizon": _sat_limits(data)[0], "sat_min_el": _sat_limits(data)[1],
         "ui_lang": data.get("ui_lang"),
         "country": BPL.country(data), "country_suggest": BPL.suggest(data.get("my_locator")),
         "countries": [{"code": k, "name": v["name"], "region": v["region"],
@@ -304,6 +305,12 @@ def load_settings():
         "hf_device": {"label": (scanner_config().get("device_labels") or {}).get("pmsdr", ""),
                       "antenna": (scanner_config().get("antennas") or {}).get("pmsdr", "")},
     }
+
+
+def _sat_limits(data):
+    import satellites as SAT
+    h, m = SAT.sat_limits(data)
+    return int(h), int(m)
 
 
 def save_settings(data):
@@ -379,6 +386,18 @@ def save_settings(data):
         out["sat_prio"] = sp
     if "sat_beam_prefer" in data:
         out["sat_beam_prefer"] = bool(data["sat_beam_prefer"])
+    if "sat_horizon" in data or "sat_min_el" in data:
+        import satellites as SAT
+        if "sat_horizon" in data:
+            v = int(data["sat_horizon"])
+            if v not in SAT.HORIZON_CHOICES:
+                raise ValueError("Horizont: " + ", ".join(f"{x}°" for x in SAT.HORIZON_CHOICES))
+            out["sat_horizon"] = v
+        if "sat_min_el" in data:
+            v = int(data["sat_min_el"])
+            if v not in SAT.MIN_EL_CHOICES:
+                raise ValueError("Mindesthöhe: " + ", ".join(f"{x}°" for x in SAT.MIN_EL_CHOICES))
+            out["sat_min_el"] = v
     if "country" in data:
         if str(data["country"]).upper() not in BPL.COUNTRIES:
             raise ValueError("Land: " + ", ".join(BPL.COUNTRIES))
@@ -2284,7 +2303,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(dict(AN.load(), current=AN.current()))
             if path == "/api/services":
                 import services as SV
-                return self.send_json(SV.status())
+                import mdns_alias as MD
+                return self.send_json(dict(SV.status(), mdns=MD.state()))
             if path == "/api/diagnose":
                 import diag
                 self.send_response(200)
@@ -2300,6 +2320,22 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/wsjtx-udp":
                 import wsjtx_udp as WX
                 return self.send_json({"config": WX.cfg(), "state": WX.state()})
+            if path == "/api/update":
+                import subprocess as _sp
+                import housekeeping as HK
+                running = _sp.run(["systemctl", "is-active", "hamscanpi-update"], capture_output=True, text=True).stdout.strip()
+                try:
+                    tail = (BASE / "log" / "update.log").read_text(encoding="utf-8", errors="replace")[-6000:]
+                except OSError:
+                    tail = ""
+                up = HK.update_check(force=qs.get("check") == "1")
+                cur = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "?"
+                return self.send_json({"version": cur, "latest": up.get("latest"), "running": running in ("activating", "active"),
+                                       "state": running, "log": tail, "git": (BASE / ".git").exists(),
+                                       "unit": _sp.run(["systemctl", "cat", "hamscanpi-update"], capture_output=True).returncode == 0})
+            if path == "/api/location-check":
+                lc = read_json(BASE / "data" / "location_check.json", None)
+                return self.send_json({"pending": bool(lc), **(lc or {}), "locator": load_settings().get("my_locator", "")})
             if path == "/api/eibi/now":
                 import eibi as EI
                 return self.send_json({"items": EI.on_air(float(qs.get("khz", 0) or 0), float(qs.get("tol", 5) or 5))[:12],
@@ -2490,6 +2526,31 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.gate(path):
                 return
+            if path == "/api/update":
+                import subprocess as _sp
+                if not (BASE / ".git").exists():
+                    raise ValueError("Diese Installation stammt nicht aus git – Update nur mit bin/update.sh nach einer Neuinstallation per git clone")
+                sc = _sp.run(["sh", "-c", "command -v systemctl"], capture_output=True, text=True).stdout.strip() or "/usr/bin/systemctl"
+                r = _sp.run(["sudo", "-n", sc, "--no-block", "start", "hamscanpi-update"], capture_output=True, text=True, timeout=15)
+                if r.returncode != 0:
+                    raise ValueError("Update lässt sich nicht starten (sudo-Regel fehlt – einmal per SSH bin/update.sh ausführen): "
+                                     + (r.stderr or r.stdout).strip()[:200])
+                APPLOG.log("INFO", "webapp", "update_started", ip=self.client_address[0])
+                return self.send_json({"ok": True})
+            if path == "/api/location-check":
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(n) or b"{}") if n else {}
+                if data.get("action") == "save":
+                    import satellites as SAT
+                    loc = str(data.get("locator") or "").strip().upper()
+                    SAT.locator_to_latlon(loc)                     # prüft die Schreibweise (wirft ValueError)
+                    save_settings({"my_locator": loc})
+                    APPLOG.log("INFO", "webapp", "location_confirmed", locator=loc, changed=True)
+                else:
+                    APPLOG.log("INFO", "webapp", "location_confirmed", locator=load_settings().get("my_locator", ""),
+                               changed=False)
+                (BASE / "data" / "location_check.json").unlink(missing_ok=True)
+                return self.send_json({"ok": True, "locator": load_settings().get("my_locator", "")})
             if path == "/api/eibi/upload":
                 import eibi as EI
                 qs = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
@@ -2582,7 +2643,8 @@ class Handler(BaseHTTPRequestHandler):
                 # startet und dafür womöglich einen Scan unterbricht
                 tb = data.get("toggle_band") if isinstance(data.get("toggle_band"), dict) else {}
                 if (tb.get("name") == "Satelliten" and tb.get("on")) or "Satelliten" in (data.get("selected_segments") or {}) \
-                        or "sat_prio" in data or (data.get("toggle_segment") or {}).get("band") == "Satelliten":
+                        or "sat_prio" in data or "sat_horizon" in data or "sat_min_el" in data \
+                        or (data.get("toggle_segment") or {}).get("band") == "Satelliten":
                     write_json(BASE / "data" / "sat_arm.json", {"until": time.time() + 60})
                     APPLOG.log("INFO", "webapp", "satellites_arming", wait_s=60)
                 return self.send_json({"ok": True, "settings": res})

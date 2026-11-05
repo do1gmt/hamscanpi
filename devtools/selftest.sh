@@ -22,7 +22,9 @@ cd "$T"
 FAIL=0
 ok()  { echo "   $1: ok"; }
 bad() { echo "   $1: FEHLER"; FAIL=$((FAIL + 1)); }
-python3 -c "import pysstv" 2>/dev/null || { echo "pysstv fehlt: pip install pysstv"; exit 1; }
+# pysstv (MIT, reines Python) erzeugt nur die SSTV-Testsignale – liegt bei, muss nicht installiert werden
+export PYTHONPATH="$T/devtools/vendor${PYTHONPATH:+:$PYTHONPATH}"
+python3 -c "import pysstv" 2>/dev/null || { echo "pysstv fehlt (devtools/vendor)"; exit 1; }
 echo "== 1 Bahndaten und Plan"
 python3 devtools/make_tles.py data/tle.json
 python3 - <<'PY'
@@ -1326,5 +1328,96 @@ g["make_spectrum"](bb, br, 145e6, 145.15e6, f"{d}/spec.png")
 peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
 assert peak - base < 120, (base, peak)
 PY
+echo "== 43 Satelliten: Horizont rundherum und Mindesthöhe"
+(cd bin && timeout 120 python3 - <<'PY') && ok "aufgenommen wird nur über dem Horizont, zu niedrige Überflüge stehen ungeplant in der Liste" || bad "Horizont/Mindesthöhe"
+import satellites as S
+ids = [s["id"] for s in S.SATELLITES][:12]
+a = S.upcoming(ids, "JN59HH", fetch=False, past_s=0, settings={})
+b = S.upcoming(ids, "JN59HH", fetch=False, past_s=0, settings={"sat_horizon": 20, "sat_min_el": 30})
+assert a["horizon"] == 0 and a["min_max_el"] == 10 and b["horizon"] == 20 and b["min_max_el"] == 30
+A = {p["key"]: p for p in a["passes"]}
+assert b["passes"] and all(p["key"] in A for p in b["passes"])
+assert not [p for p in b["passes"] if p["max_el"] < 20]                       # nie über dem Horizont: entfällt
+for p in b["passes"]:
+    q = A[p["key"]]
+    assert q["aos"] < p["aos"] < p["los"] < q["los"]                          # nur der Teil über 20°
+    if p["max_el"] < 30:
+        assert p.get("below") and p["status"] == "skipped" and not p.get("rec")
+for r in b["recordings"]:
+    assert all(A[k]["max_el"] >= 30 for k in r["keys"])
+assert len(b["recordings"]) < len(a["recordings"])
+PY
+
+echo "== 44 Stick wieder angesteckt, Standortfrage nach Netzwechsel, Name im Netz"
+(cd bin && timeout 120 python3 - <<'PY') && ok "„abgezogen“ erledigt sich, Standortfrage bis zur Antwort, hamscanpi.local angemeldet bzw. belegt erkannt" || bad "Stick/Standort/Name"
+import json, os, stat, sys, tempfile, time
+from pathlib import Path
+import health as H, notices as NT
+NT.FILE = Path(tempfile.mkdtemp()) / "n.json"; NT.LOCK = NT.FILE.with_suffix(".lock")
+import sticks as STK
+S = {"key": "rtl:27244444", "label": "NESDR SMArt v5", "serial": "27244444", "role": "main", "kind": "rtl", "port": "1-1.4"}
+st = {}
+for present in (True, False, True):
+    STK.overview = lambda p=present: {"sticks": [dict(S, present=p)]}
+    H.check_sticks(st)
+items = NT.listing()["items"]
+gone = [r for r in items if r["title"].startswith("Stick abgezogen")]
+assert gone and not gone[0]["active"], gone                                   # beim Wiederkommen quittiert
+assert any(r["title"].startswith("Stick wieder angesteckt") and r["active"] for r in items)
+# Standortfrage: anderes Netz -> data/location_check.json; Webserver beantwortet sie
+H.BASE = Path(tempfile.mkdtemp()); (H.BASE / "data").mkdir(); (H.BASE / "config").mkdir()
+(H.BASE / "config" / "web_settings.json").write_text(json.dumps({"my_locator": "JN59HH"}))
+seq = iter([{"iface": "eth0", "ip": "192.168.178.92", "gw": "192.168.178.1", "gwmac": "aa"}] * 2
+           + [{"iface": "eth0", "ip": "10.0.5.23", "gw": "10.0.5.1", "gwmac": "bb"}] * 2)
+H.net_state = lambda: next(seq)
+st = {}
+for _ in range(4):
+    H.check_network(st)
+lc = json.loads((H.BASE / "data" / "location_check.json").read_text())
+assert lc["ip"] == "10.0.5.23" and lc["old_ip"] == "192.168.178.92"
+# Name im Netz: avahi-publish nachgestellt (läuft = angemeldet, bricht mit „collision“ ab = belegt)
+import mdns_alias as MD
+MD.STATE = Path(tempfile.mkdtemp()) / "m.json"
+MD._ip = lambda: "192.168.178.92"
+d = tempfile.mkdtemp()
+for name, body in (("ok", "sleep 30"), ("busy", "echo 'Failed to add address: Local name collision' >&2; exit 1")):
+    os.makedirs(f"{d}/{name}", exist_ok=True)
+    f = f"{d}/{name}/avahi-publish"
+    open(f, "w").write("#!/bin/sh\n" + body + "\n"); os.chmod(f, 0o755)
+os.environ["PATH"] = f"{d}/ok:" + os.environ["PATH"]
+MD.run(8080, rounds=1, every=0, host="raspberrypi")
+assert MD.state()["mode"] == "alias" and MD.state()["url"] == "http://hamscanpi.local:8080", MD.state()
+os.environ["PATH"] = f"{d}/busy:" + os.environ["PATH"]
+MD.run(8080, rounds=1, every=0, host="raspberrypi")
+assert MD.state()["mode"] == "conflict" and MD.state()["name"] == "raspberrypi.local", MD.state()
+MD.run(8080, rounds=1, every=0, host="HamScanPi")
+assert MD.state()["mode"] == "hostname"
+PY
+echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
+upd45() {
+    # „set -e“ wirkt in einer &&-Kette nicht – jeder Schritt prüft selbst (|| return 1)
+    local G; G="$(mktemp -d)"
+    export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+    git config --global user.name >/dev/null || git config --global user.name t
+    git config --global user.email >/dev/null || git config --global user.email t@x
+    git init -q --bare -b main "$G/remote.git" || return 1
+    mkdir -p "$G/src" "$G/pub" "$G/fake" && cp -r "$SRC/." "$G/src/" && rm -rf "$G/src/.git" "$G/src/data" "$G/src/log" || return 1
+    echo 9.9.1 > "$G/src/VERSION"
+    (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.1" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
+    git clone -q "$G/remote.git" "$G/pi" 2>/dev/null || return 1
+    echo 9.9.2 > "$G/src/VERSION"
+    (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.2" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
+    git -C "$G/remote.git" tag | grep -q v9.9.2 || return 1
+    printf '#!/bin/sh\necho "[sudo] $*"\n' > "$G/fake/sudo" && chmod +x "$G/fake/sudo"
+    cp "$G/pi/config/web_settings.example.json" "$G/pi/config/web_settings.json"
+    local OUTU; OUTU="$(cd "$G/pi" && HSP_SETUP_CMD="echo [setup]" HSP_USER="$(id -un)" bin/update.sh --now 2>&1)" || { echo "$OUTU" | tail -5; return 1; }
+    [ "$(cat "$G/pi/VERSION")" = 9.9.2 ] || return 1
+    echo "$OUTU" | grep -q "setup_system.sh --restart" || return 1
+    grep -q "9.9.1 → 9.9.2" "$G/pi/log/update.log" || return 1
+    rm -rf "$G"
+}
+upd45 && ok "Veröffentlicher legt Commit und Tag an, der Pi holt die Version und richtet das System ein" || bad "Update per git"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

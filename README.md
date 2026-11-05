@@ -13,8 +13,13 @@ everything in a web dashboard you open on your phone or PC. When an amateur sate
 it interrupts the scan, follows the Doppler shift and records the pass – including SSTV images from
 the ISS and from CubeSats.
 
-It works with an RTL-SDR stick (VHF/UHF, satellites) and optionally with a
-PMSDR receiver (IW3AUT) for shortwave.
+It works with an RTL-SDR stick – VHF/UHF and satellites, and shortwave too with sticks that have direct
+sampling (e.g. Nooelec NESDR SMArt v5, RTL-SDR Blog V3) – and optionally with a PMSDR receiver (IW3AUT) for
+shortwave.
+
+**Quick start** on a fresh Raspberry Pi OS Lite: `sudo apt install -y git`, then
+`git clone https://github.com/do1gmt/hamscanpi.git && cd hamscanpi && ./install.sh`, re-plug the stick and open
+`http://hamscanpi.local:8080/` – details under [Installation](#installation).
 
 ![Scan page: bands, satellite passes and scan status](docs/screenshots/scan.png)
 
@@ -170,6 +175,11 @@ an unreachable target is logged once (`wsjtx_udp_failed` / `wsjtx_udp_resumed`),
 are sent afterwards, older ones are dropped (useless for a live display). "Save and send test packet" checks a
 target right away.
 
+**Satellites – horizon and minimum elevation** (Settings → Satellite priorities): *Horizon* is the elevation
+below which terrain or buildings hide the sky, the same all around (0–30°, default 0°): only the part of a pass
+above it is recorded, passes that never get above it are dropped. *Only passes reaching at least …* (10–60°,
+default 10°): lower passes stay greyed out in the list ("too low") and are not recorded.
+
 **Antenna profiles:** under *System → Devices → Antennas* (a collapsible section at the top of the card – edit the
 fields in place, "+ Antenna" adds one, ✕ deletes, then "Save") each antenna is created once (name, frequency range,
 and for directional antennas direction, beamwidth, elevation – the existing entries become the first profiles).
@@ -189,7 +199,13 @@ with a "now" button in the pass list), so looking around or choosing satellites 
 scan.
 
 **Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
-network it is reachable at the address it gets by DHCP – or as `http://<hostname>.local:8080` where mDNS works.
+network it is reachable at the address it gets by DHCP – and as **`http://hamscanpi.local:8080`**: the service
+`hamscanpi-mdns` announces that name via avahi with the current address, whatever the Pi's host name is (the host
+name itself is not changed; if another device already uses the name, this Pi stays reachable as
+`<hostname>.local` and a notice says so). Windows 10/11, macOS, iOS and Linux resolve `.local` names; Android
+does not reliably – use the IP address there (it is in the push message). In a **different network** (other
+gateway) the dashboard asks on the next visit, until answered, whether the locator is still right ("Still right" /
+"Save").
 When the IP address or the network changes (judged by the gateway and its hardware address, confirmed by two checks
 a minute apart), HamScanPi shows a notice "New network: <IP>" / "New IP address: <IP>" with the links and sends it
 by mail/push (event "New network / new IP address", on by default; without internet it is sent as soon as there is
@@ -233,19 +249,69 @@ FT8/FT4, CW/RTTY and SSTV detection as with the PMSDR. There is no gain control 
 
 ## Installation
 
+**You need:** a Raspberry Pi 4 or 5 (a Pi 3 works, but slowly) with **Raspberry Pi OS Lite, 64 bit** (Debian 12
+"bookworm" or 13 "trixie"; a desktop is not needed), a user with sudo rights (the one created in Raspberry Pi
+Imager), network (cable recommended, Wi-Fi works) and an RTL-SDR stick. Set user, password, Wi-Fi and SSH in the
+Imager before writing the card, then log in by SSH.
+
+**1. Bring the system up to date and install git** (git is not part of the Lite image):
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y git
+```
+
+**2. Get HamScanPi and install it:**
 ```bash
 git clone https://github.com/do1gmt/hamscanpi.git
 cd hamscanpi
-./install.sh            # optional: ./install.sh 8081 for another port
+./install.sh            # asks once for the language (Deutsch / English); ./install.sh --lang de asks nothing
+                        # another port: ./install.sh --port 8090 (the rescue page uses port + 1)
 ```
+The installer asks only for the language – messages and the dashboard are set to it – and takes a few minutes.
+Everything it sets up on the system is in `bin/setup_system.sh`, which runs again on every update. It
+- installs the Debian packages: Python with numpy, scipy, matplotlib, Pillow, soundfile, sgp4; `rtl-sdr` (programs
+  and USB access for the stick – **no separate driver is needed**), `multimon-ng` (APRS, POCSAG), sqlite3,
+  alsa-utils, avahi (name in the network), build tools and `iw`;
+- blacklists the DVB-T TV driver of the kernel that would otherwise grab the stick;
+- builds **ft8_lib** for FT8/FT4 (shortwave, 6 m, 2 m, 70 cm) in `~/ft8_lib`;
+- creates `config/scanner.json` and `config/web_settings.json`;
+- gives the stick access rights (udev rule `/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules` – without it `rtl_sdr`
+  reports `usb_open error -3`);
+- installs the services `hamscanpi-web` (dashboard, port 8080), `hamscanpi-scheduler` (scans, satellite passes),
+  `hamscanpi-rescue` (rescue page, port 8081), `hamscanpi-mdns` (name `hamscanpi.local`) and `hamscanpi-update`
+  (the update button);
+- adds a sudo rule for exactly the dashboard buttons (restart services, start the update, reboot), keeps the
+  system journal across reboots (max. 64 MB) and switches Wi-Fi power saving off (otherwise Live stutters over
+  Wi-Fi).
 
-The installer sets up the packages, the RTL-SDR driver blacklist, the local configuration and two
-systemd services (`hamscanpi-web`, `hamscanpi-scheduler`). Then open `http://<pi-address>:8080/`
-and enter your locator under *Settings → Station*.
+If the PMSDR control program `/usr/local/bin/pmsdr` exists, its service is set up as well (see
+[docs/pmsdr.md](docs/pmsdr.md)).
 
-Update later with `bin/update.sh` – it pulls the new version, completes your local configuration and
-restarts the services. The dashboard shows a notice under *System → Status* when a new version is out.
-Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+**3. Re-plug the stick** (or reboot) – until then the old TV driver may still hold it.
+
+**4. Open the dashboard:** `http://hamscanpi.local:8080/` or `http://<IP-of-the-Pi>:8080/` (Android phones often do
+not resolve `.local` – use the IP there; `hostname -I` on the Pi shows it). Then, all in the dashboard:
+- *Settings → Station*: locator, callsign, language, country/band plan;
+- *Settings → Access protection*: a password (recommended – without it everyone in your network can use it);
+- *System → Devices*: make the stick the **main stick** (it is recognised by its serial number);
+- *Settings → Notifications*: mail or push, if wanted;
+- choose bands and satellites on the *Scan* page and start a scan.
+
+**Check the installation** (optional): `bash devtools/selftest.sh` runs about 40 checks against simulated signals
+in a temporary copy – your installation is not touched. Everything it needs is installed or bundled.
+
+**Updates** come from GitHub: *System → Status → "Update now"* in the dashboard, or `bin/update.sh` by SSH. Both
+wait until no scan and no satellite pass is running, pull the new version (`git pull`), run `bin/setup_system.sh`
+(new packages, services, rules, configuration) and restart the services; the output is shown in the dashboard and
+kept in `log/update.log`. Settings, data and recordings stay. The dashboard checks GitHub once a day and shows
+when a new version is out. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+*Updating an older installation for the first time this way* (before 1.7.76 `bin/update.sh` did not set up the
+system yet): `cd ~/hamscanpi && git pull && bin/update.sh` – from then on the button works.
+
+*Maintainers* publish a version from a PC with git and a GitHub SSH key: `bash hamscanpi-publish.sh` (built with
+`devtools/build_publish.sh`) clones or updates a working copy next to it, replaces its files with the new version,
+commits, tags `v<version>` and pushes; nothing personal can get into the repository (checked before the commit).
 
 ### Files
 

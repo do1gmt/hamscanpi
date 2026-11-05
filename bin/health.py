@@ -94,18 +94,42 @@ def check_sticks(st):
     now_present = {r["key"]: r for r in ov["sticks"] if r.get("present") and r.get("kind") == "rtl"}
     before = set(st.get("sticks_present") or [])
     if "sticks_present" in st:
+        gone = st.setdefault("sticks_removed", {})
         for k in now_present.keys() - before:
             r = now_present[k]
+            back = gone.pop(k, None)
+            if back:                                      # derselbe Stick ist wieder da: „abgezogen“ erledigt sich
+                try:
+                    NT.ack(back["id"])
+                except Exception:
+                    pass
+                mins = max(1, round((time.time() - back["t"]) / 60))
+                NT.event("stick", "info", "hardware", f"Stick wieder angesteckt: {r['label']}",
+                         f"Seriennummer {r.get('serial') or 'ohne'}, nach {mins} min wieder da, an {r.get('port') or '?'}.")
+                continue
             NT.event("stick", "info", "hardware", f"Stick angesteckt: {r['label']}",
                      f"{r['label']}, Seriennummer {r.get('serial') or 'ohne'}, an {r.get('port') or '?'}"
                      + ("" if r.get("role") else " – noch ohne Rolle, wird nicht benutzt."),
                      fix="" if r.get("role") else "Unter System → Geräte festlegen: Haupt-Stick, Reserve oder ignorieren.")
         for k in before - now_present.keys():
             reg = next((r for r in ov["sticks"] if r["key"] == k), {})
-            NT.event("stick", "warn" if reg.get("role") == "main" else "info", "hardware",
-                     f"Stick abgezogen: {reg.get('label', k)}",
-                     f"Seriennummer {reg.get('serial') or 'ohne'}" + (" – das war der Haupt-Stick." if reg.get("role") == "main" else ""))
+            ev = NT.event("stick", "warn" if reg.get("role") == "main" else "info", "hardware",
+                          f"Stick abgezogen: {reg.get('label', k)}",
+                          f"Seriennummer {reg.get('serial') or 'ohne'}" + (" – das war der Haupt-Stick." if reg.get("role") == "main" else ""))
+            gone[k] = {"t": time.time(), "id": ev["id"]}
     st["sticks_present"] = sorted(now_present)
+    # Zugriffsrechte: darf HamScanPi die angesteckten Sticks öffnen? (sonst „usb_open error -3“)
+    denied = [r for r in now_present.values() if r.get("node") and os.path.exists(r["node"])
+              and not os.access(r["node"], os.R_OK | os.W_OK)]
+    if denied:
+        NT.raise_("stick_access", "error", "hardware", "Keine Zugriffsrechte auf den Stick",
+                  ", ".join(f"{r['label']} ({r.get('serial') or 'ohne Seriennummer'}, {r['node']})" for r in denied)
+                  + " – HamScanPi darf ihn nicht öffnen, Scans und Live schlagen fehl („usb_open error -3“).",
+                  fix="Die udev-Regel fehlt: im Dashboard unter System „Jetzt aktualisieren“ bzw. per SSH bin/update.sh "
+                      "ausführen, danach den Stick einmal ab- und wieder anstecken.",
+                  cmd="cd ~/hamscanpi && bin/update.sh")
+    else:
+        NT.clear("stick_access")
     main = next((r for r in ov["sticks"] if r.get("role") == "main"), None)
     if main and not main.get("present"):
         others = [r for r in now_present.values() if r["key"] != main["key"]]
@@ -424,7 +448,11 @@ def check_network(st):
     port = _web_port()
     host = socket.gethostname()
     url = f"http://{cur['ip']}:{port}"
-    detail = (f"Dashboard: {url} · http://{host}.local:{port} · Notfall-Seite: http://{cur['ip']}:{port + 1} "
+    try:                                                  # Name im Netz (hamscanpi.local oder der Rechnername)
+        mname = json.loads((BASE / "data" / "mdns_state.json").read_text(encoding="utf-8")).get("name") or f"{host}.local"
+    except Exception:
+        mname = f"{host}.local"
+    detail = (f"Dashboard: {url} · http://{mname}:{port} · Notfall-Seite: http://{cur['ip']}:{port + 1} "
               f"(über {cur['iface']}, Gateway {cur['gw']}).")
     fix = ""
     if not same_net:
@@ -435,6 +463,13 @@ def check_network(st):
             loc = ""
         fix = (f"Anderes Netz – Standort gewechselt? Locator {loc or '(keiner)'} unter Einstellungen → Station anpassen, "
                f"sonst stimmen Überflugzeiten, Entfernungen und die Spots an PSK Reporter nicht.")
+    if not same_net:                                     # das Dashboard fragt beim nächsten Aufruf nach dem Standort
+        try:
+            (BASE / "data" / "location_check.json").write_text(json.dumps(
+                {"since": time.time(), "ip": cur["ip"], "old_ip": seen.get("ip"), "gw": cur["gw"], "iface": cur["iface"]}),
+                encoding="utf-8")
+        except OSError:
+            pass
     NT.event("network", "info", "system", f"{'Neues Netzwerk' if not same_net else 'Neue IP-Adresse'}: {cur['ip']}",
              detail, fix=fix)
     try:

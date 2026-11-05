@@ -460,6 +460,9 @@ class RtlDevice:
                 ok, how = usb_reset_rtl(self.index, node=self.node)
                 _applog("INFO" if ok else "WARN", "scanner", "rtl_usb_reset", ok=ok, detail=how)
                 time.sleep(2.0 if ok else 0.5)
+        if any("usb_open error -3" in str(x) or "LIBUSB_ERROR_ACCESS" in str(x) for x in problems):
+            raise RuntimeError("RTL-SDR: keine Zugriffsrechte auf den Stick (usb_open error -3) – udev-Regel fehlt: "
+                               "bin/update.sh ausführen bzw. im Dashboard „Jetzt aktualisieren“, dann den Stick neu anstecken")
         raise RuntimeError("RTL-SDR liefert keine Daten: " + problems[-1])
 
     def capture(self, seconds):

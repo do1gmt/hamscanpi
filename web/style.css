@@ -633,3 +633,6 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .live-dec-list .no-i18n { white-space: pre-wrap; }
 .es-wrap { max-height: 360px; overflow-y: auto; } .es-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .6rem; }
 .stat-new { cursor: pointer; } .stat-new.active { outline: 2px solid var(--amber); outline-offset: -2px; } .tabs-main .n { cursor: pointer; }
+.loc-box { width: min(560px, 100%); } .loc-box h2 { margin-top: 0; } .loc-box input { text-transform: uppercase; font-family: var(--mono, monospace); }
+.update-log { max-height: 260px; overflow: auto; font-size: .78rem; background: var(--panel-2); padding: .5rem .7rem; border-radius: 6px; white-space: pre-wrap; }
+.stick-sn { font-family: var(--mono, monospace); font-size: .85rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 4px; margin-left: .3rem; }

@@ -37,6 +37,8 @@ NEED=""
 python3 -c "import sgp4" 2>/dev/null || NEED="$NEED python3-sgp4"
 command -v multimon-ng >/dev/null || NEED="$NEED multimon-ng"
 command -v git >/dev/null || NEED="$NEED git"
+command -v avahi-daemon >/dev/null || NEED="$NEED avahi-daemon"            # Name im Netz: hamscanpi.local
+command -v avahi-publish >/dev/null || NEED="$NEED avahi-utils"
 if [ -n "$NEED" ]; then sudo apt-get install -y -q $NEED >/dev/null; fi
 ok "Pakete vorhanden"
 
@@ -74,7 +76,7 @@ for f in /etc/systemd/system/*.service /lib/systemd/system/*.service; do
     case "$(basename "$f")" in hamscanpi-*|pmsdr-control*) continue;; esac
     grep -qE "(webapp|scheduler)\.py" "$f" 2>/dev/null && grep -qi "pmsdr" "$f" 2>/dev/null && OLD_UNITS="$OLD_UNITS $(basename "$f")"
 done
-for u in hamscanpi-web.service hamscanpi-scheduler.service hamscanpi-rescue.service; do
+for u in hamscanpi-web.service hamscanpi-scheduler.service hamscanpi-rescue.service hamscanpi-mdns.service; do
     systemctl cat "$u" >/dev/null 2>&1 && sudo systemctl stop "$u" || true
 done
 if [ -n "${OLD_UNITS// /}" ]; then
@@ -135,6 +137,26 @@ c.setdefault("antennas", {"pmsdr": "", "rtlsdr": ""})
 c.setdefault("allow_restricted_bands", False)
 d = json.loads((base / "config" / "scanner.default.json").read_text(encoding="utf-8"))
 c["legal_note"] = d.get("legal_note", c.get("legal_note", ""))
+# Bänder, die es nicht mehr gibt (LPD steckt als Segment im 70-cm-Band): aus dem Bandplan und der Auswahl entfernen
+GONE = ("LPD",)
+if any(r.get("name") in GONE for r in c.get("ranges", [])):
+    c["ranges"] = [r for r in c["ranges"] if r.get("name") not in GONE]
+    print("  \033[32m✓\033[0m Band LPD entfernt (ist als Segment im 70-cm-Band enthalten)")
+ws_p = base / "config" / "web_settings.json"
+if ws_p.exists():
+    ws = json.loads(ws_p.read_text(encoding="utf-8"))
+    ch = False
+    if any(b in GONE for b in ws.get("selected_bands") or []):
+        ws["selected_bands"] = [b for b in ws["selected_bands"] if b not in GONE]; ch = True
+    for g in GONE:
+        if g in (ws.get("selected_segments") or {}):
+            ws["selected_segments"].pop(g); ch = True
+    for sc in ws.get("schedules") or []:
+        if any(b in GONE for b in sc.get("bands") or []):
+            sc["bands"] = [b for b in sc["bands"] if b not in GONE]; ch = True
+    if ch:
+        ws_p.write_text(json.dumps(ws, indent=2, ensure_ascii=False), encoding="utf-8")
+        print("  \033[32m✓\033[0m LPD aus Bandauswahl und Zeitplänen entfernt")
 p.write_text(json.dumps(c, indent=2, ensure_ascii=False), encoding="utf-8")
 print("  \033[32m✓\033[0m Bandplan übernommen (Gerätenamen und Antennen bleiben, wie eingestellt)")
 if not c["allow_restricted_bands"]:
@@ -205,11 +227,28 @@ MemoryMax=120M
 [Install]
 WantedBy=multi-user.target
 UNIT
+sudo tee /etc/systemd/system/hamscanpi-mdns.service >/dev/null <<UNIT
+[Unit]
+Description=HamScanPi name in the network (hamscanpi.local)
+After=network-online.target avahi-daemon.service
+Wants=avahi-daemon.service
+
+[Service]
+User=$(id -un)
+WorkingDirectory=$NEW
+ExecStart=/usr/bin/python3 $NEW/bin/mdns_alias.py $PORT
+Restart=always
+RestartSec=10
+MemoryMax=60M
+
+[Install]
+WantedBy=multi-user.target
+UNIT
 # sudo-Regel: genau diese Befehle ohne Passwort (Dienste neu starten, Pi neu starten) – vorher geprüft
 SYSTEMCTL_BIN="$(command -v systemctl || echo /usr/bin/systemctl)"
 SUDOERS_TMP="$(mktemp)"
-printf '# HamScanPi: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s reboot\n' \
-    "$(id -un)" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" > "$SUDOERS_TMP"
+printf '# HamScanPi: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s reboot\n' \
+    "$(id -un)" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" > "$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/hamscanpi
 else
@@ -236,7 +275,8 @@ if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then
     echo "  Systemprotokoll bleibt jetzt über Neustarts erhalten (höchstens 64 MB)"
 fi
 sudo systemctl daemon-reload
-sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler hamscanpi-rescue >/dev/null 2>&1
+sudo systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
+sudo systemctl enable --now hamscanpi-web hamscanpi-scheduler hamscanpi-rescue hamscanpi-mdns >/dev/null 2>&1
 sleep 3
 for u in hamscanpi-web hamscanpi-scheduler hamscanpi-rescue; do echo "  $u: $(systemctl is-active $u)"; done
 for i in 1 2 3 4 5 6 7 8; do curl -fs -m 3 "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1 && break; sleep 1; done
