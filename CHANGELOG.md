@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.83 – 2026-11-06
+
+- **Phone: jump bar** at the top of every tab (below the header, stays in place while scrolling): one chip per card
+  of the tab (e.g. System: Notices, Now, Services, Devices, … Backup) – tap to jump there; the chip of the card you
+  are in is highlighted. Plus a round **↑** button (bottom right) back to the top. Desktop unchanged.
+
 ## 1.7.82 – 2026-11-06
 
 - **Shortwave per stick by hand** (System → Devices → "Shortwave": automatic / yes / no): until now HamScanPi went

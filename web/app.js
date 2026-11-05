@@ -1343,6 +1343,48 @@
     (bandplan || []).filter(b => b.name === 'Satelliten' || (b.legal === 'amateur' && (b.segments || []).some(sg => CALL_MODES.includes(sg.mode))))
       .forEach(b => { const o = document.createElement('option'); o.value = b.name; o.textContent = b.name; sel.appendChild(o); });
   }
+  // ---------- Handy: Sprungleiste zu den Karten des Reiters und „nach oben“ ----------
+  function buildJump(view) {
+    if (!view) return;
+    const old = view.querySelector(':scope > .jump-bar'); if (old) old.remove();
+    const panels = [...view.querySelectorAll('.panel')].filter(p => !p.hidden && p.offsetParent !== null && p.querySelector('h2'));
+    if (panels.length < 3) return;                          // bei wenigen Karten lohnt sich keine Leiste
+    const nav = document.createElement('nav'); nav.className = 'jump-bar'; nav.setAttribute('aria-label', EN ? 'Jump to' : 'Springen zu');
+    panels.forEach((p, i) => {
+      if (!p.id) p.id = `p-${view.dataset.view}-${i}`;
+      const h = p.querySelector('h2').cloneNode(true); h.querySelectorAll('small, button, .muted').forEach(x => x.remove());
+      const label = h.textContent.replace(/\s+/g, ' ').replace(/[·–:-]\s*$/, '').trim();
+      if (!label) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'jump-chip'; b.textContent = label; b.dataset.target = p.id;
+      b.addEventListener('click', () => {
+        if (p.tagName === 'DETAILS') p.open = true;
+        p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      nav.appendChild(b);
+    });
+    view.prepend(nav);
+  }
+  function jumpCurrent() { buildJump(document.querySelector('section.view:not([hidden])')); }
+  const topBtn = document.createElement('button');
+  topBtn.type = 'button'; topBtn.className = 'to-top'; topBtn.textContent = '↑'; topBtn.title = EN ? 'to the top' : 'nach oben'; topBtn.hidden = true;
+  topBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  document.body.appendChild(topBtn);
+  let jumpT = null;
+  window.addEventListener('scroll', () => {
+    topBtn.hidden = window.scrollY < 700;
+    clearTimeout(jumpT); jumpT = setTimeout(() => {          // die Karte, in der man gerade ist, in der Leiste markieren
+      const bar = document.querySelector('section.view:not([hidden]) > .jump-bar'); if (!bar || !bar.offsetParent) return;
+      const lim = bar.getBoundingClientRect().bottom + 20;
+      let cur = null;
+      bar.querySelectorAll('.jump-chip').forEach(c => { const p = document.getElementById(c.dataset.target); if (p && p.getBoundingClientRect().top <= lim) cur = c; });
+      bar.querySelectorAll('.jump-chip').forEach(c => c.classList.toggle('on', c === cur));
+      if (cur) bar.scrollTo({ left: cur.offsetLeft - bar.clientWidth / 2 + cur.clientWidth / 2, behavior: 'smooth' });
+    }, 120);
+  }, { passive: true });
+  const setTopbarH = () => document.documentElement.style.setProperty('--topbar-h', (document.querySelector('.topbar')?.offsetHeight || 56) + 'px');
+  setTopbarH(); window.addEventListener('resize', setTopbarH);
+  setTimeout(jumpCurrent, 1500);                             // nach dem ersten Laden (Karten und Übersetzung stehen)
+
   function showView(name) {
     if (name === 'live') setTimeout(() => { eibiList(); eibiNow(true); }, 0);
     if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); loadInterf(); }, 0);   // nach dem Start des Skripts
@@ -1350,6 +1392,7 @@
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
     localStorage.setItem('view', name);
     window.scrollTo({ top: 0 });
+    setTimeout(jumpCurrent, 400);
     if (name === 'logs') loadLogs();
     if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); }, 0);
   }

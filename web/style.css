@@ -638,3 +638,19 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .stick-sn { font-family: var(--mono, monospace); font-size: .85rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 4px; margin-left: .3rem; }
 .brand-ver { margin-left: .45rem; font-size: .72rem; color: var(--muted); font-weight: 400; letter-spacing: .02em; }
 .stick-sn { white-space: nowrap; display: inline-block; }
+/* Handy: Sprungleiste zu den Karten eines Reiters, Knopf „nach oben“ */
+.jump-bar, .to-top { display: none; }
+@media (max-width: 640px) {
+  .jump-bar { display: flex; gap: .35rem; overflow-x: auto; position: sticky; top: var(--topbar-h, 56px); z-index: 20;
+              margin: 0 -.2rem; padding: .45rem .2rem; background: rgba(15,22,32,.96); backdrop-filter: blur(8px);
+              border-bottom: 1px solid var(--line); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .jump-bar::-webkit-scrollbar { display: none; }
+  .jump-chip { flex: 0 0 auto; padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+               color: var(--text); font-size: .8rem; white-space: nowrap; }
+  .view .panel { scroll-margin-top: calc(var(--topbar-h, 56px) + 3.2rem); }
+  .to-top { display: block; position: fixed; right: .8rem; bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 26;
+            width: 2.6rem; height: 2.6rem; border-radius: 50%; border: 1px solid var(--line); background: var(--panel);
+            color: var(--text); font-size: 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .to-top[hidden] { display: none; }
+}
+@media (max-width: 640px) { .jump-chip.on { border-color: var(--accent); color: var(--accent); } }
