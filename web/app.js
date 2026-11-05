@@ -2357,14 +2357,13 @@
     if (!d.enabled) parts.push('Melden ist aus – Einstellungen → Station → „FT8/FT4-Spots an PSK Reporter melden“.');
     else if (!d.ready) parts.push('Rufzeichen und Locator fehlen (Einstellungen → Station).');
     if (d.offline_since) parts.push(`Kein Internet seit ${new Date(d.offline_since * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })} – die Spots werden nachgemeldet.`);
+    const N = d.now || {};
+    if (N.receiver || N.locator)                            // was gemeldet wird: immer aus den Einstellungen
+      parts.push(`Empfänger ${N.receiver || '–'} · ${N.locator || '–'} · ${N.software || ''} (Einstellungen → Station).`);
     if (L) {
-      parts.push(`Zuletzt gemeldet als ${L.receiver} · ${L.locator} · ${L.software} · ${L.packets} Paket(e). Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
-      // seither geändert (Locator, Rufzeichen, Version): gilt ab der nächsten Meldung
-      const N = d.now || {}, diff = [];
-      if (N.receiver && N.receiver !== L.receiver) diff.push(N.receiver);
-      if (N.locator && N.locator !== L.locator) diff.push(N.locator);
-      if (N.software && N.software !== L.software) diff.push(N.software);
-      if (diff.length) parts.push(`Ab der nächsten Meldung: ${diff.join(' · ')}.`);
+      const when = L.t ? new Date(L.t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const diff = [L.receiver !== N.receiver && L.receiver, L.locator !== N.locator && L.locator, L.software !== N.software && L.software].filter(Boolean);
+      parts.push(`Letzte Meldung ${when}: ${L.packets} Paket(e)${diff.length ? ` – damals noch mit ${diff.join(' · ')}` : ''}. Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
     }
     $('pskHint').textContent = parts.join(' ');
   }

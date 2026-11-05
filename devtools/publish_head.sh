@@ -61,7 +61,10 @@ fi
 git diff --cached --stat | tail -1 | sed 's/^/  /'
 
 bold "3/4 Festschreiben"
-git commit -q -m "$HSP_MSG"
+# Betreff kurz (GitHub zeigt ihn je Ordner abgeschnitten an), Einzelheiten aus dem CHANGELOG darunter
+awk -v v="$V" '$0 ~ "^## "v" " {f=1; next} /^## / && f {exit} f' CHANGELOG.md > "$TMP/body.txt" 2>/dev/null || true
+{ printf '%s\n' "$HSP_MSG"; [ -s "$TMP/body.txt" ] && { echo; sed '/./,$!d' "$TMP/body.txt"; }; } > "$TMP/msg.txt"
+git commit -q -F "$TMP/msg.txt"
 git tag -a "v$V" -m "HamScanPi $V"
 ok "$OLDV → $V"
 

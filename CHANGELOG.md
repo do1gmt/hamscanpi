@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.88 – 2026-11-06
+
+- Fix: passes of satellites without a NORAD number yet (HC1PX, SakhaCube – internal numbers −2/−1) were never
+  recorded: their pass keys start with a minus, and `sat_pass.py --keys -2_…` was read as an unknown option
+  ("expected one argument"); the scheduler retried every 10 s until the pass was over. The keys are now passed
+  as `--keys=…`. Self-test section 49.
+- Publishing: the commit subject is short ("1.7.88: …", without "HamScanPi") so GitHub's file list shows what
+  changed; the details from the changelog are in the commit body.
+
+## 1.7.87 – 2026-11-06
+
+- System → PSK Reporter: the line under the spots now starts with the receiver from the settings ("Receiver DO1GMT ·
+  JN59JG · HamScanPi 1.7.87 (Settings → Station)") – that is what is reported; the last report follows with its
+  time and, if different, "then still with JN59HH · …". Before, only the values of the last report were shown, which
+  looked like a fixed locator as long as no new report had gone out.
+
 ## 1.7.86 – 2026-11-06
 
 - **Version · Update card:** the button is locked and says "Up to date" when the newest version is installed;

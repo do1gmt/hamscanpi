@@ -1440,6 +1440,18 @@ assert not [r for r in NT.listing()["items"] if r["key"] == "update_available" a
 H.update_days = lambda settings=None: 0
 H.check_update(st); assert calls[-1][1] is True                  # „nie“: nichts abfragen
 PY
+echo "== 49 Satelliten ohne NORAD-Nummer (Schlüssel mit Minus)"
+(cd bin && python3 - <<'PY') && ok "sat_pass.py nimmt Schlüssel wie „-2_29898…“ an (Aufruf wie im Zeitplaner)" || bad "Schlüssel mit Minus"
+import argparse, re
+src = open("scheduler.py", encoding="utf-8").read()
+assert '"--keys=" + ' in src
+ap = argparse.ArgumentParser()                    # dieselben Optionen wie sat_pass.py
+for line in open("sat_pass.py", encoding="utf-8"):
+    if line.strip().startswith("ap.add_argument("):
+        exec(line.strip())
+a = ap.parse_args(["--sats", "hc1px", "--until", "1", "--keys=" + ",".join(["-2_29898123", "57166_2989"])])
+assert a.keys == "-2_29898123,57166_2989" and a.sats == "hc1px", a
+PY
 echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
 upd45() {
     # „set -e“ wirkt in einer &&-Kette nicht – jeder Schritt prüft selbst (|| return 1)

@@ -501,7 +501,11 @@ def start_sat_pass(p):
     # -w statt -n: die Sperre ist manchmal nur einen Augenblick belegt (Statusabfrage des Dashboards,
     # vorheriger Überflug gibt den Stick gerade frei) – dann warten statt den Überflug still zu verlieren
     cmd = ["/usr/bin/flock", "-w", "30", str(LOCK), "python3", str(BASE / "bin" / "sat_pass.py"),
-           "--sats", ",".join(p["channels"]), "--until", str(p["rec_end"]), "--keys", ",".join(p.get("keys", [p["key"]]))]
+           "--sats", ",".join(p["channels"]), "--until", str(p["rec_end"]),
+           # „--keys=…“ statt „--keys …“: Satelliten ohne NORAD-Nummer (noch nicht katalogisiert, z. B. HC1PX = -2)
+           # haben Schlüssel mit Minus am Anfang – getrennt geschrieben hielt argparse das für eine Option und die
+           # Aufnahme startete nie („expected one argument“)
+           "--keys=" + ",".join(p.get("keys", [p["key"]]))]
     with open(BASE / "log" / "satellite.log", "a", encoding="utf-8") as out:
         pr = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
     SAT_PID.write_text(str(pr.pid))
