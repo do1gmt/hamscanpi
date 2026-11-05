@@ -637,3 +637,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .update-log { max-height: 260px; overflow: auto; font-size: .78rem; background: var(--panel-2); padding: .5rem .7rem; border-radius: 6px; white-space: pre-wrap; }
 .stick-sn { font-family: var(--mono, monospace); font-size: .85rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 4px; margin-left: .3rem; }
 .brand-ver { margin-left: .45rem; font-size: .72rem; color: var(--muted); font-weight: 400; letter-spacing: .02em; }
+.stick-sn { white-space: nowrap; display: inline-block; }

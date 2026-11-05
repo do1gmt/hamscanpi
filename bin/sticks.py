@@ -255,6 +255,11 @@ def update(key, **fields):
                 if not 0 <= v <= 60:
                     raise ValueError("Verstärkung zwischen 0 und 60 dB (0 = automatisch)")
                 r["gain"] = v
+        if "hf_mode" in fields:                        # Kurzwelle: auto (laut Modell) | on | off – per Hand festlegen
+            v = str(fields["hf_mode"] or "auto")
+            if v not in ("auto", "on", "off"):
+                raise ValueError("Kurzwelle: auto, on oder off")
+            r["hf_mode"] = v
         if "antenna" in fields:
             r["antenna"] = str(fields["antenna"] or "")[:60]
         if "ant_profile" not in fields and any(k in fields for k in ("antenna", "ant_az", "ant_bw", "ant_el", "ant_range",

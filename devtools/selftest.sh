@@ -1393,6 +1393,16 @@ assert MD.state()["mode"] == "conflict" and MD.state()["name"] == "raspberrypi.l
 MD.run(8080, rounds=1, every=0, host="HamScanPi")
 assert MD.state()["mode"] == "hostname"
 PY
+echo "== 46 Kurzwelle je Stick per Hand"
+(cd bin && python3 - <<'PY') && ok "„nein“ nimmt einem als v5 gemeldeten Stick die Kurzwelle, „ja“ gibt sie einem namenlosen" || bad "Kurzwelle per Hand"
+import sdrcaps as SC
+v5 = {"manufacturer": "Nooelec", "product": "NESDR SMArt v5", "tuner": "Rafael Micro R820T"}
+assert SC.caps(v5)["hf"] == "direct_q" and SC.caps(dict(v5, hf_mode="auto"))["hf"] == "direct_q"
+off = SC.caps(dict(v5, hf_mode="off"))
+assert off["hf"] is None and off["min_hz"] == 24e6 and not SC.hf_ok(dict(v5, hf_mode="off"))[0]
+gen = {"manufacturer": "Realtek", "product": "RTL2838UHIDIR", "tuner": "Rafael Micro R820T"}
+assert SC.caps(gen)["hf"] is None and SC.caps(dict(gen, hf_mode="on"))["hf"] == "direct_q"
+PY
 echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
 upd45() {
     # „set -e“ wirkt in einer &&-Kette nicht – jeder Schritt prüft selbst (|| return 1)

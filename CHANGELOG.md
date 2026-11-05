@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.82 – 2026-11-06
+
+- **Shortwave per stick by hand** (System → Devices → "Shortwave": automatic / yes / no): until now HamScanPi went
+  only by the model name stored in the stick, which is not always right (an older Nooelec reporting itself as
+  "NESDR SMArt v5", cheap sticks with any name). "No" limits the stick to 24 MHz – 1.7 GHz – shortwave bands are not
+  scanned with it, Live offers nothing below 24 MHz, the scan box says "VHF/UHF"; "yes" enables direct sampling
+  for a stick without a known name. Stored per serial number. Self-test section 46.
+- The serial number next to the stick name no longer wraps.
+
 ## 1.7.81 – 2026-11-06
 
 - Publishing: `hamscanpi-publish.sh` also creates the **GitHub release** (box "Releases" on the project page, notes

@@ -45,13 +45,24 @@ def caps(stick):
     model = next((m for pats, m in MODELS if all(p in text for p in pats)), None)
     if tuner == "Rafael Micro R828D" and "blog" in text:
         model = dict(MODELS[2][1])
-    out = {"min_hz": lo, "max_hz": hi, "hf": None, "hf_range": None, "model": None, "note": ""}
+    # per Hand festgelegt (System → Geräte → „Kurzwelle“): die Modellbezeichnung im Stick stimmt nicht immer –
+    # Billigsticks tragen irgendeinen Namen, ältere Modelle melden sich als neuere
+    mode = (stick or {}).get("hf_mode") or "auto"
+    if mode == "off":
+        model = None
+    elif mode == "on" and not model:
+        model = {"hf": "direct_q", "hf_range": (100e3, 28.8e6), "name": None}
+    out = {"min_hz": lo, "max_hz": hi, "hf": None, "hf_range": None, "model": None, "note": "", "hf_mode": mode}
     if model:
         out.update(hf=model["hf"], hf_range=list(model["hf_range"]), model=model["name"], min_hz=model["hf_range"][0])
-        if model.get("needs") == "rtl-sdr-blog":
+        if mode == "on" and not model.get("name"):
+            out["note"] = "Kurzwelle per Direktabtastung (per Hand eingestellt) – Kurzwellenantenne nötig, kein Verstärkungsregler"
+        elif model.get("needs") == "rtl-sdr-blog":
             out["note"] = "Kurzwelle braucht den RTL-SDR-Blog-Treiber (Aufwärtsmischer im Stick)"
-        else:
+        elif not out["note"]:
             out["note"] = "Kurzwelle per Direktabtastung (Q-Zweig) – Kurzwellenantenne nötig, kein Verstärkungsregler"
+    if mode == "off":
+        out["note"] = "Kurzwelle per Hand ausgeschaltet (System → Geräte)"
     return out
 
 
@@ -113,7 +124,7 @@ def hf_ok(stick):
     """Kann dieser Stick mit dem installierten Treiber Kurzwelle? (ja/nein, Begründung)"""
     c = caps(stick)
     if not c["hf"]:
-        return False, "dieser Stick empfängt erst ab 24 MHz"
+        return False, c["note"] if c.get("hf_mode") == "off" else "dieser Stick empfängt erst ab 24 MHz"
     if c["hf"] == "upconverter":
         return False, c["note"]
     fl = tool_flags()
