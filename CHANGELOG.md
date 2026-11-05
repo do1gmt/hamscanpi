@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.86 – 2026-11-06
+
+- **Version · Update card:** the button is locked and says "Up to date" when the newest version is installed;
+  "Check for a new version" answers "No newer version – 1.7.86 is up to date" (or "New version … available",
+  or "GitHub not reachable"); the date of the last check is shown.
+- **Automatic check** every N days, set in the card ("Check automatically": never / daily / every 3 days /
+  weekly / every 14 days / monthly; default daily) – done by the scheduler, no browser needed. A newer version
+  gives the notice "New version … available" (once per version, until it is installed) and, depending on the
+  notification settings, mail/push – new event type "New version available" under Notifications.
+- The System tab no longer asks GitHub by itself on every visit (only the scheduler and the check button do).
+- Self-test section 48.
+
 ## 1.7.85 – 2026-11-06
 
 - System: the update has its own card **"Version 1.7.85 · Update"** (with "· new: …" or "· up to date") instead of

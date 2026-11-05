@@ -224,7 +224,8 @@ def flush_outbox():
 # ---------------------------------------------------------------- Hinweise (notices.py)
 EVENT_KEYS = {"stick": "Stick angesteckt, abgezogen oder gewechselt", "reboot": "System neu gestartet",
               "storage": "Probleme mit Speicherkarte / Dateisystem", "power": "Unterspannung, Drosselung, Hitze",
-              "update": "Update eingespielt", "network": "Neues Netzwerk / neue IP-Adresse"}
+              "update": "Update eingespielt", "update_available": "Neue Version verfügbar",
+              "network": "Neues Netzwerk / neue IP-Adresse"}
 LEVEL_ICON = {"error": "⛔", "warn": "⚠", "info": "ℹ"}
 
 

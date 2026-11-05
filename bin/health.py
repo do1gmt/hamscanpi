@@ -505,7 +505,47 @@ def check_wifi_powersave(st):
         NT.clear("wifi_powersave")
 
 
-CHECKS = (check_reboot, check_internet, check_network, check_wifi_powersave, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+UPDATE_DAYS = (0, 1, 3, 7, 14, 30)
+
+
+def update_days(settings=None):
+    """Wie oft automatisch auf eine neue Version prüfen (Tage; 0 = nie). Vorgabe: täglich."""
+    if settings is None:
+        try:
+            settings = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+        except Exception:
+            settings = {}
+    try:
+        d = int(settings.get("update_check_days", 1))
+    except (TypeError, ValueError):
+        d = 1
+    return d if d in UPDATE_DAYS else 1
+
+
+def check_update(st):
+    """Alle N Tage (Einstellung im System-Reiter) bei GitHub nachsehen; gibt es eine neuere Version, steht ein Hinweis
+    da (und je nach Benachrichtigungen eine Mail/Push „Neue Version verfügbar“) – bis sie eingespielt ist."""
+    days = update_days()
+    try:
+        import housekeeping as HK
+        cur = (BASE / "VERSION").read_text().strip()
+        c = HK.update_check(cached_only=days == 0, max_age=max(1, days) * 86400)
+    except Exception:
+        return
+    latest = c.get("latest")
+    if latest and HK._vtuple(latest) > HK._vtuple(cur):
+        if st.get("update_notified") != latest:                 # neue Version seit dem letzten Hinweis: neu melden
+            NT.clear("update_available")
+            st["update_notified"] = latest
+        NT.raise_("update_available", "info", "software", f"Neue Version {latest} verfügbar",
+                  f"Installiert ist {cur}. Die Änderungen stehen im CHANGELOG auf GitHub.",
+                  fix="System → Version · Update → „Jetzt aktualisieren“ (wartet, bis kein Scan und kein Überflug läuft)",
+                  key="update_available")
+    else:
+        NT.clear("update_available")
+
+
+CHECKS = (check_reboot, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 

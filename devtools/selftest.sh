@@ -1419,6 +1419,27 @@ ch, _ = S.channel_group(ids, {})
 assert "iss_sstv70" in ch, ch
 assert abs(S.channel_chance("meteor23", {}) - 0.95) < 1e-9 and S.channel_chance("so50", {}) == 0.35
 PY
+echo "== 48 Automatische Prüfung auf eine neue Version"
+(cd bin && python3 - <<'PY') && ok "neuere Version gibt einen Hinweis (einmal je Version), aktuelle Version keinen; Prüfabstand aus der Einstellung" || bad "Versionsprüfung"
+import json, tempfile, time
+from pathlib import Path
+import health as H, notices as NT, housekeeping as HK
+NT.FILE = Path(tempfile.mkdtemp()) / "n.json"; NT.LOCK = NT.FILE.with_suffix(".lock")
+H.BASE = Path(tempfile.mkdtemp()); (H.BASE / "VERSION").write_text("1.0.0\n"); cur = "1.0.0"
+calls = []
+def fake(force=False, max_age=86400, cached_only=False):
+    calls.append((max_age, cached_only)); return {"latest": latest[0], "checked": time.time()}
+HK.update_check = fake
+H.update_days = lambda settings=None: 7
+latest = ["99.0.0"]; st = {}
+H.check_update(st); H.check_update(st)
+act = [r for r in NT.listing()["items"] if r["key"] == "update_available" and r["active"]]
+assert len(act) == 1 and "99.0.0" in act[0]["title"] and calls[0] == (7 * 86400, False), (act, calls)
+latest = [cur]; H.check_update(st)
+assert not [r for r in NT.listing()["items"] if r["key"] == "update_available" and r["active"]]
+H.update_days = lambda settings=None: 0
+H.check_update(st); assert calls[-1][1] is True                  # „nie“: nichts abfragen
+PY
 echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
 upd45() {
     # „set -e“ wirkt in einer &&-Kette nicht – jeder Schritt prüft selbst (|| return 1)

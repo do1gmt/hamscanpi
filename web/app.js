@@ -2073,11 +2073,18 @@
   async function loadUpdate(check) {
     let d; try { d = await api('/api/update' + (check ? '?check=1' : '')); } catch (e) { return; }
     $('panel-update').hidden = !d.git;
-    const newer = d.latest && d.latest !== d.version;
+    const newer = !!d.newer;
     $('updVer').textContent = d.version || '–';
     $('updNew').textContent = newer ? (EN ? `· new: ${d.latest}` : `· neu: ${d.latest}`) : (d.latest ? (EN ? '· up to date' : '· aktuell') : '');
-    $('updRun').disabled = d.running || !d.unit;
-    $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`) : (EN ? 'Update now' : 'Jetzt aktualisieren');
+    const upToDate = !!d.latest && !newer;                  // neueste Version ist schon da: Knopf sperren
+    $('updRun').disabled = d.running || !d.unit || upToDate;
+    $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`)
+      : upToDate ? (EN ? 'Up to date' : 'Aktuell') : (EN ? 'Update now' : 'Jetzt aktualisieren');
+    const when = d.checked ? new Date(d.checked * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+    $('updChecked').textContent = when ? (EN ? `Last checked: ${when}` : `Zuletzt geprüft: ${when}`) + (d.check_error ? (EN ? ` – failed (${d.check_error})` : ` – fehlgeschlagen (${d.check_error})`) : '')
+      : (EN ? 'Not checked yet.' : 'Noch nicht geprüft.');
+    if (!document.activeElement || document.activeElement.id !== 'updDays') $('updDays').value = String(d.check_days ?? 1);
+    return d;
     if (!d.unit) $('updHint').textContent = EN ? 'Run bin/update.sh once by SSH – afterwards updates work from here.' : 'Einmal per SSH bin/update.sh ausführen – danach geht das Update hier.';
     $('updLog').hidden = !d.log; $('updLog').textContent = d.log || '';
     $('updLog').scrollTop = $('updLog').scrollHeight;
@@ -2089,7 +2096,18 @@
     try { await post('/api/update', {}); toast(EN ? 'Update started' : 'Update gestartet'); setTimeout(() => loadUpdate(), 1500); }
     catch (e) { toast(e.message, 6000); }
   });
-  $('updCheck').addEventListener('click', () => loadUpdate(true));
+  $('updCheck').addEventListener('click', async () => {
+    note($('updNote'), EN ? 'checking …' : 'prüfe …');
+    const d = await loadUpdate(true);
+    if (!d) return note($('updNote'), EN ? 'Check failed' : 'Prüfung fehlgeschlagen', true);
+    if (d.check_error) note($('updNote'), (EN ? 'GitHub not reachable: ' : 'GitHub nicht erreichbar: ') + d.check_error, true);
+    else if (d.newer) note($('updNote'), EN ? `New version ${d.latest} available` : `Neue Version ${d.latest} verfügbar`);
+    else note($('updNote'), EN ? `No newer version – ${d.version} is up to date` : `Keine neuere Version – ${d.version} ist aktuell`);
+  });
+  $('updDays').addEventListener('change', async () => {
+    try { await post('/api/update/settings', { check_days: Number($('updDays').value) }); note($('updNote'), EN ? '✓ saved' : '✓ gespeichert'); }
+    catch (e) { note($('updNote'), 'Fehler: ' + e.message, true); }
+  });
 
   // ---------- Antennen-Profile (bin/antennas.py) ----------
   let antData = { profiles: [], current: {} };

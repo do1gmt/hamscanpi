@@ -2338,9 +2338,13 @@ class Handler(BaseHTTPRequestHandler):
                     tail = re.sub(r"\x1b\[[0-9;]*m", "", tail)            # Farbcodes der Konsole
                 except OSError:
                     tail = ""
-                up = HK.update_check(force=qs.get("check") == "1")
+                up = HK.update_check(force=qs.get("check") == "1", cached_only=qs.get("check") != "1")
                 cur = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "?"
-                return self.send_json({"version": cur, "latest": up.get("latest"), "running": running in ("activating", "active"),
+                import health as _H
+                return self.send_json({"version": cur, "latest": up.get("latest"), "checked": up.get("checked"),
+                                       "check_error": up.get("error"), "check_days": _H.update_days(load_settings()),
+                                       "newer": bool(up.get("latest") and HK._vtuple(up["latest"]) > HK._vtuple(cur)),
+                                       "running": running in ("activating", "active"),
                                        "state": running, "log": tail, "git": (BASE / ".git").exists(),
                                        "unit": _sp.run(["systemctl", "cat", "hamscanpi-update"], capture_output=True).returncode == 0})
             if path == "/api/location-check":
@@ -2538,6 +2542,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.gate(path):
                 return
+            if path == "/api/update/settings":
+                import health as _H
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(n) or b"{}") if n else {}
+                d = int(data.get("check_days", 1))
+                if d not in _H.UPDATE_DAYS:
+                    raise ValueError("Prüfen: " + ", ".join(str(x) for x in _H.UPDATE_DAYS) + " Tage")
+                st = read_json(SETTINGS, {})
+                st["update_check_days"] = d
+                write_json(SETTINGS, st)
+                return self.send_json({"ok": True, "check_days": d})
             if path == "/api/update":
                 import subprocess as _sp
                 if not (BASE / ".git").exists():

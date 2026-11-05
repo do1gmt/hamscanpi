@@ -435,6 +435,11 @@
         <h2>Version <span class="no-i18n" id="updVer">–</span> · Update <small class="muted" id="updNew"></small></h2>
         <div class="update-box" id="updBox">
           <div class="actions"><button type="button" class="btn btn-primary" id="updRun">Jetzt aktualisieren</button><button type="button" class="btn btn-small" id="updCheck">Auf neue Version prüfen</button></div>
+          <div class="upd-check">
+            <span class="hint" id="updChecked"></span>
+            <label class="field upd-days"><span>Automatisch prüfen</span><select id="updDays"><option value="0">nie</option><option value="1">täglich</option><option value="3">alle 3 Tage</option><option value="7">wöchentlich</option><option value="14">alle 14 Tage</option><option value="30">monatlich</option></select></label>
+          </div>
+          <div class="save-note" id="updNote" aria-live="polite"></div>
           <p class="hint" id="updHint">Holt den neuen Stand von GitHub, richtet das System ein und startet die Dienste neu. Wartet vorher, bis kein Scan und kein Überflug läuft. Das Dashboard ist danach kurz nicht erreichbar.</p>
           <pre class="update-log" id="updLog" hidden></pre>
         </div>
@@ -675,6 +680,7 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
               <label class="check"><input type="checkbox" data-ne="storage"> Probleme mit Speicherkarte</label>
               <label class="check"><input type="checkbox" data-ne="power"> Unterspannung, Drosselung, Hitze</label>
               <label class="check"><input type="checkbox" data-ne="update"> Update eingespielt</label>
+              <label class="check"><input type="checkbox" data-ne="update_available"> Neue Version verfügbar</label>
               <label class="check"><input type="checkbox" data-ne="network"> Neues Netzwerk / neue IP-Adresse</label></div>
           </div>
           <label class="inline-num" title="0 = jeden Hinweis sofort. Sonst Warnungen und Infos gesammelt alle X Minuten in einer Nachricht; Fehler kommen immer sofort.">Sammeln: alle <input data-nd type="number" min="0" max="1440" value="0" inputmode="numeric"> min (0 = sofort)</label>

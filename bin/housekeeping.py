@@ -49,13 +49,15 @@ def _vtuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) or (0,)
 
 
-def update_check(force=False):
-    """Neueste Version auf GitHub (einmal am Tag). Rückgabe dict(latest, newer) oder {}."""
+def update_check(force=False, max_age=86400, cached_only=False):
+    """Neueste Version auf GitHub. Abgefragt wird höchstens alle max_age Sekunden (force: sofort; cached_only:
+    nie, nur den letzten Stand lesen – die regelmäßige Prüfung macht der Zeitplaner nach der Einstellung).
+    Rückgabe dict(latest, checked, error, url) oder {}."""
     try:
         c = json.loads(UPDATE_CACHE.read_text(encoding="utf-8"))
     except Exception:
         c = {}
-    if not force and time.time() - c.get("checked", 0) < 86400:
+    if cached_only or (not force and time.time() - c.get("checked", 0) < max_age):
         return c
     url = None
     try:
@@ -153,7 +155,7 @@ def system_status():
             services[u] = "unknown"
     st["services"] = services
     v, commit = version()
-    upd = update_check()
+    upd = update_check(cached_only=True)
     st["version"] = {"version": v, "commit": commit, "latest": upd.get("latest"),
                      "newer": bool(upd.get("latest") and _vtuple(upd["latest"]) > _vtuple(v)),
                      "check_error": upd.get("error")}
