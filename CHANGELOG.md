@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.81 – 2026-11-06
+
+- Publishing: `hamscanpi-publish.sh` also creates the **GitHub release** (box "Releases" on the project page, notes
+  from the changelog) when the GitHub CLI `gh` is installed and logged in – and adds releases for earlier versions
+  that only exist as tags (since publishing moved from the Pi to the PC the box stayed at 1.7.73). Running it again
+  for a version already on GitHub only adds missing releases.
+
+## 1.7.80 – 2026-11-06
+
+- Update from the dashboard: the output no longer shows terminal colour codes ("[1m", "[32m✓[0m") – the set-up
+  writes plain text when it is not running in a terminal, and the dashboard strips any codes left.
+- The update stops the scheduler right before `git pull` (the set-up starts it again at the end), so no scan can
+  start between the check for a free window and the restart and be cut off ("scan cancelled").
+
 ## 1.7.79 – 2026-11-06
 
 - System → PSK Reporter: the line under the spots says "Last reported as <call> · <locator> · <version>" (it showed

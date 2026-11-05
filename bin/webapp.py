@@ -2333,6 +2333,7 @@ class Handler(BaseHTTPRequestHandler):
                 running = _sp.run(["systemctl", "is-active", "hamscanpi-update"], capture_output=True, text=True).stdout.strip()
                 try:
                     tail = (BASE / "log" / "update.log").read_text(encoding="utf-8", errors="replace")[-6000:]
+                    tail = re.sub(r"\x1b\[[0-9;]*m", "", tail)            # Farbcodes der Konsole
                 except OSError:
                     tail = ""
                 up = HK.update_check(force=qs.get("check") == "1")

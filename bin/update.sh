@@ -78,6 +78,11 @@ if [ "$NOW" = 0 ] && [ -f data/cycle.lock ]; then
         sleep 60
     done
 fi
+# Zeitplaner anhalten, damit zwischen Prüfung und Neustart kein neuer Scan beginnt (die Einrichtung startet ihn
+# am Ende wieder) – sonst bricht der Neustart diesen Scan ab
+if systemctl is-active -q hamscanpi-scheduler 2>/dev/null && [ -z "${HSP_SETUP_CMD:-}" ]; then
+    $SUDO systemctl stop hamscanpi-scheduler 2>/dev/null || true
+fi
 echo "$(t "Neuer Stand von GitHub …" "Fetching the new version from GitHub …")"
 asuser git pull --ff-only
 NEW="$(cat VERSION 2>/dev/null || echo ?)"

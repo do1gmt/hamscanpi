@@ -42,9 +42,15 @@ fi
 if [ -z "$LNG" ]; then case "${LANG:-}" in de*) LNG=de;; *) LNG=en;; esac; fi
 [ "$LNG" = de ] || LNG=en
 t() { if [ "$LNG" = de ]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
-bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
-ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
-warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+if [ -t 1 ]; then                                  # Farben nur im Terminal, nicht im Protokoll/Dashboard
+    bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+    ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+    warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+else
+    bold() { printf '\n== %s\n' "$*"; }
+    ok()   { printf '  ✓ %s\n' "$*"; }
+    warn() { printf '  ! %s\n' "$*"; }
+fi
 asuser() { runuser -u "$U" -- "$@"; }
 
 bold "$(t "Pakete" "Packages")"
