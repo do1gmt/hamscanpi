@@ -1403,6 +1403,22 @@ assert off["hf"] is None and off["min_hz"] == 24e6 and not SC.hf_ok(dict(v5, hf_
 gen = {"manufacturer": "Realtek", "product": "RTL2838UHIDIR", "tuner": "Rafael Micro R820T"}
 assert SC.caps(gen)["hf"] is None and SC.caps(dict(gen, hf_mode="on"))["hf"] == "direct_q"
 PY
+echo "== 47 Satelliten: Kanalwahl nach Aussicht auf ein Signal"
+(cd bin && python3 - <<'PY') && ok "ISS: 145,825 APRS statt drei meist stiller 70-cm-Kanäle; gehörte SSTV-Aktion dreht die Wahl um" || bad "Kanalwahl"
+import tempfile, time
+from pathlib import Path
+import satellites as S
+S.STATS_FILE = Path(tempfile.mkdtemp()) / "sat_stats.json"
+ids = ["iss_sstv70", "iss", "iss_aprs", "iss_aprs70", "iss_rpt"]
+ch, dropped = S.channel_group(ids, {})
+assert set(ch) == {"iss", "iss_aprs"} and "iss_sstv70" in dropped, (ch, dropped)
+for _ in range(5):
+    S.record_channel("iss_sstv70", time.time() - 3600, True)
+assert len(S.read_stats()["channels"]["iss_sstv70"]) == 5
+ch, _ = S.channel_group(ids, {})
+assert "iss_sstv70" in ch, ch
+assert abs(S.channel_chance("meteor23", {}) - 0.95) < 1e-9 and S.channel_chance("so50", {}) == 0.35
+PY
 echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
 upd45() {
     # „set -e“ wirkt in einer &&-Kette nicht – jeder Schritt prüft selbst (|| return 1)

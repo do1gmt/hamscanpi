@@ -2072,8 +2072,10 @@
   let updTimer = null;
   async function loadUpdate(check) {
     let d; try { d = await api('/api/update' + (check ? '?check=1' : '')); } catch (e) { return; }
-    $('updBox').hidden = !d.git;
+    $('panel-update').hidden = !d.git;
     const newer = d.latest && d.latest !== d.version;
+    $('updVer').textContent = d.version || '–';
+    $('updNew').textContent = newer ? (EN ? `· new: ${d.latest}` : `· neu: ${d.latest}`) : (d.latest ? (EN ? '· up to date' : '· aktuell') : '');
     $('updRun').disabled = d.running || !d.unit;
     $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`) : (EN ? 'Update now' : 'Jetzt aktualisieren');
     if (!d.unit) $('updHint').textContent = EN ? 'Run bin/update.sh once by SSH – afterwards updates work from here.' : 'Einmal per SSH bin/update.sh ausführen – danach geht das Update hier.';

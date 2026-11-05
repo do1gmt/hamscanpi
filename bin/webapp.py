@@ -1911,6 +1911,8 @@ def sat_passes():
             stt, now_ = SAT.read_stats(), time.time()
             res["stats"] = {}
             for k, e in stt.items():
+                if k == "channels":                          # Aussicht je Kanal, kein Satellit
+                    continue
                 ps = e.get("passes", [])
                 rec = [x for x in ps if x[0] > now_ - 14 * 86400]
                 res["stats"][k] = {"last": max((x[0] for x in ps), default=None), "last_hit": e.get("last_hit"),

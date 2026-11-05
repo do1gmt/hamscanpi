@@ -462,8 +462,10 @@ class Channel:
     def classify_line(self):
         """Steht die stärkste Linie nach der Dopplerkorrektur fest (= Satellit) oder wandert sie genau
         gegen den Doppler (= Sender auf der Erde, örtliche Störung)?"""
-        L = [x for x in getattr(self, "lines", []) if x[2] >= 6.0]
-        if len(L) < 15:
+        # auch schwache Linien (ab 3,5 dB, mindestens 30 s): ein örtlicher Träger mit 4 dB erscheint im Wasserfall
+        # deutlich als spiegelverkehrte Dopplerkurve – Rauschen ergibt keine zusammenhängende Linie („unclear“)
+        L = [x for x in getattr(self, "lines", []) if x[2] >= 3.5]
+        if len(L) < 30:
             return None
         f = np.array([x[1] for x in L])
         d = np.array([x[3] for x in L])
@@ -1052,6 +1054,16 @@ def main():
                     remember_interference(L["rf_mhz"] * 1e6, ch.sat.get("name") or ch.sat["id"])
             except Exception as e:
                 applog("WARN", "satellite", "waterfall_failed", sat=ch.sat["id"], error=f"{type(e).__name__}: {e}")
+            try:                                              # Aussicht dieses Kanals für die künftige Kanalwahl
+                S_ = sig[ch.sat["id"]]
+                L = S_.get("line") or {}
+                heard = ((S_.get("max_db") or 0) >= 6.0 and L.get("kind") != "local") \
+                    or any(((v or {}).get("lrpt") or {}).get("level") for v in (S_.get("probe") or {}).values()) \
+                    or n > 0
+                if not a.test:
+                    SAT.record_channel(ch.sat["id"], t0, heard)
+            except Exception:
+                pass
             per_obj[ch.sat["norad"]] += n
             hits_total += n
         applog("INFO", "satellite", "pass_done", sat=name, hits=hits_total, per_channel=per_ch,

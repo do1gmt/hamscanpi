@@ -175,6 +175,14 @@ an unreachable target is logged once (`wsjtx_udp_failed` / `wsjtx_udp_resumed`),
 are sent afterwards, older ones are dropped (useless for a live display). "Save and send test packet" checks a
 target right away.
 
+**Which channels of a satellite are recorded:** if not all selected channels fit into one receive window (e.g.
+ISS 2 m and 70 cm), HamScanPi takes the group with the best chance of a signal – priority × chance. The chance
+starts from experience (Meteor LRPT always on, linear transponder beacons almost always, the ISS APRS digipeater on
+145.825 mostly, FM repeaters only when someone talks, SSTV only during announced events) and is then replaced
+step by step by what was actually heard on that channel in the last 30 days. Fixed carriers on the ground show up
+in the Doppler-corrected waterfall as a mirrored Doppler curve; from 3.5 dB they are recognised and remembered as
+interference lines instead of counting as a satellite signal.
+
 **Satellites – horizon and minimum elevation** (Settings → Satellite priorities): *Horizon* is the elevation
 below which terrain or buildings hide the sky, the same all around (0–30°, default 0°): only the part of a pass
 above it is recorded, passes that never get above it are dropped. *Only passes reaching at least …* (10–60°,

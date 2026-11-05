@@ -527,14 +527,46 @@ def eff_prio(sid, prio=None):
     return BY_ID[sid]["prio"]
 
 
-def channel_group(ids, prio=None):
-    """Aus den gewählten Kanälen eines Satelliten die Gruppe, die in eine Abstimmung passt
-    und die höchste Summe der Prioritäten hat. Rückgabe (gewählte ids, nicht möglich ids)."""
+def duty(sat):
+    """Wie wahrscheinlich sendet dieser Kanal bei einem Überflug überhaupt? (Erfahrungswert, 0–1)
+    Meteor (LRPT) sendet immer; Baken der Lineartransponder fast immer; der APRS-Digipeater der ISS auf 2 m
+    meistens; FM-Relais nur, wenn gerade jemand hineinspricht; SSTV nur bei angekündigten Aktionen."""
+    if sat.get("duty") is not None:
+        return float(sat["duty"])
+    if sat.get("kind") == "probe":
+        return 0.95
+    if sat.get("kind") == "linear":
+        return 0.8 if sat.get("beacons") else 0.6
+    if sat.get("aprs"):
+        return 0.7 if sat["center_hz"] < 200e6 else 0.35
+    if sat.get("sstv"):
+        return 0.15
+    return 0.35
+
+
+def channel_chance(cid, stats=None):
+    """Aussicht auf ein Signal: Erfahrungswert, nach und nach ersetzt durch das, was HamScanPi auf diesem Kanal
+    tatsächlich gehört hat (letzte 30 Tage; vier „gedachte“ Überflüge mit dem Erfahrungswert als Ausgangspunkt)."""
+    d = duty(BY_ID[cid])
+    st = (stats if stats is not None else read_stats()).get("channels", {}).get(cid) or []
+    cut = time.time() - 30 * 86400
+    recent = [x for x in st if x[0] > cut]
+    k = 4.0
+    return (sum(x[1] for x in recent) + k * d) / (len(recent) + k)
+
+
+def channel_group(ids, prio=None, stats=None):
+    """Aus den gewählten Kanälen eines Satelliten die Gruppe, die in eine Abstimmung passt und die beste Aussicht
+    hat: Summe aus Priorität × Aussicht auf ein Signal (channel_chance). Früher zählte nur die Priorität – bei der
+    ISS gewannen so drei meist stille 70-cm-Kanäle gegen den APRS-Digipeater auf 145,825.
+    Rückgabe (gewählte ids, nicht möglich ids)."""
     chans = sorted((BY_ID[i] for i in ids), key=lambda s: s["center_hz"])
+    stats = stats if stats is not None else read_stats()
     best, best_score = [], (-1, -1)
     for a in chans:
         grp = [s for s in chans if 0 <= s["center_hz"] - a["center_hz"] <= GROUP_SPAN_HZ]
-        score = (sum(eff_prio(s["id"], prio) for s in grp), max(eff_prio(s["id"], prio) for s in grp))
+        score = (round(sum(eff_prio(s["id"], prio) * channel_chance(s["id"], stats) for s in grp), 3),
+                 max(eff_prio(s["id"], prio) for s in grp))
         if score > best_score:
             best, best_score = grp, score
     best_ids = [s["id"] for s in sorted(best, key=lambda s: -eff_prio(s["id"], prio))]
@@ -573,6 +605,21 @@ def read_stats():
         return json.loads(STATS_FILE.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def record_channel(cid, t, heard):
+    """Nach jeder Aufnahme je Kanal: war ein Signal da (ja/nein)? Grundlage von channel_chance."""
+    STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(STATS_FILE.with_suffix(".lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        d = read_stats()
+        ch = d.setdefault("channels", {}).setdefault(cid, [])
+        ch.append([round(t), 1 if heard else 0])
+        cutoff = time.time() - 60 * 86400
+        d["channels"][cid] = [x for x in ch if x[0] > cutoff][-100:]
+        tmp = STATS_FILE.with_suffix(f".tmp{os.getpid()}")
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        os.replace(tmp, STATS_FILE)
 
 
 def record_stats(norad, t, hits, seconds):

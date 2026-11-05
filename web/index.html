@@ -430,7 +430,10 @@
         <h2>Zustand</h2>
         <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
         <p class="hint" id="sysNote"></p>
-        <div class="update-box" id="updBox" hidden>
+      </section>
+      <section class="panel" id="panel-update" hidden>
+        <h2>Version <span class="no-i18n" id="updVer">–</span> · Update <small class="muted" id="updNew"></small></h2>
+        <div class="update-box" id="updBox">
           <div class="actions"><button type="button" class="btn btn-primary" id="updRun">Jetzt aktualisieren</button><button type="button" class="btn btn-small" id="updCheck">Auf neue Version prüfen</button></div>
           <p class="hint" id="updHint">Holt den neuen Stand von GitHub, richtet das System ein und startet die Dienste neu. Wartet vorher, bis kein Scan und kein Überflug läuft. Das Dashboard ist danach kurz nicht erreichbar.</p>
           <pre class="update-log" id="updLog" hidden></pre>

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.85 – 2026-11-06
+
+- System: the update has its own card **"Version 1.7.85 · Update"** (with "· new: …" or "· up to date") instead of
+  sitting under "Status" – also as its own chip in the phone jump bar.
+
+## 1.7.84 – 2026-11-06
+
+- **Satellites: channel choice by chance of a signal.** When not all channels of a satellite fit into one receive
+  window, the group with the highest priority × chance wins (before: priority only – for the ISS three mostly
+  silent 70 cm channels won against the APRS digipeater on 145.825). The chance starts from experience values
+  (Meteor 0.95, linear beacons 0.8, ISS APRS 2 m 0.7, FM repeaters 0.35, SSTV 0.15) and learns from every
+  recording: per channel "signal heard yes/no" over 30 days (`data/sat_stats.json`, key `channels`). A heard SSTV
+  event turns the ISS choice to 70 cm again.
+- **Local carriers in satellite waterfalls** are now recognised from 3.5 dB (was 6 dB, at least 30 s) – a fixed
+  carrier shows up as a mirrored Doppler curve; it is remembered as an interference line and does not count as a
+  satellite signal.
+- Self-test section 47. README: channel choice.
+
 ## 1.7.83 – 2026-11-06
 
 - **Phone: jump bar** at the top of every tab (below the header, stays in place while scrolling): one chip per card
