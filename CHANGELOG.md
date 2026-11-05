@@ -1,10 +1,19 @@
 # Changelog
 
+## 1.7.91 – 2026-11-06
+
+- Phone jump bar: the chips follow the order of the cards on the screen (on phones CSS rearranges them – e.g. on
+  the scan tab "Bands & modes" comes before "Satellite passes"), and the highlighted chip is the card you are
+  actually in (before it could show "Schedules" while you were in the pass list).
+
 ## 1.7.90 – 2026-11-06
 
 - System → Devices: sticks that are not plugged in carry a badge **"NOT PLUGGED IN"** next to the name; making such
   a stick the main stick asks first and names the stick that is actually plugged in ("Plugged in is: … – it would
   no longer be used"). Avoids picking a stale entry (e.g. one that came with a backup from another Pi).
+- Publishing: GitHub releases are created with the repository given explicitly, missing ones are added, the
+  newest is marked "Latest" (the box on the project page stayed at an older version), and if something fails the
+  reason from `gh` is shown instead of only "not created".
 
 ## 1.7.89 – 2026-11-06
 

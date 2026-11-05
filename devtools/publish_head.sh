@@ -78,20 +78,32 @@ ok "auf GitHub: $(echo "$REPO" | sed -E 's#^git@github\.com:#https://github.com/
 # GitHub-Release (Kasten „Releases“ rechts auf der Projektseite) – braucht die GitHub-CLI „gh“, einmal angemeldet.
 # Holt auch Releases für frühere Versionen nach, die nur als Tag vorhanden sind (höchstens die letzten 15; in
 # aufsteigender Reihenfolge angelegt, so ist die neueste am Ende „Latest“).
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+GHREPO="$(echo "$REPO" | sed -E 's#^git@github\.com:##; s#^https://github\.com/##; s#\.git$##')"
+if ! command -v gh >/dev/null 2>&1; then
+    warn "GitHub-Releases nicht angelegt: GitHub-CLI fehlt – einmalig  sudo apt install gh  und  gh auth login"
+elif ! gh auth status >/dev/null 2>&1; then
+    warn "GitHub-Releases nicht angelegt: gh ist nicht angemeldet – einmalig  gh auth login"
+else
+    made=0
     for tg in $(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -15 | tac); do
-        gh release view "$tg" >/dev/null 2>&1 && continue
+        gh release view "$tg" --repo "$GHREPO" >/dev/null 2>&1 && continue
         vv="${tg#v}"
         git show "$tg:CHANGELOG.md" 2>/dev/null | awk -v v="$vv" '$0 ~ "^## "v" " {f=1; next} /^## / && f {exit} f' > "$TMP/notes.md"
         [ -s "$TMP/notes.md" ] || echo "HamScanPi $vv" > "$TMP/notes.md"
-        if gh release create "$tg" --title "HamScanPi $vv" --notes-file "$TMP/notes.md" >/dev/null 2>&1; then
-            ok "GitHub-Release HamScanPi $vv"
+        if ERR="$(gh release create "$tg" --repo "$GHREPO" --title "HamScanPi $vv" --notes-file "$TMP/notes.md" 2>&1 >/dev/null)"; then
+            ok "GitHub-Release HamScanPi $vv"; made=1
         else
-            warn "Release $tg nicht angelegt"
+            warn "Release $tg nicht angelegt: $(echo "$ERR" | tail -1)"
         fi
     done
-else
-    warn "GitHub-Releases nicht angelegt: dafür einmalig  sudo apt install gh  und  gh auth login  (danach automatisch)"
+    # die neueste Version ausdrücklich als „Latest“ markieren (Kasten rechts auf der Projektseite)
+    NEWEST="$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)"
+    if gh release edit "$NEWEST" --repo "$GHREPO" --latest >/dev/null 2>&1; then
+        ok "„Latest“ auf GitHub: ${NEWEST#v}"
+    else
+        LT="$(gh release list --repo "$GHREPO" --limit 20 2>/dev/null | awk -F'\t' '$2 == "Latest" {print $3}')"
+        [ "$LT" = "$NEWEST" ] && ok "„Latest“ auf GitHub: ${NEWEST#v}" || warn "„Latest“ steht auf GitHub bei ${LT:-?} – von Hand: gh release edit $NEWEST --latest"
+    fi
 fi
 echo
 echo "  Selbsttest auf GitHub: $(echo "$REPO" | sed -E 's#^git@github\.com:#https://github.com/#; s#\.git$##')/actions"

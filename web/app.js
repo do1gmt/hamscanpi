@@ -1347,7 +1347,9 @@
   function buildJump(view) {
     if (!view) return;
     const old = view.querySelector(':scope > .jump-bar'); if (old) old.remove();
-    const panels = [...view.querySelectorAll('.panel')].filter(p => !p.hidden && p.offsetParent !== null && p.querySelector('h2'));
+    // in der Reihenfolge, in der die Karten auf dem Bildschirm stehen (auf dem Handy ordnet CSS sie um)
+    const panels = [...view.querySelectorAll('.panel')].filter(p => !p.hidden && p.offsetParent !== null && p.querySelector('h2'))
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
     if (panels.length < 3) return;                          // bei wenigen Karten lohnt sich keine Leiste
     const nav = document.createElement('nav'); nav.className = 'jump-bar'; nav.setAttribute('aria-label', EN ? 'Jump to' : 'Springen zu');
     panels.forEach((p, i) => {
@@ -1375,8 +1377,8 @@
     clearTimeout(jumpT); jumpT = setTimeout(() => {          // die Karte, in der man gerade ist, in der Leiste markieren
       const bar = document.querySelector('section.view:not([hidden]) > .jump-bar'); if (!bar || !bar.offsetParent) return;
       const lim = bar.getBoundingClientRect().bottom + 20;
-      let cur = null;
-      bar.querySelectorAll('.jump-chip').forEach(c => { const p = document.getElementById(c.dataset.target); if (p && p.getBoundingClientRect().top <= lim) cur = c; });
+      let cur = null, best = -Infinity;                     // die Karte, deren Anfang zuletzt oben vorbeigezogen ist
+      bar.querySelectorAll('.jump-chip').forEach(c => { const p = document.getElementById(c.dataset.target); const t = p ? p.getBoundingClientRect().top : Infinity; if (t <= lim && t > best) { best = t; cur = c; } });
       bar.querySelectorAll('.jump-chip').forEach(c => c.classList.toggle('on', c === cur));
       if (cur) bar.scrollTo({ left: cur.offsetLeft - bar.clientWidth / 2 + cur.clientWidth / 2, behavior: 'smooth' });
     }, 120);
