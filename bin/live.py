@@ -255,7 +255,7 @@ class LiveSession:
             return []
         import sdrcaps as SC
         import sticks as STK
-        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main = STK.effective_main()
         ok, why = SC.hf_ok(main)
         if not ok:
             raise RuntimeError(f"unter 24 MHz nicht möglich: {why}")
@@ -477,7 +477,7 @@ class LiveSession:
         try:
             import sdrcaps as SC
             import sticks as STK
-            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            main = STK.effective_main()
             ok, _ = SC.hf_ok(main)
             if ok:
                 return int(SC.caps(main)["min_hz"])

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.90 – 2026-11-06
+
+- System → Devices: sticks that are not plugged in carry a badge **"NOT PLUGGED IN"** next to the name; making such
+  a stick the main stick asks first and names the stick that is actually plugged in ("Plugged in is: … – it would
+  no longer be used"). Avoids picking a stale entry (e.g. one that came with a backup from another Pi).
+
+## 1.7.89 – 2026-11-06
+
+- **Spare stick steps in:** if the main stick is missing and exactly one stick with the role "spare" is plugged in,
+  scans, satellites and Live use it (with its own gain, ppm, antenna, shortwave setting) instead of standing still;
+  notice "Spare stick steps in: …" instead of "Main stick missing", badge "STEPPING IN" under System → Devices.
+  When the main stick is back it is used again. New, unassigned sticks never step in. All parts that looked up
+  "the main stick" now use the stick actually in use (`sticks.effective_main`).
+- **Restoring a backup from another Pi:** if the backup's main stick is not plugged in but exactly one other stick
+  is, that one becomes the main stick automatically (the old one stays registered as spare with its settings);
+  notice "After the restore: … taken as main stick".
+- Self-test section 50; section 12 adapted (missing main stick with a spare now continues). README: spare stick.
+
 ## 1.7.88 – 2026-11-06
 
 - Fix: passes of satellites without a NORAD number yet (HC1PX, SakhaCube – internal numbers −2/−1) were never

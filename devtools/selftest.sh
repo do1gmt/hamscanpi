@@ -214,12 +214,15 @@ p = S.rtl_params({"ppm": 3})
 assert p["d"] == "1" and p["how"] == "order" and p["ppm"] == 42, p              # „00000001“ läse rtl_sdr als Gerät 1
 assert any(r["duplicate"] for r in S.overview()["sticks"] if r["serial"] == "00000001")
 assert S.load()["sticks"]["sn:0bda:2838:38291044"]["role"] == "spare"
-shutil.rmtree("fakeusb/1-1.3")                                                    # Haupt-Stick weg: kein Ersatz
+shutil.rmtree("fakeusb/1-1.3")                                                    # Haupt-Stick weg: die Reserve springt ein
+assert S.rtl_params({})["d"] == "38291044" and S.main_device()[0].get("failover")
+S.update("sn:0bda:2838:38291044", role="ignore")                                  # ohne Reserve: kein Ersatz
 try:
     S.rtl_params({}); raise AssertionError("NoMainStick erwartet")
 except S.NoMainStick:
     pass
 D._HW_CACHE["v"] = None; assert not D.detect_hardware()["rtlsdr"]["present"]
+S.update("sn:0bda:2838:38291044", role="spare")
 dev("1-1.4", "1d50", "6089", "Great Scott Gadgets", "HackRF One", "a06063c8", "6")
 assert any(r["kind"] == "other" for r in S.overview()["sticks"])
 try:
@@ -1451,6 +1454,44 @@ for line in open("sat_pass.py", encoding="utf-8"):
         exec(line.strip())
 a = ap.parse_args(["--sats", "hc1px", "--until", "1", "--keys=" + ",".join(["-2_29898123", "57166_2989"])])
 assert a.keys == "-2_29898123,57166_2989" and a.sats == "hc1px", a
+PY
+echo "== 50 Reserve-Stick springt ein, Sicherung von einem anderen Pi"
+(cd bin && python3 - <<'PY') && ok "fehlt der Haupt-Stick, arbeitet die Reserve mit ihren Einstellungen; nach dem Einspielen wird der angesteckte Stick Haupt-Stick" || bad "Reserve/Einspielen"
+import json, tempfile
+from pathlib import Path
+import sticks as STK
+d = Path(tempfile.mkdtemp()); STK.REG = d / "sticks.json"; STK.REG_LOCK = d / "sticks.lock"
+big = {"port": "1-1.3", "vid": "0bda", "pid": "2838", "kind": "rtl", "manufacturer": "Nooelec", "product": "NESDR SMArt v5", "serial": "27244444", "node": None}
+small = dict(big, port="1-1.4", serial="HSP24686")
+cur = [[big, small]]
+STK.usb_scan = lambda: list(cur[0])
+reg, present, _ = STK.sync(notify=False)
+kb, ks = STK.key_of(big), STK.key_of(small)
+STK.update(kb, role="main"); STK.update(ks, role="spare", gain=33)
+assert STK.main_device()[0]["serial"] == "27244444"
+cur[0] = [small]                                             # Haupt-Stick abgezogen: Reserve springt ein
+r = STK.main_device()[0]
+assert r["serial"] == "HSP24686" and r["failover"] and r["replaces_serial"] == "27244444" and r["gain"] == 33
+assert STK.effective_main()["serial"] == "HSP24686" and STK.overview()["failover"]["serial"] == "HSP24686"
+assert STK.rtl_params({})["gain"] in (33, 33.0)
+STK.update(ks, role=None)                                    # neuer, nicht festgelegter Stick springt nicht ein
+reg = STK.load(); reg["sticks"][ks]["role"] = None; STK._save(reg)
+assert STK.main_device() is None
+cur[0] = [big]; assert STK.main_device()[0]["serial"] == "27244444"
+# Sicherung eines anderen Pi: Haupt-Stick fehlt, genau ein anderer steckt -> übernommen
+cur[0] = [small]
+new, old = STK.adopt_after_restore()
+reg = STK.load()
+assert new["serial"] == "HSP24686" and reg["sticks"][ks]["role"] == "main" and reg["sticks"][kb]["role"] == "spare"
+assert STK.adopt_after_restore() is None                      # schon passend: nichts zu tun
+# Hinweis im Betrieb: Reserve springt ein (statt „Haupt-Stick fehlt“)
+import health as H, notices as NT
+NT.FILE = d / "n.json"; NT.LOCK = d / "n.lock"
+STK.update(kb, role="main"); STK.update(ks, role="spare")
+cur[0] = [small]
+H.check_sticks({})
+act = {r["key"] if r["kind"] == "event" else r["id"]: r for r in NT.listing()["items"] if r["active"]}
+assert "stick_failover" in act and "stick_main_missing" not in act, list(act)
 PY
 echo "== 45 Update per git: Veröffentlichen (PC) und bin/update.sh (Pi)"
 upd45() {

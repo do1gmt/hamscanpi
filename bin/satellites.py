@@ -647,7 +647,7 @@ def antenna_beam():
     (keine Richtung eingetragen = Rundstrahler). prefer aus den Einstellungen (sat_beam_prefer)."""
     try:
         import sticks as STK
-        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main = STK.effective_main()
     except Exception:
         return None
     if not main or main.get("ant_az") is None:

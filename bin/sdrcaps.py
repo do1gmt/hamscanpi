@@ -139,7 +139,7 @@ def main():
     try:
         sys.path.insert(0, str(BASE / "bin"))
         import sticks as STK
-        main_ = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main_ = STK.effective_main()
     except Exception:
         main_ = None
     if main_:

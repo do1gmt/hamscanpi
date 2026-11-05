@@ -188,6 +188,12 @@ below which terrain or buildings hide the sky, the same all around (0–30°, de
 above it is recorded, passes that never get above it are dropped. *Only passes reaching at least …* (10–60°,
 default 10°): lower passes stay greyed out in the list ("too low") and are not recorded.
 
+**Spare stick and restoring on other hardware:** a stick with the role *spare* steps in when the main stick is
+missing (only if exactly one spare is plugged in) – with its own gain, ppm, antenna and shortwave setting; a notice
+says so, and the main stick is used again as soon as it is back. New, not yet assigned sticks never step in.
+Restoring a backup from another Pi: if the main stick of the backup is not plugged in but exactly one other stick is,
+that one becomes the main stick (the old one stays registered as spare).
+
 **Antenna profiles:** under *System → Devices → Antennas* (a collapsible section at the top of the card – edit the
 fields in place, "+ Antenna" adds one, ✕ deletes, then "Save") each antenna is created once (name, frequency range,
 and for directional antennas direction, beamwidth, elevation – the existing entries become the first profiles).

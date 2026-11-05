@@ -317,14 +317,54 @@ def _rtl_present(present=None):
 
 
 def main_device(present=None, reg=None):
-    """(Register-Eintrag, Gerät, Index unter den angesteckten RTL-Sticks) des Haupt-Sticks oder None."""
+    """(Register-Eintrag, Gerät, Index unter den angesteckten RTL-Sticks) des Sticks, mit dem gearbeitet wird, oder None.
+    Das ist der Haupt-Stick – fehlt er und steckt genau EIN Stick mit der Rolle „Reserve“, springt dieser ein (der
+    Eintrag trägt dann failover=True und den Namen des fehlenden Haupt-Sticks). Neue, noch nicht festgelegte Sticks
+    springen nie ein: bei denen ist nicht klar, ob sie überhaupt benutzt werden sollen."""
     rtl = _rtl_present(present)
     reg = reg or load()
+    spares = []
     for i, d in enumerate(rtl):
         r = reg["sticks"].get(key_of(d))
         if r and r.get("role") == "main":
             return r, d, i
+        if r and r.get("role") == "spare":
+            spares.append((r, d, i))
+    if len(spares) == 1:
+        main = next((x for x in reg["sticks"].values() if x.get("role") == "main"), None)
+        r, d, i = spares[0]
+        return dict(r, failover=True, replaces=_label(main) if main else None,
+                    replaces_serial=(main or {}).get("serial")), d, i
     return None
+
+
+def effective_main(reg=None, present=None):
+    """Register-Eintrag des Sticks, der gerade benutzt wird (Haupt-Stick oder einspringende Reserve); steckt keiner,
+    der eingetragene Haupt-Stick (für Anzeige und Einstellungen) oder None."""
+    reg = reg or load()
+    try:
+        hit = main_device(usb_scan() if present is None else present, reg)
+    except Exception:
+        hit = None
+    if hit:
+        return hit[0]
+    return next((r for r in reg["sticks"].values() if r.get("role") == "main"), None)
+
+
+def adopt_after_restore():
+    """Nach dem Einspielen einer Sicherung (oft von einem anderen Pi): steckt der Haupt-Stick aus der Sicherung nicht,
+    aber genau ein anderer RTL-Stick, wird dieser Haupt-Stick (der alte wird Reserve, seine Einstellungen bleiben).
+    Rückgabe (neuer Eintrag, alter Eintrag) oder None."""
+    present = usb_scan()
+    rtl = _rtl_present(present)
+    reg = load()
+    main = next((r for r in reg["sticks"].values() if r.get("role") == "main"), None)
+    keys = [key_of(d) for d in rtl]
+    if not rtl or (main and main["key"] in keys) or len(rtl) != 1:
+        return None
+    sync(notify=False)
+    new = update(keys[0], role="main")
+    return new, main
 
 
 def rtl_params(rtl_cfg=None):
@@ -453,6 +493,12 @@ def overview():
         pass
     out.sort(key=lambda r: (not r["present"], {"main": 0, None: 1, "spare": 2, "ignore": 3}.get(r.get("role"), 4), r["label"]))
     main = main_device(present, reg)
+    use_key = main[0]["key"] if main else None
+    for r in out:
+        r["in_use"] = r["key"] == use_key
     return {"sticks": out, "main_present": main is not None, "rtl_present": len(rtl),
+            "failover": ({"key": use_key, "label": main[0].get("product") or _label(main[0]), "serial": main[0].get("serial"),
+                          "replaces": main[0].get("replaces"), "replaces_serial": main[0].get("replaces_serial")}
+                         if main and main[0].get("failover") else None),
             "pending": sum(1 for r in out if r["present"] and r["kind"] == "rtl" and r.get("role") is None),
             "eeprom": bool(shutil.which("rtl_eeprom"))}

@@ -655,3 +655,4 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 }
 @media (max-width: 640px) { .jump-chip.on { border-color: var(--accent); color: var(--accent); } }
 .upd-check { display: flex; flex-wrap: wrap; align-items: end; gap: .4rem 1rem; margin-top: .5rem; } .upd-days { min-width: 180px; }
+.badge.b-absent { border-color: var(--amber, #f5b942); color: var(--amber, #f5b942); }

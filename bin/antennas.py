@@ -99,7 +99,7 @@ def current():
     cur = {"rtlsdr": None, "pmsdr": None}
     try:
         import sticks as STK
-        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main = STK.effective_main()
         if main:
             cur["rtlsdr"] = main.get("ant_profile") or None
     except Exception:
@@ -121,7 +121,8 @@ def select(target, pid, log=None):
     if target == "rtlsdr":
         import sticks as STK
         reg = STK.load()
-        key = next((k for k, r in reg["sticks"].items() if r.get("role") == "main"), None)
+        _m = STK.effective_main(reg)                     # auch eine einspringende Reserve
+        key = _m["key"] if _m else None
         if not key:
             raise ValueError("Kein Haupt-Stick festgelegt (System → Geräte)")
         old = reg["sticks"][key].get("antenna")

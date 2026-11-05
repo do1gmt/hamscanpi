@@ -157,7 +157,8 @@ def antennas_effective():
 
 def _main_stick():
     try:
-        return next((r for r in STK.overview().get("sticks", []) if r.get("role") == "main"), None)
+        sticks = STK.overview().get("sticks", [])            # der benutzte Stick (auch eine einspringende Reserve)
+        return next((r for r in sticks if r.get("in_use")), None) or next((r for r in sticks if r.get("role") == "main"), None)
     except Exception:
         return None
 
@@ -1995,7 +1996,7 @@ def live_start(data):
             # Unter 24 MHz kann auch ein Stick mit Direktabtastung (z. B. NESDR SMArt v5) übernehmen
             hw = DEV.detect_hardware()
             import sdrcaps as SC
-            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            main = STK.effective_main()
             rtl_hf, rtl_hf_why = SC.hf_ok(main) if hw["rtlsdr"]["present"] else (False, "kein Stick angesteckt")
             if freq < 30_000_000 and hw["pmsdr"]["present"]:
                 device = "pmsdr"

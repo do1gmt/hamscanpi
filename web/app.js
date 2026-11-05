@@ -2504,10 +2504,12 @@
   const ROLE_TEXT = { main: 'Haupt-Stick', spare: 'Reserve', ignore: 'ignoriert', '': 'neu – noch nicht festgelegt' };
   let sticksEditing = false, sticksDirty = false, sticksLast = '';
   function fmtSeen(t) { return new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  let sticksData = { sticks: [] };
   function renderSticks(d) {
     const js = JSON.stringify(d);
     if (js === sticksLast) return;                         // nichts geändert: nicht neu zeichnen (kein Flackern)
     sticksLast = js;
+    sticksData = d;
     const list = d.sticks || [];
     $('sticksNew').hidden = !d.pending;
     $('sticksNew').textContent = d.pending ? 'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt HamScanPi ihn nicht.' : '';
@@ -2515,7 +2517,8 @@
     $('sticksList').innerHTML = list.map(r => {
       const role = r.role || '';
       const badge = r.kind === 'other' ? '<span class="badge">nicht unterstützt</span>'
-        : `<span class="badge ${role === 'main' ? 'b-main' : role === '' ? 'b-new' : ''}">${ROLE_TEXT[role]}</span>`;
+        : `<span class="badge ${role === 'main' ? 'b-main' : role === '' ? 'b-new' : ''}">${ROLE_TEXT[role]}</span>`
+          + (r.in_use && role === 'spare' ? ` <span class="badge b-main">${EN ? 'STEPPING IN' : 'SPRINGT EIN'}</span>` : '');
       const where = r.present ? `steckt · Port ${esc(r.port || '?')}` : `zuletzt gesehen ${fmtSeen(r.last_seen)}`;
       const cp = r.caps, fmtR = h => h >= 1e9 ? (h / 1e9).toFixed(2).replace('.', ',') + ' GHz' : h >= 1e6 ? Math.round(h / 1e6) + ' MHz' : Math.round(h / 1e3) + ' kHz';
       const capTxt = cp ? `${fmtR(cp.hf_ok ? cp.min_hz : Math.max(cp.min_hz, 24e6))} – ${fmtR(cp.max_hz)}${cp.hf_ok ? ' · Kurzwelle per Direktabtastung' : cp.hf ? ' · Kurzwelle möglich, aber: ' + esc(cp.hf_why) : ''}` : null;
@@ -2528,7 +2531,7 @@
       let body = '';
       if (r.kind === 'rtl') {
         body = `<div class="stick-form" data-key="${esc(r.key)}" data-role="${esc(role)}">
-          <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = bleibt unbenutzt, bis du ihn zum Haupt-Stick machst. Ignoriert = HamScanPi fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
+          <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = springt ein, wenn der Haupt-Stick fehlt (nur wenn genau eine Reserve steckt), sonst unbenutzt. Ignoriert = HamScanPi fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
           <label class="field" title="Frequenzkorrektur des Sticks in ppm (Quarzfehler). Leer = Wert aus dem Bandplan. Sticks mit TCXO wie der NESDR SMArt brauchen meist 0."><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
           <label class="field" title="Verstärkung in dB für Scan und Live. Leer = Wert aus dem Bandplan. Zu hoch übersteuert bei starken Ortssendern, zu niedrig verliert schwache Signale. Für Satelliten gibt es eine eigene Einstellung."><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
           <label class="field" title="Kann dieser Stick Kurzwelle (Direktabtastung)? „automatisch“ richtet sich nach der Modellbezeichnung im Stick – die stimmt nicht immer (ältere Modelle melden sich als neuere, Billigsticks tragen irgendeinen Namen). „nein“: nur 24 MHz – 1,7 GHz, Kurzwelle bleibt der PMSDR."><span>Kurzwelle</span><select data-f="hf_mode">${[['auto', EN ? 'automatic (model)' : 'automatisch (Modell)'], ['on', EN ? 'yes' : 'ja'], ['off', EN ? 'no' : 'nein']].map(([v, l]) => `<option value="${v}"${(r.hf_mode || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -2546,8 +2549,9 @@
       } else {
         body = '<p class="hint">Erkannt, aber HamScanPi kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.</p>';
       }
+      const absentBadge = !r.present && r.kind === 'rtl' ? ` <span class="badge b-absent">${EN ? 'NOT PLUGGED IN' : 'STECKT NICHT'}</span>` : '';
       return `<div class="stick-card${r.present ? '' : ' absent'}${role === '' && r.kind === 'rtl' && r.present ? ' pending' : ''}">
-        <div class="stick-head"><b class="no-i18n">${esc(r.label)}</b>${r.serial ? ` <span class="stick-sn no-i18n" title="${EN ? 'serial number – tells two sticks of the same model apart' : 'Seriennummer – unterscheidet zwei Sticks gleicher Bauart'}">SN ${esc(r.serial)}</span>` : ''}${badge}</div>
+        <div class="stick-head"><b class="no-i18n">${esc(r.label)}</b>${absentBadge}${r.serial ? ` <span class="stick-sn no-i18n" title="${EN ? 'serial number – tells two sticks of the same model apart' : 'Seriennummer – unterscheidet zwei Sticks gleicher Bauart'}">SN ${esc(r.serial)}</span>` : ''}${badge}</div>
         <div class="stick-sub">${where} · ${info}</div>
         ${warn.map(w => `<p class="hint warn-text">${esc(w)}</p>`).join('')}${body}</div>`;
     }).join('');
@@ -2589,7 +2593,17 @@
       if (a === 'save') {
         const f = {}; box.querySelectorAll('[data-f]').forEach(el => { f[el.dataset.f] = el.value; });
         const wasMain = (box.dataset.role || '') === 'main';
-        if (f.role === 'main' && !wasMain && !confirm('Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.')) return;
+        if (f.role === 'main' && !wasMain) {
+          // steckt dieser Stick gar nicht? Dann ausdrücklich darauf hinweisen (Verwechslung mit dem angesteckten)
+          const plugged = (sticksData.sticks || []).filter(x => x.present && x.kind === 'rtl' && x.key !== key);
+          const me = (sticksData.sticks || []).find(x => x.key === key) || {};
+          const msg = !me.present
+            ? (EN ? `This stick is NOT plugged in (last seen ${fmtSeen(me.last_seen)}).` : `Dieser Stick steckt NICHT (zuletzt gesehen ${fmtSeen(me.last_seen)}).`)
+              + (plugged.length ? (EN ? ` Plugged in is: ${plugged.map(x => x.label + (x.serial ? ' SN ' + x.serial : '')).join(', ')} – it would no longer be used.` : ` Angesteckt ist: ${plugged.map(x => x.label + (x.serial ? ' SN ' + x.serial : '')).join(', ')} – der würde dann nicht mehr benutzt.`) : '')
+              + (EN ? '\n\nMake it the main stick anyway?' : '\n\nTrotzdem zum Haupt-Stick machen?')
+            : (EN ? 'Use this stick as main stick? The previous main stick becomes spare. Scans, passes and Live then run on this stick.' : 'Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.');
+          if (!confirm(msg)) return;
+        }
         d = await post('/api/sticks/update', Object.assign({ key }, f));
         note($('sticksNote'), '✓ gespeichert');
       } else if (a === 'forget') {

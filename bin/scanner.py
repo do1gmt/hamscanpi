@@ -1425,7 +1425,7 @@ def antenna_label(device):
     try:
         if device == "rtlsdr":
             import sticks as STK
-            main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+            main = STK.effective_main()
             if main and (main.get("antenna") or "").strip():
                 return main["antenna"].strip()
         cfgf = Path(__file__).resolve().parent.parent / "config" / "scanner.json"

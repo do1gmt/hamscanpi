@@ -796,7 +796,7 @@ def hf_via_rtl():
     try:
         import sdrcaps as SC
         import sticks as STK
-        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main = STK.effective_main()
         return bool(main) and SC.hf_ok(main)[0]
     except Exception:
         return False

@@ -131,7 +131,20 @@ def check_sticks(st):
     else:
         NT.clear("stick_access")
     main = next((r for r in ov["sticks"] if r.get("role") == "main"), None)
-    if main and not main.get("present"):
+    fo = ov.get("failover")
+    if main and not main.get("present") and fo:
+        # Reserve springt ein: weiterarbeiten, nur Bescheid geben
+        NT.clear("stick_main_missing")
+        NT.raise_("stick_failover", "info", "hardware", f"Reserve-Stick springt ein: {fo['label']} {fo.get('serial') or ''}".strip(),
+                  f"Der Haupt-Stick {main['label']} (Seriennummer {main.get('serial') or 'ohne'}) steckt nicht – Scan, "
+                  f"Satelliten und Live laufen solange mit der Reserve (Seriennummer {fo.get('serial') or 'ohne'}, mit "
+                  "deren Verstärkung, ppm, Antenne und Kurzwellen-Einstellung). Steckt der Haupt-Stick wieder, wird er "
+                  "wieder benutzt.",
+                  fix="Soll die Reserve dauerhaft Haupt-Stick sein: unter System → Geräte als Haupt-Stick festlegen.",
+                  key="stick")
+    else:
+        NT.clear("stick_failover")
+    if main and not main.get("present") and not fo:
         others = [r for r in now_present.values() if r["key"] != main["key"]]
         NT.raise_("stick_main_missing", "warn", "hardware", "Haupt-Stick fehlt",
                   f"{main['label']} (Seriennummer {main.get('serial') or 'ohne'}) steckt nicht. Scan, Satelliten "
@@ -338,7 +351,7 @@ def check_software(st):
     try:                                                       # Treiber und Kurzwelle des Haupt-Sticks
         import sdrcaps as SC
         import sticks as STK
-        main = next((r for r in STK.load()["sticks"].values() if r.get("role") == "main"), None)
+        main = STK.effective_main()
         c = SC.caps(main) if main else None
         if c and c["hf"] == "upconverter":
             NT.raise_("hf_driver", "info", "hardware", "Kurzwelle braucht einen anderen Treiber",

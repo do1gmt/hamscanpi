@@ -249,6 +249,20 @@ def restore_if_pending():
         if not BK.apply_pending(log=lines.append):
             return
         applog("WARN", "scheduler", "restore_done", detail=" · ".join(lines)[:400])
+        try:                                     # Sicherung von einem anderen Pi: den angesteckten Stick übernehmen
+            import sticks as STK
+            import notices as NT
+            ad = STK.adopt_after_restore()
+            if ad:
+                new, old = ad
+                lab_new = f"{new.get('product') or 'Stick'} {new.get('serial') or ''}".strip()
+                lab_old = f"{(old or {}).get('product') or 'Stick'} {(old or {}).get('serial') or ''}".strip()
+                NT.event("stick", "info", "hardware", f"Nach dem Einspielen: {lab_new} als Haupt-Stick übernommen",
+                         f"Die Sicherung kannte {lab_old} als Haupt-Stick, der hier nicht steckt. Angesteckt ist nur "
+                         f"{lab_new} – er ist jetzt Haupt-Stick, {lab_old} bleibt mit seinen Einstellungen als Reserve eingetragen.")
+                applog("INFO", "scheduler", "restore_stick_adopted", new=new.get("serial"), old=(old or {}).get("serial"))
+        except Exception as e:
+            applog("WARN", "scheduler", "restore_stick_adopt_failed", error=f"{type(e).__name__}: {e}")
     except Exception as e:
         applog("ERROR", "scheduler", "restore_failed", error=f"{type(e).__name__}: {e}")
         try:
