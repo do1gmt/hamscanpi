@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.8.03 – 2026-11-14
+
+- **Fix: false "aborted passes still lie as raw data" warning during every pass.** The raw file of the pass that
+  is running right now was counted too; `sat_recover.py` then found nothing (or, during a pass, would have
+  evaluated and deleted the file of the running pass). Files whose `sat_pass.py` is still alive, or that were
+  written to in the last 2 minutes, no longer count (`housekeeping.sat_raw_orphans`, used by the warning and by
+  `sat_recover.py`). The hint names the full command.
+- **Who writes to the card:** the system history now notes per minute which own programs wrote how much
+  (`samples.wr_by`, e.g. `scanner.py 12.3, webapp.py 0.4`); System → Status shows the top writers of the last
+  24 h under "written in 24 h". The next diagnostics package says exactly where the card load comes from.
+- Self-test section 63.
+
+## 1.8.02 – 2026-11-14
+
+- **Fix: scheduler loop failed with `FileNotFoundError … /dev/shm/hamscanpi-…/scheduler.heartbeat`.** systemd-logind
+  (`RemoveIPC=yes`, the default) empties everything a user owns in `/dev/shm` when that user's last login ends –
+  e.g. logging out of SSH or the end of a login session during an update. The RAM folder (scheduler heartbeat,
+  level meter) was gone and every loop round failed. Now the folder is recreated when needed (`rundir.touch()` /
+  `ensure()`, logged once as `rundir_recreated`), the heartbeat can no longer abort the loop, and the setup sets
+  `RemoveIPC=no` (`/etc/systemd/logind.conf.d/hamscanpi.conf`, effective after the next reboot).
+- **Diagnostics download on phones:** the package is built once in the RAM folder and kept for 2 minutes, served
+  with its length (progress bar); repeated or aborted downloads (phone browsers fetch twice) no longer rebuild it or
+  end with "Broken pipe" tracebacks. The dashboard says it is being prepared and catches double taps.
+- **Dashboard opened while the Pi restarts** (update, reboot): instead of a red "Settings could not be loaded:
+  Failed to fetch" and an empty settings page it says the Pi is not reachable right now and loads the settings as
+  soon as it answers.
+- Self-test section 62.
+
 ## 1.8.01 – 2026-11-14
 
 - **Hit cards clearly separated:** day headings in the list (Today, Yesterday, Fri 13.11.2026 with the number of

@@ -2186,5 +2186,69 @@ i = js.index("async function loadUpdate"); j = js.index("\n  }\n", i)
 assert js[i:j].count("return d;") == 1 and js[i:j].rstrip().endswith("return d;"), "Update-Karte: Protokoll und Fortschritt nach dem return"
 PY
 
+echo "== 62 RAM-Ordner verschwindet (Abmelden), Diagnose doppelt abgerufen, Pi startet gerade neu"
+(cd bin && python3 - "$SRC" <<'PY') && ok "RAM-Ordner wird neu angelegt (Zeitplaner läuft weiter), RemoveIPC aus, Diagnose einmal gebaut und abbruchfest, Einstellungen laden nach" || bad "RAM-Ordner/Diagnose"
+import io, shutil, sys, threading, time
+from pathlib import Path
+import rundir as R, diag
+p = R.path("scheduler.heartbeat"); R.touch(p)
+shutil.rmtree(R.directory()); R.touch(p); assert p.exists()                       # logind hat /dev/shm geleert
+shutil.rmtree(R.directory()); R.ensure(); assert R.directory().is_dir()
+src = Path("scheduler.py").read_text(); i = src.index('_RD.touch(_RD.path("scheduler.heartbeat"))')
+assert "try:" in src[i - 40:i] and "except OSError" in src[i:i + 200]
+assert "RemoveIPC=no" in Path("setup_system.sh").read_text()
+assert "_RD.ensure()" in Path("scanner.py").read_text() and "_RD.ensure()" in Path("sat_pass.py").read_text()
+n = {"build": 0}
+real = diag.write
+def fake(f, stream=True):
+    n["build"] += 1; time.sleep(0.3); f.write(b"x" * 200000)
+diag.write = fake
+class Hd:
+    def __init__(self, broken=False):
+        self.h, self.wfile, self.broken = {}, io.BytesIO(), broken
+        if broken:
+            def w(b): raise BrokenPipeError()
+            self.wfile.write = w
+    def send_response(self, c): self.code = c
+    def send_header(self, k, v): self.h[k] = v
+    def end_headers(self): pass
+hs = [Hd(broken=True), Hd(), Hd()]
+th = [threading.Thread(target=lambda h=h: h.__setattr__("ok", diag.send(h))) for h in hs]
+[t.start() for t in th]; [t.join() for t in th]
+assert n["build"] == 1, n                                                    # gleichzeitig: nur einmal gebaut
+assert hs[0].ok is False and hs[1].ok and hs[2].ok and hs[1].h["Content-Length"] == "200000"
+assert hs[1].wfile.getvalue() == hs[2].wfile.getvalue()
+diag.write = real
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert "e instanceof TypeError" in js and "Pi gerade nicht erreichbar" in js and "svcDiag" in js
+PY
+
+echo "== 63 Rohdaten laufender Überflüge, wer schreibt auf die Karte"
+(cd bin && python3 - <<'PY') && ok "Rohdatei eines laufenden Überflugs ist kein „abgebrochen“ (Warnung und Rettung), Schreiblast je Programm im Verlauf" || bad "Rohdaten/Schreiblast"
+import os, subprocess, sys, tempfile, time
+from pathlib import Path
+import housekeeping as HK, sysmon as SM
+d = Path(tempfile.mkdtemp())
+live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "sat_pass.py"])
+old = d / f".sat_iss_{live.pid}.r16"; old.write_bytes(b"x" * 100)                 # läuft gerade
+dead = d / ".sat_iss_999999.r16"; dead.write_bytes(b"x" * 100)                   # Überflug abgebrochen
+fresh = d / ".sat_ao7_999998.r16"; fresh.write_bytes(b"x")                       # wird noch geschrieben
+for p in (old, dead): os.utime(p, (time.time() - 600, time.time() - 600))
+assert HK.sat_raw_orphans(d) == [dead], HK.sat_raw_orphans(d)
+live.kill()
+assert "HK.sat_raw_orphans(SP.RECDIR)" in Path("sat_recover.py").read_text()
+SM.DB = d / "sysmon.db"
+seq = iter([{"1": ("scanner.py", 0), "2": ("webapp.py", 0)},
+            {"1": ("scanner.py", 30_000_000), "2": ("webapp.py", 2_000_000)},
+            {"1": ("scanner.py", 45_000_000), "2": ("webapp.py", 2_000_000), "3": ("rtl_sdr", 10)}])
+SM.own_writes = lambda: next(seq)
+sm = SM.Sampler(); t = time.time()
+sm.tick(t); sm.tick(t + 10); row = sm.tick(t + 70)
+assert row[-1] == "scanner.py 45.0, webapp.py 2.0", row
+st = SM.storage_info(now=t + 80)
+assert st["writers_24h"][0] == ["scanner.py", 45] and st["writers_24h"][1] == ["webapp.py", 2], st
+assert SM._short(b"/usr/bin/python3\0/home/g/hamscanpi/bin/scanner.py\0--x") == "scanner.py" and SM._short(b"rtl_sdr\0-f\0x") == "rtl_sdr"
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

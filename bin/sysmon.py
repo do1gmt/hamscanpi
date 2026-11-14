@@ -403,12 +403,21 @@ def storage_info(now=None):
             else "USB-Laufwerk" if disk and disk.startswith("sd") else "unbekannt")
     now = now or time.time()
     w24 = w7 = None
+    by = {}
     if DB.exists():
         db = _db()
         try:
             w24 = db.execute("SELECT SUM(wr_mb) FROM samples WHERE t >= ?", (int(now - 86400),)).fetchone()[0]
             w7 = db.execute("SELECT SUM(wr_mb), MIN(t) FROM samples WHERE t >= ? AND wr_mb IS NOT NULL",
                             (int(now - 7 * 86400),)).fetchone()
+            by = {}
+            for (txt,) in db.execute("SELECT wr_by FROM samples WHERE t >= ? AND wr_by IS NOT NULL", (int(now - 86400),)):
+                for part in txt.split(", "):
+                    n, _, v = part.rpartition(" ")
+                    try:
+                        by[n] = by.get(n, 0.0) + float(v)
+                    except ValueError:
+                        pass
         finally:
             db.close()
     sw = swap_info()
@@ -416,7 +425,9 @@ def storage_info(now=None):
             "swap_on_disk": any(not s["zram"] for s in sw),
             "written_24h_mb": round(w24) if w24 is not None else None,
             "written_7d_mb": round(w7[0]) if w7 and w7[0] is not None else None,
-            "written_since": w7[1] if w7 else None}
+            "written_since": w7[1] if w7 else None,
+            # wer am meisten geschrieben hat (eigene Programme, 24 h) – der Rest ist System, Protokoll, Dateisystem
+            "writers_24h": [[k, round(v)] for k, v in sorted(by.items(), key=lambda x: -x[1])[:3]]}
 
 
 def wifi_dbm(full=False):
@@ -449,7 +460,38 @@ def _db():
         db.execute("ALTER TABLE samples ADD COLUMN wr_mb REAL")
     if "wifi_dbm" not in cols:                                          # ab 1.7.93: WLAN-Empfangsstärke
         db.execute("ALTER TABLE samples ADD COLUMN wifi_dbm INTEGER")
+    if "wr_by" not in cols:                                             # ab 1.8.02: wer hat geschrieben
+        db.execute("ALTER TABLE samples ADD COLUMN wr_by TEXT")
     return db
+
+
+def _short(cmd):
+    """„/usr/bin/python3 /home/x/hamscanpi/bin/scanner.py --x“ -> „scanner.py“, „rtl_sdr -f …“ -> „rtl_sdr“."""
+    parts = cmd.split(b"\0")
+    for a in parts[1:3]:
+        if a.endswith(b".py"):
+            return os.path.basename(a).decode(errors="replace")
+    return os.path.basename(parts[0]).decode(errors="replace")[:24] or "?"
+
+
+def own_writes():
+    """{pid: (Kurzname, write_bytes)} der eigenen Prozesse (fremde sind ohne root nicht lesbar)."""
+    out, uid = {}, os.getuid()
+    for d in os.scandir("/proc"):
+        if not d.name.isdigit():
+            continue
+        try:
+            if d.stat().st_uid != uid:
+                continue
+            with open(f"/proc/{d.name}/io", "rb") as f:
+                wb = int(next(x for x in f.read().splitlines() if x.startswith(b"write_bytes")).split()[1])
+            with open(f"/proc/{d.name}/cmdline", "rb") as f:
+                cmd = f.read()
+            if cmd:
+                out[d.name] = (_short(cmd), wb)
+        except (OSError, StopIteration, ValueError):
+            continue
+    return out
 
 
 class Sampler:
@@ -477,6 +519,7 @@ class Sampler:
         self.last = self.cpu0
         self.peak, self.act = 0.0, 0
         self.top = (None, 0.0)                                          # größter Prozess in dieser Minute
+        self.wby = {}                                                   # geschriebene Bytes je Programm
 
     def tick(self, now=None):
         now = now or time.time()
@@ -486,6 +529,16 @@ class Sampler:
             self.peak = max(self.peak, u[0])
         self.last = cur
         self.act = max(self.act, activity())
+        try:                                                            # wer schreibt? (Zuwachs je Prozess)
+            w = own_writes()
+            prev = getattr(self, "wprev", {})
+            for pid, (name, wb) in w.items():
+                d = wb - prev[pid][1] if pid in prev and prev[pid][0] == name else 0
+                if d > 0:
+                    self.wby[name] = self.wby.get(name, 0) + d
+            self.wprev = w
+        except Exception:
+            pass
         try:                                                            # bei jedem Durchlauf (~10 s) nachsehen
             tp = top_process()
             if tp[0] and tp[1] > self.top[1]:
@@ -502,11 +555,12 @@ class Sampler:
         thr = throttled_now()
         row = (int(now // 60 * 60), avg[0] if avg else None, self.peak, mem.get("available"), mem.get("swap_used"),
                cpu_temp(), None if thr is None else int(thr), self.act,
-               self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written(), wifi_dbm())
+               self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written(), wifi_dbm(),
+               ", ".join(f"{k} {v / 1e6:.1f}" for k, v in sorted(self.wby.items(), key=lambda x: -x[1])[:4] if v >= 50_000) or None)
         db = _db()
         try:
             db.execute("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act, "
-                       "top_name, top_mb, wr_mb, wifi_dbm) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", row)
+                       "top_name, top_mb, wr_mb, wifi_dbm, wr_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
             if now - self.pruned > 3600:
                 db.execute("DELETE FROM samples WHERE t < ?", (int(now - KEEP_S),))
                 self.pruned = now

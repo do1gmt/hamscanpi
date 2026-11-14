@@ -325,6 +325,7 @@ def scan_meter(band, center, result):
         del _METER_HIST[:-60]
         rf = (center + top["offset_hz"]) if top and top.get("offset_hz") is not None else None
         lab = f"{band} · stärkstes Signal {rf/1e6:.4f} MHz" if rf else f"{band} {center/1e6:.3f} MHz · nichts über der Schwelle"
+        _RD.ensure()
         tmp = METER_FILE.with_suffix(f".tmp{os.getpid()}")
         tmp.write_text(json.dumps({"t": time.time(), "src": "scan",
                                    "items": [{"label": lab, "db": db, "hist": list(_METER_HIST)}]}), encoding="utf-8")

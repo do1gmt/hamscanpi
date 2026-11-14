@@ -261,6 +261,14 @@ if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then
     systemctl restart systemd-journald 2>/dev/null || true
 fi
 ok "$(t "Systemprotokoll bleibt über Neustarts erhalten (höchstens 64 MB)" "system journal kept across reboots (max. 64 MB)")"
+# Abmelden von SSH darf den RAM-Ordner der Dienste nicht leeren (logind RemoveIPC=yes räumt sonst /dev/shm des
+# Benutzers ab – Lebenszeichen des Zeitplaners und Pegelanzeige verschwanden). Gilt ab dem nächsten Neustart;
+# bis dahin legen die Dienste den Ordner selbst neu an (bin/rundir.py).
+if [ ! -f /etc/systemd/logind.conf.d/hamscanpi.conf ]; then
+    mkdir -p /etc/systemd/logind.conf.d
+    printf '[Login]\nRemoveIPC=no\n' > /etc/systemd/logind.conf.d/hamscanpi.conf
+fi
+ok "$(t "RAM-Ordner bleibt beim Abmelden erhalten" "RAM folder kept on logout")"
 # WLAN ohne Stromsparen (sonst ruckelt Live und das Dashboard meldet „Server nicht erreichbar“)
 if command -v nmcli >/dev/null 2>&1 && [ ! -f /etc/NetworkManager/conf.d/hamscanpi-wifi.conf ]; then
     mkdir -p /etc/NetworkManager/conf.d

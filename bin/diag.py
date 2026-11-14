@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -156,3 +157,51 @@ if __name__ == "__main__":
     with open(out, "wb") as f:
         write(f, stream=False)
     print(f"{out} ({out.stat().st_size / 1e6:.1f} MB)")
+
+
+# ------------------------------------------------------------------ Herunterladen
+# Handy-Browser holen eine Datei oft zweimal (Vorschau, dann der Download-Manager) oder brechen ab und versuchen es
+# neu. Früher baute jeder Abruf das Paket neu (je ~15 s, Stromsparen der Karte egal) und brach mit „Broken pipe“ ab.
+# Jetzt: einmal im RAM-Ordner bauen, 2 min für Wiederholungen bereithalten, mit Länge ausliefern (Fortschritt).
+_LOCK = threading.Lock()
+_LAST = {"path": None, "t": 0.0, "name": None}
+
+
+def prepared(max_age=120):
+    with _LOCK:
+        p = _LAST["path"]
+        if p and p.exists() and time.time() - _LAST["t"] < max_age:
+            return p, _LAST["name"]
+        import rundir
+        d = rundir.ensure()
+        if p:
+            p.unlink(missing_ok=True)
+        name, p = filename(), d / f"diagnose-{os.getpid()}.tar.gz"
+        tmp = p.with_suffix(".tmp")
+        with open(tmp, "wb") as f:
+            write(f, stream=False)
+        os.replace(tmp, p)
+        _LAST.update(path=p, t=time.time(), name=name)
+        return p, name
+
+
+def send(handler):
+    """An einen http.server-Handler ausliefern. Rückgabe True = ganz angekommen, False = Browser hat abgebrochen."""
+    p, name = prepared()
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/gzip")
+    handler.send_header("Content-Disposition", f'attachment; filename="{name}"')
+    handler.send_header("Content-Length", str(p.stat().st_size))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Connection", "close")
+    handler.end_headers()
+    handler.close_connection = True
+    try:
+        with open(p, "rb") as f:
+            while True:
+                b = f.read(65536)
+                if not b:
+                    return True
+                handler.wfile.write(b)
+    except (BrokenPipeError, ConnectionResetError, TimeoutError):
+        return False

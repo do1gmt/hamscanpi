@@ -58,7 +58,7 @@ def check_yield():
 def heartbeat():
     """Lebenszeichen des Scanners (je Fenster/Schritt) – der Scheduler erkennt daran einen hängenden Scan."""
     try:
-        HEARTBEAT.touch()
+        _RD.touch(HEARTBEAT)
     except OSError:
         pass
 

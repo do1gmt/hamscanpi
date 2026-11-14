@@ -135,6 +135,34 @@ def _read(path):
         return None
 
 
+_RAW = re.compile(r"^\.sat_[a-z0-9_]+?_(\d+)\.(raw|r16|aud|a16)$")
+
+
+def sat_raw_orphans(recdir=None, exts=("raw", "r16")):
+    """Rohdateien abgebrochener Überflüge. Die Datei eines laufenden Überflugs (Kennung = Prozessnummer von
+    sat_pass.py, der noch lebt) oder einer gerade laufenden Rettung zählt nicht – sonst warnte das Dashboard bei jedem
+    Überflug, und sat_recover.py hätte die Aufnahme mitten im Überflug ausgewertet und gelöscht."""
+    recdir = Path(recdir or BASE / "recordings")
+    out = []
+    for x in exts:
+        for p in recdir.glob(f".sat_*.{x}"):
+            m = _RAW.match(p.name)
+            try:
+                if m:
+                    cmd = Path(f"/proc/{m.group(1)}/cmdline").read_bytes()
+                    if b"sat_pass" in cmd or b"sat_recover" in cmd:
+                        continue                              # gehört einem laufenden Überflug
+            except OSError:
+                pass
+            try:
+                if time.time() - p.stat().st_mtime < 120:      # wird gerade noch geschrieben
+                    continue
+            except OSError:
+                continue
+            out.append(p)
+    return out
+
+
 def system_status():
     st = {}
     du = shutil.disk_usage(str(BASE))
@@ -142,7 +170,7 @@ def system_status():
                   "used_pct": round(100.0 * du.used / du.total, 1)}
     size, n = _dir_size(BASE / "recordings")
     st["recordings"] = {"gb": round(size / 1e9, 2), "files": n}
-    raw = [*(BASE / "recordings").glob(".sat_*.raw"), *(BASE / "recordings").glob(".sat_*.r16")]
+    raw = sat_raw_orphans()
     st["sat_raw"] = {"files": len(raw), "mb": round(sum(p.stat().st_size for p in raw) / 1e6)}
     mem = {}
     try:

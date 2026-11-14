@@ -92,6 +92,7 @@ def open_iq(path):
 def write_meter(src, items):
     """[{label, db, hist}] -> data/meter.json (atomar). Für die Pegelanzeige im Dashboard."""
     try:
+        _RD.ensure()
         tmp = METER.with_suffix(f".tmp{os.getpid()}")
         tmp.write_text(json.dumps({"t": time.time(), "src": src, "items": items}), encoding="utf-8")
         os.replace(tmp, METER)

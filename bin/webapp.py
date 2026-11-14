@@ -2406,15 +2406,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(dict(SV.status(), mdns=MD.state()))
             if path == "/api/diagnose":
                 import diag
-                self.send_response(200)
-                self.send_header("Content-Type", "application/gzip")
-                self.send_header("Content-Disposition", f'attachment; filename="{diag.filename()}"')
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Connection", "close")
-                self.end_headers()
-                self.close_connection = True
-                diag.write(self.wfile, stream=True)
-                APPLOG.log("INFO", "webapp", "diagnose_downloaded", ip=self.client_ip())
+                if diag.send(self):
+                    APPLOG.log("INFO", "webapp", "diagnose_downloaded", ip=self.client_ip())
                 return
             if path == "/api/wsjtx-udp":
                 import wsjtx_udp as WX

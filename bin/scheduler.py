@@ -623,7 +623,10 @@ while True:
     if _sdn:
         _sdn.notify("WATCHDOG=1")
     try:
-        _RD.path("scheduler.heartbeat").touch()                 # im RAM: schont die Speicherkarte
+        try:
+            _RD.touch(_RD.path("scheduler.heartbeat"))          # im RAM: schont die Speicherkarte
+        except OSError:
+            pass                                                # nie die ganze Runde (Überflüge, Scans) verlieren
         if _sysmon:
             try:
                 _sysmon.tick()

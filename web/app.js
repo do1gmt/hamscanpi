@@ -2232,7 +2232,7 @@
     tile(`${d.free_gb} GB`, `frei von ${d.total_gb} GB (${d.used_pct} % belegt)`, dcls);
     if (dcls) warn.push(d.used_pct >= 95 ? 'Speicherkarte fast voll – keine neuen Scans und Überflüge, bis wieder Platz ist.' : 'Speicherkarte wird voll – alte Treffer aufräumen oder automatisch löschen lassen.');
     tile(`${s.recordings.gb} GB`, `Aufnahmen (${s.recordings.files} Dateien)`);
-    if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – auf dem Pi: python3 bin/sat_recover.py'); }
+    if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – retten per SSH: cd ~/hamscanpi && python3 bin/sat_recover.py (sonst nach 48 h gelöscht)'); }
     if (s.throttled) {
       const t = s.throttled; const now = t.now, ever = t.since_boot;
       tile(now ? 'gedrosselt' : ever ? 'war gedrosselt' : 'nein', 'Drosselung / Unterspannung', now ? 'bad' : ever ? 'warn' : '');
@@ -2248,7 +2248,8 @@
       const days = sto.written_since ? Math.max(1, Math.min(7, (Date.now() / 1000 - sto.written_since) / 86400)) : null;
       const perDay = sto.written_7d_mb != null && days ? sto.written_7d_mb / days : null;
       const sd = sto.kind === 'SD-Karte';
-      tile(gb(sto.written_24h_mb), `geschrieben in 24 h · ${sto.kind}${perDay != null && days >= 2 ? ` (Ø ${gb(perDay)}/Tag)` : ''}`,
+      const wr = (sto.writers_24h || []).filter(x => x[1] >= 1).map(x => `${esc(x[0])} ${gb(x[1])}`).join(' · ');
+      tile(gb(sto.written_24h_mb), `geschrieben in 24 h · ${sto.kind}${perDay != null && days >= 2 ? ` (Ø ${gb(perDay)}/Tag)` : ''}${wr ? `<br><small>davon: ${wr}</small>` : ''}`,
            sd && sto.written_24h_mb > 20480 ? 'warn' : '');
       const swOn = (sto.swap || []).filter(x => !x.zram).map(x => x.name);
       const swZ = (sto.swap || []).some(x => x.zram);
@@ -2423,6 +2424,13 @@
     try { await post('/api/services/restart', { unit: b.dataset.svc }); note($('svcNote'), `✓ ${label} wird neu gestartet`);
           if (b.dataset.svc === 'hamscanpi-web') setTimeout(() => location.reload(), 8000); else setTimeout(loadServices, 5000); }
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
+  });
+  // Diagnose: der Pi braucht bis ~20 s zum Zusammenstellen – Rückmeldung geben, doppeltes Antippen abfangen
+  let diagAt = 0;
+  $('svcDiag').addEventListener('click', e => {
+    if (Date.now() - diagAt < 25000) { e.preventDefault(); toast(EN ? 'Diagnostics package is being prepared …' : 'Diagnosepaket wird schon erstellt …', 3000, false); return; }
+    diagAt = Date.now();
+    toast(EN ? 'Preparing diagnostics package (up to 20 s) – the download starts by itself' : 'Diagnosepaket wird erstellt (bis 20 s) – der Download startet von selbst', 6000, false);
   });
   $('svcReboot').addEventListener('click', async () => {
     if (!confirm('Den Raspberry Pi wirklich neu starten? Laufende Scans und Aufnahmen werden abgebrochen. In etwa einer Minute ist er wieder da.')) return;
@@ -3151,7 +3159,22 @@
 
   // ---------- Start ----------
   (async () => {
-    try { await loadBandplan(); await loadSettings(); } catch (e) { toast('Einstellungen nicht ladbar: ' + e.message, 6000); }
+    // Einstellungen laden. Startet der Pi gerade neu (Update, Neustart), kommt „Failed to fetch“: dann ruhig
+    // weiter versuchen, bis er wieder antwortet – statt einer roten Fehlermeldung und einer leeren Einstellungsseite.
+    const loadInitial = async () => { await loadBandplan(); await loadSettings(); };
+    try { await loadInitial(); } catch (e) {
+      if (!(e instanceof TypeError)) toast((EN ? 'Settings could not be loaded: ' : 'Einstellungen nicht ladbar: ') + e.message, 6000, true);
+      else {
+        toast(EN ? 'Pi not reachable right now (restarting?) – settings load as soon as it answers' : 'Pi gerade nicht erreichbar (startet neu?) – Einstellungen kommen, sobald er antwortet', 5000, false);
+        (async () => {
+          for (let i = 1; i <= 60; i++) {
+            await new Promise(r => setTimeout(r, Math.min(10000, 2000 * i)));
+            try { await loadInitial(); toast(EN ? '✓ Pi reachable again – settings loaded' : '✓ Pi wieder erreichbar – Einstellungen geladen'); refreshData(); return; }
+            catch (e2) { if (!(e2 instanceof TypeError)) { toast((EN ? 'Settings could not be loaded: ' : 'Einstellungen nicht ladbar: ') + e2.message, 6000, true); return; } }
+          }
+        })();
+      }
+    }
     await pollStatus();
     await refreshData();
 

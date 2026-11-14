@@ -68,9 +68,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
-    files = sorted([*SP.RECDIR.glob(".sat_*.raw"), *SP.RECDIR.glob(".sat_*.r16")], key=lambda p: p.stat().st_mtime)
+    import housekeeping as HK
+    files = sorted(HK.sat_raw_orphans(SP.RECDIR), key=lambda p: p.stat().st_mtime)   # nie die eines laufenden Überflugs
     if not files:
-        print("Keine liegengebliebenen Rohaufnahmen.")
+        print("Keine liegengebliebenen Rohaufnahmen (die eines gerade laufenden Überflugs zählen nicht).")
         return
     total = 0
     for p in files:

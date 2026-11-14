@@ -162,14 +162,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, LOGIN.format(css=CSS, msg=""))
         if u.path == "/diagnose":
             import diag
-            self.send_response(200)
-            self.send_header("Content-Type", "application/gzip")
-            self.send_header("Content-Disposition", f'attachment; filename="{diag.filename()}"')
-            self.send_header("Connection", "close")
-            self.end_headers()
-            self.close_connection = True
-            diag.write(self.wfile, stream=True)
-            log("INFO", "diagnose_downloaded", ip=self.ip())
+            if diag.send(self):
+                log("INFO", "diagnose_downloaded", ip=self.ip())
             return
         msg = urllib.parse.parse_qs(u.query).get("msg", [""])[0]
         return self.send(200, page(msg).replace("{host}", (self.headers.get("Host") or "").split(":")[0]))
