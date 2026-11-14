@@ -2250,5 +2250,32 @@ assert st["writers_24h"][0] == ["scanner.py", 45] and st["writers_24h"][1] == ["
 assert SM._short(b"/usr/bin/python3\0/home/g/hamscanpi/bin/scanner.py\0--x") == "scanner.py" and SM._short(b"rtl_sdr\0-f\0x") == "rtl_sdr"
 PY
 
+echo "== 64 PMSDR im Diagnosepaket, Galerie in der Breite des Themes"
+(cd bin && python3 - "$SRC" <<'PY') && ok "Diagnose: PMSDR-Empfangstest mit Pegel, I/Q und stärksten Signalen, nur wenn frei; Galerie begrenzt ihre Breite" || bad "PMSDR-Diagnose/Galerie-Breite"
+import fcntl, json, sys
+from pathlib import Path
+import numpy as np, diag, devices as DEV
+Path("../config/scanner.json").write_text(json.dumps({**json.loads(Path("../config/scanner.json").read_text()), "alsa_name": "Aureon", "iq_conjugate": True}))
+class F:
+    rate = 48000; fifo_fd = -1
+    def __init__(self, cfg): pass
+    @staticmethod
+    def _find_alsa(n, d): return 2, 0
+    def tune(self, c): self.c = c
+    def capture(self, s):
+        t = np.arange(int(48000 * s)) / 48000
+        z = 0.01 * np.exp(2j * np.pi * 11500 * t) + 0.001 * (np.random.randn(len(t)) + 1j * np.random.randn(len(t)))
+        return z.real, -z.imag
+DEV.PmsdrDevice = F
+diag._run = lambda cmd, timeout=20: f"[{cmd[0]}]"
+r = diag.pmsdr_info()
+assert "7.074 MHz: Pegel" in r and "7.0755 MHz +" in r and "ÜBERSTEUERT" not in r, r
+lk = open("../data/scan.lock", "a"); fcntl.flock(lk, fcntl.LOCK_EX)          # Scan läuft
+assert "übersprungen – Scan" in diag.pmsdr_info(); fcntl.flock(lk, fcntl.LOCK_UN)
+css = (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/assets/galerie.css").read_text()
+assert "var(--hsp-max, var(--max" in css and "margin: 1rem auto 2rem" in css
+assert "'max_w'" in (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php").read_text()
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

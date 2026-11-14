@@ -1,6 +1,7 @@
 /* HamScanPi SSTV-Galerie – alles über Variablen anpassbar (Einstellungen → SSTV-Galerie oder im Theme):
  *   .hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-text: …; --hsp-muted: …; --hsp-line: …; --hsp-radius: …;
- *                  --hsp-shadow: …; --hsp-thumb: 220px; --hsp-gap: .9rem; --hsp-fade: 450ms; --hsp-font: inherit; }
+ *                  --hsp-shadow: …; --hsp-thumb: 220px; --hsp-gap: .9rem; --hsp-fade: 450ms; --hsp-font: inherit;
+ *                  --hsp-max: 1180px; }
  * Ohne Angabe übernimmt die Galerie die Farben des Themes, wenn es die üblichen Variablen setzt (--green bzw.
  * --accent, --panel, --line, --radius, --ink, --muted, --shadow) – sonst Schrift und Hintergrund der Seite. */
 .hsp-galerie, .hsp-lb {
@@ -20,7 +21,10 @@
   --hsp-lb-text: #f2f4f7;
   font-family: var(--hsp-font);
 }
-.hsp-galerie { color: var(--hsp-text); margin: 1rem 0 2rem; }
+/* Breite: nie breiter als der Inhaltsbereich des Themes (--max bzw. die „weite“ Breite aus theme.json) und am
+   Handy mit Rand – auch wenn der Kurzcode außerhalb eines Inhaltsrahmens steht. Eigene Breite: --hsp-max. */
+.hsp-galerie { color: var(--hsp-text); margin: 1rem auto 2rem;
+  width: min(100%, var(--hsp-max, var(--max, var(--wp--style--global--wide-size, 100%))), calc(100vw - 32px)); }
 .hsp-galerie *, .hsp-lb * { box-sizing: border-box; }
 /* „hidden“ muss gewinnen – sonst stünden Nachladeknopf und leere Filterleiste da, obwohl es nichts gibt */
 .hsp-galerie [hidden] { display: none !important; }

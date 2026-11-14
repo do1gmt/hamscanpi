@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HamScanPi SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von HamScanPi (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.3.0
+ * Version:           1.3.1
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            HamScanPi
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.3.0');
+define('HSP_SSTV_VERSION', '1.3.1');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -41,6 +41,7 @@ function hsp_sstv_defaults()
         'muted'       => '',
         'radius'      => '',          // leer = vom Theme (--radius)
         'thumb'       => 220,         // Mindestbreite eines Vorschaubilds in px
+        'max_w'       => '',          // größte Breite der Galerie in px, leer = vom Theme
         'fade_ms'     => 450,
         'load_css'    => 1,
         'custom_css'  => '',
@@ -414,6 +415,9 @@ function hsp_sstv_assets()
         if ($o['radius'] !== '' && $o['radius'] !== null) {
             $vars[] = '--hsp-radius:' . (int) $o['radius'] . 'px';
         }
+        if ($o['max_w'] !== '' && $o['max_w'] !== null) {
+            $vars[] = '--hsp-max:' . (int) $o['max_w'] . 'px';
+        }
         $vars[] = '--hsp-thumb:' . (int) $o['thumb'] . 'px';
         $vars[] = '--hsp-fade:' . (int) $o['fade_ms'] . 'ms';
         wp_add_inline_style('hsp-sstv', '.hsp-galerie,.hsp-lb{' . implode(';', $vars) . '}' . "\n" . wp_strip_all_tags($o['custom_css']));
@@ -573,6 +577,7 @@ add_action('admin_init', function () {
         $o = array();
         $o['status_mode'] = in_array(isset($in['status_mode']) ? $in['status_mode'] : '', array('pi', 'draft', 'publish'), true) ? $in['status_mode'] : 'pi';
         $o['radius'] = (isset($in['radius']) && $in['radius'] !== '') ? max(0, min(40, (int) $in['radius'])) : '';
+        $o['max_w'] = (isset($in['max_w']) && $in['max_w'] !== '') ? max(320, min(4000, (int) $in['max_w'])) : '';
         foreach (array('max_mb' => array(1, 50), 'per_page' => array(6, 100), 'thumb' => array(100, 600), 'fade_ms' => array(0, 3000)) as $k => $lim) {
             $o[$k] = max($lim[0], min($lim[1], isset($in[$k]) ? (int) $in[$k] : $d[$k]));
         }
@@ -646,6 +651,8 @@ function hsp_sstv_settings_page()
                 <tr><th>Schrift</th><td><input type="text" name="<?php echo esc_attr($f('text')); ?>" value="<?php echo esc_attr($o['text']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Schrift gedämpft</th><td><input type="text" name="<?php echo esc_attr($f('muted')); ?>" value="<?php echo esc_attr($o['muted']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Ecken (px)</th><td><input type="number" name="<?php echo esc_attr($f('radius')); ?>" value="<?php echo esc_attr($o['radius']); ?>" min="0" max="40" placeholder="leer = vom Theme"></td></tr>
+                <tr><th>Größte Breite (px)</th><td><input type="number" name="<?php echo esc_attr($f('max_w')); ?>" value="<?php echo esc_attr($o['max_w']); ?>" min="320" max="4000" placeholder="leer = vom Theme">
+                    <p class="description">Leer: so breit wie der Inhaltsbereich des Themes – auch wenn der Kurzcode außerhalb eines Inhaltsrahmens steht.</p></td></tr>
                 <tr><th>Vorschaubild mindestens (px)</th><td><input type="number" name="<?php echo esc_attr($f('thumb')); ?>" value="<?php echo (int) $o['thumb']; ?>" min="100" max="600"></td></tr>
                 <tr><th>Überblenden (ms)</th><td><input type="number" name="<?php echo esc_attr($f('fade_ms')); ?>" value="<?php echo (int) $o['fade_ms']; ?>" min="0" max="3000"></td></tr>
                 <tr><th>Bilder je Seite</th><td><input type="number" name="<?php echo esc_attr($f('per_page')); ?>" value="<?php echo (int) $o['per_page']; ?>" min="6" max="100"></td></tr>

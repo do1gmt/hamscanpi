@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.04 – 2026-11-14
+
+- **Diagnostics package: `pmsdr.txt`** – control program (status and log), USB devices, sound cards, the sound
+  card's mixer, and a short reception test on 3.573/7.074/14.074 MHz (level per I and Q in dBFS, clipping, I/Q
+  balance and correlation, strongest signals). Runs only while the PMSDR is free (no scan, pass or Live).
+- **WordPress plugin 1.3.1:** the gallery is never wider than the theme's content area (`--max` or the wide size
+  from theme.json), also when the shortcode is placed outside a content container, and keeps a margin on phones;
+  *Largest width* adjustable.
+- Self-test section 64.
+
 ## 1.8.03 – 2026-11-14
 
 - **Fix: false "aborted passes still lie as raw data" warning during every pass.** The raw file of the pass that

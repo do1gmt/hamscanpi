@@ -1,7 +1,7 @@
 === HamScanPi SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von HamScanPi und zeigt sie als Galerie.
@@ -37,6 +37,8 @@ Raspberry Pi (Temperatur, Last, Speicher). Keine IP- oder MAC-Adressen, kein WLA
 und Pi-Werte lassen sich in den Einstellungen ausblenden.
 
 == Änderungen ==
+= 1.3.1 =
+* Galerie nie breiter als der Inhaltsbereich des Themes (auch wenn der Kurzcode außerhalb eines Inhaltsrahmens steht), am Handy mit Rand; „Größte Breite“ einstellbar.
 = 1.3.0 =
 * Anordnung einstellbar: Reihenfolge, Gruppierung (Tag, Quelle, Überflug, keine), Zeitzone, Filterknöpfe.
 * Je Bild: Empfangszeit, Quelle und „hervorheben“ bearbeiten.

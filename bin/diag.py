@@ -91,6 +91,83 @@ def git_info():
                       "Geänderte Dateien:", _run(g + ["status", "--short"])[:4000]]) + "\n"
 
 
+def pmsdr_info(freqs=(3_573_000, 7_074_000, 14_074_000), secs=1.5):
+    """Kurzwelle mit der PMSDR: Steuerprogramm, Soundkarte, Mischpult und ein kurzer Empfangstest auf den FT8-
+    Frequenzen (Pegel, Übersteuerung, I/Q-Gleichlauf, stärkste Signale). Nur wenn die PMSDR frei ist."""
+    out = []
+    try:
+        import devices as DEV
+        cfg = json.loads((BASE / "config" / "scanner.json").read_text(encoding="utf-8"))
+    except Exception as e:
+        return f"Einstellungen nicht lesbar: {e}\n"
+    if not cfg.get("alsa_name"):
+        return "keine PMSDR eingerichtet (scanner.json ohne alsa_name)\n"
+    out += ["== Steuerprogramm", _run(["systemctl", "status", "--no-pager", "-l", "pmsdr-control"])[:3000],
+            _run(["journalctl", "-u", "pmsdr-control", "-n", "60", "--no-pager", "-o", "short-iso"])[-6000:],
+            "== USB", _run(["lsusb"]), "== Soundkarten", _run(["arecord", "-l"])]
+    try:
+        card, dev = DEV.PmsdrDevice._find_alsa(cfg["alsa_name"], int(cfg.get("alsa_device", 0)))
+        out += [f"== Mischpult Karte {card}", _run(["amixer", "-c", str(card), "contents"])[:6000]]
+    except Exception as e:
+        out.append(f"Soundkarte: {e}")
+        return "\n".join(out) + "\n"
+    # Empfangstest – nicht, während Scan, Überflug oder Live die PMSDR benutzen
+    import fcntl
+    live = BASE / "data" / "live.lock"
+    if live.exists() and time.time() - live.stat().st_mtime < 120:
+        out.append("== Empfangstest: übersprungen – Live läuft")
+        return "\n".join(out) + "\n"
+    lk = open(BASE / "data" / "scan.lock", "a")
+    try:
+        fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lk.close()
+        out.append("== Empfangstest: übersprungen – Scan oder Überflug läuft")
+        return "\n".join(out) + "\n"
+    try:
+        import numpy as np
+        d = DEV.PmsdrDevice(cfg)
+        out.append(f"== Empfangstest ({secs} s je Frequenz, {d.rate} Hz, I/Q {'getauscht' if cfg.get('iq_conjugate') else 'normal'})")
+        for f in freqs:
+            try:
+                c = f - 10000                                  # FT8-Bereich 10 kHz neben der Mitte (Gleichspannung)
+                d.tune(c)
+                i, q = d.capture(secs)
+                raw_peak = max(np.max(np.abs(i)), np.max(np.abs(q)))
+                rms_i, rms_q = float(np.sqrt(np.mean(i * i))), float(np.sqrt(np.mean(q * q)))
+                corr = float(np.corrcoef(i, q)[0, 1]) if rms_i > 0 and rms_q > 0 else float("nan")
+                z = i + (-1j if cfg.get("iq_conjugate") else 1j) * q
+                n = 8192
+                win = np.hanning(n)
+                spec = np.zeros(n)
+                for k in range(0, len(z) - n, n // 2):
+                    spec += np.abs(np.fft.fftshift(np.fft.fft(z[k:k + n] * win))) ** 2
+                db = 10 * np.log10(spec + 1e-20)
+                fr = np.fft.fftshift(np.fft.fftfreq(n, 1 / d.rate))
+                floor = float(np.median(db))
+                top = sorted(((db[k] - floor, fr[k]) for k in range(1, n - 1)
+                              if db[k] >= db[k - 1] and db[k] >= db[k + 1] and abs(fr[k]) > 300), reverse=True)[:5]
+                db_fs = lambda x: 20 * np.log10(x + 1e-12)
+                out.append(f"{f / 1e6:.3f} MHz: Pegel I {db_fs(rms_i):.1f} dBFS, Q {db_fs(rms_q):.1f} dBFS, Spitze {db_fs(raw_peak):.1f} dBFS"
+                           f"{' – ÜBERSTEUERT' if raw_peak > 0.95 else ''}{' – fast kein Signal von der Soundkarte' if max(rms_i, rms_q) < 1e-4 else ''}; "
+                           f"I/Q-Verhältnis {db_fs(rms_i) - db_fs(rms_q):+.1f} dB, Korrelation {corr:+.2f}; "
+                           "stärkste Signale: " + ", ".join(f"{(c + o) / 1e6:.4f} MHz +{s:.0f} dB" for s, o in top))
+            except Exception as e:
+                out.append(f"{f / 1e6:.3f} MHz: {type(e).__name__}: {e}")
+        try:
+            os.close(d.fifo_fd)
+        except Exception:
+            pass
+    except Exception as e:
+        out.append(f"Empfangstest nicht möglich: {type(e).__name__}: {e}")
+    finally:
+        try:
+            fcntl.flock(lk, fcntl.LOCK_UN)
+        finally:
+            lk.close()
+    return "\n".join(out) + "\n"
+
+
 def filename():
     return f"hamscanpi-diagnose-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
 
@@ -127,6 +204,7 @@ def write(fileobj, stream=True):
         add("systemd/status.txt", _run(["systemctl", "status", "--no-pager", "-l", "hamscanpi-web", "hamscanpi-scheduler",
                                          "hamscanpi-rescue"]))
         add("git.txt", git_info())                                                    # woher kommen Updates?
+        add("pmsdr.txt", pmsdr_info())                                                # Kurzwelle: Soundkarte, Empfangstest
         for name in ("notices.json", "health_state.json", "live_state.json", "sticks.json", "pskreporter_state.json",
                      "runtime_status.json", "sat_stats.json", "update_check.json"):
             p = BASE / "data" / name
