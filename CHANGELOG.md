@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.7.94 – 2026-11-14
+
+- Fix: **PMSDR control program still missing after 1.7.93** on the 64-bit Pi OS: the bundled `./configure`
+  (config.guess from 2009) does not know aarch64 and stopped with "unable to guess system type" – on x86 it
+  worked, so the self-test did not notice. The set-up now compiles directly with gcc (the command documented in
+  `pmsdr.c`); on failure it prints the last compiler lines. The self-test also compiles for aarch64.
+- **Settings save by themselves** – no more *Save* buttons: a change (selection, tick box, leaving a field) saves
+  the whole area after a short pause. Antennas, sticks (the main-stick question stays), keep recording, automatic
+  backup, WSJT-X network, notifications, trusted networks. The confirmation now appears at the bottom of the screen
+  too (green, errors red and longer) and the changed field flashes – also where the note under the area was out
+  of sight (satellites). Errors stay until the next change.
+- **Themes** (per browser, button top right or Settings → Station → Theme): Automatic (follows the device),
+  Dark, Light, High contrast (black/white, strong lines – for old or pale screens), Night (red, keeps the eyes
+  dark-adapted). All colours are now variables.
+- The *HF receiver* block under System → Devices is gone; the PMSDR antenna is chosen in the scan box like for
+  the stick.
+- **Backup to USB stick and network share** in the dashboard (System → Backup → Where to back up): list of
+  plugged-in drives, *Use for backups* (mounted by UUID, mounted again after re-plugging or a reboot), *Eject*;
+  NAS/FRITZ!Box/Windows share with address, user and password (password only in `/etc/hamscanpi/nas.cred`, root
+  only), re-mounted every 10 min after a dropout; backups in `HamScanPi-Sicherungen/<host>/`; backups on the
+  target (also of other Pis) can be restored from the list. Root actions through
+  `/usr/local/sbin/hamscanpi-store` (sudo rule for exactly this file, never formats). New packages cifs-utils,
+  ntfs-3g.
+- Self-test sections 55–56.
+
 ## 1.7.93 – 2026-11-14
 
 - Fix: **System → Status** (was "Zustand") stayed empty since 1.7.76 – a local import in the update request hid a

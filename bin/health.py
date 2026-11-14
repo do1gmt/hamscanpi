@@ -564,7 +564,14 @@ def check_wifi(st):
     netheal.check(st, nt=NT)
 
 
-CHECKS = (check_reboot, check_wifi, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def check_backup_target(st):
+    """Gewählten USB-Stick nach dem Wiederanstecken einhängen, Netzwerkfreigabe nach einem Ausfall (bin/storage.py)."""
+    import storage
+    from applog import log
+    storage.ensure(log=lambda lv, src, ev, **d: log(lv, src, ev, **d))
+
+
+CHECKS = (check_reboot, check_wifi, check_backup_target, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 

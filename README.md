@@ -398,10 +398,20 @@ file safe. To restore, upload the file in the same card: HamScanPi shows what is
 no scan or pass is running, moves the current settings and data to `restore-previous/<time>/` first, adds
 recordings (never deletes them) and restarts its services.
 
-**Automatic backup:** in the same card, a backup can be written daily or weekly at a chosen hour to a USB stick
-(appears under `/media/<user>/…`) or a mounted network share (e.g. `/mnt/nas`, mounting example in the card),
-keeping the last N files. A target on the SD card itself is refused – it would not help if the card fails.
-A failed backup becomes a notice.
+**Where to back up:** under *Where to back up* in the same card, plugged-in USB sticks and USB drives are listed
+(FAT32, exFAT, NTFS, ext4 – nothing is ever formatted, the system card is never offered). *Use for backups* mounts
+the drive at `/mnt/hamscanpi-usb` and remembers it by its UUID: unplugged and plugged in again – also after a
+reboot – it is mounted again within a minute. *Eject* unmounts it cleanly; it stays out until it has been
+unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
+`//host/share` with user and password and mounted at `/mnt/hamscanpi-nas` (SMB 2 or newer, package cifs-utils);
+if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hamscanpi/nas.cred`
+(root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` on the
+target, so several HamScanPis can share one stick or share. Backups found there (also those of another Pi, e.g.
+when moving to a new one) can be checked and restored directly from the list.
+
+**Automatic backup:** daily or weekly at a chosen hour to the chosen target, keeping the last N files. A folder
+can also be entered by hand (advanced). A target on the SD card itself is refused – it would not help if the
+card fails. A failed backup becomes a notice.
 
 From the command line, e.g. after losing the card (fresh install, then):
 

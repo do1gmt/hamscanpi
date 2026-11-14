@@ -702,7 +702,7 @@ ca = names("CA"); assert "MURS" not in ca and "FRS/GMRS" in ca and "PMR446" not 
 assert BP.suggest("IO91WM") == "GB" and BP.suggest("JN47AB") == "CH" and BP.suggest("JN78AA") == "AT"
 d = Path(tempfile.mkdtemp())
 assert BK.check_dir(str(Path("..").resolve())) is not None              # gleiches Laufwerk: abgelehnt
-BK.check_dir = lambda x: None                                            # Testordner liegt auf derselben Platte
+BK.check_dir = lambda x, t=None: None                                         # Testordner liegt auf derselben Platte
 BK.AUTO_STATE = d / "state.json"
 for i in range(4):
     BK.filename = (lambda i: (lambda scope: f"hamscanpi-backup-2026010{i}-0300-{scope}.tar.gz"))(i)
@@ -1662,12 +1662,21 @@ pm54() {
     sed -n 's/unsigned int nbytes = sizeof szLine - 1;/size_t nbytes = sizeof szLine - 1;/p' "$SRC/bin/setup_system.sh" | grep -q "sed -i" || return 1
     sed -i 's/unsigned int nbytes = sizeof szLine - 1;/size_t nbytes = sizeof szLine - 1;/' "$P/pmsdr-0.26/pmsdr.c"
     [ "$(grep -c 'size_t nbytes = sizeof szLine - 1;' "$P/pmsdr-0.26/pmsdr.c")" = 1 ] || return 1
-    # mit libusb-Entwicklerpaket: wirklich bauen, mit den strengen Regeln von GCC 14
-    if pkg-config --exists libusb-1.0 2>/dev/null || [ -f /usr/include/libusb-1.0/libusb.h ]; then
-        (cd "$P/pmsdr-0.26" && ./configure >/dev/null 2>&1 \
-          && make CFLAGS="-O2 -Werror=incompatible-pointer-types -Werror=implicit-function-declaration -Werror=int-conversion" >/dev/null 2>&1 \
-          && ./pmsdr -h 2>&1 | grep -q "PMSDR") || return 1
+    # nicht über ./configure bauen: dessen config.guess (2009) kennt aarch64 nicht – auf dem 64-Bit-Pi scheiterte 1.7.93
+    grep -q "pmsdr-0.26\" && asuser ./configure\|asuser ./configure" "$SRC/bin/setup_system.sh" && return 1
+    grep -q "asuser gcc -D__USE_GNU -std=gnu99 -fgnu89-inline -O2 -o pmsdr" "$SRC/bin/setup_system.sh" || return 1
+    # mit libusb-Entwicklerpaket: genau den Befehl des Installers ausführen, mit den strengen Regeln von GCC 14
+    if [ -f /usr/include/libusb-1.0/libusb.h ] && [ -f /usr/include/readline/readline.h ]; then
+        (cd "$P/pmsdr-0.26" && gcc -Werror=incompatible-pointer-types -Werror=implicit-function-declaration -Werror=int-conversion \
+            -D__USE_GNU -std=gnu99 -fgnu89-inline -O2 -o pmsdr cmdparser.c pmsdr.c pmsdr_ctrl.c pmsdr_err.c udp_cmd.c \
+            -lusb-1.0 -lreadline -lpthread -lm >/dev/null 2>&1 && ./pmsdr -h 2>&1 | grep -q "PMSDR") || return 1
         echo "   gebaut und gestartet (strenge Compiler-Regeln)"
+        if command -v aarch64-linux-gnu-gcc >/dev/null; then
+            (cd "$P/pmsdr-0.26" && aarch64-linux-gnu-gcc -Werror=incompatible-pointer-types -Werror=implicit-function-declaration \
+                -Werror=int-conversion -D__USE_GNU -std=gnu99 -fgnu89-inline -O2 -c cmdparser.c pmsdr.c pmsdr_ctrl.c pmsdr_err.c udp_cmd.c \
+                >/dev/null 2>&1) || return 1
+            echo "   übersetzt auch für aarch64 (64-Bit-Pi)"
+        fi
     fi
     rm -rf "$P"
     (cd bin && python3 - <<'PY') || return 1
@@ -1678,5 +1687,169 @@ assert "Steuerprogramm fehlt" in m and "sudo systemctl start" not in m, m
 PY
 }
 pm54 && ok "Archiv geprüft, Korrektur greift genau einmal, Meldung nennt den richtigen Schritt" || bad "PMSDR-Steuerprogramm"
+echo "== 55 Einheitliches Speichern, Designs, Kurzwellen-Block entfernt"
+(python3 - "$SRC/web" <<'PY') && ok "keine Speichern-Knöpfe mehr sichtbar, Rückmeldung als Einblendung, alle Designs vollständig" || bad "Speichern/Designs"
+import re, sys
+from pathlib import Path
+w = Path(sys.argv[1])
+html, js, css = (w / "index.html").read_text(), (w / "app.js").read_text(), (w / "style.css").read_text()
+# Speichern-Knöpfe: nur noch versteckt (Ausnahme: Standort-Abfrage im Dialog, Passwort setzen)
+for m in re.finditer(r'<button[^>]*>(Speichern|Netze speichern)</button>', html):
+    tag = m.group(0)
+    assert " hidden" in tag or 'id="locSave"' in tag or re.search(r'<div class="actions" hidden>\s*$', html[max(0, m.start() - 40):m.start()]), tag
+assert 'data-a="save" hidden>' in js
+for wire in ("autoSave($('antRows')", "autoSave($('panel-backup')", "autoSave($('wxBox')", "autoSave($('notifyForm')", "[data-follow]"):
+    assert wire in js, wire
+assert "toast(msg, err ? 8000 : 2800, err)" in js
+# Kurzwellen-Block ist weg
+assert "hfDevice" not in html and "$('hf" not in js and "renderHfDevice" not in js
+# Designs: jedes Design setzt alle Farbwerte
+root = re.search(r":root \{(.*?)\n\}", css, re.S).group(1)
+toks = {t for t in re.findall(r"--([a-z0-9-]+):", root) if t not in ("radius", "tap", "font", "mono")}
+for th in ("light", "contrast", "night"):
+    blk = re.search(r':root\[data-theme="%s"\] \{(.*?)\}' % th, css, re.S).group(1)
+    miss = toks - set(re.findall(r"--([a-z0-9-]+):", blk))
+    assert not miss, (th, miss)
+auto = re.search(r':root\[data-theme="auto"\] \{(.*?)\}', css, re.S).group(1)
+assert not toks - set(re.findall(r"--([a-z0-9-]+):", auto))
+# keine fest eingebaute dunkle Fläche mehr außerhalb der Variablen (Kartenbeschriftung und Wasserfall bleiben dunkel)
+rest = re.sub(r":root[^{]*\{.*?\}", "", css, flags=re.S)
+for bad in ("rgba(15,22,32,.9", "#0a0f16", "#2b1d00", "#a78bfa"):
+    assert bad not in rest, bad
+assert '<script src="/static/theme.js"></script>' in html and '<script src="/static/theme.js"></script>' in (w / "login.html").read_text()
+PY
+(node - "$SRC/web/theme.js" <<'JS') && ok "Design je Browser: Wahl bleibt, Unsinn wird „Automatisch“, gesperrter Speicher stört nicht" || bad "Design-Umschalter"
+const src = require('fs').readFileSync(process.argv[2], 'utf8');
+function run(store, throwing) {
+  const attrs = {}, metas = { 'color-scheme': { c: '' }, 'theme-color': { c: '' } };
+  const document = { documentElement: { setAttribute: (k, v) => attrs[k] = v },
+    querySelector: q => { const n = (q.match(/name="([^"]+)"/) || [])[1]; return metas[n] ? { setAttribute: (k, v) => metas[n].c = v } : null; } };
+  const localStorage = throwing ? { getItem() { throw new Error('x'); }, setItem() { throw new Error('x'); } }
+    : { getItem: k => store[k] ?? null, setItem: (k, v) => store[k] = v };
+  const window = {};
+  new Function('window', 'document', 'localStorage', 'matchMedia', src)(window, document, localStorage, () => ({ matches: false, addEventListener() {} }));
+  return { T: window.HSPTheme, attrs, metas };
+}
+const st = {};
+let r = run(st); if (r.attrs['data-theme'] !== 'auto') throw 'default';
+r.T.set('night'); if (st.theme !== 'night' || r.attrs['data-theme'] !== 'night' || r.metas['theme-color'].c !== '#080000') throw 'set';
+r = run(st); if (r.attrs['data-theme'] !== 'night') throw 'remembered';
+r.T.set('quatsch'); if (r.T.get() !== 'auto') throw 'invalid';
+r = run({}, true); r.T.set('light'); if (r.attrs['data-theme'] !== 'light' || r.metas['color-scheme'].c !== 'light') throw 'blocked storage';
+if (r.T.next() !== 'contrast') throw 'next ' + r.T.next();
+JS
+
+echo "== 56 Sicherung auf USB-Stick und Netzwerkfreigabe"
+(cd bin && python3 - <<'PY') && ok "Stick erkannt (Systemkarte nicht), Ziel gemerkt, nach Wiederanstecken eingehängt, Auswerfen respektiert, Freigabe alle 10 min, Sicherung vom Ziel einspielbar" || bad "USB/NAS-Sicherung"
+import json, os, tempfile, socket
+from pathlib import Path
+import storage as STO, backup as BK
+tmp = Path(tempfile.mkdtemp())
+STO.STATE = tmp / "storage_state.json"
+STO.USB_MP, STO.NAS_MP = tmp / "usb", tmp / "nas"
+for p in (STO.USB_MP, STO.NAS_MP):
+    p.mkdir()
+cfgf = Path("../config/web_settings.json")
+lsblk = {"blockdevices": [
+  {"name": "mmcblk0", "type": "disk", "tran": None, "rm": False, "hotplug": False, "children": [
+     {"name": "mmcblk0p2", "path": "/dev/mmcblk0p2", "type": "part", "fstype": "ext4", "uuid": "root-uuid", "size": 3e10, "mountpoint": "/"}]},
+  {"name": "sda", "type": "disk", "tran": "usb", "rm": True, "hotplug": True, "model": "SanDisk ", "children": [
+     {"name": "sda1", "path": "/dev/sda1", "type": "part", "fstype": "vfat", "uuid": "1234-ABCD", "label": "STICK", "size": 32e9, "mountpoint": None}]},
+  {"name": "sdb", "type": "disk", "tran": "usb", "rm": False, "hotplug": True, "model": "Ext", "children": [
+     {"name": "sdb1", "path": "/dev/sdb1", "type": "part", "fstype": "ntfs", "uuid": "AAAA-1", "size": 1e12},
+     {"name": "sdb2", "path": "/dev/sdb2", "type": "part", "fstype": "hfsplus", "uuid": "BBBB-2", "size": 1e11}]},
+]}
+def run(cmd, timeout=30, input=None):
+    if cmd[0] == "lsblk" and "-J" in cmd:
+        return 0, json.dumps(lsblk), ""
+    if cmd[0] == "findmnt":
+        return 0, "/dev/mmcblk0p2\n", ""
+    if cmd[0] == "lsblk":
+        return 0, "mmcblk0\n", ""
+    return 1, "", "?"
+STO._run = run
+dr = STO.drives()
+assert [d["uuid"] for d in dr] == ["1234-ABCD", "AAAA-1", "BBBB-2"], dr
+assert dr[0]["fs_name"] == "FAT32" and dr[1]["supported"] and not dr[2]["supported"]
+mounts, calls, present = set(), [], {"1234-ABCD": True}
+STO.mounted = lambda mp: str(mp) in mounts
+STO._present = lambda u: present.get(u, False)
+def helper(*a, input=None, timeout=60):
+    calls.append(a)
+    if a[0] == "mount-usb":
+        if not present.get(a[1]): return False, "Datenträger nicht gefunden – eingesteckt?"
+        mounts.add(str(STO.USB_MP))
+    if a[0] == "umount-usb": mounts.discard(str(STO.USB_MP))
+    if a[0] == "mount-nas":
+        if a[1] == "//nas/zu": return False, "Zugang verweigert – Benutzer oder Passwort falsch"
+        if present.get("nas_down"): return False, "Rechner nicht erreichbar – Adresse prüfen"
+        mounts.add(str(STO.NAS_MP))
+    if a[0] in ("umount-nas", "nas-forget"): mounts.discard(str(STO.NAS_MP))
+    return True, ""
+STO.helper = helper
+d = STO.use_usb("1234-ABCD")
+assert d == str(STO.USB_MP / STO.SUB / socket.gethostname()) and Path(d).is_dir()
+st = json.loads(cfgf.read_text()); st["auto_backup"] = {"enabled": True, "target": {"kind": "usb", "uuid": "1234-ABCD", "label": "STICK"}}
+cfgf.write_text(json.dumps(st))
+c = BK.auto_cfg()
+assert c["dir"] == d, c
+assert BK.check_dir(c["dir"], c["target"]) is None
+# Sicherung landet im Ordner dieses Pi
+res = BK.run_auto(c, log=lambda m: None)
+assert Path(res["file"]).parent == Path(d)
+# auswerfen: bleibt draußen, bis abgezogen; wieder angesteckt: eingehängt
+STO.eject_usb()
+assert not STO.mounted(STO.USB_MP)
+STO.ensure(now=1e6); assert not STO.mounted(STO.USB_MP), "ausgeworfen, aber wieder eingehängt"
+assert "ausgeworfen" in BK.check_dir(c["dir"], c["target"])
+present["1234-ABCD"] = False; STO.ensure(now=1e6 + 60)
+present["1234-ABCD"] = True; STO.ensure(now=1e6 + 120)
+assert STO.mounted(STO.USB_MP), "nach dem Wiederanstecken nicht eingehängt"
+present["1234-ABCD"] = False; mounts.clear()
+assert "steckt nicht" in BK.check_dir(c["dir"], c["target"])
+# Sicherungen auf dem Ziel: auch die eines anderen Pi; nur Dateien darunter
+mounts.add(str(STO.USB_MP))
+other = STO.USB_MP / STO.SUB / "anderer-pi"; other.mkdir(parents=True)
+(other / "hamscanpi-backup-20260101-0300-data.tar.gz").write_bytes(b"x")
+lst = STO.list_backups()
+assert len(lst) == 2 and lst[0]["name"] > lst[1]["name"] or lst[0]["host"] == socket.gethostname(), lst
+assert {x["host"] for x in lst} == {socket.gethostname(), "anderer-pi"}, lst
+STO.checked_path(other / "hamscanpi-backup-20260101-0300-data.tar.gz")
+for badp in ("/etc/passwd", str(other / ".." / ".." / ".." / "x.tar.gz"), str(tmp / "hamscanpi-backup-20260101-0300-data.tar.gz")):
+    try:
+        STO.checked_path(badp); raise AssertionError(badp)
+    except ValueError:
+        pass
+# NAS: Adresse prüfen, Passwort nur an den Helfer (stdin), Ausfall: höchstens alle 10 min neu versuchen
+assert STO.norm_share("smb://nas.local/Backup/") == "//nas.local/Backup"
+assert STO.norm_share("\\\\192.168.1.5\\Daten") == "//192.168.1.5/Daten"
+for b in ("//nas/a,b", "//nas/../etc", "nas", "//a b/x"):
+    try:
+        STO.norm_share(b); raise AssertionError(b)
+    except ValueError:
+        pass
+calls.clear()
+share, nd = STO.use_nas("//nas/backup", "pi", "geheim", "")
+assert ("nas-cred",) in calls and all("geheim" not in " ".join(map(str, c)) for c in calls), calls
+try:
+    STO.use_nas("//nas/zu", "pi", "falsch"); raise AssertionError("falsches Passwort angenommen")
+except ValueError as e:
+    assert "verweigert" in str(e)
+st["auto_backup"]["target"] = {"kind": "nas", "share": "//nas/backup"}; cfgf.write_text(json.dumps(st))
+mounts.discard(str(STO.NAS_MP)); calls.clear(); present["nas_down"] = True
+for m in range(10):
+    STO.ensure(now=2e6 + m * 60)
+assert [c[0] for c in calls].count("mount-nas") == 1, calls
+STO.ensure(now=2e6 + 601); assert [c[0] for c in calls].count("mount-nas") == 2
+assert "nicht erreichbar" in STO.status()["nas"]["error"]
+present["nas_down"] = False; STO.ensure(now=2e6 + 1202); assert STO.mounted(STO.NAS_MP)
+assert "geheim" not in cfgf.read_text()
+PY
+H="$SRC/share/root/hamscanpi-store"
+bash -n "$H" && ! bash "$H" mount-usb "../../etc" 2>/dev/null && ! bash "$H" mount-nas "//nas/a,uid=0" 2>/dev/null \
+  && ! printf 'pi\n\001x\n\n' | bash "$H" nas-cred 2>/dev/null && ! bash "$H" format 2>/dev/null \
+  && grep -q "hamscanpi-store" "$SRC/bin/setup_system.sh" && grep -q "cifs-utils" "$SRC/bin/setup_system.sh" \
+  && ok "Root-Helfer prüft UUID, Adresse und Zugangsdaten, formatiert nie; Installer richtet ihn ein" || bad "Root-Helfer Sicherungsziel"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

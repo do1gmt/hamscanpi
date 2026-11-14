@@ -61,8 +61,26 @@
   setInterval(() => { const d = new Date(); $('clock').textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; $('clockLocal').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }, 1000);
 
   let toastTimer;
-  function toast(msg, ms = 2500) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms); }
-  function note(el, msg, err) { el.textContent = msg; el.classList.toggle('err', !!err); if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000); }
+  function toast(msg, ms = 2500, err = false) { const t = $('toast'); t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms); }
+  // Rückmeldung zu Einstellungen: steht am Bereich UND unten als Einblendung (immer im Blick, auch wenn der Bereich
+  // gerade außer Sicht ist). Das zuletzt geänderte Feld wird kurz grün (gespeichert) oder bleibt rot (Fehler).
+  let lastChg = null;
+  document.addEventListener('change', e => { lastChg = { el: e.target, t: Date.now() }; }, true);
+  document.addEventListener('input', e => { const f = e.target.closest && e.target.closest('.save-err'); if (f) f.classList.remove('save-err'); }, true);
+  function note(el, msg, err) {
+    el.textContent = msg; el.classList.toggle('err', !!err);
+    if (!msg) return;
+    if (!err) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
+    if (err || /^✓/.test(msg)) {
+      toast(msg, err ? 8000 : 2800, err);
+      const f = lastChg && Date.now() - lastChg.t < 6000 && lastChg.el.closest && lastChg.el.closest('.field, .check, td, .stick-card, label');
+      if (f) { f.classList.remove('flash-ok', 'save-err'); void f.offsetWidth; f.classList.add(err ? 'save-err' : 'flash-ok'); if (!err) setTimeout(() => f.classList.remove('flash-ok'), 1500); }
+    }
+  }
+  // Automatisch speichern: eine Änderung (Auswahl, Haken, Feld verlassen) speichert den ganzen Bereich nach kurzer Pause
+  function autoSave(root, fn, skip) {
+    let t; root.addEventListener('change', e => { if (skip && skip(e.target)) return; clearTimeout(t); t = setTimeout(fn, 400); });
+  }
 
   // ---------- Zustand ----------
   let bandplan = [];          // [{name, segments:[...]}]
@@ -95,7 +113,6 @@
       sel.value = (settings.scan_raster || {})[dev] || 'normal';
     }
     $('cleanupAuto').value = String(settings.cleanup_auto_days || 0);
-    renderHfDevice();
     document.querySelectorAll('[data-follow]').forEach(el => { const v = (settings.follow || {})[el.dataset.follow]; el.value = v == null ? '' : v; });
     // Verstärkung für Satelliten: Stufen des R820T/R860 (rtl_sdr nimmt sonst die nächstgelegene)
     const sg = $('satGain');
@@ -1313,7 +1330,8 @@
       if (!d.chats.length) { note($('notifyNote'), 'Noch keine Nachricht an den Bot gefunden – schreib deinem Bot in Telegram etwas (z. B. „hallo“) und drück dann noch einmal auf „Chat-ID ermitteln“.', true); return; }
       const c = d.chats.find(x => x.type === 'private') || d.chats[0];
       $('tgChat').value = c.id;
-      note($('notifyNote'), `✓ Chat-ID ${c.id}${c.name ? ' (' + c.name + ')' : ''} eingetragen – jetzt Speichern, dann „Test-Push senden“.`);
+      note($('notifyNote'), `✓ Chat-ID ${c.id}${c.name ? ' (' + c.name + ')' : ''} eingetragen und gespeichert – jetzt „Test-Push senden“.`);
+      $('notifyForm').requestSubmit();
     } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); }
   });
   $('pushTest').addEventListener('click', async () => { note($('notifyNote'), 'sende …'); try { await post('/api/push-test'); note($('notifyNote'), '✓ Test-Push verschickt – kommt er an?'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message + ' (vorher speichern)', true); } });
@@ -1325,8 +1343,9 @@
                   events: Object.fromEntries([...f.querySelectorAll('[data-ne]')].map(el => [el.dataset.ne, el.checked])),
                   digest_min: Number(f.querySelector('[data-nd]').value || 0) };
     n.log_send = { levels: pick('[data-ll]').map(el => el.dataset.ll), daily: f.querySelector('[data-ld]').checked, hour: Number(f.querySelector('[data-lh]').value || 7) };
-    try { const d = await post('/api/settings', { notify: n }); settings.notify = d.settings.notify; fillNotify(); note($('notifyNote'), '✓ gespeichert'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); }
+    try { const d = await post('/api/settings', { notify: n }); settings.notify = d.settings.notify; if (!f.contains(document.activeElement) || e.submitter) fillNotify(); note($('notifyNote'), '✓ gespeichert'); } catch (err) { note($('notifyNote'), 'Fehler: ' + err.message, true); }
   });
+  autoSave($('notifyForm'), () => $('notifyForm').requestSubmit());
   $('logSendNow').addEventListener('click', async () => {
     const levels = [...$('notifyForm').querySelectorAll('[data-ll]')].filter(el => el.checked).map(el => el.dataset.ll);
     note($('notifyNote'), 'sende Protokoll …');
@@ -2195,7 +2214,6 @@
     const opts = (sel, cur, custom) => { sel.innerHTML = (custom ? `<option value="">${custom}</option>` : '')
       + antData.profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.fmin != null ? ' · ' + antRange(p) + ' MHz' : ''}${p.az != null ? ' · ' + p.az + '°' : ''}</option>`).join('');
       sel.value = cur || ''; };
-    opts($('hfAntProfile'), antData.current.pmsdr, '– eigene Angabe –');
     const act = settings && settings.active_device === 'pmsdr' ? 'pmsdr' : 'rtlsdr';
     opts($('antQuick'), antData.current[act], '– eigene Angabe –');
     $('antQuick').dataset.target = act;
@@ -2213,12 +2231,14 @@
   }
   $('antAdd').addEventListener('click', () => { antData.profiles = antRowsData().concat([{ id: '', name: '' }]); renderAntProfiles(); });
   $('antRows').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return;
-    const rows = antRowsData(); rows.splice(Number(b.dataset.del), 1); antData.profiles = rows; renderAntProfiles(); });
-  $('antSave').addEventListener('click', async () => {
+    const rows = antRowsData(); rows.splice(Number(b.dataset.del), 1); antData.profiles = rows; renderAntProfiles(); antSaveNow(); });
+  autoSave($('antRows'), () => { if (antRowsData().every(r => r.name)) antSaveNow(); });
+  $('antSave').addEventListener('click', () => antSaveNow());
+  async function antSaveNow() {
     try { antData = await post('/api/antennas', { profiles: antRowsData() }); renderAntProfiles(); note($('antNote'), '✓ gespeichert – gewählte Profile sind gleich übernommen');
           loadSticks(); loadSettings(); }
     catch (err) { note($('antNote'), 'Fehler: ' + err.message, true); }
-  });
+  }
   async function antSelect(target, id, from) {
     if (!id) return;
     try {
@@ -2230,7 +2250,6 @@
     } catch (err) { toast('Fehler: ' + err.message); }
   }
   $('antQuick').addEventListener('change', e => antSelect(e.target.dataset.target, e.target.value));
-  $('hfAntProfile').addEventListener('change', e => antSelect('pmsdr', e.target.value));
   document.addEventListener('change', e => { const s2 = e.target.closest('select[data-antsel]'); if (s2) antSelect('rtlsdr', s2.value, 'sticks'); });
   loadAntennas();
 
@@ -2408,6 +2427,7 @@
     } catch (e) { note($('wxNote'), 'Fehler: ' + e.message, true); }
   }
   $('wxSave').addEventListener('click', () => saveWx(false));
+  autoSave($('wxBox'), () => saveWx(false));
   $('wxTest').addEventListener('click', () => saveWx(true));
   $('wxBox').addEventListener('toggle', () => { if ($('wxBox').open) loadWx(); });
   loadWx();
@@ -2457,17 +2477,20 @@
     if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#panel-backup .filter-grid, #abDir')) return;
     $('abOn').checked = !!c.enabled; $('abInterval').value = c.interval || 'daily'; $('abHour').value = c.hour ?? 3;
     $('abScope').value = c.scope || 'data'; $('abKeep').value = c.keep || 7; $('abDir').value = c.dir || ''; $('abSecrets').checked = c.secrets !== false;
+    if (c.dir && !(c.target || {}).kind) $('abDir').closest('details').open = true;   // bisher eigener Ordner eingetragen
     $('abDirs').innerHTML = (d.candidates || []).map(x => `<option value="${esc(x.dir)}">${esc(x.dir)} – ${x.free_gb} GB frei</option>`).join('');
     $('abState').textContent = st.last ? `Letzte Sicherung: ${new Date(st.last * 1000).toLocaleString(I18N.locale)} · ${esc(String(st.file || '').split('/').pop())} · ${fmtSize(st.size || 0)}`
-      + (st.error ? ` · zuletzt fehlgeschlagen: ${st.error}` : '') : (st.error ? 'Fehlgeschlagen: ' + st.error : (d.candidates || []).length ? '' : 'Kein USB-Stick erkannt – einstecken oder eine Netzwerkfreigabe einhängen.');
+      + (st.error ? ` · zuletzt fehlgeschlagen: ${st.error}` : '') : (st.error ? 'Fehlgeschlagen: ' + st.error : '');
   }
   async function abPost(extra) {
     const body = Object.assign({ enabled: $('abOn').checked, interval: $('abInterval').value, hour: Number($('abHour').value), scope: $('abScope').value,
-                                 keep: Number($('abKeep').value), dir: $('abDir').value.trim(), secrets: $('abSecrets').checked }, extra || {});
+                                 keep: Number($('abKeep').value), secrets: $('abSecrets').checked }, extra || {});
+    if ($('abDir').closest('details').open) body.dir = $('abDir').value.trim();   // eigener Ordner nur, wenn aufgeklappt
     const d = await post('/api/backup/auto', body);
     renderAutoBackup(Object.assign({}, d, { candidates: [...$('abDirs').options].map(o => ({ dir: o.value, free_gb: '' })) }));
     return d;
   }
+  autoSave($('panel-backup'), () => $('abSave').click(), el => !el.closest('#abOn, #abInterval, #abHour, #abScope, #abKeep, #abDir, #abSecrets'));
   $('abSave').addEventListener('click', async () => { try { await abPost(); note($('abNote'), '✓ gespeichert'); } catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); } });
   $('abNow').addEventListener('click', async () => {
     note($('abNote'), 'sichere …');
@@ -2480,9 +2503,80 @@
     for (const [k, v] of Object.entries(d.sizes || {})) { const el = document.querySelector(`[data-bs=${k}]`); if (el) el.textContent = '≈ ' + fmtSize(v); }
     bkShowUpload(d.upload);
     renderAutoBackup(d);
+    loadStorage();
     if (d.pending) note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …');
     if (bkWaiting && !d.pending && !d.upload) { clearInterval(bkWaiting); bkWaiting = null; note($('bkNote'), '✓ eingespielt – die Seite lädt neu'); setTimeout(() => location.reload(), 4000); }
   }
+  // ---------- Sicherungsziel: USB-Stick/-Festplatte oder Netzwerkfreigabe ----------
+  let stoData = null;
+  async function loadStorage() {
+    try { stoData = await api('/api/storage'); } catch (e) { return; }
+    renderStorage();
+  }
+  function renderStorage() {
+    const d = stoData; if (!d) return;
+    const t = d.target || {}, u = d.usb || {}, n = d.nas || {};
+    let tgt;
+    if (!d.helper) tgt = '<span class="warn-text">Für USB-Stick und Netzwerkfreigabe einmal „Jetzt aktualisieren“ (System → Update) – danach geht es hier.</span>';
+    else if (t.kind === 'usb') tgt = u.mounted ? `✓ Sicherungen gehen auf den USB-Stick <b>${esc(t.label || '')}</b> · ${u.free_gb ?? '?'} GB frei · Ordner <code>${esc(u.dir)}</code>`
+      : u.ejected ? `USB-Stick <b>${esc(t.label || '')}</b> ist ausgeworfen – kann abgezogen werden. Wieder angesteckt, wird er von selbst eingehängt.`
+      : `<span class="warn-text">USB-Stick <b>${esc(t.label || '')}</b> steckt nicht${u.error ? ' (' + esc(u.error) + ')' : ''} – beim Anstecken wird er von selbst eingehängt.</span>`;
+    else if (t.kind === 'nas') tgt = n.mounted ? `✓ Sicherungen gehen auf die Netzwerkfreigabe <b>${esc(t.share)}</b> · ${n.free_gb ?? '?'} GB frei`
+      : `<span class="warn-text">Netzwerkfreigabe <b>${esc(t.share)}</b> nicht erreichbar${n.error ? ' (' + esc(n.error) + ')' : ''} – wird alle 10 min neu versucht.</span>`;
+    else tgt = 'Noch kein Ziel gewählt.';
+    $('stoTarget').innerHTML = tgt;
+    const drv = d.drives || [];
+    $('stoDrives').innerHTML = !d.helper ? '' : drv.length ? drv.map(x => {
+      const mine = t.kind === 'usb' && t.uuid === x.uuid;
+      const name = esc(x.label || x.model || 'Datenträger');
+      let act;
+      if (mine && u.mounted) act = `<span class="badge badge-prot">IN BENUTZUNG</span> <button class="btn btn-small" type="button" data-sto="eject">Auswerfen</button>`;
+      else if (mine && u.ejected) act = '<span class="muted">ausgeworfen – kann abgezogen werden</span>';
+      else if (!x.supported) act = `<span class="muted">${esc(x.fs_name)} wird nicht unterstützt</span>`;
+      else if (x.mounted_at && !mine) act = `<span class="muted">eingehängt unter ${esc(x.mounted_at)}</span>`;
+      else act = `<button class="btn btn-small" type="button" data-sto="usb" data-uuid="${esc(x.uuid)}">Für Sicherungen verwenden</button>`;
+      return `<div class="sto-drive"><span><b class="no-i18n">${name}</b> <small class="muted">${esc(x.fs_name)} · ${x.size_gb} GB</small></span> ${act}</div>`;
+    }).join('') : '<p class="hint">Kein USB-Stick und keine USB-Festplatte erkannt – einstecken, die Liste aktualisiert sich von selbst.</p>';
+    $('stoNasSum').textContent = t.kind === 'nas' ? (n.mounted ? '· verbunden' : '· nicht erreichbar') : '';
+    if (t.kind === 'nas' && !document.activeElement.closest?.('#stoNasBox')) { $('nasShare').value = t.share || ''; $('nasUser').value = t.user || ''; }
+    $('nasForget').hidden = t.kind !== 'nas';
+    const bks = d.backups || [];
+    $('stoBackupsWrap').hidden = !bks.length;
+    $('stoBackups').innerHTML = bks.slice(0, 30).map(b => `<tr><td class="no-i18n">${esc(new Date(b.mtime * 1000).toLocaleString(I18N.locale))}</td>
+      <td>${esc(b.where)}${b.host && b.host !== d.host ? ` · <span class="no-i18n">${esc(b.host)}</span>` : ''}</td><td>${{ settings: 'Einstellungen', data: '+ Daten', all: '+ Aufnahmen' }[b.scope] || ''}</td>
+      <td>${fmtSize(b.size)}</td><td><button class="btn btn-small" type="button" data-sto-restore="${esc(b.path)}">Prüfen …</button></td></tr>`).join('');
+  }
+  $('stoDrives').addEventListener('click', async e => {
+    const b = e.target.closest('[data-sto]'); if (!b) return;
+    b.disabled = true;
+    try {
+      if (b.dataset.sto === 'usb') { note($('stoNote'), 'hänge ein …'); stoData = await post('/api/storage/usb', { uuid: b.dataset.uuid }); note($('stoNote'), '✓ USB-Stick wird für Sicherungen verwendet'); }
+      else { stoData = await post('/api/storage/eject'); note($('stoNote'), '✓ ausgeworfen – der Stick kann jetzt abgezogen werden'); }
+      renderStorage();
+      loadBackup();
+    } catch (err) { note($('stoNote'), 'Fehler: ' + err.message, true); b.disabled = false; }
+  });
+  $('nasUse').addEventListener('click', async () => {
+    note($('stoNote'), 'verbinde …'); $('nasUse').disabled = true;
+    try {
+      stoData = await post('/api/storage/nas', { share: $('nasShare').value, user: $('nasUser').value, password: $('nasPass').value });
+      $('nasPass').value = ''; renderStorage(); note($('stoNote'), '✓ Netzwerkfreigabe wird für Sicherungen verwendet'); loadBackup();
+    } catch (err) { note($('stoNote'), 'Fehler: ' + err.message, true); }
+    $('nasUse').disabled = false;
+  });
+  $('nasForget').addEventListener('click', async () => {
+    if (!confirm('Netzwerkfreigabe trennen und die gespeicherten Zugangsdaten löschen?')) return;
+    try { stoData = await post('/api/storage/nas/forget'); renderStorage(); note($('stoNote'), '✓ getrennt'); loadBackup(); }
+    catch (err) { note($('stoNote'), 'Fehler: ' + err.message, true); }
+  });
+  $('stoBackups').addEventListener('click', async e => {
+    const b = e.target.closest('[data-sto-restore]'); if (!b) return;
+    note($('bkNote'), 'lese die Sicherung …');
+    try { const d = await post('/api/storage/restore', { path: b.dataset.stoRestore }); bkShowUpload(d.upload); note($('bkNote'), '✓ geprüft – unten „Einspielen“ drücken, wenn es die richtige ist');
+          $('bkUploaded').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    catch (err) { note($('bkNote'), 'Fehler: ' + err.message, true); }
+  });
+  setInterval(() => { if ($('panel-backup').offsetParent !== null && !document.hidden) loadStorage(); }, 15000);
   document.querySelectorAll('input[name=bkScope]').forEach(r => r.addEventListener('change', bkLink));
   $('bkSecrets').addEventListener('change', bkLink);
   bkLink();
@@ -2612,7 +2706,7 @@
           <label class="field" title="Frequenzbereich der Antenne in MHz, z. B. 137–150 (mit Bindestrich). Satelliten außerhalb gelten als „falsches Band“. Leer = alle Frequenzen."><span>gilt für (MHz)</span><input data-f="ant_range" type="text" inputmode="decimal" maxlength="20" placeholder="z. B. 137–150" value="${r.ant_fmin != null || r.ant_fmax != null ? `${r.ant_fmin ?? ''}–${r.ant_fmax ?? ''}` : ''}"></label>
           <button type="button" class="info-btn" data-info="Richtantenne (z. B. Yagi): Richtung = Azimut, in den sie zeigt (0° Nord, 90° Ost, 180° Süd, 270° West), Öffnungswinkel = Breite der Keule (4-Element-Yagi etwa 60–70°), Erhebung = wie weit sie nach oben geneigt ist (waagrecht 0°). „gilt für MHz“: Frequenzbereich der Antenne, z. B. 144–146. Die Überflugliste zeigt dann, welcher Teil eines Überflugs durch die Keule läuft. Für einen Rundstrahler (Discone, X30) Richtung leer lassen.">ⓘ</button>
           ${role === 'main' ? '<label class="field stick-antprof" title="Antennen-Profil wählen – wird sofort gespeichert und füllt Antenne, Richtung, Öffnungswinkel, Erhebung und Frequenzbereich"><span>Antennen-Profil</span><select data-antsel></select></label>' : ''}
-          <div class="stick-actions"><button class="btn" data-a="save">Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}<span class="save-note stick-note" aria-live="polite"></span></div>
+          <div class="stick-actions"><button class="btn" data-a="save" hidden>Speichern</button>${(r.generic || r.duplicate) && r.present && d.eeprom ? '<button class="btn" data-a="serial">Seriennummer schreiben</button>' : ''}${r.present ? '' : '<button class="btn btn-danger" data-a="forget">Vergessen</button>'}<span class="save-note stick-note" aria-live="polite"></span></div>
         </div>`;
       } else if (!r.present) {
         body = `<div class="stick-actions" data-key="${esc(r.key)}"><button class="btn btn-danger" data-a="forget">Vergessen</button></div>`;
@@ -2629,32 +2723,19 @@
     $('sticksList').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => stickAction(b)));
     $('sticksList').querySelectorAll('input, select').forEach(el => {
       el.addEventListener('focus', () => { sticksEditing = true; });
-      el.addEventListener('input', () => { if (el.matches('[data-antsel]')) return;   // Profilwahl speichert sofort
-        if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
-      el.addEventListener('change', () => { if (!sticksDirty) { sticksDirty = Date.now(); note($('sticksNote'), 'Änderung noch nicht gespeichert – „Speichern“ drücken'); } });
+      el.addEventListener('input', () => { if (!el.matches('[data-antsel]') && !sticksDirty) sticksDirty = Date.now(); });
+      // jede Änderung speichert die Karte gleich (Profilwahl speichert ohnehin sofort)
+      el.addEventListener('change', () => { if (el.matches('[data-antsel]')) return; sticksDirty = sticksDirty || Date.now();
+        clearTimeout(el.closest('[data-key]')._t); const b = el.closest('[data-key]').querySelector('[data-a="save"]');
+        if (b) el.closest('[data-key]')._t = setTimeout(() => stickAction(b), 400); });
       el.addEventListener('blur', () => { setTimeout(() => { sticksEditing = !!document.activeElement.closest?.('#sticksList input, #sticksList select'); }, 0); });
     });
   }
+  autoSave(document, () => $('followSave').click(), el => !el.matches || !el.matches('[data-follow]'));
   $('followSave').addEventListener('click', async () => {
     const body = {}; document.querySelectorAll('[data-follow]').forEach(el => { body[el.dataset.follow] = el.value.trim(); });
     try { const d = await post('/api/follow', body); settings.follow = d.follow; note($('followNote'), '✓ gespeichert – gilt ab dem nächsten Scan'); }
     catch (e) { note($('followNote'), 'Fehler: ' + e.message, true); }
-  });
-  // Kurzwellen-Empfänger: Bezeichnung und Antenne (config/scanner.json)
-  function renderHfDevice() {
-    const hf = (settings && settings.hf_device) || {};
-    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#hfDevice')) return;
-    $('hfLabel').value = hf.label && hf.label !== 'PMSDR' ? hf.label : '';
-    $('hfAntenna').value = hf.antenna || '';
-  }
-  $('hfSave').addEventListener('click', async () => {
-    try {
-      const d = await post('/api/hf-device', { label: $('hfLabel').value, antenna: $('hfAntenna').value });
-      settings.hf_device = { label: d.label, antenna: d.antenna };
-      settings.antennas = Object.assign({}, settings.antennas, { pmsdr: d.antenna });
-      note($('hfNote'), '✓ gespeichert');
-      try { await loadSettings(); } catch (e) { /* Anzeige beim nächsten Laden */ }
-    } catch (e) { note($('hfNote'), 'Fehler: ' + e.message, true); }
   });
   async function stickAction(b) {
     const box = b.closest('[data-key]'), key = box.dataset.key, a = b.dataset.a;
@@ -2672,7 +2753,7 @@
               + (plugged.length ? (EN ? ` Plugged in is: ${plugged.map(x => x.label + (x.serial ? ' SN ' + x.serial : '')).join(', ')} – it would no longer be used.` : ` Angesteckt ist: ${plugged.map(x => x.label + (x.serial ? ' SN ' + x.serial : '')).join(', ')} – der würde dann nicht mehr benutzt.`) : '')
               + (EN ? '\n\nMake it the main stick anyway?' : '\n\nTrotzdem zum Haupt-Stick machen?')
             : (EN ? 'Use this stick as main stick? The previous main stick becomes spare. Scans, passes and Live then run on this stick.' : 'Diesen Stick als Haupt-Stick benutzen? Der bisherige Haupt-Stick wird Reserve. Scans, Überflüge und Live laufen dann über diesen Stick.');
-          if (!confirm(msg)) return;
+          if (!confirm(msg)) { sticksEditing = false; sticksDirty = false; sticksLast = ''; loadSticks(); return; }
         }
         d = await post('/api/sticks/update', Object.assign({ key }, f));
         note($('sticksNote'), '✓ gespeichert');
@@ -2825,6 +2906,7 @@
     catch (e) { note($('authNote'), 'Fehler: ' + e.message, true); }
   });
   $('authLogout').addEventListener('click', async () => { try { await post('/api/logout'); } catch (e) { } location.href = '/login'; });
+  $('authTrusted').addEventListener('change', () => $('authTrustedSave').click());
   $('authTrustedSave').addEventListener('click', async () => {
     try { await post('/api/auth/trusted', { networks: $('authTrusted').value }); note($('authNote'), '✓ Netze gespeichert'); loadAuth(); }
     catch (e) { note($('authNote'), 'Fehler: ' + e.message, true); }
@@ -2853,6 +2935,14 @@
   });
   $('uiLang').value = I18N.lang;
   $('uiLang').addEventListener('change', e => I18N.set(e.target.value));
+  // Design (je Browser): Auswahl unter Station und Knopf ◐ oben rechts
+  if (window.HSPTheme) {
+    const T = window.HSPTheme, tsel = $('uiTheme');
+    tsel.innerHTML = T.list.map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+    tsel.value = T.get();
+    tsel.addEventListener('change', e => { T.set(e.target.value); toast('✓ Design: ' + T.label(T.get()) + ' (nur dieser Browser)'); });
+    $('themeBtn').addEventListener('click', () => { T.set(T.next()); tsel.value = T.get(); toast('Design: ' + T.label(T.get())); });
+  } else { $('themeBtn').hidden = true; }
 
   // ---------- Start ----------
   (async () => {

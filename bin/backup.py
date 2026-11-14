@@ -275,6 +275,11 @@ def auto_cfg(settings=None):
     c.setdefault("scope", "data")
     c.setdefault("secrets", True)
     c.setdefault("keep", 7)
+    c.setdefault("target", {})
+    t = c.get("target") or {}
+    if t.get("kind") in ("usb", "nas"):                 # gewähltes Ziel (System → Sicherung): Ordner ergibt sich daraus
+        import storage as STO
+        c["dir"] = str(STO.host_dir(STO.USB_MP if t["kind"] == "usb" else STO.NAS_MP))
     return c
 
 
@@ -301,11 +306,27 @@ def candidates():
     return out
 
 
-def check_dir(d):
+def check_dir(d, target=None):
     """Ziel prüfen: vorhanden, eingehängt (nicht die SD-Karte selbst), beschreibbar. Rückgabe Fehlertext oder None."""
     if not d:
-        return "kein Zielordner eingetragen"
+        return "kein Sicherungsziel gewählt"
     p = Path(d)
+    t = target or {}
+    if t.get("kind") in ("usb", "nas"):
+        import storage as STO
+        mp = STO.USB_MP if t["kind"] == "usb" else STO.NAS_MP
+        if not STO.mounted(mp):
+            st = STO.read_state()
+            if t["kind"] == "usb":
+                return (f"USB-Stick „{t.get('label') or t.get('uuid')}“ ist ausgeworfen – abziehen und wieder anstecken"
+                        if st.get("ejected") else f"USB-Stick „{t.get('label') or t.get('uuid')}“ steckt nicht"
+                        + (f" ({st['usb_error']})" if st.get("usb_error") else ""))
+            return f"Netzwerkfreigabe {t.get('share')} nicht erreichbar" + (f" ({st['nas_error']})" if st.get("nas_error") else "")
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return f"Ordner {d} lässt sich nicht anlegen ({e.strerror})"
+        return None if os.access(p, os.W_OK) else f"Zielordner {d} ist nicht beschreibbar"
     if not p.is_dir():
         return f"Zielordner {d} gibt es nicht (USB-Stick nicht eingesteckt oder Freigabe nicht eingehängt?)"
     if not os.access(p, os.W_OK):
@@ -321,7 +342,13 @@ def check_dir(d):
 def run_auto(cfg=None, log=print):
     """Sicherung in den Zielordner schreiben (erst .part, dann umbenennen), alte über „keep“ hinaus löschen."""
     cfg = cfg or auto_cfg()
-    err = check_dir(cfg.get("dir"))
+    if (cfg.get("target") or {}).get("kind") in ("usb", "nas"):
+        try:
+            import storage as STO
+            STO.ensure_now()
+        except Exception:
+            pass
+    err = check_dir(cfg.get("dir"), cfg.get("target"))
     if err:
         raise RuntimeError(err)
     d = Path(cfg["dir"])

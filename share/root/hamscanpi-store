@@ -1,0 +1,108 @@
+#!/bin/bash
+# HamScanPi – Sicherungsziele einhängen (USB-Stick/-Festplatte, Netzwerkfreigabe). Wird von bin/setup_system.sh
+# nach /usr/local/sbin/hamscanpi-store kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel
+# erlaubt genau diese Datei. Eingehängt wird nur an zwei feste Stellen, jede Eingabe wird geprüft.
+#
+#   hamscanpi-store mount-usb <uuid>      Datenträger mit dieser UUID nach /mnt/hamscanpi-usb einhängen
+#   hamscanpi-store umount-usb            alles schreiben und aushängen (danach darf er abgezogen werden)
+#   hamscanpi-store nas-cred              Zugangsdaten der Freigabe speichern (stdin: Benutzer, Passwort, Domäne –
+#                                         je eine Zeile; nur root kann die Datei lesen)
+#   hamscanpi-store mount-nas <//rechner/freigabe[/ordner]>   Freigabe nach /mnt/hamscanpi-nas einhängen
+#   hamscanpi-store umount-nas            Freigabe aushängen
+#   hamscanpi-store nas-forget            aushängen und Zugangsdaten löschen
+# Formatiert wird nie etwas. Dateisysteme: FAT32, exFAT, NTFS, ext2/3/4, btrfs, xfs.
+set -u
+USB_MP=/mnt/hamscanpi-usb
+NAS_MP=/mnt/hamscanpi-nas
+CRED_DIR=/etc/hamscanpi
+CRED=$CRED_DIR/nas.cred
+SUB=HamScanPi-Sicherungen
+die() { echo "$*" >&2; exit 2; }
+OWN_UID="${SUDO_UID:-0}"; OWN_GID="${SUDO_GID:-0}"
+[[ "$OWN_UID" =~ ^[0-9]+$ && "$OWN_GID" =~ ^[0-9]+$ ]] || die "ungültiger Benutzer"
+
+root_disk() {   # Datenträger, auf dem das System läuft (z. B. mmcblk0) – wird nie eingehängt
+    local src; src="$(findmnt -n -o SOURCE / 2>/dev/null)"
+    lsblk -no PKNAME "$src" 2>/dev/null | head -1
+}
+
+case "${1:-}" in
+  mount-usb)
+    uuid="${2:-}"
+    [[ "$uuid" =~ ^[A-Za-z0-9-]{4,36}$ ]] || die "ungültige UUID"
+    dev="$(readlink -f "/dev/disk/by-uuid/$uuid" 2>/dev/null)"
+    [ -b "$dev" ] || die "Datenträger nicht gefunden – eingesteckt?"
+    disk="$(lsblk -no PKNAME "$dev" 2>/dev/null | head -1)"; [ -n "$disk" ] || disk="$(basename "$dev")"
+    [ "$disk" != "$(root_disk)" ] || die "das ist die Systemkarte – nicht als Sicherungsziel geeignet"
+    if mountpoint -q "$USB_MP"; then
+        [ "$(findmnt -n -o SOURCE "$USB_MP")" = "$dev" ] && exit 0
+        die "an $USB_MP hängt schon ein anderer Datenträger – erst auswerfen"
+    fi
+    # anderswo eingehängt (z. B. vom Desktop unter /media)? Dann dort lassen und nur nicht doppelt einhängen
+    other="$(findmnt -n -o TARGET --source "$dev" 2>/dev/null | head -1)"
+    [ -z "$other" ] || die "schon eingehängt unter $other – dort aushängen oder diesen Ordner als Zielordner eintragen"
+    fs="$(blkid -s TYPE -o value "$dev" 2>/dev/null)"; [ -n "$fs" ] || fs="$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1)"
+    mkdir -p "$USB_MP"
+    opts="uid=$OWN_UID,gid=$OWN_GID,umask=0022,noatime"
+    case "$fs" in
+      vfat)  mount -t vfat -o "$opts,flush,utf8" "$dev" "$USB_MP" ;;
+      exfat) mount -t exfat -o "$opts" "$dev" "$USB_MP" ;;
+      ntfs)  { modprobe ntfs3 2>/dev/null && mount -t ntfs3 -o "$opts" "$dev" "$USB_MP"; } \
+               || mount -t ntfs-3g -o "$opts" "$dev" "$USB_MP" ;;
+      ext2|ext3|ext4|btrfs|xfs) mount -o noatime "$dev" "$USB_MP" ;;
+      "")    die "kein Dateisystem erkannt – Stick am PC formatieren (FAT32 oder exFAT)" ;;
+      *)     die "Dateisystem $fs wird nicht unterstützt (FAT32, exFAT, NTFS oder ext4 nehmen)" ;;
+    esac || die "Einhängen fehlgeschlagen ($fs)"
+    install -d -o "$OWN_UID" -g "$OWN_GID" "$USB_MP/$SUB" 2>/dev/null || mkdir -p "$USB_MP/$SUB" \
+        || { umount "$USB_MP"; die "Stick ist schreibgeschützt oder voll"; }
+    ;;
+  umount-usb)
+    mountpoint -q "$USB_MP" || exit 0
+    sync
+    umount "$USB_MP" || die "Aushängen fehlgeschlagen – wird gerade darauf geschrieben? Gleich noch einmal versuchen."
+    ;;
+  nas-cred)
+    IFS= read -r user || user=""; IFS= read -r pass || pass=""; IFS= read -r dom || dom=""
+    [[ "$user" =~ ^[^[:cntrl:]]{0,64}$ && "$dom" =~ ^[A-Za-z0-9._-]{0,64}$ ]] || die "ungültiger Benutzer oder Domäne"
+    [[ ${#pass} -le 128 && ! "$pass" =~ [[:cntrl:]] ]] || die "ungültiges Passwort"
+    install -d -m 700 -o root -g root "$CRED_DIR"
+    umask 077
+    { printf 'username=%s\n' "${user:-guest}"
+      printf 'password=%s\n' "$pass"
+      if [ -n "$dom" ]; then printf 'domain=%s\n' "$dom"; fi; } > "$CRED.tmp" || die "Zugangsdaten nicht speicherbar"
+    mv "$CRED.tmp" "$CRED"
+    ;;
+  mount-nas)
+    share="${2:-}"
+    re_share='^//[A-Za-z0-9._-]{1,64}/[^[:cntrl:],"\\]{1,120}$'
+    [[ "$share" =~ $re_share && "$share" != *"'"* && "$share" != *..* ]] || die "Adresse bitte so: //rechner/freigabe (z. B. //192.168.178.1/FRITZ.NAS)"
+    [ -f "$CRED" ] || die "keine Zugangsdaten gespeichert"
+    if mountpoint -q "$NAS_MP"; then
+        [ "$(findmnt -n -o SOURCE "$NAS_MP")" = "$share" ] && exit 0
+        umount "$NAS_MP" || die "alte Freigabe lässt sich nicht aushängen"
+    fi
+    command -v mount.cifs >/dev/null || die "cifs-utils fehlt – „Jetzt aktualisieren“ installiert es"
+    mkdir -p "$NAS_MP"
+    out="$(mount -t cifs "$share" "$NAS_MP" -o "credentials=$CRED,uid=$OWN_UID,gid=$OWN_GID,file_mode=0644,dir_mode=0755,iocharset=utf8,soft,noserverino" 2>&1)" || {
+        case "$out" in
+          *"error(13)"*|*"Permission denied"*) die "Zugang verweigert – Benutzer oder Passwort falsch" ;;
+          *"error(2)"*|*"No such file"*)       die "Freigabe gibt es nicht – Name prüfen (Groß-/Kleinschreibung)" ;;
+          *"error(112)"*|*"Host is down"*|*"error(113)"*) die "Rechner nicht erreichbar – Adresse prüfen" ;;
+          *"error(95)"*)                       die "Der Rechner spricht nur das alte SMB1 – dort SMB2 oder neuer einschalten" ;;
+          *) die "Einhängen fehlgeschlagen: $(echo "$out" | tail -1)" ;;
+        esac; }
+    install -d -o "$OWN_UID" -g "$OWN_GID" "$NAS_MP/$SUB" 2>/dev/null || mkdir -p "$NAS_MP/$SUB" 2>/dev/null \
+        || die "auf der Freigabe darf dieser Benutzer nicht schreiben"
+    ;;
+  umount-nas)
+    mountpoint -q "$NAS_MP" || exit 0
+    sync; umount "$NAS_MP" || umount -l "$NAS_MP"
+    ;;
+  nas-forget)
+    mountpoint -q "$NAS_MP" && { sync; umount "$NAS_MP" || umount -l "$NAS_MP"; }
+    rm -f "$CRED"
+    ;;
+  *)
+    die "unbekannter Befehl"
+    ;;
+esac

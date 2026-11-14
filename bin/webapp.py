@@ -2435,6 +2435,9 @@ class Handler(BaseHTTPRequestHandler):
                                        "auto": BK.auto_cfg(read_json(SETTINGS, {})), "auto_state": BK.auto_state(),
                                        "candidates": BK.candidates(),
                                        "free_gb": round(__import__("shutil").disk_usage(str(BASE)).free / 1e9, 1)})
+            if path == "/api/storage":
+                import storage as STO
+                return self.send_json(STO.status(read_json(SETTINGS, {})))
             if path == "/api/backup/download":
                 # Sicherung direkt in die Antwort schreiben (kein Zwischenstand auf der Karte, auch bei GB)
                 scope = qs.get("scope", "data")
@@ -2964,10 +2967,11 @@ class Handler(BaseHTTPRequestHandler):
                     c["keep"] = max(1, min(60, int(data["keep"] or 7)))
                 if data.get("scope") in ("settings", "data", "all"):
                     c["scope"] = data["scope"]
-                if "dir" in data:
+                if "dir" in data and str(data["dir"] or "").strip() != c["dir"]:
                     c["dir"] = str(data["dir"] or "").strip()
+                    c["target"] = {}                     # eigener Ordner statt USB-Stick/Freigabe
                 if c["enabled"] or data.get("run_now"):
-                    err = BK.check_dir(c["dir"])
+                    err = BK.check_dir(c["dir"], c.get("target"))
                     if err:
                         raise ValueError(err)
                 st["auto_backup"] = c
@@ -2977,6 +2981,57 @@ class Handler(BaseHTTPRequestHandler):
                     res = BK.run_auto(c, log=lambda m: APPLOG.log("INFO", "backup", "backup_now", detail=m))
                 APPLOG.log("INFO", "webapp", "auto_backup_set", **{k: c[k] for k in ("enabled", "interval", "hour", "dir", "scope", "keep")})
                 return self.send_json({"ok": True, "auto": c, "auto_state": BK.auto_state(), "result": res})
+            if path in ("/api/storage/usb", "/api/storage/nas", "/api/storage/eject", "/api/storage/nas/forget"):
+                # Sicherungsziel wählen: USB-Datenträger (UUID) oder Netzwerkfreigabe; Passwort nur an den Root-Helfer
+                import storage as STO
+                st = read_json(SETTINGS, {})
+                ab = dict(st.get("auto_backup") or {})
+                if path == "/api/storage/usb":
+                    d = next((x for x in STO.drives() if x["uuid"] == str(data.get("uuid", ""))), None)
+                    if not d:
+                        raise ValueError("Datenträger nicht gefunden – eingesteckt?")
+                    if not d["supported"]:
+                        raise ValueError(f"Dateisystem {d['fs']} wird nicht unterstützt (FAT32, exFAT, NTFS oder ext4 nehmen)")
+                    if ab.get("target", {}).get("kind") == "nas":
+                        STO.forget_nas()
+                    ab["dir"] = STO.use_usb(d["uuid"])
+                    ab["target"] = {"kind": "usb", "uuid": d["uuid"], "label": d["label"] or d["model"] or d["fs_name"]}
+                    APPLOG.log("INFO", "webapp", "backup_target_usb", uuid=d["uuid"], fs=d["fs"], label=d["label"])
+                elif path == "/api/storage/nas":
+                    if ab.get("target", {}).get("kind") == "usb":
+                        STO.helper("umount-usb")
+                    share, ab["dir"] = STO.use_nas(data.get("share"), data.get("user"), data.get("password"), data.get("domain"))
+                    ab["target"] = {"kind": "nas", "share": share, "user": str(data.get("user") or "").strip(),
+                                    "domain": str(data.get("domain") or "").strip()}
+                    APPLOG.log("INFO", "webapp", "backup_target_nas", share=share)
+                elif path == "/api/storage/eject":
+                    STO.eject_usb()
+                    APPLOG.log("INFO", "webapp", "backup_usb_ejected")
+                else:
+                    STO.forget_nas()
+                    if ab.get("target", {}).get("kind") == "nas":
+                        ab["target"] = {}
+                    APPLOG.log("INFO", "webapp", "backup_target_nas_removed")
+                if path != "/api/storage/eject":
+                    st["auto_backup"] = ab
+                    write_json(SETTINGS, st)
+                return self.send_json({"ok": True, **STO.status(read_json(SETTINGS, {})),
+                                       "auto": BK.auto_cfg(read_json(SETTINGS, {}))})
+            if path == "/api/storage/restore":
+                # Sicherung vom Stick/von der Freigabe zum Einspielen bereitlegen (wie ein Hochladen)
+                import storage as STO
+                src = STO.checked_path(data.get("path"))
+                BK.PENDING.unlink(missing_ok=True)
+                tmp = BK.UPLOAD.with_suffix(".part")
+                __import__("shutil").copyfile(src, tmp)
+                os.replace(tmp, BK.UPLOAD)
+                try:
+                    man = BK.info(BK.UPLOAD)
+                except ValueError:
+                    BK.UPLOAD.unlink(missing_ok=True)
+                    raise
+                APPLOG.log("INFO", "webapp", "backup_from_target", file=src.name)
+                return self.send_json({"ok": True, "upload": man})
             if path == "/api/backup/restore":
                 if not BK.UPLOAD.exists():
                     raise ValueError("Keine Sicherung hochgeladen")

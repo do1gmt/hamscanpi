@@ -56,7 +56,7 @@ asuser() { runuser -u "$U" -- "$@"; }
 bold "$(t "Pakete" "Packages")"
 PKGS="python3 python3-numpy python3-scipy python3-matplotlib python3-pil python3-soundfile python3-sgp4 rtl-sdr
       multimon-ng sqlite3 alsa-utils util-linux curl git avahi-daemon avahi-utils build-essential iw
-      libusb-1.0-0-dev libreadline-dev"
+      libusb-1.0-0-dev libreadline-dev cifs-utils ntfs-3g"
 NEED=""
 for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || NEED="$NEED $p"; done
 if [ -n "$NEED" ]; then
@@ -180,7 +180,7 @@ ok "$(t "hamscanpi-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), -
 # sudo-Regel: genau diese Befehle ohne Passwort (Knöpfe im Dashboard und auf der Notfall-Seite)
 SC="$(command -v systemctl || echo /usr/bin/systemctl)"
 TMPS="$(mktemp)"
-printf '# HamScanPi: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net\n' \
+printf '# HamScanPi: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
     "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
 if visudo -cf "$TMPS" >/dev/null 2>&1; then
     install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hamscanpi
@@ -191,6 +191,8 @@ fi
 rm -f "$TMPS"
 
 # PMSDR: Steuerprogramm aus den beigelegten Quellen (GPL-3, share/pmsdr) bauen, Dienst mit Befehls-FIFO und Hotplug
+# Direkt mit gcc (wie im Kopf von pmsdr.c beschrieben), nicht über ./configure: dessen config.guess von 2009 kennt
+# aarch64 nicht (64-Bit-Pi OS) und bricht mit „unable to guess system type“ ab.
 bold "$(t "PMSDR (Kurzwelle)" "PMSDR (shortwave)")"
 PMSRC="$DIR/share/pmsdr/pmsdr-0.26.tar.gz"
 PMSUM="7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947"
@@ -201,11 +203,13 @@ if [ ! -x /usr/local/bin/pmsdr ] && [ -f "$PMSRC" ]; then
         PB="$(mktemp -d)"; chown "$U" "$PB"
         if asuser tar xzf "$PMSRC" -C "$PB" \
            && asuser sed -i 's/unsigned int nbytes = sizeof szLine - 1;/size_t nbytes = sizeof szLine - 1;/' "$PB/pmsdr-0.26/pmsdr.c" \
-           && (cd "$PB/pmsdr-0.26" && asuser ./configure >/dev/null 2>&1 && asuser make -s >/dev/null 2>&1) \
+           && (cd "$PB/pmsdr-0.26" && asuser gcc -D__USE_GNU -std=gnu99 -fgnu89-inline -O2 -o pmsdr \
+                 cmdparser.c pmsdr.c pmsdr_ctrl.c pmsdr_err.c udp_cmd.c -lusb-1.0 -lreadline -lpthread -lm >"$PB/build.log" 2>&1) \
            && install -m 755 "$PB/pmsdr-0.26/pmsdr" /usr/local/bin/pmsdr; then
             ok "$(t "Steuerprogramm gebaut: /usr/local/bin/pmsdr" "control program built: /usr/local/bin/pmsdr")"
         else
             warn "$(t "Steuerprogramm ließ sich nicht bauen – PMSDR bleibt ohne Steuerung" "control program could not be built – PMSDR stays without control")"
+            [ -f "$PB/build.log" ] && tail -5 "$PB/build.log" | sed 's/^/    /'
         fi
         rm -rf "$PB"
     fi
@@ -247,6 +251,7 @@ fi
 
 # Root-Helfer (gehören root, für den Benutzer nicht beschreibbar; die sudo-Regel erlaubt genau diese Datei)
 install -m 755 -o root -g root "$DIR/share/root/hamscanpi-net" /usr/local/sbin/hamscanpi-net
+install -m 755 -o root -g root "$DIR/share/root/hamscanpi-store" /usr/local/sbin/hamscanpi-store
 
 bold "$(t "System" "System")"
 # Systemprotokoll über Neustarts behalten (höchstens 64 MB, gebündelt geschrieben)

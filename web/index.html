@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>HamScanPi</title>
 <link rel="stylesheet" href="/static/style.css">
+<script src="/static/theme.js"></script>
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
@@ -18,6 +19,7 @@
     <button type="button" class="notice-pill" id="noticePill" hidden title="Hinweise ansehen (System → Hinweise)">⚠ <span id="noticeCount">0</span></button>
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Verbinde …</span></div>
     <div class="clock"><span class="clock-utc" id="clock">--:--:--</span><span class="clock-sep">UTC</span><span class="clock-local" id="clockLocal">--:--:--</span><span class="clock-sep" id="clockZone">Lokal</span></div>
+    <button type="button" class="theme-btn" id="themeBtn" title="Design wechseln (Automatisch, Dunkel, Hell, Hoher Kontrast, Nacht)" aria-label="Design wechseln"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
   </div>
 </header>
 <nav class="tabs-main" aria-label="Bereiche">
@@ -403,24 +405,14 @@
       <section class="panel" id="panel-sticks">
         <h2>Geräte</h2>
         <details class="ant-profiles" id="antBox"><summary><b>Antennen</b> <small class="muted" id="antCount"></small></summary>
-          <p class="hint">Jede Antenne einmal anlegen – beim Umschalten dann nur noch auswählen (im Scan-Kasten oder hier beim Haupt-Stick bzw. Kurzwellen-Empfänger), das wird sofort gespeichert. „gilt für“: Frequenzbereich in MHz (Satelliten außerhalb gelten als „falsches Band“); Richtung/Öffnungswinkel/Erhebung nur bei Richtantennen.</p>
+          <p class="hint">Jede Antenne einmal anlegen – beim Umschalten dann nur noch auswählen (im Scan-Kasten oder hier beim Haupt-Stick), das wird sofort gespeichert. „gilt für“: Frequenzbereich in MHz (Satelliten außerhalb gelten als „falsches Band“); Richtung/Öffnungswinkel/Erhebung nur bei Richtantennen.</p>
           <div class="table-wrap"><table class="table ant-table"><thead><tr><th>Name</th><th>gilt für (MHz)</th><th>Richtung (°)</th><th>Öffnung (°)</th><th>Erhebung (°)</th><th></th></tr></thead><tbody id="antRows"></tbody></table></div>
-          <div class="actions"><button type="button" class="btn" id="antAdd">＋ Antenne</button><button type="button" class="btn btn-primary" id="antSave">Speichern</button></div>
+          <div class="actions"><button type="button" class="btn" id="antAdd">＋ Antenne</button><button type="button" class="btn btn-primary" id="antSave" hidden>Speichern</button></div>
           <div class="save-note" id="antNote" aria-live="polite"></div>
         </details>
         <p class="hint warn-text" id="sticksNew" hidden></p>
         <div id="sticksList"><div class="muted">–</div></div>
         <div class="save-note" id="sticksNote" aria-live="polite"></div>
-        <div class="stick-card" id="hfDevice">
-          <div class="stick-head"><b>Kurzwellen-Empfänger</b></div>
-          <div class="stick-form">
-            <label class="field" title="Name des Kurzwellen-Empfängers, wie er in der Oberfläche erscheint. Leer = PMSDR."><span>Bezeichnung</span><input id="hfLabel" type="text" maxlength="40" placeholder="PMSDR"></label>
-            <label class="field" title="Name der Kurzwellenantenne – nur eine Beschriftung. Erscheint in der Scan-Anzeige und bei jedem Treffer."><span>Antenne</span><input id="hfAntenna" type="text" maxlength="60" placeholder="z. B. Langdraht, Dipol 40 m"></label>
-            <label class="field" title="Antennen-Profil wählen – wird sofort gespeichert"><span>Profil</span><select id="hfAntProfile"></select></label>
-            <div class="stick-actions"><button class="btn" id="hfSave" type="button">Speichern</button></div>
-          </div>
-        </div>
-        <div class="save-note" id="hfNote" aria-live="polite"></div>
         <p class="hint">HamScanPi benutzt für VHF/UHF, Satelliten und Live nur den <b>Haupt-Stick</b> und spricht ihn über seine Seriennummer an – egal an welchem USB-Port. Ein neu angesteckter Stick wird nie von selbst benutzt. ppm und Verstärkung leer = Werte aus dem Bandplan. Die PMSDR (Kurzwelle) ist davon unabhängig.</p>
         <p class="hint"><b>Antennen</b> sind nur eine Beschriftung (mit Frequenzbereich und Richtung für die Überflugplanung): HamScanPi kann nicht sehen, welche Antenne tatsächlich angeschlossen ist – wer einen Antennenumschalter benutzt, wählt beim Umschalten das passende Profil (oben unter „Antennen“ anlegen, dann im Scan-Kasten oder hier auswählen).</p>
       </section>
@@ -500,6 +492,20 @@
         <label class="check" title="Mail-Passwort, Telegram-/ntfy-Token und Zugangsschutz. Ohne sie ist die Wiederherstellung unvollständig – mit ihnen die Datei sorgsam aufbewahren."><input type="checkbox" id="bkSecrets" checked> Zugangsdaten mitsichern</label>
         <div class="actions"><a class="btn" id="bkDownload" href="#" download>↓ Sicherung herunterladen</a></div>
         <p class="hint">Die Datei enthält mit Zugangsdaten das Mail-Passwort und den Telegram-Token im Klartext – nicht weitergeben.</p>
+        <h3>Wohin sichern</h3>
+        <p class="hint">Nicht auf die Speicherkarte selbst – bei einem Kartenausfall wäre die Sicherung mit weg. USB-Stick oder Festplatte (FAT32, exFAT, NTFS oder ext4 – es wird nichts formatiert) oder eine Netzwerkfreigabe.</p>
+        <p class="hint" id="stoTarget"></p>
+        <div id="stoDrives"><div class="muted">–</div></div>
+        <details class="sto-nas" id="stoNasBox"><summary><b>Netzwerkfreigabe</b> (NAS, FRITZ!Box, Windows-Freigabe) <small class="muted" id="stoNasSum"></small></summary>
+          <div class="filter-grid">
+            <label class="field" title="So wie im Windows-Explorer, nur mit Schrägstrichen: //Rechner/Freigabe, auch mit Unterordner. FRITZ!Box mit USB-Speicher: //192.168.178.1/FRITZ.NAS"><span>Adresse</span><input id="nasShare" type="text" placeholder="//192.168.178.1/FRITZ.NAS" autocomplete="off"></label>
+            <label class="field"><span>Benutzer</span><input id="nasUser" type="text" autocomplete="off"></label>
+            <label class="field" title="Leer lassen = gespeichertes Passwort weiterverwenden"><span>Passwort</span><input id="nasPass" type="password" autocomplete="new-password"></label>
+          </div>
+          <div class="actions"><button class="btn" id="nasUse" type="button">Verbinden und verwenden</button><button class="btn btn-danger" id="nasForget" type="button" hidden>Trennen</button></div>
+          <p class="hint">Das Passwort liegt nur auf dem Pi und ist nur für root lesbar – es steht nicht in den Einstellungen und nicht in Sicherungen. Mehrere HamScanPis können dieselbe Freigabe (und denselben Stick) benutzen, jeder bekommt einen eigenen Ordner.</p>
+        </details>
+        <div class="save-note" id="stoNote" aria-live="polite"></div>
         <h3>Automatisch sichern</h3>
         <label class="check"><input type="checkbox" id="abOn"> regelmäßig sichern</label>
         <div class="filter-grid">
@@ -508,18 +514,15 @@
           <label class="field"><span>Umfang</span><select id="abScope"><option value="settings">Einstellungen</option><option value="data" selected>+ Datenbestände</option><option value="all">+ Aufnahmen</option></select></label>
           <label class="field"><span>behalten (Anzahl)</span><input id="abKeep" type="number" min="1" max="60" value="7" inputmode="numeric"></label>
         </div>
-        <label class="field" title="Ein USB-Stick (z. B. /media/gmt/USBSTICK) oder eine eingehängte Netzwerkfreigabe (z. B. /mnt/nas). Nicht die Speicherkarte selbst – bei einem Kartenausfall wäre die Sicherung mit weg."><span>Zielordner</span><input id="abDir" type="text" list="abDirs" placeholder="/media/gmt/USBSTICK oder /mnt/nas" autocomplete="off"><datalist id="abDirs"></datalist></label>
+        <details class="sto-adv"><summary>Zielordner selbst eintragen (für Fortgeschrittene)</summary>
+        <label class="field" title="Nur nötig, wenn das Ziel nicht oben unter „Wohin sichern“ gewählt wird – etwa ein selbst eingehängtes Laufwerk. Nicht die Speicherkarte selbst."><span>Zielordner</span><input id="abDir" type="text" list="abDirs" placeholder="wird oben gewählt" autocomplete="off"><datalist id="abDirs"></datalist></label>
+        </details>
         <label class="check"><input type="checkbox" id="abSecrets" checked> Zugangsdaten mitsichern</label>
-        <div class="actions"><button class="btn" id="abSave" type="button">Speichern</button><button class="btn" id="abNow" type="button">Jetzt sichern</button></div>
+        <div class="actions"><button class="btn" id="abSave" type="button" hidden>Speichern</button><button class="btn" id="abNow" type="button">Jetzt sichern</button></div>
         <div class="save-note" id="abNote" aria-live="polite"></div>
         <p class="hint" id="abState"></p>
-        <details><summary>Netzwerkfreigabe einhängen</summary><p class="hint">Einmalig auf dem Pi (Beispiel NAS mit SMB-Freigabe „backup“):</p>
-        <pre class="log">sudo apt install -y cifs-utils
-sudo mkdir -p /mnt/nas
-echo "//nas.local/backup /mnt/nas cifs credentials=/home/gmt/.nascred,uid=gmt,gid=gmt,nofail,x-systemd.automount 0 0" | sudo tee -a /etc/fstab
-printf 'username=BENUTZER\npassword=PASSWORT\n' > ~/.nascred && chmod 600 ~/.nascred
-sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> eintragen. USB-Sticks erscheinen von selbst unter /media.</p></details>
         <h3>Wiederherstellen</h3>
+        <div id="stoBackupsWrap" hidden><p class="hint">Auf USB-Stick bzw. Freigabe:</p><div class="table-wrap"><table class="table"><tbody id="stoBackups"></tbody></table></div><p class="hint">oder eine Datei vom PC/Handy:</p></div>
         <div class="row"><input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"><button class="btn" id="bkUpload" type="button">Hochladen und prüfen</button></div>
         <div class="save-note" id="bkNote" aria-live="polite"></div>
         <div id="bkUploaded" hidden>
@@ -554,7 +557,7 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
           <label class="check"><input type="checkbox" id="wxOn"> Dekodierungen senden</label>
           <label class="field"><span>Ziele (Rechner:Port)</span><input id="wxTargets" type="text" placeholder="z. B. 192.168.178.50:2237, 224.0.0.1:2237" autocomplete="off"></label>
           <label class="field" title="So erscheint HamScanPi im Empfänger (WSJT-X: „Id“)"><span>Kennung</span><input id="wxIdent" type="text" maxlength="32" placeholder="HamScanPi"></label>
-          <div class="actions"><button type="button" class="btn" id="wxSave">Speichern</button><button type="button" class="btn" id="wxTest">Speichern und Testpaket senden</button></div>
+          <div class="actions"><button type="button" class="btn" id="wxSave" hidden>Speichern</button><button type="button" class="btn" id="wxTest">Testpaket senden</button></div>
           <div class="save-note" id="wxNote" aria-live="polite"></div>
           <p class="hint" id="wxState"></p>
           <p class="hint">Ohne Netz läuft alles weiter: Senden passiert im Hintergrund, ein nicht erreichbares Ziel wird einmal im Protokoll vermerkt, die Dekodierungen der letzten 2 Minuten werden nachgeschickt, sobald es wieder geht (ältere wären für eine Live-Anzeige wertlos).</p>
@@ -565,6 +568,9 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
         <p class="hint" id="countryHint"></p>
         <label class="field"><span>Sprache / Language</span>
           <select id="uiLang"><option value="de">Deutsch</option><option value="en">English</option></select>
+        </label>
+        <label class="field" title="Gilt nur für diesen Browser. Auch oben rechts mit ◐ umschaltbar."><span>Design</span>
+          <select id="uiTheme"></select>
         </label>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
       </section>
@@ -601,7 +607,7 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
         </div>
         <label class="field"><span>Ohne Anmeldung aus diesen Netzen (z. B. 192.168.178.0/24)</span>
           <input id="authTrusted" type="text" placeholder="192.168.178.0/24" autocomplete="off"></label>
-        <div class="actions"><button type="button" class="btn" id="authTrustedSave">Netze speichern</button></div>
+        <div class="actions" hidden><button type="button" class="btn" id="authTrustedSave">Netze speichern</button></div>
         <div class="save-note" id="authNote" aria-live="polite"></div>
         <p class="hint">Ohne Passwort kann jeder, der das Dashboard erreicht, scannen, Treffer löschen und die Einstellungen ändern. Spätestens wenn der Pi aus dem Internet erreichbar ist, ein Passwort setzen. Passwort vergessen: auf dem Pi <span class="mono">python3 bin/auth.py set</span>.</p>
       </section>
@@ -628,7 +634,7 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
           <label class="field" title="Weitere 15-s-Takte (FT4 7,5 s) direkt hinterher, wenn viel los ist. 0 = nur einer."><span>FT8/FT4: weitere Takte</span><input type="number" data-follow="ft8_extra_cycles" min="0" max="4" step="1" placeholder="1"></label>
           <label class="field" title="So viele Nachrichten muss ein Takt haben, damit der nächste mitgenommen wird."><span>FT8/FT4: weiter ab Nachrichten</span><input type="number" data-follow="ft8_extra_min_msgs" min="1" max="50" step="1" placeholder="3"></label>
         </div>
-        <div class="actions"><button class="btn" id="followSave" type="button">Speichern</button></div>
+        <div class="actions" hidden><button class="btn" id="followSave" type="button">Speichern</button></div>
         <div class="save-note" id="followNote" aria-live="polite"></div>
       </section>
       <section class="panel" id="panel-satprio">
@@ -716,7 +722,7 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
             <label class="inline-num">um <input data-lh type="number" min="0" max="23" value="7" inputmode="numeric"> Uhr (letzte 24 h als Datei)</label>
             <button type="button" class="btn btn-small" id="logSendNow">Jetzt schicken</button>
           </div>
-          <div class="actions"><button type="submit" class="btn btn-primary">Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button><button type="button" class="btn" id="pushTest">Test-Push senden</button></div>
+          <div class="actions"><button type="submit" class="btn btn-primary" hidden>Speichern</button><button type="button" class="btn" id="notifyTest">Testmail senden</button><button type="button" class="btn" id="pushTest">Test-Push senden</button></div>
           <div class="save-note" id="notifyNote"></div>
           <p class="hint">Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.</p>
         </form>
