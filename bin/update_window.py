@@ -90,8 +90,8 @@ def free_in(now, recs, margin_s):
         moved = False
         for s, e, name in recs:
             if s - margin_s <= t < e + AFTER_S:
-                t, why, moved = e + AFTER_S, f"Überflug {name} {time.strftime('%H:%M', time.gmtime(s))}–" \
-                                             f"{time.strftime('%H:%M', time.gmtime(e))} UTC", True
+                import timefmt as TF
+                t, why, moved = e + AFTER_S, f"Überflug {name} {TF.fmt(s, '%H:%M', with_label=False)}–{TF.hm(e)}", True
     return max(0, int(t - now)), why
 
 

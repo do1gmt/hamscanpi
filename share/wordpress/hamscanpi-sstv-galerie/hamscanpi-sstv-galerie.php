@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HamScanPi SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von HamScanPi (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.0.0
+ * Version:           1.2.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            HamScanPi
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.0.0');
+define('HSP_SSTV_VERSION', '1.2.0');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -33,11 +33,11 @@ function hsp_sstv_defaults()
         'status_mode' => 'pi',        // pi = wie HamScanPi es schickt | draft = immer Entwurf | publish = immer sofort
         'max_mb'      => 8,
         'per_page'    => 48,
-        'accent'      => '#e8d28e',
+        'accent'      => '',          // leer = vom Theme (--green / --accent), sonst Vorgabe des Plugins
         'card_bg'     => '',          // leer = vom Theme
         'text'        => '',
         'muted'       => '',
-        'radius'      => 10,
+        'radius'      => '',          // leer = vom Theme (--radius)
         'thumb'       => 220,         // Mindestbreite eines Vorschaubilds in px
         'fade_ms'     => 450,
         'load_css'    => 1,
@@ -126,7 +126,7 @@ function hsp_sstv_clean_meta($m)
         return $out;
     }
     $keys = array('source', 'time_utc', 'mode', 'complete', 'call', 'locator', 'station', 'kind', 'norad', 'freq_hz',
-                  'max_el', 'el', 'snr_db', 'band');
+                  'max_el', 'el', 'snr_db', 'band', 'tz');
     $sum = isset($m['summary']) && is_array($m['summary']) ? $m['summary'] : array();
     foreach ($keys as $k) {
         if (isset($sum[$k]) && is_scalar($sum[$k])) {
@@ -152,6 +152,37 @@ function hsp_sstv_clean_meta($m)
     return $out;
 }
 
+/** Zeitzone, in der HamScanPi die Zeiten anzeigt (UTC oder Ortszeit des Pi) – die Galerie folgt ihr. */
+function hsp_sstv_zone($sum)
+{
+    $tz = isset($sum['tz']) ? (string) $sum['tz'] : 'UTC';
+    try {
+        return new DateTimeZone(in_array($tz, timezone_identifiers_list(), true) ? $tz : 'UTC');
+    } catch (Exception $e) {
+        return new DateTimeZone('UTC');
+    }
+}
+
+function hsp_sstv_local($t, $sum)
+{
+    $d = new DateTime('@' . (int) $t);
+    $d->setTimezone(hsp_sstv_zone($sum));
+    return $d;
+}
+
+/** Kennung der Zeitzone wie in HamScanPi: deutsch MEZ/MESZ, sonst CET/CEST usw. */
+function hsp_sstv_tzlabel($lbl)
+{
+    if ($lbl === 'Z' || $lbl === '+00:00' || $lbl === 'GMT') {
+        return 'UTC';
+    }
+    if (strpos(get_locale(), 'de') === 0) {
+        $de = array('CET' => 'MEZ', 'CEST' => 'MESZ');
+        return isset($de[$lbl]) ? $de[$lbl] : $lbl;
+    }
+    return $lbl;
+}
+
 function hsp_sstv_find_uid($uid)
 {
     $q = get_posts(array('post_type' => 'hsp_sstv', 'post_status' => 'any', 'meta_key' => '_hsp_uid', 'meta_value' => $uid,
@@ -172,7 +203,31 @@ function hsp_sstv_answer($id, $dup)
                  'edit' => get_edit_post_link($id, 'raw'));
 }
 
+/** Protokoll der letzten 100 Empfänge (Einstellungen → SSTV-Galerie) – zur Fehlersuche. */
+function hsp_sstv_log($result, $detail = array())
+{
+    $log = get_option('hsp_sstv_log', array());
+    $log = is_array($log) ? $log : array();
+    $u = wp_get_current_user();
+    $log[] = array_merge(array('t' => time(), 'result' => $result, 'user' => $u ? $u->user_login : ''), $detail);
+    update_option('hsp_sstv_log', array_slice($log, -100), false);
+}
+
 function hsp_sstv_receive(WP_REST_Request $req)
+{
+    $r = hsp_sstv_receive_inner($req);
+    $src = json_decode((string) $req->get_param('meta'), true);
+    $src = is_array($src) && isset($src['summary']['source']) ? mb_substr(sanitize_text_field((string) $src['summary']['source']), 0, 80) : '';
+    if (is_wp_error($r)) {
+        hsp_sstv_log('abgelehnt', array('source' => $src, 'reason' => $r->get_error_message()));
+    } else {
+        hsp_sstv_log($r['duplicate'] ? 'schon vorhanden' : ($r['status'] === 'publish' ? 'veröffentlicht' : 'Entwurf'),
+                     array('source' => $src, 'id' => $r['id']));
+    }
+    return $r;
+}
+
+function hsp_sstv_receive_inner(WP_REST_Request $req)
 {
     $o = hsp_sstv_opts();
     $uid = substr(preg_replace('/[^A-Za-z0-9_-]/', '', (string) $req->get_param('uid')), 0, 64);
@@ -210,7 +265,8 @@ function hsp_sstv_receive(WP_REST_Request $req)
     }
     $want = apply_filters('hsp_sstv_insert_status', $want, $meta);
     $source = !empty($sum['source']) ? $sum['source'] : 'SSTV';
-    $title = sprintf('%s · %s · %s UTC', $source, !empty($sum['mode']) ? $sum['mode'] : 'SSTV', gmdate('Y-m-d H:i', $t));
+    $lt = hsp_sstv_local($t, $sum);
+    $title = sprintf('%s · %s · %s %s', $source, !empty($sum['mode']) ? $sum['mode'] : 'SSTV', $lt->format('Y-m-d H:i'), hsp_sstv_tzlabel($lt->format('T')));
     $gmt = gmdate('Y-m-d H:i:s', $t);
     $id = wp_insert_post(array('post_type' => 'hsp_sstv', 'post_status' => $want, 'post_title' => $title,
                                'post_date_gmt' => $gmt, 'post_date' => get_date_from_gmt($gmt)), true);
@@ -258,12 +314,16 @@ function hsp_sstv_item($id)
         $secs[] = $s;
     }
     $t = (int) get_post_meta($id, '_hsp_time', true);
+    $lt = hsp_sstv_local($t, $meta['summary']);
+    $lbl = $lt->format('T');
     $terms = wp_get_object_terms($id, 'hsp_sat', array('fields' => 'all'));
     $item = array(
         'id'       => $id,
         't'        => $t,
         'time_utc' => gmdate('Y-m-d H:i:s', $t),
-        'day'      => gmdate('Y-m-d', $t),
+        'day'      => $lt->format('Y-m-d'),          // Tag und Uhrzeit in der Zeit, die HamScanPi eingestellt hat
+        'time'     => $lt->format('H:i:s'),
+        'tz'       => hsp_sstv_tzlabel($lbl),
         'source'   => $terms && !is_wp_error($terms) ? $terms[0]->name : '',
         'slug'     => $terms && !is_wp_error($terms) ? $terms[0]->slug : '',
         'summary'  => $meta['summary'],
@@ -311,7 +371,9 @@ function hsp_sstv_assets()
                 $vars[] = $v . ':' . $o[$k];
             }
         }
-        $vars[] = '--hsp-radius:' . (int) $o['radius'] . 'px';
+        if ($o['radius'] !== '' && $o['radius'] !== null) {
+            $vars[] = '--hsp-radius:' . (int) $o['radius'] . 'px';
+        }
         $vars[] = '--hsp-thumb:' . (int) $o['thumb'] . 'px';
         $vars[] = '--hsp-fade:' . (int) $o['fade_ms'] . 'ms';
         wp_add_inline_style('hsp-sstv', '.hsp-galerie,.hsp-lb{' . implode(';', $vars) . '}' . "\n" . wp_strip_all_tags($o['custom_css']));
@@ -380,6 +442,32 @@ add_action('add_meta_boxes_hsp_sstv', function () {
     }, 'hsp_sstv', 'normal', 'high');
 });
 
+/** Galerie-Seite anlegen: Seitenkopf wie die übrigen Seiten des Themes (page-hero mit eyebrow), darunter die Galerie. */
+add_action('admin_post_hsp_sstv_page', function () {
+    if (!current_user_can('publish_pages') || !check_admin_referer('hsp_sstv_page')) {
+        wp_die('Keine Berechtigung');
+    }
+    $eyebrow = sanitize_text_field(wp_unslash(isset($_POST['eyebrow']) ? $_POST['eyebrow'] : ''));
+    $title = sanitize_text_field(wp_unslash(isset($_POST['title']) ? $_POST['title'] : 'SSTV-Bilder'));
+    $intro = sanitize_textarea_field(wp_unslash(isset($_POST['intro']) ? $_POST['intro'] : ''));
+    $tpl = sanitize_text_field(wp_unslash(isset($_POST['template']) ? $_POST['template'] : ''));
+    $hero = '<!-- wp:group {"className":"page-hero","layout":{"type":"constrained"}} -->' . "\n"
+          . '<div class="wp-block-group page-hero"><div class="wp-block-group container">'
+          . ($eyebrow !== '' ? '<p class="eyebrow">' . esc_html($eyebrow) . '</p>' : '')
+          . '<h1>' . esc_html($title) . '</h1>' . ($intro !== '' ? '<p>' . esc_html($intro) . '</p>' : '') . "</div></div>\n<!-- /wp:group -->\n\n";
+    $body = '<!-- wp:group {"className":"section","layout":{"type":"constrained"}} -->' . "\n"
+          . '<div class="wp-block-group section"><div class="wp-block-group container"><!-- wp:shortcode -->' . "\n[sstv_galerie]\n"
+          . '<!-- /wp:shortcode --></div></div>' . "\n<!-- /wp:group -->";
+    $id = wp_insert_post(array('post_type' => 'page', 'post_status' => 'publish', 'post_title' => $title,
+                               'post_content' => $hero . $body, 'page_template' => $tpl), true);
+    if (!is_wp_error($id)) {
+        update_option('hsp_sstv_page', (int) $id);
+        wp_safe_redirect(get_edit_post_link($id, 'raw'));
+        exit;
+    }
+    wp_die(esc_html($id->get_error_message()));
+});
+
 add_action('admin_menu', function () {
     add_options_page('SSTV-Galerie', 'SSTV-Galerie', 'manage_options', 'hsp-sstv', 'hsp_sstv_settings_page');
 });
@@ -389,7 +477,8 @@ add_action('admin_init', function () {
         $d = hsp_sstv_defaults();
         $o = array();
         $o['status_mode'] = in_array(isset($in['status_mode']) ? $in['status_mode'] : '', array('pi', 'draft', 'publish'), true) ? $in['status_mode'] : 'pi';
-        foreach (array('max_mb' => array(1, 50), 'per_page' => array(6, 100), 'radius' => array(0, 40), 'thumb' => array(100, 600), 'fade_ms' => array(0, 3000)) as $k => $lim) {
+        $o['radius'] = (isset($in['radius']) && $in['radius'] !== '') ? max(0, min(40, (int) $in['radius'])) : '';
+        foreach (array('max_mb' => array(1, 50), 'per_page' => array(6, 100), 'thumb' => array(100, 600), 'fade_ms' => array(0, 3000)) as $k => $lim) {
             $o[$k] = max($lim[0], min($lim[1], isset($in[$k]) ? (int) $in[$k] : $d[$k]));
         }
         foreach (array('accent', 'card_bg', 'text', 'muted') as $k) {
@@ -421,11 +510,11 @@ function hsp_sstv_settings_page()
                     <option value="draft" <?php selected($o['status_mode'], 'draft'); ?>>immer als Entwurf (ich gebe frei)</option>
                     <option value="publish" <?php selected($o['status_mode'], 'publish'); ?>>immer sofort veröffentlichen</option>
                 </select></td></tr>
-                <tr><th>Akzentfarbe</th><td><input type="text" name="<?php echo esc_attr($f('accent')); ?>" value="<?php echo esc_attr($o['accent']); ?>" placeholder="#e8d28e"></td></tr>
+                <tr><th>Akzentfarbe</th><td><input type="text" name="<?php echo esc_attr($f('accent')); ?>" value="<?php echo esc_attr($o['accent']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Kartenhintergrund</th><td><input type="text" name="<?php echo esc_attr($f('card_bg')); ?>" value="<?php echo esc_attr($o['card_bg']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Schrift</th><td><input type="text" name="<?php echo esc_attr($f('text')); ?>" value="<?php echo esc_attr($o['text']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Schrift gedämpft</th><td><input type="text" name="<?php echo esc_attr($f('muted')); ?>" value="<?php echo esc_attr($o['muted']); ?>" placeholder="leer = vom Theme"></td></tr>
-                <tr><th>Ecken (px)</th><td><input type="number" name="<?php echo esc_attr($f('radius')); ?>" value="<?php echo (int) $o['radius']; ?>" min="0" max="40"></td></tr>
+                <tr><th>Ecken (px)</th><td><input type="number" name="<?php echo esc_attr($f('radius')); ?>" value="<?php echo esc_attr($o['radius']); ?>" min="0" max="40" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Vorschaubild mindestens (px)</th><td><input type="number" name="<?php echo esc_attr($f('thumb')); ?>" value="<?php echo (int) $o['thumb']; ?>" min="100" max="600"></td></tr>
                 <tr><th>Überblenden (ms)</th><td><input type="number" name="<?php echo esc_attr($f('fade_ms')); ?>" value="<?php echo (int) $o['fade_ms']; ?>" min="0" max="3000"></td></tr>
                 <tr><th>Bilder je Seite</th><td><input type="number" name="<?php echo esc_attr($f('per_page')); ?>" value="<?php echo (int) $o['per_page']; ?>" min="6" max="100"></td></tr>
@@ -439,6 +528,39 @@ function hsp_sstv_settings_page()
             </table>
             <?php submit_button(); ?>
         </form>
+
+        <h2>Galerie-Seite anlegen</h2>
+        <?php $page = (int) get_option('hsp_sstv_page'); if ($page && get_post_status($page)) : ?>
+            <p>Die Galerie steht auf <a href="<?php echo esc_url(get_permalink($page)); ?>"><?php echo esc_html(get_the_title($page)); ?></a>
+               (<a href="<?php echo esc_url(get_edit_post_link($page)); ?>">bearbeiten</a>).</p>
+        <?php endif; ?>
+        <p>Legt eine Seite mit Seitenkopf wie die übrigen Seiten an (Bereich <code>page-hero</code> mit kleiner Überschrift, Titel und
+           Einleitung) und darunter die Galerie. Die Seite lässt sich danach wie jede andere im Blockeditor ändern und ins Menü aufnehmen.</p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="hsp_sstv_page"><?php wp_nonce_field('hsp_sstv_page'); ?>
+            <table class="form-table" role="presentation">
+                <tr><th>Kleine Überschrift</th><td><input type="text" name="eyebrow" value="Satelliten · SSTV · Empfang" class="regular-text"></td></tr>
+                <tr><th>Titel</th><td><input type="text" name="title" value="SSTV-Bilder" class="regular-text"></td></tr>
+                <tr><th>Einleitung</th><td><textarea name="intro" rows="3" cols="70">Bilder, die mein HamScanPi von Satelliten, auf Kurzwelle und im Live-Empfang aufgenommen hat – mit allen Angaben zu Überflug und Empfang. Antippen zum Vergrößern.</textarea></td></tr>
+                <tr><th>Seitenvorlage</th><td><select name="template"><option value="">Standard</option>
+                    <?php foreach (wp_get_theme()->get_page_templates() as $file => $name) : ?>
+                        <option value="<?php echo esc_attr($file); ?>" <?php selected(stripos($name, 'editier') !== false || stripos($file, 'editable') !== false); ?>><?php echo esc_html($name); ?></option>
+                    <?php endforeach; ?></select>
+                    <p class="description">Am besten dieselbe Vorlage wie die übrigen Seiten (bei Themes mit Blockseiten meist die „editierbare“ Vorlage in voller Breite).</p></td></tr>
+            </table>
+            <?php submit_button('Seite anlegen', 'secondary'); ?>
+        </form>
+
+        <h2>Protokoll</h2>
+        <?php $log = array_reverse((array) get_option('hsp_sstv_log', array())); ?>
+        <?php if (!$log) : ?><p>Noch nichts empfangen.</p><?php else : ?>
+        <table class="widefat striped"><thead><tr><th>Zeit (UTC)</th><th>Ergebnis</th><th>Quelle</th><th>Benutzer</th><th>Hinweis</th></tr></thead><tbody>
+        <?php foreach (array_slice($log, 0, 50) as $e) : ?>
+            <tr><td><?php echo esc_html(gmdate('Y-m-d H:i:s', (int) $e['t'])); ?></td><td><?php echo esc_html($e['result']); ?></td>
+                <td><?php echo esc_html(isset($e['source']) ? $e['source'] : ''); ?><?php if (!empty($e['id'])) : ?> · <a href="<?php echo esc_url(get_edit_post_link((int) $e['id'])); ?>">#<?php echo (int) $e['id']; ?></a><?php endif; ?></td>
+                <td><?php echo esc_html($e['user']); ?></td><td><?php echo esc_html(isset($e['reason']) ? $e['reason'] : ''); ?></td></tr>
+        <?php endforeach; ?></tbody></table>
+        <?php endif; ?>
     </div>
     <?php
 }

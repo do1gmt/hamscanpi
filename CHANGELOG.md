@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.7.99 – 2026-11-14
+
+- **Times: UTC or local time** (Settings → Station → Times, default UTC): one central formatting in the dashboard
+  (`tfmt`) – about 30 places that showed the browser's local time without a label now follow the setting; every
+  time carries its label (UTC, MEZ/MESZ, CET/CEST …), table headers too; the clock top right shows both. On the Pi
+  (`bin/timefmt.py`): notices, mail and Telegram ("since 15:20 MEZ", "late, originally …"), the activity by hour
+  and weekday (Stations), the end of the permanent watch (entered and shown in the chosen time), the update window
+  and the details sent to the website. Uses the Pi's time zone (also when the browser is elsewhere).
+- **Schedules** keep their own time zone (`tz`: entries made so far = local time; new ones in the chosen time) and
+  are evaluated in it – a weekly net at 19:00 local stays at 19:00 over the change to summer time; the dashboard
+  shows every entry converted (including day shifts over midnight). EiBi times are converted too.
+- **WordPress plugin 1.2.0:** the gallery groups days and shows times in the time zone HamScanPi uses (sent with
+  every image), label next to every time.
+- Logged: `time_mode_set`. Self-test section 59 (dashboard functions run in Node, Pi side with TZ=Europe/Berlin).
+
+## 1.7.98 – 2026-11-14
+
+- **WordPress plugin 1.1.0:** the gallery takes the theme's colours, corners and shadows by itself when the theme
+  sets the usual CSS variables (`--green`/`--accent`, `--panel`, `--line`, `--radius`, `--ink`, `--muted`,
+  `--shadow`); themes that style every `<button>` no longer change chips and cards. *Create gallery page*
+  (settings page): page with the same page header as the theme's other pages (`page-hero`: eyebrow, title,
+  intro) and the gallery below, page template selectable. **Log** of the last 100 receptions (time UTC, result,
+  source, user, reason when rejected). Phone: two images side by side. Tested with the DO1GMT theme.
+
 ## 1.7.97 – 2026-11-14
 
 - **SSTV images on your own website (WordPress):** every SSTV image (satellite, HF, Live) with ≥ 60 % of the

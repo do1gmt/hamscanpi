@@ -231,8 +231,10 @@ def _sat(e):
 
 
 # ------------------------------------------------------------------ Angaben zusammenstellen
-def utc(t):
-    return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(t))
+def utc(t, date=True):
+    """Zeit für die Angaben auf der Webseite – in der eingestellten Zeit (UTC oder Ortszeit), mit Kennung."""
+    import timefmt as TF
+    return TF.fmt(t, "%Y-%m-%d %H:%M:%S" if date else "%H:%M:%S")
 
 
 def station_section():
@@ -279,6 +281,12 @@ def pi_section():
     return {"title": "Raspberry Pi beim Empfang", "rows": [r for r in rows if r[1] is not None]}
 
 
+def _tz():
+    """Zeitzone für die Anzeige auf der Webseite (Tag der Gruppe, Uhrzeit): UTC oder die des Pi (IANA-Name)."""
+    import timefmt as TF
+    return "UTC" if TF.mode() == "utc" else (TF.tzname() or "UTC")
+
+
 def build(source, t_img, image, sections, summary_extra=None):
     """Gemeinsamer Rahmen: summary (zum Filtern/Gruppieren auf der Seite) + beschriftete Abschnitte."""
     st, st_sec = station_section()
@@ -290,7 +298,7 @@ def build(source, t_img, image, sections, summary_extra=None):
         img_rows.append(["Gegenstation verstimmt", f"{image['offset_hz']:+d} Hz"])
     summary = {"source": source, "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_img)), "mode": image.get("mode"),
                "complete": round(float(image.get("complete") or 0), 3), "call": st["call"], "locator": st["locator"],
-               "station": st["name"], **(summary_extra or {})}
+               "station": st["name"], "tz": _tz(), **(summary_extra or {})}
     return {"v": 1, "summary": summary, "image": {"mode": image.get("mode"), "complete": image.get("complete")},
             "sections": [{"title": "Bild", "rows": img_rows}, *sections, st_sec, pi_section()]}
 

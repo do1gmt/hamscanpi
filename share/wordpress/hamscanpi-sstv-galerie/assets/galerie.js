@@ -6,7 +6,8 @@
   var DAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   function dayLabel(d) { var x = new Date(d + 'T12:00:00Z'); return DAYS[x.getUTCDay()] + ', ' + x.getUTCDate() + '. ' + MONTHS[x.getUTCMonth()] + ' ' + x.getUTCFullYear(); }
-  function utc(s) { return esc(s) + '<abbr class="hsp-utc" title="koordinierte Weltzeit">UTC</abbr>'; }
+  // Uhrzeit mit Kennung der Zeitzone (UTC oder Ortszeit, wie in HamScanPi eingestellt)
+  function utc(s, tz) { tz = tz || 'UTC'; return esc(s) + '<abbr class="hsp-utc" title="' + (tz === 'UTC' ? 'koordinierte Weltzeit' : 'Ortszeit') + '">' + esc(tz) + '</abbr>'; }
   function pct(x) { return Math.round((Number(x) || 0) * 100); }
 
   function Gallery(root) {
@@ -65,13 +66,13 @@
     if (!list.length) { this.$days.innerHTML = '<p class="hsp-empty">Noch keine Bilder veröffentlicht.</p>'; return; }
     this.$days.innerHTML = order.map(function (d) {
       var ids = groups[d];
-      return '<section class="hsp-day"><h3>' + dayLabel(d) + ' <small>' + ids.length + (ids.length === 1 ? ' Bild' : ' Bilder') + ' · Datum in UTC</small></h3><div class="hsp-grid">'
+      return '<section class="hsp-day"><h3>' + dayLabel(d) + ' <small>' + ids.length + (ids.length === 1 ? ' Bild' : ' Bilder') + ' · Datum in ' + esc(list[ids[0]].tz || 'UTC') + '</small></h3><div class="hsp-grid">'
         + ids.map(function (i) {
           var it = list[i], s = it.summary || {};
           return '<button type="button" class="hsp-card" data-i="' + i + '" aria-label="' + esc(it.source + ', ' + it.time_utc + ' UTC') + '">'
             + (it.thumb ? '<img loading="lazy" decoding="async" src="' + esc(it.thumb.url) + '" alt="">' : '')
             + '<div class="hsp-bar" title="' + pct(s.complete) + ' % der Zeilen"><i style="width:' + pct(s.complete) + '%"></i></div>'
-            + '<div class="cap"><b>' + esc(it.source) + '</b><span>' + utc(it.time_utc.slice(11, 19)) + ' · ' + esc(s.mode || 'SSTV')
+            + '<div class="cap"><b>' + esc(it.source) + '</b><span>' + utc(it.time || it.time_utc.slice(11, 19), it.tz) + ' · ' + esc(s.mode || 'SSTV')
             + (s.max_el != null ? ' · max. ' + esc(s.max_el) + '°' : '') + '</span></div></button>';
         }).join('') + '</div></section>';
     }).join('');
@@ -163,10 +164,10 @@
       var s = it.summary || {};
       this.el.querySelector('.hsp-count').textContent = (i + 1) + ' / ' + this.g.items.length + (this.g.page < this.g.pages ? '+' : '');
       this.el.querySelector('.hsp-caption').innerHTML = '<b>' + esc(it.source) + '</b> · ' + esc(s.mode || 'SSTV') + ' · ' + pct(s.complete) + ' %'
-        + '<small>' + esc(dayLabel(it.day)) + ', ' + utc(it.time_utc.slice(11, 19)) + (s.call ? ' · empfangen von ' + esc(s.call) : '') + (s.locator ? ' (' + esc(s.locator) + ')' : '') + '</small>';
+        + '<small>' + esc(dayLabel(it.day)) + ', ' + utc(it.time || it.time_utc.slice(11, 19), it.tz) + (s.call ? ' · empfangen von ' + esc(s.call) : '') + (s.locator ? ' (' + esc(s.locator) + ')' : '') + '</small>';
       this.el.querySelector('.hsp-info').innerHTML = (it.sections || []).map(function (sec) {
         return '<h4>' + esc(sec.title) + '</h4><dl>' + sec.rows.map(function (r) {
-          var v = esc(r[1]).replace(/ UTC\b/g, '<abbr class="hsp-utc" title="koordinierte Weltzeit">UTC</abbr>');
+          var v = esc(r[1]).replace(/ (UTC|C?E[SD]?T|M?ESZ|MEZ)\b/g, function (m, z) { return '<abbr class="hsp-utc">' + z + '</abbr>'; });
           return '<dt>' + esc(r[0]) + '</dt><dd>' + v + '</dd>';
         }).join('') + '</dl>';
       }).join('') + '<h4>Bild</h4><dl><dt>Originaldatei</dt><dd><a href="' + esc(it.full.url) + '" target="_blank" rel="noopener" style="color:inherit">' + it.full.w + ' × ' + it.full.h + ' Pixel öffnen</a></dd></dl>';

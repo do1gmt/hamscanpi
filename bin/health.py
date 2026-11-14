@@ -75,7 +75,7 @@ def check_reboot(st):
             dur = f" Vorher lief er {h:.1f} h." if h < 72 else f" Vorher lief er {h / 24:.1f} Tage."
         NT.event("reboot", "info", "system", "System neu gestartet",
                  f"Der Pi wurde neu gestartet (vor {up / 60:.0f} min), zuletzt erreichbar "
-                 f"{time.strftime('%d.%m. %H:%M', time.localtime(last)) if last else 'unbekannt'}.{dur}",
+                 f"{__import__('timefmt').fmt(last) if last else 'unbekannt'}.{dur}",
                  fix="Ohne Absicht neu gestartet? Netzteil und Unterspannung prüfen (System → Zustand).")
     st["boot_id"] = boot
     st["boot_time"] = time.time() - up
@@ -341,7 +341,7 @@ def check_software(st):
         tle = BASE / "data" / "tle.json"
         if tle.exists() and time.time() - tle.stat().st_mtime > 3 * 86400:
             NT.raise_("tle_old", "warn", "satellite", "Bahndaten veraltet",
-                      f"Zuletzt geholt {time.strftime('%d.%m. %H:%M', time.localtime(tle.stat().st_mtime))} – "
+                      f"Zuletzt geholt {__import__('timefmt').fmt(tle.stat().st_mtime)} – "
                       "Überflugzeiten werden ungenau.", fix="Internetverbindung prüfen; von Hand holen:",
                       cmd="cd ~/hamscanpi && python3 bin/satellites.py fetch")
         else:
@@ -396,7 +396,7 @@ def check_internet(st):
     st.setdefault("offline_since", time.time())
     if time.time() - st["offline_since"] >= 900:
         NT.raise_("internet", "warn", "system",
-                  f"Kein Internet seit {time.strftime('%H:%M', time.localtime(st['offline_since']))}",
+                  f"Kein Internet seit {__import__('timefmt').hm(st['offline_since'])}",
                   "Scan, Live, Satelliten und Dekoder laufen weiter. Es fehlen: PSK Reporter (die Spots der letzten Stunde "
                   "werden nachgemeldet), Mail/Push (werden nachgeschickt), neue Bahndaten und die Zeitsynchronisation.",
                   fix="Router, WLAN bzw. Netzwerkkabel prüfen.", notify=False)

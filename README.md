@@ -452,6 +452,14 @@ their drive is mounted.
 
 Keep the old card as an emergency spare – put it back in and the Pi starts as before.
 
+## Times: UTC or local time
+
+*Settings → Station → Times*: **UTC** (default, the radio standard) or the **local time of the Pi**. It applies
+everywhere – dashboard, notices, mail, Telegram, the website – and every time carries its label (UTC, CET/MEZ,
+CEST/MESZ …); the clock top right always shows both. Internally everything is stored in UTC. Schedules keep the
+time zone they were entered in (a weekly net at 19:00 local time stays at 19:00 across the change to summer
+time) and are shown converted. Times burnt into images (waterfalls) stay UTC and are labelled so.
+
 ## SSTV images on your website
 
 Every SSTV image (satellite, HF, Live) can go to your own WordPress site with all details on satellite, pass,

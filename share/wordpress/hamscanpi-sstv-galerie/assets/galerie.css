@@ -1,14 +1,17 @@
 /* HamScanPi SSTV-Galerie – alles über Variablen anpassbar (Einstellungen → SSTV-Galerie oder im Theme):
- *   .hsp-galerie { --hsp-accent: #e8d28e; --hsp-card: …; --hsp-text: …; --hsp-muted: …; --hsp-radius: 10px;
- *                  --hsp-thumb: 220px; --hsp-gap: .9rem; --hsp-fade: 450ms; --hsp-font: inherit; }
- * Leer gelassene Farben übernehmen Schrift und Hintergrund des Themes. */
+ *   .hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-text: …; --hsp-muted: …; --hsp-line: …; --hsp-radius: …;
+ *                  --hsp-shadow: …; --hsp-thumb: 220px; --hsp-gap: .9rem; --hsp-fade: 450ms; --hsp-font: inherit; }
+ * Ohne Angabe übernimmt die Galerie die Farben des Themes, wenn es die üblichen Variablen setzt (--green bzw.
+ * --accent, --panel, --line, --radius, --ink, --muted, --shadow) – sonst Schrift und Hintergrund der Seite. */
 .hsp-galerie, .hsp-lb {
-  --hsp-accent: #e8d28e;
-  --hsp-text: inherit;
-  --hsp-muted: color-mix(in srgb, currentColor 62%, transparent);
-  --hsp-card: color-mix(in srgb, currentColor 5%, transparent);
-  --hsp-line: color-mix(in srgb, currentColor 16%, transparent);
-  --hsp-radius: 10px;
+  --hsp-accent: var(--accent, var(--green, #b8862b));
+  --hsp-text: var(--ink, inherit);
+  --hsp-muted: var(--muted, color-mix(in srgb, currentColor 62%, transparent));
+  --hsp-card: var(--panel, color-mix(in srgb, currentColor 5%, transparent));
+  --hsp-line: var(--line, color-mix(in srgb, currentColor 16%, transparent));
+  --hsp-shadow: var(--shadow, 0 6px 20px rgba(0,0,0,.18));
+  --hsp-on-accent: #fff;
+  --hsp-radius: var(--radius, 10px);
   --hsp-thumb: 220px;
   --hsp-gap: .9rem;
   --hsp-fade: 450ms;
@@ -22,17 +25,20 @@
 
 /* Kopf: Zahlen */
 .hsp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--hsp-gap); margin-bottom: 1.2rem; }
-.hsp-stat { background: var(--hsp-card); border: 1px solid var(--hsp-line); border-left: 4px solid var(--hsp-accent); border-radius: var(--hsp-radius); padding: .7rem .9rem; }
+.hsp-stat { box-shadow: var(--hsp-shadow); background: var(--hsp-card); border: 1px solid var(--hsp-line); border-left: 4px solid var(--hsp-accent); border-radius: var(--hsp-radius); padding: .7rem .9rem; }
 .hsp-stat b { display: block; font-size: 1.5rem; line-height: 1.2; }
 .hsp-stat span { font-size: .85rem; color: var(--hsp-muted); }
 
 /* Filter je Quelle */
 .hsp-filter { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.2rem; }
-.hsp-chip { font: inherit; font-size: .9rem; padding: .35rem .8rem; border-radius: 999px; border: 1px solid var(--hsp-line);
+/* viele Themes gestalten jeden <button> (Farbe, Schatten, Breite) – in der Galerie gilt unser Aussehen */
+.hsp-galerie button, .hsp-lb button { font: inherit; font-weight: 600; text-transform: none; letter-spacing: normal; box-shadow: none;
+  width: auto; min-height: 0; line-height: 1.3; }
+.hsp-galerie .hsp-chip { font-size: .9rem; padding: .35rem .8rem; border-radius: 999px; border: 1px solid var(--hsp-line);
             background: transparent; color: inherit; cursor: pointer; }
 .hsp-chip .n { opacity: .65; margin-left: .3rem; font-size: .8em; }
 .hsp-chip:hover, .hsp-chip:focus-visible { border-color: var(--hsp-accent); }
-.hsp-chip.on { background: var(--hsp-accent); border-color: var(--hsp-accent); color: #1a1408; }
+.hsp-chip.on { background: var(--hsp-accent); border-color: var(--hsp-accent); color: var(--hsp-on-accent); }
 
 /* Tage */
 .hsp-day { margin: 0 0 1.8rem; }
@@ -40,7 +46,7 @@
               display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .hsp-day h3 small { font-weight: normal; font-size: .8rem; color: var(--hsp-muted); }
 .hsp-grid { display: grid; align-items: start; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--hsp-thumb)), 1fr)); gap: var(--hsp-gap); }
-.hsp-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; padding: 0; cursor: zoom-in;
+.hsp-galerie .hsp-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; padding: 0; cursor: zoom-in; box-shadow: var(--hsp-shadow);
             background: var(--hsp-card); border: 1px solid var(--hsp-line); border-radius: var(--hsp-radius); overflow: hidden;
             transition: transform .2s, box-shadow .2s, border-color .2s; }
 .hsp-card:hover, .hsp-card:focus-visible { transform: translateY(-2px); border-color: var(--hsp-accent); box-shadow: 0 6px 20px rgba(0,0,0,.25); outline: none; }
@@ -54,9 +60,9 @@
 .hsp-bar i { display: block; height: 100%; background: var(--hsp-accent); }
 .hsp-utc { font-size: .75em; font-weight: 600; letter-spacing: .03em; padding: 0 .3em; border-radius: 4px;
            border: 1px solid currentColor; opacity: .8; margin-left: .25em; text-decoration: none; }
-.hsp-more { display: block; margin: 1rem auto; font: inherit; padding: .6rem 1.4rem; border-radius: 999px; cursor: pointer;
+.hsp-galerie .hsp-more { display: block; margin: 1rem auto; padding: .6rem 1.4rem; border-radius: 999px; cursor: pointer;
             border: 1px solid var(--hsp-accent); background: transparent; color: inherit; }
-.hsp-more:hover { background: var(--hsp-accent); color: #1a1408; }
+.hsp-more:hover { background: var(--hsp-accent); color: var(--hsp-on-accent); }
 .hsp-wait, .hsp-empty { color: var(--hsp-muted); }
 
 /* Lightbox */
@@ -71,7 +77,7 @@
 .hsp-stage img.on { opacity: 1; }
 .hsp-lb button { font: inherit; color: inherit; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
                  border-radius: 999px; cursor: pointer; }
-.hsp-lb button:hover, .hsp-lb button:focus-visible { background: var(--hsp-accent); color: #1a1408; border-color: var(--hsp-accent); outline: none; }
+.hsp-lb button:hover, .hsp-lb button:focus-visible { background: var(--hsp-accent); color: var(--hsp-on-accent); border-color: var(--hsp-accent); outline: none; }
 .hsp-prev, .hsp-next { position: absolute; top: 50%; transform: translateY(-50%); width: 2.8rem; height: 2.8rem; font-size: 1.4rem; line-height: 1; }
 .hsp-prev { left: .6rem; } .hsp-next { right: .6rem; }
 .hsp-close { position: absolute; top: .7rem; right: .7rem; width: 2.4rem; height: 2.4rem; font-size: 1.2rem; }
@@ -96,4 +102,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .hsp-stage img, .hsp-lb, .hsp-card { transition: none; }
+}
+/* Handy: zwei Bilder nebeneinander – mehr im Blick beim Durchscrollen */
+@media (max-width: 560px) {
+  .hsp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .hsp-card .cap { font-size: .78rem; padding: .4rem .5rem .5rem; }
+  .hsp-card .cap b { font-size: .85rem; }
+  .hsp-day h3 { flex-wrap: wrap; }
 }

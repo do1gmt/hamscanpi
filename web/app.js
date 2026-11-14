@@ -13,21 +13,88 @@
   };
   const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 
-  // ---------- Zeit (immer UTC, lesbar) ----------
+  // ---------- Zeitangaben: UTC oder Ortszeit des Pi (Einstellungen → Station → Zeitangaben) ----------
+  // Alle Zeiten laufen über tfmt(): eine Stelle, eine Regel, immer mit Kennung (UTC bzw. MEZ/MESZ …).
+  // Die Uhr oben rechts zeigt immer beides.
   const pad = n => String(n).padStart(2, '0');
   const EN = (window.I18N && I18N.lang === 'en');
   const WD = EN ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const WDM = EN ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];     // Mo = 0
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const TZ = { mode: 'utc', zone: 'UTC' };
   function parseT(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-  function fmtTime(s, withDate = true) {
-    const d = parseT(s); if (!d) return '–';
-    const t = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-    if (!withDate) return t + ' UTC';
-    const today = new Date();
-    const sameDay = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
-    // Englisch: „Sat 24 Oct“ statt „24/10“ – in den USA stünde 05/10 sonst für den 10. Mai
-    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return (sameDay ? (EN ? 'today ' : 'heute ') : (EN ? `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ` : `${WD[d.getUTCDay()]} ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}. `)) + t + ' UTC';
+  function toDate(x) {
+    if (x == null || x === '') return null;
+    if (x instanceof Date) return isNaN(x) ? null : x;
+    if (typeof x === 'number') return new Date(x < 1e12 ? x * 1000 : x);        // Sekunden oder Millisekunden
+    return parseT(x);
   }
+  const _dtf = {};
+  function tparts(d, zone = TZ.zone) {
+    const k = zone || '-';
+    let f = _dtf[k];
+    if (!f) {
+      try { f = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short' }); }
+      catch (e) { f = new Intl.DateTimeFormat('en-GB', { hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short' }); }
+      _dtf[k] = f;
+    }
+    const o = {}; for (const p of f.formatToParts(d)) o[p.type] = p.value;
+    return { Y: +o.year, M: +o.month, D: +o.day, h: +o.hour % 24, m: +o.minute, s: +o.second, wd: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(o.weekday) };
+  }
+  function tzLabel(d = new Date()) { return TZ.mode === 'utc' ? 'UTC' : zoneAt(d, TZ.zone); }
+  // tfmt(x, {date: 'auto' (heute/Datum) | true | false, sec, year, label: false = ohne Kennung})
+  function tfmt(x, o = {}) {
+    const d = toDate(x); if (!d) return '–';
+    const p = tparts(d), date = o.date === undefined ? 'auto' : o.date;
+    let t = `${pad(p.h)}:${pad(p.m)}` + (o.sec ? ':' + pad(p.s) : '');
+    if (date) {
+      const n = tparts(new Date()), same = p.Y === n.Y && p.M === n.M && p.D === n.D;
+      // Englisch: „Sat 24 Oct“ statt „24/10“ – in den USA stünde 05/10 sonst für den 10. Mai
+      const ds = EN ? `${WDM[p.wd]} ${p.D} ${MON[p.M - 1]}${o.year ? ' ' + p.Y : ''}` : `${WDM[p.wd]} ${pad(p.D)}.${pad(p.M)}.${o.year ? p.Y : ''}`;
+      t = (date === 'auto' && same ? (EN ? 'today ' : 'heute ') : ds + ' ') + t;
+    }
+    return o.label === false ? t : `${t} ${tzLabel(d)}`;
+  }
+  // Uhrzeit „HHMM“/„HH:MM“ in UTC (EiBi-Sendepläne) in die eingestellte Zeit, für heute
+  function utcHM(v) {
+    const m = String(v || '').match(/^(\d{1,2}):?(\d{2})$/); if (!m) return v || '';
+    const d = new Date(); d.setUTCHours(+m[1] % 24, +m[2], 0, 0);
+    return tfmt(d, { date: false, label: false });
+  }
+  // Zeitpläne: jeder Eintrag hat seine Zeitzone (utc/local – wie beim Anlegen eingestellt); angezeigt wird er in der
+  // gerade eingestellten Zeit. Umgerechnet über das nächste Vorkommen (Sommer-/Winterzeit stimmt dann).
+  function zoneOffsetMs(zone, d) { const p = tparts(d, zone); return Date.UTC(p.Y, p.M - 1, p.D, p.h, p.m, p.s) - Math.floor(d.getTime() / 1000) * 1000; }
+  function wallToDate(zone, Y, M, D, h, m) {
+    const g = Date.UTC(Y, M - 1, D, h, m);
+    const t1 = g - zoneOffsetMs(zone, new Date(g));
+    return new Date(g - zoneOffsetMs(zone, new Date(t1)));
+  }
+  function schedShown(r) {
+    const src = r.tz === 'utc' ? 'utc' : 'local';
+    if (src === TZ.mode || !r.days || !r.days.length) return { days: r.days, from: r.from, to: r.to };
+    const piZone = (settings && settings.pi_tzname) || undefined;
+    const sz = src === 'utc' ? 'UTC' : piZone, dz = TZ.mode === 'utc' ? 'UTC' : piZone;
+    const now = new Date(), n = tparts(now, sz);
+    const conv = hhmm => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const ahead = (r.days[0] - n.wd + 7) % 7;                 // nächster Tag mit diesem Eintrag
+      const base = new Date(Date.UTC(n.Y, n.M - 1, n.D + ahead));
+      const d = wallToDate(sz, base.getUTCFullYear(), base.getUTCMonth() + 1, base.getUTCDate(), h, m);
+      const p = tparts(d, dz);
+      return { hm: `${pad(p.h)}:${pad(p.m)}`, shift: (p.wd - r.days[0] + 8) % 7 - 1 };     // -1, 0 oder +1 Tag
+    };
+    const f = conv(r.from), t = conv(r.to);
+    return { days: r.days.map(x => (x + f.shift + 7) % 7).sort((a, b) => a - b), from: f.hm, to: t.hm };
+  }
+  function tday(x) { const d = toDate(x); return d ? WDM[tparts(d).wd] : ''; }
+  function tdate(x) { const d = toDate(x); if (!d) return '–'; const p = tparts(d); return EN ? `${p.D} ${MON[p.M - 1]} ${p.Y}` : `${pad(p.D)}.${pad(p.M)}.${p.Y}`; }
+  function tzApply(s) {
+    TZ.mode = s && s.time_mode === 'local' ? 'local' : 'utc';
+    TZ.zone = TZ.mode === 'utc' ? 'UTC' : ((s && s.pi_tzname) || undefined);       // unbekannt: Zeitzone des Browsers
+    document.querySelectorAll('.tzl').forEach(e => { e.textContent = tzLabel(); });
+    const ut = document.getElementById('uiTime'); if (ut) ut.value = TZ.mode;
+  }
+  function fmtTime(s, withDate = true) { return tfmt(s, { date: withDate ? 'auto' : false, sec: true }); }
   function fmtRel(s) {
     const d = parseT(s); if (!d) return '';
     const diff = Math.round((d - Date.now()) / 1000);
@@ -39,11 +106,11 @@
   function fmtMHz(hz) { return (hz / 1e6).toFixed(4); }
   // Kürzel der Ortszeit (MESZ, MEZ, CEST …) – überall dort, wo Ortszeit statt UTC steht
   // Das Kürzel gilt für den jeweiligen Zeitpunkt: in der Nacht der Zeitumstellung stehen MESZ und MEZ nebeneinander
-  function zoneAt(d) {
+  function zoneAt(d, zone) {
     // Kürzel in der Sprache des Browsers: so heißt es in New York „EDT“, in Tokio „JST“, in Sydney „AEDT“
     // (mit fester Sprache gäbe es dort nur „GMT-4“ usw.); in Deutschland bleibt es „MESZ“/„MEZ“
     for (const lang of [navigator.language, EN ? 'en-GB' : 'de']) {      // ungültige Sprachkennung → Rückfall
-      try { const z = new Intl.DateTimeFormat(lang, { timeZoneName: 'short' }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value; if (z) return z; }
+      try { const z = new Intl.DateTimeFormat(lang, { timeZoneName: 'short', timeZone: zone }).formatToParts(d).find(p => p.type === 'timeZoneName')?.value; if (z) return z; }
       catch (e) { }
     }
     return EN ? 'local' : 'Ortszeit';
@@ -53,7 +120,6 @@
     const z = zoneAt(new Date());
     if (z !== ZONE || !$('clockZone').dataset.set) {
       ZONE = z; $('clockZone').textContent = z; $('clockZone').dataset.set = '1';
-      $('satTimeHead').textContent = `Zeit (${z})`;
       try { if (satData) renderSatPasses(); } catch (e) { }   // beim ersten Aufruf gibt es satData noch nicht
     }
   }
@@ -111,6 +177,7 @@
 
   async function loadSettings() {
     settings = await api('/api/settings');
+    tzApply(settings);
     setTimeout(() => { try { renderCountry(); } catch (e) { } try { applyLiveState(); } catch (e) { } }, 0);
     const iv = $('interval');
     iv.innerHTML = settings.allowed_intervals.map(m => `<option value="${m}">${intervalLabel(m)}</option>`).join('');
@@ -349,7 +416,7 @@
   const C_KM_S = 299792.458, R_EARTH = 6371.0;
   const COMPASS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const compass = az => { const c = COMPASS[Math.round(az / 22.5) % 16]; return I18N.lang === 'en' ? c.replace(/O/g, 'E') : c; };
-  const hm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+  const hm = t => tfmt(t, { date: false });
   const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} h` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`; };
   function trkAt(t) {                                   // zwischen zwei Bahnpunkten linear (Azimut/Länge über 360° hinweg)
     const P = trk.d.points; if (!P.length || t < P[0].t || t > P[P.length - 1].t) return null;
@@ -477,8 +544,8 @@
     const b = p.beam; if (!b) return '';
     if (!b.band) return '<br><span class="bad">Antenne: falsches Band</span>';
     if (!b.secs || b.secs < 60) return '<br><span>nicht im Strahl</span>';
-    const hm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
-    return `<br><span class="ok">im Strahl ${hm(b.start)}–${hm(b.end)}, bis ${Math.round(b.max_el)}°</span>`;
+    const hm = t => tfmt(t, { date: false, label: false });
+    return `<br><span class="ok">im Strahl ${hm(b.start)}–${hm(b.end)} ${tzLabel(toDate(b.start))}, bis ${Math.round(b.max_el)}°</span>`;
   }
   // Pegelanzeige: dB über dem Rauschen (kein S-Meter – der RTL-Stick ist nicht in dBm kalibriert).
   // Balken 0–40 dB mit Skala, Zahl, Spitzenmarke (höchster Wert der letzten 10 s) und Verlauf.
@@ -520,7 +587,7 @@
     const busy = s.state === 'running' || s.state === 'queued';
     const lw = s.live_watch;
     if (lw && !busy) {
-      const end = lw.until ? ' · bis ' + new Date(lw.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' }) : '';
+      const end = lw.until ? ' · bis ' + tfmt(lw.until, { date: false }) : '';
       setPill(lw.paused_for ? `Dauerwache pausiert (${lw.paused_for})` : `Dauerwache ${(lw.freq_hz / 1e6).toFixed(3)} ${String(lw.mode || '').toUpperCase()}${end}`, 'running');
     } else if (s.live_active && !busy) { setPill('Live-Empfang', 'running'); }
     // ein Fehler von vor über einer Stunde ist Vergangenheit: neutral „Bereit“, der Grund steht klein darunter
@@ -548,7 +615,7 @@
     const nextPast = s.next_scan_at && new Date(s.next_scan_at) < Date.now();
     const pp = s.scan_postponed;
     $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade'
-      : pp && nextPast ? `nach Überflug ${pp.name} (${new Date(pp.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })})`
+      : pp && nextPast ? `nach Überflug ${pp.name} (${tfmt(pp.until, { date: false })})`
       : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
     // nur bei einem Fehler, der gerade passiert (nicht beim Öffnen der Seite für einen alten Lauf)
     if (s.state === 'error' && lastState && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
@@ -665,8 +732,8 @@
       const c = root.querySelector('.hit'); if (c && !c.classList.contains('open')) c.querySelector('.hit-head, summary')?.click();
     }
     if (filter.last && !filter.id) {                  // nur der letzte Lauf: Zeitraum nennen, Rückweg anbieten
-      const L = d.last_run, hm = t => t ? new Date(t).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' }) : '…';
-      $('hitCount').innerHTML = `${d.hits.length} ${EN ? 'hits of the last run' : 'Treffer im letzten Lauf'}${L ? ` (${hm(L.from)}–${hm(L.to)})` : ''} <button type="button" class="btn btn-small" id="hitLastClear">${EN ? 'show all hits' : 'alle Treffer zeigen'}</button>`;
+      const L = d.last_run, hm = t => t ? tfmt(t, { date: false, label: false }) : '…';
+      $('hitCount').innerHTML = `${d.hits.length} ${EN ? 'hits of the last run' : 'Treffer im letzten Lauf'}${L ? ` (${hm(L.from)}–${hm(L.to)} ${tzLabel()})` : ''} <button type="button" class="btn btn-small" id="hitLastClear">${EN ? 'show all hits' : 'alle Treffer zeigen'}</button>`;
       $('hitLastClear').addEventListener('click', () => setLastFilter(false));
     }
     $('statNew').closest('.stat').classList.toggle('active', !!filter.last);
@@ -1036,7 +1103,7 @@
     renderLiveDec(on ? st.decode : null);
     if (on && document.activeElement !== $('liveWatch')) $('liveWatch').checked = !!st.watch;
     if (on && st.watch && st.watch.until && document.activeElement !== $('liveWatchUntil')) {
-      const u = new Date(st.watch.until * 1000); $('liveWatchUntil').value = `${String(u.getHours()).padStart(2, '0')}:${String(u.getMinutes()).padStart(2, '0')}`;
+      $('liveWatchUntil').value = tfmt(st.watch.until, { date: false, label: false });     // in der eingestellten Zeit
     }
   }
   function liveEnsureCtx() {
@@ -1298,12 +1365,12 @@
         const main = mainKeys.filter(k => data[k] != null).map(k => `${KEY_TEXT[k] || k}: ${esc(fmtVal(k, data[k]))}`).join(' · ');
         const all = Object.entries(data).map(([k, v]) => `<tr><td>${esc(KEY_TEXT[k] || k)}</td><td class="mono">${esc(fmtVal(k, v))}</td></tr>`).join('');
         // Uhrzeit; ältere Tage mit Datum darunter (passt in die schmale Spalte)
-        const full = fmtTime(r.ts, true).replace(' UTC', '').replace(/^(heute|today) /, '');
+        const full = tfmt(r.ts, { sec: true, label: false }).replace(/^(heute|today) /, '');
         const mt = full.match(/^(.*\S)\s+(\d\d:\d\d:\d\d)$/);
         const when = mt ? `${mt[2]}<br><small class="muted">${esc(mt[1].replace(/^\S+\s+/, ''))}</small>` : full;
-        const span = n > 1 ? `<span class="rep">${n}× seit ${fmtTime(first, true).replace(' UTC', '').replace(/^(heute|today) /, '')}</span>` : '';
+        const span = n > 1 ? `<span class="rep">${n}× seit ${tfmt(first, { sec: true, label: false }).replace(/^(heute|today) /, '')}</span>` : '';
         return `<li class="${r.level}"><span>${when}</span><span class="lv">${r.level}</span><span>${esc(r.component)}</span><div class="lmain"><details><summary><b>${esc(evName)}</b> ${span} <span class="d">${main}</span></summary>
-          <table class="table log-detail"><tr><td>Ereignis</td><td class="mono">${esc(r.event)}</td></tr>${all}<tr><td>Zeit (UTC)</td><td class="mono">${esc(r.ts)}</td></tr></table></details></div></li>`;
+          <table class="table log-detail"><tr><td>Ereignis</td><td class="mono">${esc(r.event)}</td></tr>${all}<tr><td>Zeit</td><td class="mono">${esc(tfmt(r.ts, { date: true, year: true, sec: true }))} · ${esc(r.ts)}</td></tr></table></details></div></li>`;
       }).join('') || '<li>keine Einträge</li>';
       $('logPos').textContent = d.entries.length ? `Einträge ${logPage.offset + 1}–${logPage.offset + d.entries.length}` : '';
       $('logPrev').disabled = logPage.offset === 0; $('logNext').disabled = !d.has_more;
@@ -1380,7 +1447,7 @@
     // quittierte Hinweise verschwinden (Haken „behobene und quittierte zeigen“ holt sie zurück); kommt der Fehler
     // neu, erscheinen sie wieder
     const items = d.items.filter(r => showOld || (r.active && !r.acked));
-    const tm = x => new Date(x * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const tm = x => tfmt(x, { date: true });
     $('noticeSummary').textContent = d.open ? `${d.open} offen` : 'alles in Ordnung';
     const en = I18N.lang === 'en';
     $('noticeList').innerHTML = items.length ? items.map(r => { const T = en && r.en ? r.en : r; return `<div class="notice ${r.level}${r.active ? '' : ' done'}${r.acked ? ' acked' : ''}">
@@ -1587,7 +1654,7 @@
       `<a href="/api/live/recording/${encodeURIComponent(r.name)}" download>${esc(r.name)}</a> <small class="muted">(${r.seconds} s)</small>`).join(' · ') : '';
     if (d.seq === liveDecSeq) return;
     liveDecSeq = d.seq;
-    const tm = t => new Date(t * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const tm = t => tfmt(t, { date: false, sec: true });
     $('liveDecCount').textContent = (d.events || []).length ? `${d.events.length}` : '';
     if (!(d.events || []).length) return;
     $('liveDecList').innerHTML = (d.events || []).slice(0, 60).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
@@ -1660,8 +1727,8 @@
       if (!parts.length) parts.push(future.length ? 'Aufnahme startet 15 s vor dem Aufgang. Überschneiden sich Überflüge, entscheidet die Punktzahl (Priorität, Höhe, Wartezeit, Aktivität – einstellbar unter Einstellungen). Passen die Frequenzen in ein Empfangsfenster, werden die Satelliten gemeinsam aufgenommen.' : 'In den nächsten 24 h kein Überflug über 10° Höhe.');
       hint.textContent = parts.join(' ');
     }
-    const t = x => new Date(x * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
-    const day = x => new Date(x * 1000).toLocaleDateString(I18N.locale, { weekday: 'short' });
+    const t = x => tfmt(x, { date: false, label: false });
+    const day = x => tday(x);
     const showPast = $('satShowPast').checked, showAll = $('satShowAll').checked;
     let list = (d.passes || []).filter(p => showPast || p.los > now);
     // „vergangene zeigen“: die jüngsten 10 vergangenen und die nächsten Überflüge (nicht die ältesten)
@@ -1710,7 +1777,7 @@
         plan = `<span class="${cls}"><span>${esc(r.text)}</span>${r.state === 'done' ? ` · <span>${r.hits || 0} Treffer</span>` : ''}</span>${r.error ? `<br><small class="muted">${esc(r.error)}</small>` : ''}${sigTxt}${lineTxt}${rig}`;
       } else if (p.status === 'skipped' && p.below) plan = `<span class="muted">${EN ? 'too low' : 'zu niedrig'}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else if (p.status === 'skipped') plan = `<span class="bad">übersprungen</span><br><small class="muted">${esc(p.reason)}</small>`;
-      else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${zoneAt(new Date(p.rec_start * 1000))}</span><br><small class="muted">${esc(p.reason)}</small>`;
+      else if (p.status === 'partial') plan = `<span class="part">${t(p.rec_start)}–${t(p.rec_end)} ${tzLabel(toDate(p.rec_start))}</span><br><small class="muted">${esc(p.reason)}</small>`;
       else plan = p.prio <= 2 ? '<span class="muted">wenn Stick frei</span>' : '<span class="ok">voll</span>';
       const when = past ? `vor ${fmtSpan(now - p.los)}` : live ? 'läuft gerade' : 'in ' + fmtSpan(p.aos - now);
       if (p.score != null && !p.below) {
@@ -1719,7 +1786,7 @@
       }
       return `<tr class="${live ? 'sat-now' : ''}${past || p.below ? ' sat-past' : ''}">
         <td><b>${esc(p.name)}</b> <button type="button" class="track-btn" data-track="${p.norad}|${p.aos}|${p.los}|${p.center_hz || ''}|${esc(p.name)}" title="Flugbahn ansehen" aria-label="Flugbahn ansehen">🛰</button><br><small>${ch} MHz</small>${dropped}</td>
-        <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${zoneAt(new Date(p.aos * 1000)) === ZONE ? 'tz-m' : 'tz-diff'}"> ${zoneAt(new Date(p.aos * 1000))}</span><br><small class="muted">${when}</small></td>
+        <td>${day(p.aos)} ${t(p.aos)}–${t(p.los)}<span class="${tzLabel(toDate(p.aos)) === tzLabel() ? 'tz-m' : 'tz-diff'}"> ${tzLabel(toDate(p.aos))}</span><br><small class="muted">${when}</small></td>
         <td>${Math.round(p.max_el)}°<br><small class="muted">${p.aos_az ?? ''}°→${p.los_az ?? ''}°${p.min_km ? `<br><span title="kürzeste Entfernung (am höchsten Punkt)">↓ ${Number(p.min_km).toLocaleString(I18N.locale)} km</span>` : ''}${beamTxt(p)}</small></td><td>${plan}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">keine Überflüge</td></tr>';
     const foot = [];
@@ -1804,16 +1871,18 @@
     if (!settings) return;
     const act = settings.schedule_active;
     $('schedActiveNote').hidden = !act;
-    if (act) $('schedActiveNote').textContent = `Zeitplan „${act.name}“ aktiv bis ${act.to} – gescannt wird gerade: ${act.bands.join(', ')}`;
+    if (act) { const sh = schedShown({ days: [tparts(new Date(), act.tz === 'utc' ? 'UTC' : (settings.pi_tzname || undefined)).wd], from: act.to, to: act.to, tz: act.tz });
+      $('schedActiveNote').textContent = `Zeitplan „${act.name}“ aktiv bis ${sh.to} ${tzLabel()} – gescannt wird gerade: ${act.bands.join(', ')}`; }
     $('schedHint').dataset.pi = `${settings.pi_time} ${settings.pi_tz}`;
     const list = settings.schedules || [];
     $('schedList').innerHTML = list.length ? `<table class="table watch-table"><tbody>${list.map((r, i) => {
-      const days = r.days.length === 7 ? 'täglich' : r.days.map(d => DAYS[d]).join(' ');
+      const sh = schedShown(r);
+      const days = sh.days.length === 7 ? 'täglich' : sh.days.map(d => DAYS[d]).join(' ');
       const on = act && act.name === r.name;
       return `<tr class="${on ? 'sched-now' : ''}"><td><label class="check"><input type="checkbox" data-si="${i}" ${r.enabled ? 'checked' : ''}> <b>${esc(r.name)}</b>${on ? ' <span class="badge badge-new">aktiv</span>' : ''}</label>
-        <small class="muted">${esc(days)} · ${r.from}–${r.to} · ${esc(r.bands.join(', '))}</small></td>
+        <small class="muted">${esc(days)} · ${sh.from}–${sh.to} ${tzLabel()} · ${esc(r.bands.join(', '))}</small></td>
         <td><button type="button" class="btn btn-small btn-danger" data-sdel="${i}">✕</button></td></tr>`; }).join('')}</tbody></table>
-        <p class="hint">Uhrzeiten in der Ortszeit des Pi (jetzt ${esc(settings.pi_time)} ${esc(settings.pi_tz)}).</p>` : '<p class="muted">Noch kein Zeitplan.</p>';
+        <p class="hint">Uhrzeiten in ${TZ.mode === 'utc' ? 'UTC' : 'der Ortszeit des Pi'} (jetzt ${esc(tfmt(new Date(), { date: false }))}) – umschalten unter Einstellungen → Station → Zeitangaben.</p>` : '<p class="muted">Noch kein Zeitplan.</p>';
     $('schedList').querySelectorAll('[data-si]').forEach(cb => cb.addEventListener('change', () => { const l = [...settings.schedules]; l[cb.dataset.si] = { ...l[cb.dataset.si], enabled: cb.checked }; saveSchedules(l); }));
     $('schedList').querySelectorAll('[data-sdel]').forEach(b => b.addEventListener('click', () => { const l = [...settings.schedules]; l.splice(Number(b.dataset.sdel), 1); saveSchedules(l); }));
     $('scDays').innerHTML = ''; DAYS.forEach((d, i) => { const c = chip(d, scSel.days.has(i)); c.addEventListener('click', () => { scSel.days.has(i) ? scSel.days.delete(i) : scSel.days.add(i); renderSchedules(); }); $('scDays').appendChild(c); });
@@ -1830,7 +1899,8 @@
     try { const d = await api('/api/settings'); Object.assign(settings, { schedule_active: d.schedule_active, pi_time: d.pi_time, pi_tz: d.pi_tz }); renderSchedules(); } catch (e) { }
   }, 60000);
   $('scAdd').addEventListener('click', async () => {
-    const sc = { name: $('scName').value.trim(), from: $('scFrom').value, to: $('scTo').value, days: [...scSel.days], bands: [...scSel.bands], enabled: true };
+    const sc = { name: $('scName').value.trim(), from: $('scFrom').value, to: $('scTo').value, days: [...scSel.days], bands: [...scSel.bands], enabled: true,
+                 tz: TZ.mode };                                   // eingegeben in der gerade eingestellten Zeit
     if (await saveSchedules([...(settings.schedules || []), sc], '✓ Zeitplan gespeichert')) { $('scName').value = ''; scSel.bands.clear(); renderSchedules(); }
   });
 
@@ -1988,7 +2058,7 @@
           : '<p class="muted">Diese Station hat keinen Locator gesendet (FT8 meist nur beim CQ-Ruf) – darum nicht auf der Karte.</p>'}
         <h3>Bänder und Betriebsarten</h3><p>${per || '–'}</p>
         <h3>Alle Empfänge <small class="muted">${a}–${b} / ${d.total}</small></h3>
-        <div class="table-wrap"><table class="table st-recs"><thead><tr><th>Zeit (UTC)</th><th>Band</th><th>MHz</th><th>Art</th><th>SNR</th><th>Locator</th><th>Nachricht</th><th>Antenne</th><th>Quelle</th></tr></thead><tbody>${recs}</tbody></table></div>
+        <div class="table-wrap"><table class="table st-recs"><thead><tr><th>Zeit (${tzLabel()})</th><th>Band</th><th>MHz</th><th>Art</th><th>SNR</th><th>Locator</th><th>Nachricht</th><th>Antenne</th><th>Quelle</th></tr></thead><tbody>${recs}</tbody></table></div>
         <div class="actions"><button type="button" class="btn" id="stdPrev" ${d.offset ? '' : 'disabled'}>◀ neuer</button><button type="button" class="btn" id="stdNext" ${b >= d.total ? 'disabled' : ''}>älter ▶</button></div>`;
       $('stdPrev').addEventListener('click', () => openStation(d.call, Math.max(0, d.offset - d.limit)));
       $('stdNext').addEventListener('click', () => openStation(d.call, d.offset + d.limit));
@@ -2158,7 +2228,7 @@
       + `<td>${n.fallback ? (EN ? 'fallback' : 'Ausweich') : (EN ? 'main Wi-Fi' : 'Haupt-WLAN')}</td>`
       + `<td>${n.fallback ? `<button type="button" class="btn btn-small btn-danger" data-wifirm="${esc(n.name)}">${EN ? 'Remove' : 'Entfernen'}</button>` : ''}</td></tr>`).join('')
       || `<tr><td colspan="3" class="muted">${d.helper ? '–' : (EN ? 'Not available yet – install the update once.' : 'Noch nicht verfügbar – einmal das Update einspielen.')}</td></tr>`;
-    const fmt = t => new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const fmt = t => tfmt(t, { date: true });
     $('wifiLog').innerHTML = (d.log || []).length ? (d.log || []).map(x => `<div>${fmt(x.from)} · ${x.minutes} min · ${esc(x.fixed_by)}</div>`).join('')
       : (EN ? 'No outage recorded.' : 'Kein Ausfall aufgezeichnet.');
   }
@@ -2192,7 +2262,7 @@
     $('updRun').disabled = d.running || !d.unit || upToDate;
     $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`)
       : upToDate ? (EN ? 'Up to date' : 'Aktuell') : (EN ? 'Update now' : 'Jetzt aktualisieren');
-    const when = d.checked ? new Date(d.checked * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+    const when = d.checked ? tfmt(d.checked, { date: true, year: true }) : null;
     $('updChecked').textContent = when ? (EN ? `Last checked: ${when}` : `Zuletzt geprüft: ${when}`) + (d.check_error ? (EN ? ` – failed (${d.check_error})` : ` – fehlgeschlagen (${d.check_error})`) : '')
       : (EN ? 'Not checked yet.' : 'Noch nicht geprüft.');
     if (!document.activeElement || document.activeElement.id !== 'updDays') $('updDays').value = String(d.check_days ?? 1);
@@ -2314,7 +2384,7 @@
     if (!$('locCheck').hidden) return;
     let d; try { d = await api('/api/location-check'); } catch (e) { return; }
     if (!d.pending) return;
-    const since = d.since ? new Date(d.since * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const since = d.since ? tfmt(d.since, { date: true }) : '';
     $('locText').textContent = EN
       ? `Since ${since} HamScanPi has been in a different network (${d.ip}${d.old_ip ? ` instead of ${d.old_ip}` : ''}). Was the Pi moved? Is the locator ${d.locator || '(none)'} still right?`
       : `HamScanPi hängt seit ${since} in einem anderen Netz (${d.ip}${d.old_ip ? ` statt ${d.old_ip}` : ''}). Wurde der Pi woanders hingestellt? Stimmt der Locator ${d.locator || '(keiner)'} noch?`;
@@ -2380,7 +2450,7 @@
     if (!d.items.length) { $('liveEibi').hidden = false; $('liveEibi').innerHTML = `<span class="muted">EiBi: auf ${khz.toLocaleString(I18N.locale)} kHz (±5) laut Plan gerade nichts.</span>`; return; }
     const top = d.items[0], rest = d.items.slice(1, 6);
     $('liveEibi').hidden = false;
-    $('liveEibi').innerHTML = `<b>EiBi ${top.khz} kHz:</b> <b class="no-i18n">${esc(top.station)}</b> · ${(top.lang_name || top.lang) ? esc(top.lang_name || top.lang) + ' ' : ''}→ ${esc(top.target_name || top.target)} · <span class="muted">${esc(eibiSite(top))} · ${EN ? 'until' : 'bis'} ${top.until} UTC${top.unsure ? (EN ? ' · irregular' : ' · unregelmäßig') : ''}</span>`
+    $('liveEibi').innerHTML = `<b>EiBi ${top.khz} kHz:</b> <b class="no-i18n">${esc(top.station)}</b> · ${(top.lang_name || top.lang) ? esc(top.lang_name || top.lang) + ' ' : ''}→ ${esc(top.target_name || top.target)} · <span class="muted">${esc(eibiSite(top))} · ${EN ? 'until' : 'bis'} ${utcHM(top.until)} ${tzLabel()}${top.unsure ? (EN ? ' · irregular' : ' · unregelmäßig') : ''}</span>`
       + (rest.length ? `<div class="muted eibi-alt">${EN ? 'also' : 'auch'}: ${rest.map(x => `${x.khz} <span class="no-i18n">${esc(x.station)}</span> (${esc(x.lang_name || x.lang || '')})`).join(' · ')}</div>` : '');
   }
   setInterval(() => { if (!$('liveEibi').hidden || lf() < 30e6) eibiNow(true); }, 60000);
@@ -2399,10 +2469,10 @@
     $('eibiCount').textContent = d.items.length ? `· ${d.items.length}` : '';
     $('eibiList').innerHTML = d.items.slice(0, 400).map(x => `<tr class="eibi-row" data-khz="${x.khz}" title="antippen: Live in AM auf ${x.khz} kHz">`
       + `<td class="mono-num"><b>${x.khz}</b></td><td class="no-i18n">${esc(x.station)}${x.unsure ? ` <small class="muted">(${EN ? 'irregular' : 'unregelmäßig'})</small>` : ''}</td>`
-      + `<td>${esc(x.lang_name || x.lang || '')}</td><td>${esc(x.target_name || x.target || '')}</td><td>${esc(eibiSite(x))}</td><td class="mono-num">${x.until}</td></tr>`).join('')
+      + `<td>${esc(x.lang_name || x.lang || '')}</td><td>${esc(x.target_name || x.target || '')}</td><td>${esc(eibiSite(x))}</td><td class="mono-num">${utcHM(x.until)}</td></tr>`).join('')
       || `<tr><td colspan="6" class="muted">${d.status.count ? 'Gerade nichts für diese Auswahl.' : 'EiBi-Sendeplan noch nicht geladen – „Liste verwalten“ → „Jetzt neu holen“.'}</td></tr>`;
     const S = d.status;
-    $('eibiStatus').textContent = S.count ? `Saison ${String(S.season || '').toUpperCase()} · ${S.count} Einträge · ${S.sites} Senderstandorte · geholt ${S.fetched ? new Date(S.fetched * 1000).toLocaleDateString(I18N.locale) : '–'}`
+    $('eibiStatus').textContent = S.count ? `Saison ${String(S.season || '').toUpperCase()} · ${S.count} Einträge · ${S.sites} Senderstandorte · geholt ${S.fetched ? tdate(S.fetched) : '–'}`
       + (S.season && S.current_season && S.season !== S.current_season ? ` · noch Liste der vorigen Saison (${S.current_season.toUpperCase()} noch nicht erschienen)` : '')
       + (S.error ? ` · letzter Versuch fehlgeschlagen` : '') : (S.error ? `Noch keine Liste – Herunterladen fehlgeschlagen: ${S.error}` : '');
   }
@@ -2439,7 +2509,7 @@
       $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || settings.station_name || 'HamScanPi';
     }
     $('wxSum').textContent = c.enabled ? `· an ${c.targets}` : '· aus';
-    const ago = t => t ? new Date(t * 1000).toLocaleString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
+    const ago = t => t ? tfmt(t, { date: false, sec: true }) : '–';
     const bad = Object.entries(st.targets || {}).filter(([k, v]) => v.error).map(([k, v]) => `${k}: ${v.error}`);
     $('wxState').textContent = c.enabled ? `Gesendet: ${st.sent || 0} Pakete · zuletzt ${ago(st.last_ok)}${st.pending ? ` · wartend ${st.pending}` : ''}${st.dropped ? ` · verworfen ${st.dropped}` : ''}`
       + (bad.length ? ` · nicht erreichbar: ${bad.join('; ')}` : '') : '';
@@ -2460,9 +2530,9 @@
   // ---------- System: zuletzt an PSK Reporter gemeldet ----------
   async function loadPsk() {
     let d; try { d = await api('/api/pskreporter'); } catch (e) { return; }
-    const L = d.last, utc = t => new Date(t * 1000).toISOString().slice(11, 19);
+    const L = d.last, utc = t => tfmt(t, { date: false, sec: true, label: false });
     const sinceTxt = t => { const m = Math.round((Date.now() / 1000 - t) / 60); return m < 60 ? `vor ${m} min` : `vor ${Math.round(m / 60)} h`; };
-    $('pskWhen').textContent = L ? `· ${new Date(L.t * 1000).toLocaleString(I18N.locale, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })} (${sinceTxt(L.t)}) · ${L.spots} Spots` : '';
+    $('pskWhen').textContent = L ? `· ${tfmt(L.t, { date: true })} (${sinceTxt(L.t)}) · ${L.spots} Spots` : '';
     $('pskList').innerHTML = L && L.list && L.list.length ? L.list.slice(0, 15).map(x => `<tr><td><b class="no-i18n">${esc(x.call)}</b></td>`
       + `<td class="mono-num">${(x.freq_hz / 1e6).toFixed(6)}</td><td>${esc(x.band || '')}</td><td>${esc(x.mode)}</td>`
       + `<td class="mono-num">${x.snr != null ? (x.snr > 0 ? '+' : '') + Math.round(x.snr) + ' dB' : '–'}</td><td class="no-i18n">${esc(x.grid || '')}</td>`
@@ -2471,12 +2541,12 @@
     const parts = [];
     if (!d.enabled) parts.push('Melden ist aus – Einstellungen → Station → „FT8/FT4-Spots an PSK Reporter melden“.');
     else if (!d.ready) parts.push('Rufzeichen und Locator fehlen (Einstellungen → Station).');
-    if (d.offline_since) parts.push(`Kein Internet seit ${new Date(d.offline_since * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })} – die Spots werden nachgemeldet.`);
+    if (d.offline_since) parts.push(`Kein Internet seit ${tfmt(d.offline_since, { date: false })} – die Spots werden nachgemeldet.`);
     const N = d.now || {};
     if (N.receiver || N.locator)                            // was gemeldet wird: immer aus den Einstellungen
       parts.push(`Empfänger ${N.receiver || '–'} · ${N.locator || '–'} · ${N.software || ''} (Einstellungen → Station).`);
     if (L) {
-      const when = L.t ? new Date(L.t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const when = L.t ? tfmt(L.t, { date: true }) : '';
       const diff = [L.receiver !== N.receiver && L.receiver, L.locator !== N.locator && L.locator, L.software !== N.software && L.software].filter(Boolean);
       parts.push(`Letzte Meldung ${when}: ${L.packets} Paket(e)${diff.length ? ` – damals noch mit ${diff.join(' · ')}` : ''}. Je Rufzeichen, Band und Art ein Spot pro Meldung, höchstens alle 5 Minuten. Gezeigt die neuesten 15.`);
     }
@@ -2494,7 +2564,7 @@
     $('bkUploaded').hidden = !m;
     if (!m) return;
     const scope = { settings: 'Einstellungen', data: 'Einstellungen + Datenbestände', all: 'Einstellungen + Datenbestände + Aufnahmen' }[m.scope] || m.scope;
-    $('bkInfo').innerHTML = `<b>Sicherung vom ${esc(new Date(m.created).toLocaleString(I18N.locale))}</b> · Version ${esc(m.version)} · ${esc(m.call || '–')} ${esc(m.locator || '')}<br>`
+    $('bkInfo').innerHTML = `<b>Sicherung vom ${esc(tfmt(m.created, { date: true, year: true }))}</b> · Version ${esc(m.version)} · ${esc(m.call || '–')} ${esc(m.locator || '')}<br>`
       + `<small class="muted">${esc(scope)} · ${m.files} Dateien · ${fmtSize(m.size)} · ${m.secrets ? 'mit' : 'ohne'} Zugangsdaten · Rechner ${esc(m.host || '?')}</small>`;
   }
   function renderAutoBackup(d) {
@@ -2504,7 +2574,7 @@
     $('abScope').value = c.scope || 'data'; $('abKeep').value = c.keep || 7; $('abDir').value = c.dir || ''; $('abSecrets').checked = c.secrets !== false;
     if (c.dir && !(c.target || {}).kind) $('abDir').closest('details').open = true;   // bisher eigener Ordner eingetragen
     $('abDirs').innerHTML = (d.candidates || []).map(x => `<option value="${esc(x.dir)}">${esc(x.dir)} – ${x.free_gb} GB frei</option>`).join('');
-    $('abState').textContent = st.last ? `Letzte Sicherung: ${new Date(st.last * 1000).toLocaleString(I18N.locale)} · ${esc(String(st.file || '').split('/').pop())} · ${fmtSize(st.size || 0)}`
+    $('abState').textContent = st.last ? `Letzte Sicherung: ${tfmt(st.last, { date: true, year: true })} · ${esc(String(st.file || '').split('/').pop())} · ${fmtSize(st.size || 0)}`
       + (st.error ? ` · zuletzt fehlgeschlagen: ${st.error}` : '') : (st.error ? 'Fehlgeschlagen: ' + st.error : '');
   }
   async function abPost(extra) {
@@ -2567,7 +2637,7 @@
     $('nasForget').hidden = t.kind !== 'nas';
     const bks = d.backups || [];
     $('stoBackupsWrap').hidden = !bks.length;
-    $('stoBackups').innerHTML = bks.slice(0, 30).map(b => `<tr><td class="no-i18n">${esc(new Date(b.mtime * 1000).toLocaleString(I18N.locale))}</td>
+    $('stoBackups').innerHTML = bks.slice(0, 30).map(b => `<tr><td class="no-i18n">${esc(tfmt(b.mtime, { date: true, year: true }))}</td>
       <td>${esc(b.where)}${b.host && b.host !== d.host ? ` · <span class="no-i18n">${esc(b.host)}</span>` : ''}</td><td>${{ settings: 'Einstellungen', data: '+ Daten', all: '+ Aufnahmen' }[b.scope] || ''}</td>
       <td>${fmtSize(b.size)}</td><td><button class="btn btn-small" type="button" data-sto-restore="${esc(b.path)}">Prüfen …</button></td></tr>`).join('');
   }
@@ -2639,7 +2709,7 @@
   const fmtUp = h => h >= 48 ? `${Math.round(h / 24)} Tage` : `${h} h`;
   async function loadSysLive() {
     let s; try { s = await api('/api/system/live'); } catch (e) { $('sysLiveAge').textContent = '· keine Verbindung'; return; }
-    $('sysLiveAge').textContent = '· ' + new Date(s.t * 1000).toLocaleTimeString(I18N.locale);
+    $('sysLiveAge').textContent = '· ' + tfmt(s.t, { date: false, sec: true });
     const tiles = [], warn = [];
     const tile = (val, label, cls = '') => tiles.push(`<div class="stat ${cls}"><b>${val}</b><span>${label}</span></div>`);
     const c = s.cpu || {}, m = s.mem || {};
@@ -2709,7 +2779,7 @@
   // ---------- System: Geräte (SDR-Sticks) ----------
   const ROLE_TEXT = { main: 'Haupt-Stick', spare: 'Reserve', ignore: 'ignoriert', '': 'neu – noch nicht festgelegt' };
   let sticksEditing = false, sticksDirty = false, sticksLast = '';
-  function fmtSeen(t) { return new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  function fmtSeen(t) { return tfmt(t, { date: true }); }
   let sticksData = { sticks: [] };
   function renderSticks(d) {
     const js = JSON.stringify(d);
@@ -2839,8 +2909,7 @@
   }
   function histTime(t) {
     const d = new Date(t * 1000);
-    return histHours > 24 ? d.toLocaleString(I18N.locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' });
+    return histHours > 24 ? `${tday(d)} ${tfmt(d, { date: false, label: false })}` : tfmt(d, { date: false, label: false });
   }
   function renderHistory() {
     const box = $('histCharts'), h = histData;
@@ -2965,7 +3034,7 @@
       $('pubPw').placeholder = c.has_password ? '•••• gespeichert – leer lassen = unverändert' : 'xxxx xxxx xxxx xxxx xxxx xxxx';
     }
     $('pubSum').textContent = c.enabled ? (c.status === 'publish' ? '· an, sofort öffentlich' : '· an, als Entwurf') : '· aus';
-    const tm = t => new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const tm = t => tfmt(t, { date: true });
     const q = (d.queue || []).map(e => `<div>⏳ ${esc(e.source || e.key)} – ${e.error ? 'neuer Versuch in ' + Math.ceil(e.waiting_s / 60) + ' min (' + esc(e.error) + ')' : e.waiting_s ? 'wartet noch ' + e.waiting_s + ' s (Bild wächst)' : 'geht gleich raus'}</div>`);
     const l = (d.log || []).map(e => `<div>${e.state === 'Entwurf' || e.state === 'veröffentlicht' ? '✓' : '·'} ${tm(e.t)} ${esc(e.sat || e.key)} – ${esc(e.state)}${e.link ? ` · <a href="${esc(e.link)}" target="_blank" rel="noopener">ansehen</a>` : ''}${e.edit ? ` · <a href="${esc(e.edit)}" target="_blank" rel="noopener">freigeben</a>` : ''}${e.error ? ' (' + esc(e.error) + ')' : ''}</div>`);
     $('pubLog').innerHTML = q.concat(l).join('') || 'Noch nichts hochgeladen.';
@@ -3015,6 +3084,11 @@
   });
   $('uiLang').value = I18N.lang;
   $('uiLang').addEventListener('change', e => I18N.set(e.target.value));
+  // Zeitangaben (für alle: Dashboard, Hinweise, Mail, Telegram, Webseite): UTC oder Ortszeit des Pi
+  $('uiTime').addEventListener('change', async e => {
+    try { await post('/api/settings', { time_mode: e.target.value }); toast('✓ Zeitangaben: ' + (e.target.value === 'utc' ? 'UTC' : (EN ? 'local time' : 'Ortszeit'))); setTimeout(() => location.reload(), 900); }
+    catch (err) { toast('Fehler: ' + err.message); }
+  });
   // Design (je Browser): Auswahl unter Station und Knopf ◐ oben rechts
   if (window.HSPTheme) {
     const T = window.HSPTheme, tsel = $('uiTheme');

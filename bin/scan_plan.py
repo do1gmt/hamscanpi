@@ -117,7 +117,9 @@ def rtl_centers(ranges, points, step):
 # ---------------------------------------------------------------- Zeitpläne
 # web_settings.json → "schedules": [{"id", "name", "days": [0..6] (Mo=0), "from": "HH:MM", "to": "HH:MM",
 #                                    "bands": [...], "enabled": true}]
-# Zeit ist die Ortszeit des Pi. "to" < "from" heißt über Mitternacht (22:00–06:00). Ein Zeitplan gilt nur,
+# "tz": "utc" oder "local" (Ortszeit des Pi, so auch alle Einträge ohne tz) – wie beim Anlegen unter Einstellungen
+# → Station → Zeitangaben eingestellt; im Dashboard wird jeder Eintrag in die gerade eingestellte Zeit umgerechnet.
+# "to" < "from" heißt über Mitternacht (22:00–06:00). Ein Zeitplan gilt nur,
 # wenn er Bänder des gerade gewählten Geräts enthält – sonst gilt die normale Auswahl.
 
 def _hm(s):
@@ -128,8 +130,7 @@ def _hm(s):
 def active_schedule(settings, cfg=None, now=None):
     """Der gerade gültige Zeitplan (dict) oder None."""
     import time as _t
-    lt = _t.localtime(now)
-    minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
+    lts = {"local": _t.localtime(now), "utc": _t.gmtime(now)}
     cfg = cfg if cfg is not None else _bp(read_json(CFG, {"ranges": []}))
     dev = "rtlsdr" if settings.get("active_device") == "rtlsdr" else "pmsdr"
     dev_bands = {b["name"] for b in cfg.get("ranges", []) if str(b.get("device", "pmsdr")) == dev}
@@ -148,6 +149,8 @@ def active_schedule(settings, cfg=None, now=None):
             a, b = _hm(sc["from"]), _hm(sc["to"])
         except Exception:
             continue
+        lt = lts["utc" if sc.get("tz") == "utc" else "local"]
+        minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
         days = set(sc.get("days") or range(7))
         if a <= b:
             inside = a <= minute < b and wd in days

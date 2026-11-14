@@ -231,7 +231,7 @@ def check(st, now=None, nt=None):
             _applog("WARN" if ok else "ERROR", "wifi_heal", step=step, ok=ok, output=out[-200:],
                     down_min=round((now - w["down_since"]) / 60))
             nt.raise_("wifi_down", "warn", "system", "WLAN-Verbindung weg",
-                      f"Seit {time.strftime('%H:%M', time.localtime(w['down_since']))} keine Verbindung zum Router. "
+                      f"Seit {__import__('timefmt').hm(w['down_since'])} keine Verbindung zum Router. "
                       f"Zuletzt versucht: {text}. HamScanPi versucht es weiter von selbst.", notify=False)
             break
 

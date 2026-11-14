@@ -279,6 +279,7 @@ def load_settings():
         "schedules": data.get("schedules") or [],
         "watch_events": ST.EVENTS,
         "pi_time": time.strftime("%H:%M", time.localtime()), "pi_tz": time.strftime("%Z"),
+        "time_mode": __import__("timefmt").mode(data), "pi_tzname": __import__("timefmt").tzname(),
         "schedule_active": _active_schedule_info(data),
         "scan_raster": {d: (str((data.get("scan_raster") or {}).get(d, "normal"))
                             if str((data.get("scan_raster") or {}).get(d, "normal")) in RASTERS else "normal")
@@ -466,6 +467,10 @@ def save_settings(data):
         if loc and not _re.fullmatch(r"[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?", loc):
             raise ValueError("Locator ungültig (z. B. JO31 oder JO31AB)")
         out["my_locator"] = loc
+    if "time_mode" in data:
+        if data["time_mode"] not in ("utc", "local"):
+            raise ValueError("Zeitangaben: utc oder local")
+        out["time_mode"] = data["time_mode"]
     if "station_name" in data:
         import station as STN
         out["station_name"] = STN.validate(data["station_name"])
@@ -969,7 +974,7 @@ def _active_schedule_info(data):
         d = dict(data)
         d["active_device"] = DEV.resolve_device("rtlsdr" if data.get("active_device") == "rtlsdr" else "pmsdr")
         sc = SP.active_schedule(d, scanner_config())
-        return {"name": sc["name"], "bands": sc["bands"], "to": sc["to"]} if sc else None
+        return {"name": sc["name"], "bands": sc["bands"], "to": sc["to"], "tz": sc.get("tz", "local")} if sc else None
     except Exception:
         return None
 
@@ -988,7 +993,9 @@ def clean_schedules(items):
             raise ValueError("Zeitplan: mindestens ein Band wählen")
         days = sorted({int(d) for d in it.get("days") or [] if 0 <= int(d) <= 6}) or list(range(7))
         out.append({"id": str(it.get("id") or secrets.token_hex(4)), "name": str(it.get("name") or "").strip()[:40] or f"{f}–{t}",
-                    "days": days, "from": f, "to": t, "bands": bands, "enabled": bool(it.get("enabled", True))})
+                    "days": days, "from": f, "to": t, "bands": bands, "enabled": bool(it.get("enabled", True)),
+                    # Zeitzone des Eintrags: wie beim Anlegen eingestellt (UTC oder Ortszeit); alte Einträge: Ortszeit
+                    "tz": "utc" if it.get("tz") == "utc" else "local"})
     return out
 
 
@@ -1158,19 +1165,21 @@ def stations_map(days=0, q="", band=""):
 
 
 def activity(days=30):
-    """Aktivität je Band und Stunde (UTC) sowie je Wochentag und Stunde.
+    """Aktivität je Band und Stunde (UTC oder Ortszeit) sowie je Wochentag und Stunde.
     Gezählt werden Treffer je Abstimmung – so verfälscht es nicht, wann und wie oft gescannt wurde."""
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
     hidden = [b["name"] for b in scanner_config().get("ranges", []) if b.get("legal") == "restricted" and not restricted_allowed()]
     excl = f" AND s.band NOT IN ({','.join('?' * len(hidden))})" if hidden else ""
+    # Stunden und Wochentage in der eingestellten Zeit (Einstellungen → Station → Zeitangaben)
+    T = "s.time" if __import__("timefmt").mode() == "utc" else "datetime(s.time, 'localtime')"
     db = db_connect()
-    tunes = db.execute(f"""SELECT s.band, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n FROM scan s
+    tunes = db.execute(f"""SELECT s.band, CAST(substr({T}, 12, 2) AS INTEGER) h, COUNT(*) n FROM scan s
                            WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY s.band, h""", [since] + hidden).fetchall()
-    hits = db.execute(f"""SELECT s.band, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n FROM peak p JOIN scan s ON s.id = p.scan_id
+    hits = db.execute(f"""SELECT s.band, CAST(substr({T}, 12, 2) AS INTEGER) h, COUNT(*) n FROM peak p JOIN scan s ON s.id = p.scan_id
                           WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY s.band, h""", [since] + hidden).fetchall()
-    wk_t = db.execute(f"""SELECT CAST(strftime('%w', s.time) AS INTEGER) d, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n
+    wk_t = db.execute(f"""SELECT CAST(strftime('%w', {T}) AS INTEGER) d, CAST(substr({T}, 12, 2) AS INTEGER) h, COUNT(*) n
                           FROM scan s WHERE s.time >= ? AND s.band != 'Satelliten'{excl} GROUP BY d, h""", [since] + hidden).fetchall()
-    wk_h = db.execute(f"""SELECT CAST(strftime('%w', s.time) AS INTEGER) d, CAST(substr(s.time, 12, 2) AS INTEGER) h, COUNT(*) n
+    wk_h = db.execute(f"""SELECT CAST(strftime('%w', {T}) AS INTEGER) d, CAST(substr({T}, 12, 2) AS INTEGER) h, COUNT(*) n
                           FROM peak p JOIN scan s ON s.id = p.scan_id WHERE s.time >= ? AND s.band != 'Satelliten'{excl}
                           GROUP BY d, h""", [since] + hidden).fetchall()
     db.close()
@@ -1697,7 +1706,7 @@ def watch_set(on, until=0.0):
     _live_state["dirty"] = True
     _live_state_write()                                      # sofort: überlebt einen Neustart des Webservers
     if on:
-        end = f" bis {time.strftime('%H:%M', time.localtime(until))}" if until else ""
+        end = f" bis {__import__('timefmt').hm(until)}" if until else ""
         NT.raise_("live_watch", "info", "scan", f"Dauerwache {w['freq_hz'] / 1e6:.4f} MHz {w['mode'].upper()}{end}",
                   "Live läuft ohne Browser weiter (nur die Dekoder). Scans ruhen solange; Satellitenüberflüge "
                   "unterbrechen die Dauerwache kurz, danach geht es auf derselben Frequenz weiter.",
@@ -2731,6 +2740,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "auth": AUTH.status()})
             if path == "/api/settings":
                 res = save_settings(data)
+                if "time_mode" in data:
+                    APPLOG.log("INFO", "webapp", "time_mode_set", mode=data["time_mode"])
                 if "station_name" in data:                   # Rechnername im Netz mitziehen
                     import station as STN
                     import netheal as NH
@@ -2893,8 +2904,13 @@ class Handler(BaseHTTPRequestHandler):
                 u = str(data.get("until") or "").strip()
                 if u:                                                   # „07:00“ = nächstes Mal 07:00 Uhr
                     hh, mm = (int(x) for x in u.split(":"))
-                    lt = time.localtime()
-                    t = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh, mm, 0, 0, 0, -1))
+                    if __import__("timefmt").mode() == "utc":             # Eingabe in der eingestellten Zeit
+                        import calendar
+                        g = time.gmtime()
+                        t = calendar.timegm((g.tm_year, g.tm_mon, g.tm_mday, hh, mm, 0, 0, 0, 0))
+                    else:
+                        lt = time.localtime()
+                        t = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh, mm, 0, 0, 0, -1))
                     until = t if t > time.time() + 60 else t + 86400
                 w = watch_set(bool(data.get("on")), until)
                 return self.send_json({"ok": True, "watch": w})

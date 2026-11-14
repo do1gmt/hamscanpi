@@ -205,7 +205,7 @@ def flush_outbox():
     for i, m in enumerate(box):
         if now - m["t"] > OUTBOX_MAX_AGE_S:
             continue
-        late = time.strftime("%d.%m. %H:%M", time.localtime(m["t"]))
+        late = __import__("timefmt").fmt(m["t"])
         subj = m["subject"] + (f" (late, originally {late})" if _is_en() else f" (verspätet, eigentlich {late})")
         try:
             if m["way"] == "mail" and c.get("enabled"):
@@ -312,7 +312,7 @@ def flush_digest(force=False):
         return
     st["digest"], st["digest_sent"] = [], time.time()
     _save_state(st)
-    lines = [f"{time.strftime('%d.%m. %H:%M', time.localtime(x['t']))} {LEVEL_ICON.get(x['level'], '')} {x['title']}"
+    lines = [f"{__import__('timefmt').fmt(x['t'])} {LEVEL_ICON.get(x['level'], '')} {x['title']}"
              + (f" – {x['text'].splitlines()[0]}" if x.get("text") else "") for x in items]
     send_all(f"{len(items)} Hinweise", "\n".join(lines) + "\n", c)
 

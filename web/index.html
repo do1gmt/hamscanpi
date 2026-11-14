@@ -110,7 +110,7 @@
         <div class="sat-arm" id="satArm" hidden><span id="satArmText"></span> <button type="button" class="btn btn-small" id="satArmNow">sofort</button></div>
         <p class="hint" id="satHint"></p>
         <div class="table-wrap">
-          <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th id="satTimeHead">Zeit (Ortszeit)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
+          <table class="table sat-table"><thead><tr><th>Satellit · Kanäle</th><th id="satTimeHead">Zeit (<span class="tzl">UTC</span>)</th><th>Höhe</th><th>Aufnahme</th></tr></thead>
             <tbody id="satPasses"></tbody></table>
         </div>
         <div class="row pager-row">
@@ -135,7 +135,7 @@
         <h2>Scan-Verlauf</h2>
         <div class="table-wrap">
           <table class="table runs-table" id="runsTable">
-            <thead><tr><th>Start (UTC)</th><th>Bänder</th><th>Status</th><th title="Treffer / verworfen">Treffer</th><th title="Abstimmungen">Abst.</th><th>Dauer</th></tr></thead>
+            <thead><tr><th>Start (<span class="tzl">UTC</span>)</th><th>Bänder</th><th>Status</th><th title="Treffer / verworfen">Treffer</th><th title="Abstimmungen">Abst.</th><th>Dauer</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -200,7 +200,7 @@
       <p class="hint" id="mapNote">Kartenhintergrund: OpenStreetMap (braucht Internet im Browser). Nur Stationen mit Locator.</p>
     </details>
     <div class="table-wrap"><table class="table stations-table">
-      <thead><tr><th>Rufzeichen</th><th>Locator</th><th>Entfernung</th><th>Bänder</th><th>Betriebsart</th><th>Zuletzt (UTC)</th><th title="Anzahl Aussendungen">×</th><th>SNR</th></tr></thead>
+      <thead><tr><th>Rufzeichen</th><th>Locator</th><th>Entfernung</th><th>Bänder</th><th>Betriebsart</th><th>Zuletzt (<span class="tzl">UTC</span>)</th><th title="Anzahl Aussendungen">×</th><th>SNR</th></tr></thead>
       <tbody id="stTable"></tbody></table></div>
     <div class="row pager-row">
       <button type="button" class="btn btn-small" id="stPrev">◀</button><span class="hint" id="stPos"></span><button type="button" class="btn btn-small" id="stNext">▶</button>
@@ -211,7 +211,7 @@
     <h2>Störlinien</h2>
     <p class="hint">Frequenzen, auf denen immer wieder ein Träger ohne Inhalt auftaucht (mindestens 5 Läufe über 2 Stunden, nur Träger, keine Dekodierung) oder die der Satelliten-Wasserfall als örtliche Störung erkannt hat. Treffer dort werden in der Trefferliste ausgeblendet. Typische Quellen: Schaltnetzteile, Monitore, Router, LED-Treiber, Störlinien des Sticks selbst. Mit „keine Störung“ nimmst du eine Frequenz dauerhaft aus.</p>
     <div class="table-wrap"><table class="table interf-table">
-      <thead><tr><th>Band</th><th>MHz</th><th>Erkannt durch</th><th>Seit</th><th>Zuletzt (UTC)</th><th title="Anzahl">×</th><th></th></tr></thead>
+      <thead><tr><th>Band</th><th>MHz</th><th>Erkannt durch</th><th>Seit</th><th>Zuletzt (<span class="tzl">UTC</span>)</th><th title="Anzahl">×</th><th></th></tr></thead>
       <tbody id="interfTable"></tbody></table></div>
     <p class="hint" id="interfHidden"></p>
   </section>
@@ -219,12 +219,12 @@
     <h2>UKW-Sender (RDS)</h2>
     <p class="hint">Aus den Scans des Bands „Rundfunk“: je Frequenz der Sender mit Kennung (PI), Namen, Programmart und dem zuletzt gesendeten Text. Neue Sender und Überreichweiten (Tropo, Sporadic-E) fallen hier auf.</p>
     <div class="table-wrap"><table class="table fm-table">
-      <thead><tr><th>MHz</th><th>Sender</th><th>PI</th><th>Programmart</th><th>Jetzt / Radiotext</th><th>SNR</th><th>Zuletzt (UTC)</th><th title="Anzahl Empfänge">×</th></tr></thead>
+      <thead><tr><th>MHz</th><th>Sender</th><th>PI</th><th>Programmart</th><th>Jetzt / Radiotext</th><th>SNR</th><th>Zuletzt (<span class="tzl">UTC</span>)</th><th title="Anzahl Empfänge">×</th></tr></thead>
       <tbody id="fmTable"></tbody></table></div>
   </section>
   <section class="panel" id="panel-stations-4">
     <h2>Aktivität</h2>
-    <p class="hint">Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in UTC.</p>
+    <p class="hint">Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in <span class="tzl">UTC</span>.</p>
     <div class="row filter-row">
       <label class="field"><span>Zeitraum</span><select id="actDays"><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="90">90 Tage</option><option value="365">1 Jahr</option></select></label>
     </div>
@@ -305,7 +305,7 @@
       <label class="field"><span>Land</span><select id="eibiCountry"><option value="">alle</option></select></label>
       <label class="field" title="Station, Land, Sprache, Senderstandort oder Frequenz (z. B. 6070)"><span>Suche</span><input id="eibiQ" type="search" placeholder="z. B. Romania, German, 6070" autocomplete="off"></label>
     </div>
-    <div class="table-wrap eibi-wrap"><table class="table eibi-table"><thead><tr><th>kHz</th><th>Station</th><th>Sendesprache</th><th>Ziel</th><th>Senderstandort</th><th>bis (UTC)</th></tr></thead>
+    <div class="table-wrap eibi-wrap"><table class="table eibi-table"><thead><tr><th>kHz</th><th>Station</th><th>Sendesprache</th><th>Ziel</th><th>Senderstandort</th><th>bis (<span class="tzl">UTC</span>)</th></tr></thead>
       <tbody id="eibiList"><tr><td colspan="6" class="muted">–</td></tr></tbody></table></div>
     <p class="hint" id="eibiStatus"></p>
     <details class="eibi-more"><summary>Liste verwalten</summary>
@@ -338,7 +338,7 @@
       <label class="check"><input type="checkbox" id="logGroup" checked> Wiederholungen zusammenfassen</label>
       <button class="btn btn-small" id="logReload">Laden</button>
     </div>
-    <div class="loghead" aria-hidden="true"><span>Zeit (UTC)</span><span>Stufe</span><span>Quelle</span><span>Ereignis</span></div>
+    <div class="loghead" aria-hidden="true"><span>Zeit (<span class="tzl">UTC</span>)</span><span>Stufe</span><span>Quelle</span><span>Ereignis</span></div>
     <ul class="loglist" id="logList"></ul>
     <div class="row pager-row">
       <button type="button" class="btn btn-small" id="logPrev">◀ neuere</button>
@@ -454,7 +454,7 @@
       </section>
       <section class="panel" id="panel-psk">
         <h2>PSK Reporter – letzte Meldung <small class="muted" id="pskWhen"></small></h2>
-        <div class="table-wrap"><table class="table"><thead><tr><th>Rufzeichen</th><th>Frequenz</th><th>Band</th><th>Art</th><th>SNR</th><th>Locator</th><th>gehört (UTC)</th><th>Antenne</th></tr></thead>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Rufzeichen</th><th>Frequenz</th><th>Band</th><th>Art</th><th>SNR</th><th>Locator</th><th>gehört (<span class="tzl">UTC</span>)</th><th>Antenne</th></tr></thead>
           <tbody id="pskList"><tr><td colspan="8" class="muted">–</td></tr></tbody></table></div>
         <p class="hint" id="pskHint"></p>
       </section>
@@ -569,6 +569,9 @@
         <p class="hint" id="countryHint"></p>
         <label class="field"><span>Sprache / Language</span>
           <select id="uiLang"><option value="de">Deutsch</option><option value="en">English</option></select>
+        </label>
+        <label class="field" title="Gilt überall: Dashboard, Hinweise, Mail, Telegram, Webseite. Jede Zeit trägt ihre Kennung. Die Uhr oben rechts zeigt immer beides."><span>Zeitangaben</span>
+          <select id="uiTime"><option value="utc">UTC (Funk-Standard)</option><option value="local">Ortszeit des Pi</option></select>
         </label>
         <label class="field" title="Gilt nur für diesen Browser. Auch oben rechts mit ◐ umschaltbar."><span>Design</span>
           <select id="uiTheme"></select>

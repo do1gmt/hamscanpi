@@ -1,7 +1,7 @@
 === HamScanPi SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.2.0
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von HamScanPi und zeigt sie als Galerie.

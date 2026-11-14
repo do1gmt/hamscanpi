@@ -1989,5 +1989,43 @@ phpok && node -e "new Function(require('fs').readFileSync('$SRC/share/wordpress/
   && grep -q "Plugin Name: *HamScanPi SSTV-Galerie" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
   && ok "WordPress-Plugin: PHP und Skript fehlerfrei" || bad "WordPress-Plugin"
 
+echo "== 59 Zeitangaben: UTC oder Ortszeit, überall mit Kennung"
+OUT59="$(node "$SRC/devtools/tz_harness.js" "$SRC/web/app.js" 2>&1)"
+[ "$OUT59" = "$(printf '%s\n' '18:05 UTC' 'Sa 14.11. 18:05:09 UTC' 'Sa 14.11.2026 18:05 UTC' '19:05 MEZ' 'MESZ' 'Sa' '{"days":[4],"from":"18:00","to":"18:30"}' '{"days":[6],"from":"23:30","to":"01:00"}' '13:00' '{"days":[0],"from":"00:30","to":"02:00"}' '14:00')" ] \
+  && ok "Dashboard: UTC und Ortszeit mit Kennung (MEZ/MESZ), Zeitpläne über Mitternacht und Tagesgrenze umgerechnet, EiBi-Zeiten" \
+  || { echo "$OUT59"; bad "Zeitangaben im Dashboard"; }
+(python3 - "$SRC" <<'PY') && ok "keine Zeitangabe mehr am Einstellungs-Weg vorbei; Tabellenköpfe tragen die Kennung" || bad "Zeitangaben vollständig"
+import re, sys
+from pathlib import Path
+w = Path(sys.argv[1]) / "web"
+js, html = (w / "app.js").read_text(), (w / "index.html").read_text()
+bad = [l for l in js.splitlines() if re.search(r"toLocaleTimeString|toLocaleDateString|toLocaleString\([^)]*hour|\.getHours\(\)", l) and "clockLocal" not in l]
+assert not bad, bad
+assert "(UTC)" not in html.replace('<span class="tzl">UTC</span>', "X"), "fester UTC-Tabellenkopf"
+assert html.count('class="tzl"') >= 8 and 'id="uiTime"' in html
+PY
+(cd bin && TZ=Europe/Berlin python3 - <<'PY') && ok "Pi: Hinweise und Meldungen in der eingestellten Zeit, Zeitpläne je eigener Zeitzone, Dauerwache" || bad "Zeitangaben auf dem Pi"
+import json, time, calendar
+from pathlib import Path
+import timefmt as T, scan_plan as SP
+t = calendar.timegm((2026, 11, 14, 18, 5, 0, 0, 0, 0))
+assert T.fmt(t, m="utc") == "14.11. 18:05 UTC" and T.fmt(t, m="local", settings={}) == "14.11. 19:05 MEZ", (T.fmt(t, m="local", settings={}))
+assert T.fmt(calendar.timegm((2026, 7, 1, 12, 0, 0, 0, 0, 0)), m="local", settings={"ui_lang": "en"}).endswith("CEST")
+cfg = {"ranges": [{"name": "70cm", "device": "rtlsdr", "start_hz": 430e6}]}
+base = {"active_device": "rtlsdr"}
+loc = {**base, "schedules": [{"name": "Babbelrunde", "days": [5], "from": "19:00", "to": "19:30", "bands": ["70cm"]}]}
+utc = {**base, "schedules": [{"name": "UTC-Runde", "days": [5], "from": "18:00", "to": "18:30", "bands": ["70cm"], "tz": "utc"}]}
+assert SP.active_schedule(loc, cfg, now=t + 600)["name"] == "Babbelrunde"           # 19:15 MEZ
+assert SP.active_schedule(utc, cfg, now=t + 600)["name"] == "UTC-Runde"             # 18:15 UTC
+assert SP.active_schedule({**utc, "schedules": [dict(utc["schedules"][0], **{"from": "19:00", "to": "19:30"})]}, cfg, now=t + 600) is None
+s = Path("../config/web_settings.json"); d = json.loads(s.read_text())
+d["time_mode"] = "local"; s.write_text(json.dumps(d)); assert T.mode() == "local" and T.hm(t).endswith("MEZ")
+d["time_mode"] = "utc"; s.write_text(json.dumps(d)); assert T.mode() == "utc" and T.hm(t) == "18:05 UTC"
+src = Path("webapp.py").read_text()
+assert 'datetime(s.time, \'localtime\')' in src and '"time_mode": __import__("timefmt").mode(data)' in src
+for f in ("health.py", "netheal.py", "notify.py"):
+    assert "time.localtime(" not in "".join(l for l in Path(f).read_text().splitlines() if "strftime" in l and "%H:%M" in l), f
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

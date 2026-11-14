@@ -13,18 +13,25 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
    Es lässt sich dort jederzeit widerrufen; das eigentliche WordPress-Passwort braucht der Pi nicht.
 4. **In HamScanPi:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
    „SSTV-Bilder hochladen“ an → „Verbindung prüfen“ → „Testbild senden“.
-5. **Galerie-Seite:** in WordPress eine Seite anlegen (z. B. unter „Satelliten“) mit dem Kurzcode
-   `[sstv_galerie]`. Möglich: `[sstv_galerie quelle="iss-zarya" pro_seite="48" statistik="nein"]`.
+5. **Galerie-Seite:** WordPress → Einstellungen → SSTV-Galerie → *Galerie-Seite anlegen*. Die Seite bekommt
+   denselben Seitenkopf wie die übrigen Seiten des Themes (Bereich `page-hero`: kleine Überschrift, großer Titel,
+   Einleitung) und darunter die Galerie; als Seitenvorlage die der übrigen Seiten wählen (beim DO1GMT-Theme
+   „DO1GMT Editierbare Theme-Seite“). Danach ins Menü aufnehmen (Design → Menüs), z. B. unter „Satelliten“.
+   Von Hand geht es auch: irgendeine Seite mit dem Kurzcode `[sstv_galerie]`; möglich ist
+   `[sstv_galerie quelle="iss-zarya" pro_seite="48" statistik="nein"]`.
 6. **Freigeben:** Neue Bilder kommen zunächst als Entwurf (Menü *SSTV-Bilder*). Das Bild prüfen,
    „Veröffentlichen“ – oder in der Liste mehrere auf einmal. Läuft alles, in HamScanPi „sofort veröffentlichen“
    wählen.
 
 ## Was übertragen wird
 
+Alle Zeiten in der Zeit, die in HamScanPi unter Einstellungen → Station → *Zeitangaben* eingestellt ist (UTC oder
+Ortszeit des Pi), jeweils mit Kennung (UTC, MEZ, MESZ …). Die Galerie gruppiert die Tage in derselben Zeit.
+
 | Abschnitt | Inhalt |
 |---|---|
-| Bild | SSTV-Modus, Anteil der Zeilen, Empfangszeit (UTC) |
-| Satellit und Überflug | Name, NORAD-Nummer, Soll- und Empfangsfrequenz, Doppler, Aufgang/höchster Punkt/Untergang (Zeit UTC, Richtung, Elevation), beim Bild Elevation, Richtung, Entfernung, Bewegung, Alter der Bahndaten |
+| Bild | SSTV-Modus, Anteil der Zeilen, Empfangszeit |
+| Satellit und Überflug | Name, NORAD-Nummer, Soll- und Empfangsfrequenz, Doppler, Aufgang/höchster Punkt/Untergang (Zeit, Richtung, Elevation), beim Bild Elevation, Richtung, Entfernung, Bewegung, Alter der Bahndaten |
 | Empfang | Signal beim Bild, Spitze und 90-%-Wert im Überflug, Zeit über 6 dB, Bilddauer, Aufnahmezeit, Empfänger, Verstärkung, ppm, Abstimmung und Abtastrate, Antenne |
 | Station | Rufzeichen, Locator, Stationsname (welcher Pi gemeldet hat), HamScanPi-Version |
 | Raspberry Pi beim Empfang | Modell, System, CPU-Temperatur, Last, freier Speicher, Unterspannung, Laufzeit |
@@ -38,7 +45,19 @@ merkt sich der Pi die Bilder und schickt sie später (Wartezeit bis 1 h, nach 14
 Live-Bild geht erst, wenn es 90 s nicht mehr gewachsen ist. Jedes Bild hat eine feste Kennung – ein
 wiederholter Versuch legt in WordPress kein zweites an.
 
+## Protokoll
+
+- **WordPress:** Einstellungen → SSTV-Galerie → *Protokoll*: die letzten 100 Empfänge mit Zeit (UTC), Ergebnis
+  (Entwurf, veröffentlicht, schon vorhanden, abgelehnt mit Grund), Quelle und Benutzer.
+- **HamScanPi:** Einstellungen → Webseite → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
+  Ereignisse `sstv_uploaded`, `sstv_upload_failed`, `publish_set`.
+
 ## Aussehen anpassen
+
+Ohne eigene Angaben übernimmt die Galerie die Farben des Themes, wenn es die üblichen CSS-Variablen setzt
+(`--green` bzw. `--accent`, `--panel`, `--line`, `--radius`, `--ink`, `--muted`, `--shadow` – das DO1GMT-Theme tut
+das), sonst Schrift und Hintergrund der Seite. Die Lightbox bleibt dunkel (Bilder wirken so am besten), Akzente
+in der Farbe des Themes.
 
 - **Einstellungen → SSTV-Galerie:** Akzentfarbe, Kartenhintergrund, Schriftfarben, Ecken, Größe der
   Vorschaubilder, Überblenddauer, Bilder je Seite, eigenes CSS; Plugin-CSS ganz aus (dann gestaltet das Theme).
