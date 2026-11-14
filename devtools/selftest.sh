@@ -1520,5 +1520,163 @@ upd45() {
     rm -rf "$G"
 }
 upd45 && ok "Veröffentlicher legt Commit und Tag an, der Pi holt die Version und richtet das System ein" || bad "Update per git"
+echo "== 51 Dashboard: jede Abfrage einmal (kein Programmfehler), Status-Karte, Prüfabstand"
+api51() {
+    local W; W="$(mktemp -d)"
+    cp -r "$SRC/bin" "$SRC/web" "$SRC/config" "$SRC/share" "$SRC/bandplans" "$SRC/VERSION" "$W/" && mkdir -p "$W/data" "$W/log"
+    cp "$W/config/web_settings.example.json" "$W/config/web_settings.json"; cp "$W/config/scanner.default.json" "$W/config/scanner.json"
+    python3 - "$W" <<'PY' || return 1
+import json, sys
+p = sys.argv[1] + "/config/web_settings.json"; d = json.load(open(p)); d["update_check_days"] = 7; json.dump(d, open(p, "w"))
+PY
+    local PORT=$((20000 + RANDOM % 20000))
+    (cd "$W" && exec python3 bin/webapp.py $PORT >"$W/web.log" 2>&1) & local WP=$!
+    for i in $(seq 1 40); do curl -fs -m 2 "http://127.0.0.1:$PORT/api/ping" >/dev/null 2>&1 && break; sleep 0.5; done
+    python3 - "$PORT" "$W/bin/webapp.py" <<'PY'; local rc=$?
+import json, re, sys, urllib.request, urllib.error
+port, src = sys.argv[1], open(sys.argv[2], encoding="utf-8").read()
+paths = sorted(set(re.findall(r'if path == "(/api/[^"]+)"', src)))
+bad = []
+for p in paths:
+    if p in ("/api/update",) or "diagnose" in p or "backup/download" in p or p.startswith("/api/live/"):
+        continue
+    try:
+        body = urllib.request.urlopen(f"http://127.0.0.1:{port}{p}", timeout=30).read()
+    except urllib.error.HTTPError as e:
+        body = e.read()
+    except Exception as e:
+        continue
+    t = body[:400].decode("utf-8", "replace")
+    if re.search(r"local variable|not associated with a value|is not defined|NameError|has no attribute", t):
+        bad.append(f"{p}: {t[:120]}")
+assert not bad, bad
+s = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/system", timeout=30).read())
+assert "disk" in s and "version" in s, s
+u = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/update", timeout=30).read())
+assert u["check_days"] == 7, u
+PY
+    kill $WP 2>/dev/null; wait $WP 2>/dev/null; rm -rf "$W"
+    return $rc
+}
+api51 && ok "keine Abfrage bricht mit einem Programmfehler ab, Status-Karte liefert Werte, Prüfabstand 7 Tage" || bad "Dashboard-Abfragen"
+
+echo "== 52 WLAN repariert sich selbst, Ausweich-WLAN, schwacher Empfang"
+(cd bin && python3 - <<'PY') && ok "Stufen nach 2/5/9/14 min, Meldung beim Wiederkommen, Ausweich-WLAN unter dem Haupt-WLAN, Kabel = nichts tun" || bad "WLAN-Selbstheilung"
+import tempfile
+from pathlib import Path
+import netheal as N, notices as NT
+d = Path(tempfile.mkdtemp())
+NT.FILE = d / "n.json"; NT.LOCK = d / "n.lock"; N.LOG = d / "wifi_log.json"
+calls = []
+state = {"up": True, "cable": False, "dbm": -60}
+N.wifi_iface = lambda: "wlan0"
+N.cable_ok = lambda: state["cable"]
+N.link = lambda i: {"connected": state["up"], "ssid": "Haus" if state["up"] else None, "dbm": state["dbm"] if state["up"] else None}
+N.gateway_ok = lambda i: (state["up"], "192.168.1.1")
+nets = [{"name": "preconfigured", "ssid": "Haus", "prio": 0, "active": True, "fallback": False}]
+def helper(*a, input=None, timeout=60):
+    calls.append(a)
+    if a[0] == "list":
+        return True, "\n".join(f"{n['name']}\t{n['ssid']}\t{n['prio']}\t{'yes' if n['active'] else 'no'}" for n in nets)
+    if a[0] == "add":
+        nets.append({"name": "hsp-" + a[1], "ssid": a[1], "prio": int(a[2]), "active": False, "fallback": True})
+    return True, ""
+N.helper = helper
+st, t = {}, 1_000_000.0
+N.check(st, now=t)                                    # alles gut
+state["up"] = False
+for m in range(0, 16):                                # 15 min weg
+    N.check(st, now=t + 60 + m * 60)
+steps = [c[0] for c in calls if c[0] not in ("list", "scan")]
+assert steps == ["reconnect", "radio", "restart-nm", "reload-driver"], steps
+assert any(r["id"] == "wifi_down" and r["active"] for r in NT.listing()["items"])
+state["up"] = True
+N.check(st, now=t + 60 * 18)
+items = NT.listing()["items"]
+assert not any(r["id"] == "wifi_down" and r["active"] for r in items)
+ev = [r for r in items if r["title"].startswith("WLAN war")]
+assert ev and "WLAN-Treiber neu geladen" in ev[0]["detail"], ev
+assert N.read_log()[-1]["minutes"] == 17, N.read_log()
+# Ausweich-WLAN: Priorität unter dem Haupt-WLAN, jedes weitere darunter
+p1 = N.add_fallback("Handy", "geheim123"); p2 = N.add_fallback("Nachbar", "")
+assert p1 < 0 and p2 < p1, (p1, p2)
+try:
+    N.remove_fallback("preconfigured"); raise AssertionError("Haupt-WLAN gelöscht?")
+except ValueError:
+    pass
+# Netzwerkkabel: nichts tun
+calls.clear(); state.update(up=False, cable=True); st2 = {}
+for m in range(20):
+    N.check(st2, now=t + m * 60)
+assert not [c for c in calls if c[0] != "list"], calls
+# schwacher Empfang: Median der letzten 15 Messungen unter -75 dBm
+state.update(up=True, cable=False, dbm=-82); st3 = {}
+for m in range(15):
+    N.check(st3, now=t + m * 60)
+assert any(r["id"] == "wifi_weak" and r["active"] for r in NT.listing()["items"])
+PY
+bash -n "$SRC/share/root/hamscanpi-net" && ! bash "$SRC/share/root/hamscanpi-net" hostname "Böser Name" 2>/dev/null \
+  && ! bash "$SRC/share/root/hamscanpi-net" remove preconfigured 2>/dev/null \
+  && ok "Root-Helfer prüft seine Eingaben (falscher Rechnername, fremde Verbindung)" || bad "Root-Helfer"
+
+echo "== 53 Name dieser Station: Rechnername, Mail, Namensdienst"
+(cd bin && python3 - <<'PY') && ok "„HamScanPi-AFGN“ → hamscanpi-afgn, Betreff [HamScanPi-AFGN], kein zusätzliches hamscanpi.local" || bad "Stationsname"
+import json, tempfile
+from pathlib import Path
+import station as STN
+assert STN.hostname_for("HamScanPi-AFGN") == "hamscanpi-afgn"
+assert STN.hostname_for("Funkbude Müller") == "funkbude-mueller"
+assert STN.validate("") == "HamScanPi" and STN.name({}) == "HamScanPi" and not STN.custom({})
+for bad in ("x" * 33, "<script>", "-abc"):
+    try:
+        STN.validate(bad); raise AssertionError(bad)
+    except ValueError:
+        pass
+assert STN.custom({"station_name": "HamScanPi-AFGN"})
+d = Path(tempfile.mkdtemp()); (d / "config").mkdir()
+(d / "config" / "web_settings.json").write_text(json.dumps({"station_name": "HamScanPi-AFGN"}))
+STN.BASE = d
+import notify as NF
+sent = {}
+class FakeSMTP:
+    def __init__(self, *a, **k): pass
+    def starttls(self): pass
+    def login(self, *a): pass
+    def send_message(self, m): sent["subj"], sent["from"] = m["Subject"], m["From"]
+    def quit(self): pass
+NF.smtplib.SMTP = FakeSMTP
+NF.send_mail("Test", "x", {"smtp_host": "h", "mail_to": "a@b", "mail_from": "pi@example.org", "smtp_port": 587})
+assert sent["subj"] == "[HamScanPi-AFGN] Test" and sent["from"].startswith("HamScanPi-AFGN"), sent
+import mdns_alias as MD
+MD.STATE = d / "m.json"; MD._ip = lambda: "192.168.1.5"
+MD.run(8080, rounds=1, every=0, host="hamscanpi-afgn", custom=True)
+assert MD.state()["mode"] == "hostname" and MD.state()["name"] == "hamscanpi-afgn.local", MD.state()
+PY
+
+echo "== 54 PMSDR-Steuerprogramm: Quellen, Korrektur, Meldungen"
+pm54() {
+    local P; P="$(mktemp -d)"
+    echo "7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947  $SRC/share/pmsdr/pmsdr-0.26.tar.gz" | sha256sum -c --quiet || return 1
+    tar xzf "$SRC/share/pmsdr/pmsdr-0.26.tar.gz" -C "$P" || return 1
+    grep -q "unsigned int nbytes = sizeof szLine - 1;" "$P/pmsdr-0.26/pmsdr.c" || return 1
+    sed -n 's/unsigned int nbytes = sizeof szLine - 1;/size_t nbytes = sizeof szLine - 1;/p' "$SRC/bin/setup_system.sh" | grep -q "sed -i" || return 1
+    sed -i 's/unsigned int nbytes = sizeof szLine - 1;/size_t nbytes = sizeof szLine - 1;/' "$P/pmsdr-0.26/pmsdr.c"
+    [ "$(grep -c 'size_t nbytes = sizeof szLine - 1;' "$P/pmsdr-0.26/pmsdr.c")" = 1 ] || return 1
+    # mit libusb-Entwicklerpaket: wirklich bauen, mit den strengen Regeln von GCC 14
+    if pkg-config --exists libusb-1.0 2>/dev/null || [ -f /usr/include/libusb-1.0/libusb.h ]; then
+        (cd "$P/pmsdr-0.26" && ./configure >/dev/null 2>&1 \
+          && make CFLAGS="-O2 -Werror=incompatible-pointer-types -Werror=implicit-function-declaration -Werror=int-conversion" >/dev/null 2>&1 \
+          && ./pmsdr -h 2>&1 | grep -q "PMSDR") || return 1
+        echo "   gebaut und gestartet (strenge Compiler-Regeln)"
+    fi
+    rm -rf "$P"
+    (cd bin && python3 - <<'PY') || return 1
+import devices as D
+D.Path = type("P", (), {"__init__": lambda s, p: None, "exists": lambda s: False})
+m = D.pmsdr_control_problem()
+assert "Steuerprogramm fehlt" in m and "sudo systemctl start" not in m, m
+PY
+}
+pm54 && ok "Archiv geprüft, Korrektur greift genau einmal, Meldung nennt den richtigen Schritt" || bad "PMSDR-Steuerprogramm"
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

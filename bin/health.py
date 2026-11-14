@@ -558,7 +558,13 @@ def check_update(st):
         NT.clear("update_available")
 
 
-CHECKS = (check_reboot, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def check_wifi(st):
+    """WLAN repariert sich selbst, Ausweich-WLANs, schwacher Empfang (bin/netheal.py)."""
+    import netheal
+    netheal.check(st, nt=NT)
+
+
+CHECKS = (check_reboot, check_wifi, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
 
 

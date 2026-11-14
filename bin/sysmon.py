@@ -228,7 +228,10 @@ def network():
     except Exception:
         pass
     wlan = None
-    w = _read("/proc/net/wireless")
+    d = wifi_dbm(full=True)
+    if d:
+        wlan = d
+    w = None if wlan else _read("/proc/net/wireless")
     if w:
         for line in w.splitlines()[2:]:
             p = line.split()
@@ -357,6 +360,22 @@ def storage_info(now=None):
             "written_since": w7[1] if w7 else None}
 
 
+def wifi_dbm(full=False):
+    """Empfangsstärke des WLANs in dBm (aus /proc/net/wireless) oder None – nur wenn verbunden."""
+    w = _read("/proc/net/wireless")
+    for line in (w or "").splitlines()[2:]:
+        p = line.split()
+        if len(p) >= 4:
+            try:
+                v = int(float(p[3].rstrip(".")))
+            except ValueError:
+                return None
+            if v == 0 or v < -110:
+                return None
+            return {"iface": p[0].rstrip(":"), "dbm": v} if full else v
+    return None
+
+
 # ---------------------------------------------------------------- Verlauf
 def _db():
     DB.parent.mkdir(parents=True, exist_ok=True)
@@ -369,6 +388,8 @@ def _db():
         db.execute("ALTER TABLE samples ADD COLUMN top_mb INTEGER")
     if "wr_mb" not in cols:                                             # ab 1.7.20: auf das Systemlaufwerk geschrieben
         db.execute("ALTER TABLE samples ADD COLUMN wr_mb REAL")
+    if "wifi_dbm" not in cols:                                          # ab 1.7.93: WLAN-Empfangsstärke
+        db.execute("ALTER TABLE samples ADD COLUMN wifi_dbm INTEGER")
     return db
 
 
@@ -422,11 +443,11 @@ class Sampler:
         thr = throttled_now()
         row = (int(now // 60 * 60), avg[0] if avg else None, self.peak, mem.get("available"), mem.get("swap_used"),
                cpu_temp(), None if thr is None else int(thr), self.act,
-               self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written())
+               self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written(), wifi_dbm())
         db = _db()
         try:
             db.execute("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act, "
-                       "top_name, top_mb, wr_mb) VALUES (?,?,?,?,?,?,?,?,?,?,?)", row)
+                       "top_name, top_mb, wr_mb, wifi_dbm) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", row)
             if now - self.pruned > 3600:
                 db.execute("DELETE FROM samples WHERE t < ?", (int(now - KEEP_S),))
                 self.pruned = now
@@ -447,7 +468,7 @@ def history(hours=24, now=None):
     db = _db()
     try:
         rows = db.execute("SELECT (t / ?) * ? AS tb, ROUND(AVG(cpu), 1), ROUND(MAX(cpu_peak), 1), MIN(mem_avail), MAX(swap), "
-                          "MAX(temp), MAX(throttled), MAX(act) FROM samples WHERE t >= ? GROUP BY tb ORDER BY tb",
+                          "MAX(temp), MAX(throttled), MAX(act), MIN(wifi_dbm) FROM samples WHERE t >= ? GROUP BY tb ORDER BY tb",
                           (b, b, since)).fetchall()
         total = db.execute("SELECT COUNT(*), MIN(t) FROM samples").fetchone()
         # größter Prozess je Raster: der Eintrag mit dem meisten Speicher
@@ -458,7 +479,7 @@ def history(hours=24, now=None):
                 tops[tb] = (name, mb)
     finally:
         db.close()
-    keys = ("t", "cpu", "cpu_peak", "mem_avail", "swap", "temp", "throttled", "act")
+    keys = ("t", "cpu", "cpu_peak", "mem_avail", "swap", "temp", "throttled", "act", "wifi_dbm")
     pts = []
     for r in rows:
         p = dict(zip(keys, r))

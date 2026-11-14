@@ -18,7 +18,7 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q multimon-ng
+          sudo apt-get install -y -q multimon-ng libusb-1.0-0-dev libreadline-dev
           python -m pip install numpy scipy sgp4 pillow soundfile matplotlib
       - name: Python syntax
         run: python -m py_compile bin/*.py devtools/*.py

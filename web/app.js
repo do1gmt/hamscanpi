@@ -107,6 +107,8 @@
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
+    if (document.activeElement !== $('stationName')) $('stationName').value = settings.station_name && settings.station_name !== 'HamScanPi' ? settings.station_name : '';
+    $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${settings.station_hostname || 'hamscanpi'}.local:${location.port || 80}`;
     $('pskOn').checked = !!settings.pskreporter;
     renderSchedules();
     renderWatch();
@@ -169,7 +171,12 @@
   // Zurück zur Seite (anderer Tab, Handy aus dem Standby): aktuellen Stand holen
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSettings().catch(() => {}); });
 
-  function showVersion() { if (settings && settings.version) { $('appVer').textContent = 'v' + settings.version; $('appVer').title = 'HamScanPi ' + settings.version; } }
+  function showVersion() {
+    if (!settings || !settings.version) return;
+    const own = settings.station_name && settings.station_name !== 'HamScanPi' ? settings.station_name : '';
+    $('appVer').textContent = 'v' + settings.version + (own ? ' · ' + own : '');
+    $('appVer').title = 'HamScanPi ' + settings.version + (own ? ' – ' + own : '');
+  }
   function renderDeviceSwitch() {
     showVersion();
     const root = $('deviceSwitch'); root.innerHTML = '';
@@ -189,7 +196,7 @@
       if (!present && id === 'pmsdr' && hw.pmsdr && (hw.pmsdr.usb || hw.pmsdr.audio))
         state = hw.pmsdr.usb ? 'Soundkarte (Aureon) fehlt' : 'PMSDR-Platine fehlt';
       if (present && id === 'pmsdr' && hw.pmsdr.control && !['active', 'unbekannt'].includes(hw.pmsdr.control))
-        state = `<span class="warn-text">steckt – Steuerung läuft nicht (${esc(hw.pmsdr.control)})</span>`;
+        state = `<span class="warn-text">${hw.pmsdr.control === 'fehlt' ? 'steckt – Steuerprogramm fehlt (Update einspielen)' : `steckt – Steuerung läuft nicht (${esc(hw.pmsdr.control)})`}</span>`;
       b.innerHTML = `<b>${esc(short(id))}${id === 'rtlsdr' && settings.rtl_serial ? ` <small class="stick-sn no-i18n">SN ${esc(settings.rtl_serial)}</small>` : ''}</b>${state}`;
       b.addEventListener('click', async () => {
         if (settings.active_device === id || !present) return;
@@ -220,6 +227,18 @@
   $('pskOn').addEventListener('change', async e => {
     try { const d = await post('/api/settings', { pskreporter: e.target.checked }); settings.pskreporter = d.settings.pskreporter; note($('stationNote'), e.target.checked ? '✓ PSK Reporter an – erste Spots nach etwa 5 min' : '✓ PSK Reporter aus'); }
     catch (x) { e.target.checked = false; note($('stationNote'), 'Fehler: ' + x.message, true); }
+  });
+  $('stationName').addEventListener('change', async () => {
+    note($('stationNote'), EN ? 'saving …' : 'speichere …');
+    try {
+      const d = await post('/api/settings', { station_name: $('stationName').value });
+      Object.assign(settings, d.settings);
+      $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${d.settings.station_hostname}.local:${location.port || 80}`;
+      document.title = d.settings.station_name;
+      showVersion();
+      if (d.settings.hostname_error) note($('stationNote'), (EN ? 'Name saved, host name not changed: ' : 'Name gespeichert, Rechnername nicht geändert: ') + d.settings.hostname_error, true);
+      else note($('stationNote'), (EN ? '✓ saved – in the network now: ' : '✓ gespeichert – im Netz jetzt: ') + d.settings.station_hostname + '.local');
+    } catch (e) { note($('stationNote'), 'Fehler: ' + e.message, true); }
   });
   $('myCall').addEventListener('change', async () => {
     try { const d = await post('/api/settings', { my_call: $('myCall').value }); settings.my_call = d.settings.my_call; note($('stationNote'), '✓ Rufzeichen gespeichert'); }
@@ -452,9 +471,23 @@
         <div class="meter-scale"><span>0</span><span>10</span><span>20</span><span>30</span><span>40 dB</span></div>${spark}</div>`;
     }).join('');
   }
+  // Nach einem Update läuft im offenen Browser sonst noch das alte Programm (die Kopfzeile zeigt schon die neue
+  // Version, Anzeigen und Übersetzungen sind aber alt) – deshalb neu laden, sobald der Server eine andere Version hat
+  const PAGE_VER = (document.querySelector('meta[name="hsp-version"]') || {}).content || '';
+  let reloadPending = false;
+  function checkVersion(v) {
+    if (!v || !PAGE_VER || v === PAGE_VER || reloadPending) return;
+    if (sessionStorage.getItem('hsp-reloaded-for') === v) return;          // nie in einer Schleife neu laden
+    const busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (busy) return;                                                        // nicht mitten in einer Eingabe
+    reloadPending = true; sessionStorage.setItem('hsp-reloaded-for', v);
+    toast(EN ? `New version ${v} – reloading the page` : `Neue Version ${v} – die Seite wird neu geladen`, 3000);
+    setTimeout(() => location.reload(), 2500);
+  }
   async function pollStatus() {
     let s;
     try { s = await api('/api/status'); } catch (e) { setPill('Server nicht erreichbar', 'error'); return; }
+    checkVersion(s.version);
     if (s.hardware && settings) hardwareChanged(s.hardware);
     const busy = s.state === 'running' || s.state === 'queued';
     const lw = s.live_watch;
@@ -1396,7 +1429,7 @@
     window.scrollTo({ top: 0 });
     setTimeout(jumpCurrent, 400);
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); loadWifi(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', e => {
     // die Zahl am Reiter „Treffer“ (neu im letzten Lauf) antippen: nur diese Treffer zeigen
@@ -2070,6 +2103,41 @@
     $('sysNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNote').classList.toggle('warn-text', warn.length > 0);
   }
+  // ---------- WLAN: Zustand, Ausweich-WLANs, Ausfälle (bin/netheal.py) ----------
+  async function loadWifi() {
+    let d; try { d = await api('/api/wifi'); } catch (e) { return; }
+    $('panel-wifi').hidden = !d.iface;
+    if (!d.iface) return;
+    const bars = v => v == null ? '' : v >= -55 ? '▂▄▆█' : v >= -65 ? '▂▄▆' : v >= -75 ? '▂▄' : '▂';
+    $('wifiNow').textContent = d.cable ? (EN ? '· network cable in use' : '· Netzwerkkabel aktiv')
+      : d.connected ? `· ${d.ssid || '?'} · ${d.dbm ?? '?'} dBm ${bars(d.dbm)}` : (EN ? '· not connected' : '· nicht verbunden');
+    const nets = d.networks || [];
+    $('wifiNets').innerHTML = nets.map(n => `<tr><td class="no-i18n"><b>${esc(n.ssid || n.name)}</b>${n.active ? ` <span class="ok">${EN ? 'connected' : 'verbunden'}</span>` : ''}</td>`
+      + `<td>${n.fallback ? (EN ? 'fallback' : 'Ausweich') : (EN ? 'main Wi-Fi' : 'Haupt-WLAN')}</td>`
+      + `<td>${n.fallback ? `<button type="button" class="btn btn-small btn-danger" data-wifirm="${esc(n.name)}">${EN ? 'Remove' : 'Entfernen'}</button>` : ''}</td></tr>`).join('')
+      || `<tr><td colspan="3" class="muted">${d.helper ? '–' : (EN ? 'Not available yet – install the update once.' : 'Noch nicht verfügbar – einmal das Update einspielen.')}</td></tr>`;
+    const fmt = t => new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    $('wifiLog').innerHTML = (d.log || []).length ? (d.log || []).map(x => `<div>${fmt(x.from)} · ${x.minutes} min · ${esc(x.fixed_by)}</div>`).join('')
+      : (EN ? 'No outage recorded.' : 'Kein Ausfall aufgezeichnet.');
+  }
+  $('wifiNets').addEventListener('click', async e => {
+    const b = e.target.closest('[data-wifirm]'); if (!b) return;
+    if (!confirm((EN ? 'Remove fallback Wi-Fi ' : 'Ausweich-WLAN entfernen: ') + b.dataset.wifirm.replace(/^hsp-/, '') + '?')) return;
+    try { await post('/api/wifi/remove', { name: b.dataset.wifirm }); note($('wifiNote'), EN ? '✓ removed' : '✓ entfernt'); loadWifi(); }
+    catch (ex) { note($('wifiNote'), 'Fehler: ' + ex.message, true); }
+  });
+  $('wifiAdd').addEventListener('click', async () => {
+    note($('wifiNote'), EN ? 'adding …' : 'lege an …');
+    try { await post('/api/wifi/add', { ssid: $('wifiSsid').value.trim(), psk: $('wifiPsk').value }); $('wifiPsk').value = ''; note($('wifiNote'), EN ? '✓ added' : '✓ angelegt'); loadWifi(); }
+    catch (ex) { note($('wifiNote'), 'Fehler: ' + ex.message, true); }
+  });
+  $('wifiScan').addEventListener('click', async () => {
+    note($('wifiNote'), EN ? 'searching …' : 'suche …');
+    try { const d = await api('/api/wifi/scan'); $('wifiSeen').innerHTML = (d.visible || []).map(v => `<option value="${esc(v.ssid)}">${v.signal ?? ''} %</option>`).join('');
+      note($('wifiNote'), (d.visible || []).length ? (EN ? `${d.visible.length} networks found – pick one in the name field` : `${d.visible.length} Netze gefunden – im Feld „Netzname“ auswählen`) : (EN ? 'no networks found' : 'keine Netze gefunden')); }
+    catch (ex) { note($('wifiNote'), 'Fehler: ' + ex.message, true); }
+  });
+
   // ---------- Update per git (bin/update.sh über den Dienst hamscanpi-update) ----------
   let updTimer = null;
   async function loadUpdate(check) {
@@ -2324,7 +2392,7 @@
     let d; try { d = await api('/api/wsjtx-udp'); } catch (e) { return; }
     const c = d.config || {}, st = d.state || {};
     if (!document.activeElement || !document.activeElement.closest('#wxBox')) {
-      $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || 'HamScanPi';
+      $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || settings.station_name || 'HamScanPi';
     }
     $('wxSum').textContent = c.enabled ? `· an ${c.targets}` : '· aus';
     const ago = t => t ? new Date(t * 1000).toLocaleString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
@@ -2687,6 +2755,8 @@
     let html = chart('Prozessor (Mittel je Minute, dünn: Spitze)', 0, 100, '%', [{ key: 'cpu_peak', cls: 'l-peak' }, { key: 'cpu', cls: 'l-cpu' }], [0, 50, 100])
       + chart('Arbeitsspeicher verfügbar · Swap belegt (MB)', 0, memTop, '', [{ key: 'mem_avail', cls: 'l-mem' }, { key: 'swap', cls: 'l-swap' }], memTicks)
       + chart('CPU-Temperatur', tLo, tHi, '°', [{ key: 'temp', cls: 'l-temp' }], [tLo, Math.round((tLo + tHi) / 2), tHi]);
+    if (pts.some(p => p.wifi_dbm != null))                  // nur wenn der Pi über WLAN hängt
+      html += chart('WLAN-Empfang (dBm, schwächster Wert)', -90, -30, '', [{ key: 'wifi_dbm', cls: 'l-wifi' }], [-90, -75, -60, -45, -30]);
     // Zeitachse
     const n = Math.max(2, Math.min(7, Math.floor((W - L) / 80)));
     let ax = '';
@@ -2701,7 +2771,7 @@
       if (Math.abs(best.t - t) > GAP) { $('histRead').textContent = histTime(t) + ' · keine Daten'; return; }
       box.querySelectorAll('.cursor').forEach(l => { l.setAttribute('x1', x(best.t)); l.setAttribute('x2', x(best.t)); });
       const f = (v, u, k = 0) => v == null ? '–' : v.toFixed(k) + u;
-      $('histRead').textContent = `${histTime(best.t)} · CPU ${f(best.cpu, ' %')} (Spitze ${f(best.cpu_peak, ' %')}) · verfügbar ${f(best.mem_avail, ' MB')} · Swap ${f(best.swap, ' MB')} · ${f(best.temp, ' °C', 1)} · ${ACT_NAME[best.act || 0]}${best.throttled ? ' · gedrosselt' : ''}${best.top_name ? ` · größter Prozess ${best.top_name} ${best.top_mb} MB` : ''}`;
+      $('histRead').textContent = `${histTime(best.t)} · CPU ${f(best.cpu, ' %')} (Spitze ${f(best.cpu_peak, ' %')}) · verfügbar ${f(best.mem_avail, ' MB')} · Swap ${f(best.swap, ' MB')} · ${f(best.temp, ' °C', 1)}${best.wifi_dbm != null ? ` · WLAN ${best.wifi_dbm} dBm` : ''} · ${ACT_NAME[best.act || 0]}${best.throttled ? ' · gedrosselt' : ''}${best.top_name ? ` · größter Prozess ${best.top_name} ${best.top_mb} MB` : ''}`;
     };
     box.onpointermove = pick; box.onpointerdown = pick;
     const maxSwap = Math.max(...pts.map(p => p.swap || 0));

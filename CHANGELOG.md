@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.7.93 – 2026-11-14
+
+- Fix: **System → Status** (was "Zustand") stayed empty since 1.7.76 – a local import in the update request hid a
+  module, `/api/system` answered with an error. The card shows storage, recordings, throttling, clock, services and
+  write load again. New self-test section 51 calls every dashboard request once.
+- Fix: *Check automatically* in the update card showed "daily" after a reload although "weekly" was saved (and used).
+- **PMSDR on a fresh Pi:** the set-up builds the control program from the bundled source (`share/pmsdr`, GPL-3,
+  SHA-256 checked) with one correction – `size_t` for `getline()`: GCC 14 (Debian 13) rejects the original, older
+  compilers built it with a memory overwrite on 64-bit. The service creates the command FIFO before it starts (the
+  program does not; `/tmp` is empty after every boot) and no longer passes `-u` (a UDP port option, not the FIFO);
+  hotplug as before. Messages say what is wrong: "control program missing – install the update" vs "control not
+  running – unplug and plug in again". Build packages libusb-1.0-0-dev, libreadline-dev.
+- **Wi-Fi repairs itself** (`bin/netheal.py`, every minute): router not answering → reconnect (2 min), Wi-Fi off/on
+  (5 min), restart NetworkManager (9 min), reload the Wi-Fi driver brcmfmac (14 min), then again every 30 min; no
+  reboot. Notice while it is down, event "Wi-Fi was N min gone – back again" with what helped, history in
+  `data/wifi_log.json`. Left alone with a network cable.
+- **Fallback Wi-Fis** (System → Wi-Fi): add/remove networks such as a phone hotspot (below the main Wi-Fi in
+  priority; switching back to the main Wi-Fi every 10 min when it is in range); networks in range can be searched.
+  Passwords stay with NetworkManager (root only).
+- **Wi-Fi signal** in the system history (new chart, dBm) and a notice when it is weak (median < −75 dBm for 15 min).
+- **Name of this station** (Settings → Station, default "HamScanPi"): mail subject and sender name, push title,
+  browser tab and header, WSJT-X/OpenHamClock id, PSK Reporter antenna info – and the host name in the network
+  ("HamScanPi-AFGN" → hamscanpi-afgn.local, /etc/hosts and avahi updated). With an own name the extra
+  hamscanpi.local is not published (two Pis would fight over it).
+- Root actions (network, host name) go through `/usr/local/sbin/hamscanpi-net`: installed by the set-up, owned by
+  root, sudo rule for exactly this file, every command checks its input.
+- Self-test sections 51–54; the GitHub workflow builds the PMSDR program with GCC 14's strict rules.
+
+## 1.7.92 – 2026-11-06
+
+- **The page reloads itself after an update:** an open browser kept running the old program (the header already
+  showed the new version, but displays and translations were old – e.g. the PSK Reporter line); the server now
+  reports its version, and when it differs from the page's, the page reloads (not while you are typing, never in
+  a loop).
+- English UI: "(Anruf 145.500)" in band segments → "(calling 145.500)", band name "Wettersat" → "Weather sat" in
+  scan history and log, "no suitable receiver connected – skipped: …", "cancelled by the user after … s".
+- New screenshots for the README (scan, hits, stations, map, live, log, system, settings – English UI).
+
 ## 1.7.91 – 2026-11-06
 
 - Phone jump bar: the chips follow the order of the cards on the screen (on phones CSS rearranges them – e.g. on

@@ -87,23 +87,22 @@ shortwave.
 
 | | |
 |---|---|
-| ![A hit with spectrum, audio player and APRS decode](docs/screenshots/hits.png) | ![Live listening on 10 m FT8 with waterfall and live decodes](docs/screenshots/live.png) |
-| Hit card: spectrum, audio with tuning and noise reduction, decoded APRS packets | Live listening: 10 m FT8 via the stick (direct sampling) with level meter, waterfall and live decodes (FT8/FT4, APRS, POCSAG, CW, RTTY, SSTV) |
+| ![Hits: filters by band, mode and time, hit cards](docs/screenshots/hits.png) | ![Live listening: FM broadcast with RDS and TMC, waterfall, shortwave schedule](docs/screenshots/live.png) |
+| Hits: filters by band, mode and time; every hit with spectrum, audio and decodes | Live listening: FM broadcast with RDS (radio text, alternative frequencies) and TMC traffic messages, level meter and waterfall; next to it what is on air on shortwave right now (EiBi) and the recently heard frequencies |
 | ![Readable event log](docs/screenshots/log.png) | ![Phone: satellite passes and live listening (German UI)](docs/screenshots/mobile.png) |
 | Event log with the monitored frequencies of every scan | On the phone (here with the German UI) |
 | ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |
 | Settings: station (ADIF, PSK Reporter), watchlist, mail and push notifications | Satellite priorities with the last 14 days, system status of the Pi |
 
-![System: notices, system values and history, status, devices](docs/screenshots/system.png)
-System page: notices with what to do, live values and 24-hour history (CPU, memory/zram, temperature),
-status (storage, write load, swap, services, version) and the device register – here an NESDR SMArt v5 that
-also covers HF via direct sampling.
+![System: notices, live values and history, services, version and update](docs/screenshots/system.png)
+System page: notices with what to do, live values and history (CPU, memory, temperature – with scans, passes and
+Live marked), services with restart buttons, version and update from GitHub, PSK Reporter spots.
 
-![Stations: heard callsigns with distance and bearing, FM stations with RDS](docs/screenshots/stations.png)
-*Stations: callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export); FM stations with RDS name, PI, programme type and radio text.*
+![Stations: map of locator squares and heard callsigns with distance and bearing](docs/screenshots/stations.png)
+*Stations: map (locator squares, the stronger the brighter) and callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export).*
 
-![Map of heard stations: FT8 on 80/60/40/30/20 m from JN59, up to the US east coast](docs/screenshots/map.png)
-*Map of heard stations (one evening of FT8 scans on 80–20 m with an HF-360 vertical): lines from the own locator, up to 7,900 km; point colour = SNR, border = mode.*
+![Map of heard stations: locator squares across Europe and beyond](docs/screenshots/map.png)
+*Map of heard stations over one month (FT8 scans on 80–15 m with an HF-360 vertical from JN59): one square per 4-character locator, the stronger the brighter.*
 
 <img src="docs/screenshots/tmc.png" width="560" alt="Live FM reception with RDS and TMC traffic messages">
 
@@ -212,6 +211,18 @@ interrupt a scan. A scan without a sign of life for 10 minutes is ended and repo
 with a "now" button in the pass list), so looking around or choosing satellites does not throw out a running
 scan.
 
+**Wi-Fi that repairs itself:** every minute HamScanPi checks whether the router answers. If not, it helps in
+steps – reconnect after 2 min, Wi-Fi off/on after 5 min, restart the network service after 9 min, reload the Wi-Fi
+driver after 14 min, then again every 30 min – and reports how long the Wi-Fi was gone and what brought it back.
+*System → Wi-Fi* lists the known networks and takes **fallback Wi-Fis** (e.g. a phone hotspot): if the main Wi-Fi
+is gone the Pi uses a fallback and switches back when the main Wi-Fi is in range again (passwords are kept by the
+system's network service, readable only by root). The system history shows the Wi-Fi signal; a weak signal
+(median below −75 dBm for 15 min) gives a notice. With a network cable the Wi-Fi is left alone.
+
+**Several HamScanPis:** *Settings → Station → Name of this station* (default "HamScanPi") appears in mail (subject
+and sender) and push, in the browser tab and header, as the WSJT-X/OpenHamClock id and in the PSK Reporter
+antenna info – and becomes the Pi's host name in the network: "HamScanPi-AFGN" → `http://hamscanpi-afgn.local:8080`.
+
 **Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
 network it is reachable at the address it gets by DHCP – and as **`http://hamscanpi.local:8080`**: the service
 `hamscanpi-mdns` announces that name via avahi with the current address, whatever the Pi's host name is (the host
@@ -298,8 +309,8 @@ Everything it sets up on the system is in `bin/setup_system.sh`, which runs agai
   system journal across reboots (max. 64 MB) and switches Wi-Fi power saving off (otherwise Live stutters over
   Wi-Fi).
 
-If the PMSDR control program `/usr/local/bin/pmsdr` exists, its service is set up as well (see
-[docs/pmsdr.md](docs/pmsdr.md)).
+For the PMSDR the set-up builds its control program from the bundled source (GPL-3) and sets up its service with
+hotplug – plug in the PMSDR and it is ready (see [docs/pmsdr.md](docs/pmsdr.md)).
 
 **3. Re-plug the stick** (or reboot) – until then the old TV driver may still hold it.
 

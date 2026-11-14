@@ -385,6 +385,21 @@
         <p class="hint" id="svcMdns"></p>
         <p class="hint" id="svcHint">Hängt das Dashboard, hilft die <a id="svcRescue" href="#" target="_blank" rel="noopener">Notfall-Seite</a> (eigener Dienst, Port 8081): dort lassen sich die Dienste und der Pi ebenso neu starten und die Diagnose herunterladen. Zusätzlich starten Webserver und Zeitplaner von selbst neu, wenn sie 3 bzw. 5 Minuten nicht mehr reagieren. Die Diagnose (Protokolle, Kernel- und Dienstmeldungen der letzten 2 Tage, Systemverlauf, Einstellungen ohne Zugangsdaten) hilft bei der Fehlersuche.</p>
       </section>
+      <section class="panel" id="panel-wifi" hidden>
+        <h2>WLAN <small class="muted" id="wifiNow"></small></h2>
+        <p class="hint">HamScanPi prüft jede Minute, ob der Router erreichbar ist, und repariert die Verbindung selbst: nach 2 min neu verbinden, nach 5 min WLAN aus/an, nach 9 min Netzwerkdienst neu starten, nach 14 min WLAN-Treiber neu laden – danach alle 30 min von vorn. Mit Netzwerkkabel bleibt das WLAN unangetastet.</p>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Netz</th><th>Art</th><th></th></tr></thead><tbody id="wifiNets"></tbody></table></div>
+        <h3>Ausweich-WLAN hinzufügen</h3>
+        <p class="hint">Z. B. ein Handy-Hotspot. Ist das Haupt-WLAN weg, verbindet sich der Pi mit einem Ausweich-WLAN und wechselt zurück, sobald das Haupt-WLAN wieder in Reichweite ist. Das Passwort speichert der Netzwerkdienst des Systems (nur für root lesbar), nicht HamScanPi.</p>
+        <div class="filter-grid">
+          <label class="field"><span>Netzname (SSID)</span><input id="wifiSsid" type="text" maxlength="32" list="wifiSeen" autocomplete="off"><datalist id="wifiSeen"></datalist></label>
+          <label class="field"><span>Passwort</span><input id="wifiPsk" type="password" maxlength="63" autocomplete="new-password" placeholder="leer = offenes Netz"></label>
+        </div>
+        <div class="actions"><button type="button" class="btn" id="wifiAdd">Hinzufügen</button><button type="button" class="btn btn-small" id="wifiScan">Netze in Reichweite suchen</button></div>
+        <div class="save-note" id="wifiNote" aria-live="polite"></div>
+        <h3>Letzte Ausfälle</h3>
+        <div id="wifiLog" class="hint">–</div>
+      </section>
       <section class="panel" id="panel-sticks">
         <h2>Geräte</h2>
         <details class="ant-profiles" id="antBox"><summary><b>Antennen</b> <small class="muted" id="antCount"></small></summary>
@@ -427,7 +442,7 @@
         <p class="hint" id="histNote">Der Zeitplaner schreibt einmal pro Minute einen Messpunkt (7 Tage aufbewahrt). Antippen oder mit der Maus zeigen die Werte zu einem Zeitpunkt.</p>
       </section>
       <section class="panel" id="panel-system">
-        <h2>Zustand</h2>
+        <h2>Status</h2>
         <div class="sysgrid" id="sysGrid"><div class="muted">–</div></div>
         <p class="hint" id="sysNote"></p>
       </section>
@@ -522,6 +537,10 @@ sudo mount -a</pre><p class="hint">Danach als Zielordner <code>/mnt/nas</code> e
     <div class="col">
       <section class="panel" id="panel-station">
         <h2>Station</h2>
+        <label class="field" title="Erscheint in Mail und Push, im Browser-Tab, bei OpenHamClock und PSK Reporter – und wird der Name des Pi im Netz (z. B. hamscanpi-afgn.local). So lassen sich mehrere HamScanPis auseinanderhalten."><span>Name dieser Station</span>
+          <input id="stationName" type="text" placeholder="HamScanPi" maxlength="32" autocomplete="off">
+        </label>
+        <p class="hint" id="stationNameHint"></p>
         <label class="field"><span>Mein Rufzeichen (für den ADIF-Export)</span>
           <input id="myCall" type="text" placeholder="z. B. DL1ABC" maxlength="12" autocapitalize="characters" autocomplete="off">
         </label>

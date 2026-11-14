@@ -1,0 +1,98 @@
+#!/bin/bash
+# HamScanPi – Netzwerk-Handgriffe, die Root-Rechte brauchen. Wird von bin/setup_system.sh nach
+# /usr/local/sbin/hamscanpi-net kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel erlaubt
+# genau diese Datei. Jeder Befehl prüft seine Eingaben selbst.
+#
+#   hamscanpi-net reconnect <iface>        WLAN neu verbinden
+#   hamscanpi-net radio                    WLAN aus- und wieder einschalten
+#   hamscanpi-net restart-nm               Netzwerkdienst (NetworkManager) neu starten
+#   hamscanpi-net reload-driver            WLAN-Treiber (brcmfmac) neu laden
+#   hamscanpi-net switch <verbindung>      zu einer bekannten WLAN-Verbindung wechseln
+#   hamscanpi-net list                     bekannte WLAN-Verbindungen: NAME<TAB>SSID<TAB>PRIORITÄT<TAB>AKTIV
+#   hamscanpi-net scan <iface>             sichtbare WLANs: SSID<TAB>SIGNAL(%)<TAB>SICHERHEIT
+#   hamscanpi-net add <ssid> <priorität>   Ausweich-WLAN anlegen (Passwort auf stdin, leer = offenes Netz)
+#   hamscanpi-net remove <verbindung>      Ausweich-WLAN löschen (nur von HamScanPi angelegte: Name „hsp-…“)
+#   hamscanpi-net hostname <name>          Rechnernamen setzen (a–z, 0–9, Bindestrich), /etc/hosts nachziehen
+set -u
+NMCLI="$(command -v nmcli || echo /usr/bin/nmcli)"
+die() { echo "$*" >&2; exit 2; }
+valid_iface() { [[ "$1" =~ ^wl[a-z0-9]{1,13}$ ]] || die "ungültige Schnittstelle"; }
+valid_con() { [[ "$1" =~ ^[[:print:]]{1,64}$ ]] && [[ "$1" != -* ]] || die "ungültiger Verbindungsname"; }
+
+case "${1:-}" in
+  reconnect)
+    valid_iface "${2:-}"
+    "$NMCLI" device disconnect "$2" >/dev/null 2>&1
+    sleep 2
+    "$NMCLI" device connect "$2"
+    ;;
+  radio)
+    "$NMCLI" radio wifi off; sleep 3; "$NMCLI" radio wifi on
+    ;;
+  restart-nm)
+    systemctl restart NetworkManager
+    ;;
+  reload-driver)
+    # brcmfmac ist der Treiber des WLAN-Chips im Pi; neuere Kernel haben dazu brcmfmac_wcc
+    modprobe -r brcmfmac_wcc 2>/dev/null; modprobe -r brcmfmac || die "Treiber ließ sich nicht entladen"
+    sleep 2
+    modprobe brcmfmac
+    for w in /sys/class/net/wl*; do [ -e "$w" ] && iw dev "$(basename "$w")" set power_save off 2>/dev/null; done
+    ;;
+  switch)
+    valid_con "${2:-}"
+    "$NMCLI" connection up id "$2"
+    ;;
+  list)
+    "$NMCLI" -t -f NAME,TYPE,AUTOCONNECT-PRIORITY,ACTIVE connection show | while IFS=: read -r name typ prio act; do
+      [ "$typ" = "802-11-wireless" ] || continue
+      name="${name//\\:/:}"
+      ssid="$("$NMCLI" -g 802-11-wireless.ssid connection show id "$name" 2>/dev/null)"
+      printf '%s\t%s\t%s\t%s\n' "$name" "$ssid" "$prio" "$act"
+    done
+    ;;
+  scan)
+    valid_iface "${2:-}"
+    "$NMCLI" device wifi rescan ifname "$2" >/dev/null 2>&1
+    sleep 3
+    "$NMCLI" -t -f SSID,SIGNAL,SECURITY device wifi list ifname "$2" | sed 's/\\:/\x01/g' \
+      | awk -F: 'length($1) {gsub("\x01", ":", $1); print $1 "\t" $2 "\t" $3}' | sort -t$'\t' -k1,1 -u
+    ;;
+  add)
+    ssid="${2:-}"; prio="${3:-}"
+    [[ ${#ssid} -ge 1 && ${#ssid} -le 32 ]] || die "SSID: 1–32 Zeichen"
+    [[ "$prio" =~ ^-?[0-9]{1,3}$ ]] || die "ungültige Priorität"
+    IFS= read -r psk || psk=""
+    name="hsp-$ssid"
+    "$NMCLI" connection delete id "$name" >/dev/null 2>&1
+    if [ -n "$psk" ]; then
+      [[ ${#psk} -ge 8 && ${#psk} -le 63 ]] || die "WLAN-Passwort: 8–63 Zeichen"
+      "$NMCLI" connection add type wifi con-name "$name" ssid "$ssid" connection.autoconnect yes \
+        connection.autoconnect-priority "$prio" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$psk" >/dev/null
+    else
+      "$NMCLI" connection add type wifi con-name "$name" ssid "$ssid" connection.autoconnect yes \
+        connection.autoconnect-priority "$prio" >/dev/null
+    fi
+    ;;
+  remove)
+    valid_con "${2:-}"
+    [[ "$2" == hsp-* ]] || die "nur von HamScanPi angelegte WLANs lassen sich hier löschen"
+    "$NMCLI" connection delete id "$2"
+    ;;
+  hostname)
+    n="${2:-}"
+    [[ "$n" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "Rechnername: a–z, 0–9 und Bindestrich, höchstens 63 Zeichen"
+    old="$(hostname)"
+    [ "$old" = "$n" ] && exit 0
+    hostnamectl set-hostname "$n" || die "hostnamectl fehlgeschlagen"
+    if grep -q '^127\.0\.1\.1' /etc/hosts; then
+      sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$n/" /etc/hosts
+    else
+      printf '127.0.1.1\t%s\n' "$n" >> /etc/hosts
+    fi
+    systemctl restart avahi-daemon 2>/dev/null || true
+    ;;
+  *)
+    die "unbekannter Befehl"
+    ;;
+esac

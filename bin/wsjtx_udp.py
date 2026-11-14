@@ -93,7 +93,9 @@ def cfg():
     c = dict(s.get("wsjtx_udp") or {})
     c.setdefault("enabled", False)
     c.setdefault("targets", "")
-    c.setdefault("ident", "HamScanPi")
+    if not str(c.get("ident") or "").strip() or c.get("ident") == "HamScanPi":
+        import station as STN                          # Vorgabe: Name dieser Station (zwei Pis unterscheidbar)
+        c["ident"] = STN.name(s)
     c["my_call"], c["my_locator"] = s.get("my_call", ""), s.get("my_locator", "")
     return c
 

@@ -150,9 +150,7 @@ class PmsdrDevice:
                     if e.errno not in (6,):            # ENXIO: kein Leser
                         raise
             if time.time() - t0 > wait_s:
-                raise RuntimeError("PMSDR-Steuerung läuft nicht (pmsdr-control: "
-                                   f"{_unit_state('pmsdr-control')}) – PMSDR angesteckt? "
-                                   "sudo systemctl start pmsdr-control")
+                raise RuntimeError(pmsdr_control_problem() or "PMSDR-Steuerung antwortet nicht – PMSDR ab- und wieder anstecken")
             time.sleep(0.5)
 
     def tune(self, center):
@@ -704,6 +702,20 @@ USB_IDS = {
 }
 
 
+def pmsdr_control_problem():
+    """Warum die PMSDR-Steuerung nicht läuft – mit dem richtigen nächsten Schritt; None, wenn sie läuft."""
+    if not Path("/usr/local/bin/pmsdr").exists():
+        return ("PMSDR-Steuerprogramm fehlt (/usr/local/bin/pmsdr) – System → Version · Update → „Jetzt aktualisieren“ "
+                "baut es, danach die PMSDR einmal ab- und wieder anstecken")
+    st = _unit_state("pmsdr-control")
+    if st in ("active", "activating"):
+        return None
+    r = subprocess.run(["systemctl", "cat", "pmsdr-control"], capture_output=True, text=True, timeout=5)
+    if r.returncode != 0:
+        return "Dienst pmsdr-control fehlt – System → Version · Update → „Jetzt aktualisieren“ richtet ihn ein"
+    return f"PMSDR-Steuerung läuft nicht (pmsdr-control: {st}) – PMSDR ab- und wieder anstecken"
+
+
 def _unit_state(unit):
     try:
         r = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, timeout=3)
@@ -785,7 +797,8 @@ def _detect_hardware():
         "rtlsdr": rtl,
         "pmsdr": {"present": bool(seen["pmsdr_usb"]) and bool(seen["aureon"]),
                   "usb": bool(seen["pmsdr_usb"]), "audio": bool(seen["aureon"]),
-                  "control": (_unit_state("pmsdr-control") if seen["pmsdr_usb"] and fake is None
+                  "control": (("fehlt" if not Path("/usr/local/bin/pmsdr").exists() else _unit_state("pmsdr-control"))
+                              if seen["pmsdr_usb"] and fake is None
                               else ("active" if seen["pmsdr_usb"] else "inactive")),
                   "port": ", ".join(seen["pmsdr_usb"] + seen["aureon"])},
     }

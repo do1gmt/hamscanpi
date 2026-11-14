@@ -6,39 +6,19 @@ sends tuning commands to a **control program** through a FIFO.
 
 ## Control program
 
-The author's station uses the Linux command-line program **`pmsdr`** (version 0.26, built from the
-source archive `pmsdr-0.26.tar.gz`, installed as `/usr/local/bin/pmsdr`). Started with `-u`, it
-reads tuning commands from a FIFO:
+HamScanPi uses the Linux command-line program **`pmsdr`** (version 0.26, GPL-3, by IW3AUT and IW0HDV).
+**You do not have to build it yourself:** the source archive is bundled in `share/pmsdr/`, and the
+installer (and every update) builds and installs it as `/usr/local/bin/pmsdr` if it is missing – after
+checking its SHA-256 sum (`7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947`) and applying
+one correction (`size_t` for `getline()` – GCC 14 on Debian 13 rejects the original, older compilers built it
+with a silent memory overwrite on 64-bit systems). Build packages: `build-essential`, `libusb-1.0-0-dev`,
+`libreadline-dev` (installed by the set-up).
 
-```
-/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
-```
+The program reads tuning commands (`f <frequency in Hz>`) from a FIFO, `/tmp/PMSDRcommands` by default
+(environment variable `PMSDR_FILE`). It does not create the FIFO itself – the service does that before it
+starts. Note: `-u` is *not* the FIFO but a UDP port option of this program.
 
-**Download:** the PMSDR software is published by IW3AUT on
-<https://iw3aut.altervista.org/downloads.htm> – look for the Linux command-line program; this setup uses
-version 0.26 (`pmsdr-0.26.tar.gz`).
-
-> **Certificate warning:** at the time of writing the site's HTTPS certificate is not valid, so
-> browsers show a security warning. The page itself is the official source; you can continue
-> past the warning (in most browsers: *Advanced → Continue*). Because the connection is then not
-> verified, check the downloaded archive before building it – compare its SHA-256 checksum
-> (`sha256sum pmsdr-0.26.tar.gz`) with the one below, and do not run anything from it as root
-> except the final `make install` step.
-
-SHA-256 of the archive used on the author's station:
-
-```
-7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947  pmsdr-0.26.tar.gz
-```
-
-Check it with `echo "7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947  pmsdr-0.26.tar.gz" | sha256sum -c`
-– it must print `pmsdr-0.26.tar.gz: OK`.
-
-Build it from source as described in the archive's README and install the binary to
-`/usr/local/bin/pmsdr`. If `install.sh` finds that binary, it offers to set up the service and the
-hotplug rule below for you.
-
-### Service
+### Service (set up automatically)
 
 `/etc/systemd/system/pmsdr-control.service`:
 
@@ -50,7 +30,9 @@ After=network.target
 [Service]
 Type=simple
 User=<your user>
-ExecStart=/usr/local/bin/pmsdr -u /tmp/PMSDRcommands
+Environment=PMSDR_FILE=/tmp/PMSDRcommands
+ExecStartPre=/bin/sh -c '[ -p "/tmp/PMSDRcommands" ] || { rm -f "/tmp/PMSDRcommands"; mkfifo -m 660 "/tmp/PMSDRcommands"; }'
+ExecStart=/usr/local/bin/pmsdr
 Restart=on-failure
 RestartSec=2
 
@@ -70,10 +52,11 @@ WantedBy=multi-user.target
 | `frequency_correction_ppm` | crystal correction, measure it on a known carrier | `0` |
 | `pmsdr_soundcard_usb` | USB IDs of the sound card (`["0ccd:00b1"]`); `[]` = detect by `alsa_name` | Aureon 7.1 USB |
 
-The control program must run as a service named **`pmsdr-control`**: the dashboard shows
-“steckt – Steuerung läuft nicht” when the PMSDR is plugged in but this service is not active.
+The control program must run as a service named **`pmsdr-control`**: the dashboard shows “plugged in – control
+program missing” when `/usr/local/bin/pmsdr` does not exist (install the update) and “plugged in – control not
+running” when the service is not active (unplug the PMSDR and plug it in again).
 
-## Hotplug (optional)
+## Hotplug (set up automatically)
 
 With this udev rule the control service starts when the PMSDR is plugged in and stops when it is
 unplugged (`/etc/udev/rules.d/90-hamscanpi-pmsdr.rules`):

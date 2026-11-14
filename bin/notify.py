@@ -48,8 +48,14 @@ def send_mail(subject, body, settings=None):
     if not c.get("smtp_host") or not c.get("mail_to"):
         raise ValueError("SMTP-Server oder Empfänger fehlt")
     msg = EmailMessage()
-    msg["Subject"] = "[HamScanPi] " + subject
-    msg["From"] = c.get("mail_from") or c.get("smtp_user") or "pmsdr@localhost"
+    import station as STN
+    sn = STN.name()
+    msg["Subject"] = f"[{sn}] " + subject
+    frm = c.get("mail_from") or c.get("smtp_user") or "pmsdr@localhost"
+    from email.utils import formataddr, parseaddr
+    if not parseaddr(frm)[0]:                          # Anzeigename = Stationsname (zwei Pis unterscheidbar)
+        frm = formataddr((sn, parseaddr(frm)[1] or frm))
+    msg["From"] = frm
     msg["To"] = c["mail_to"]
     msg["Date"] = formatdate(localtime=True)
     msg.set_content(body)
@@ -93,6 +99,9 @@ def push_on(c):
 
 
 def send_push(title, text, c, image=None, priority="default"):
+    import station as STN
+    if STN.custom():                                   # mehrere Stationen: wer meldet sich?
+        title = f"{STN.name()}: {title}"
     """Push über ntfy oder Telegram. image: Pfad zu einem Bild (SSTV), wird mitgeschickt."""
     import urllib.request
     import urllib.parse

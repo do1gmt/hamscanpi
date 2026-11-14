@@ -60,15 +60,30 @@ def _notice(mode, host):
         pass
 
 
-def run(port=8080, rounds=None, every=30, host=None):
-    host = host or socket.gethostname().split(".")[0]
+def _custom_name():
+    try:
+        import station as STN
+        return STN.custom()
+    except Exception:
+        return False
+
+
+def run(port=8080, rounds=None, every=30, host=None, custom=None):
+    fixed_host = host
     proc, cur_ip, mode = None, None, None
     n = 0
     while rounds is None or n < rounds:
         n += 1
+        host = fixed_host or socket.gethostname().split(".")[0]   # ändert sich mit dem Stationsnamen
         ip = _ip()
-        if host.lower() == NAME:
-            new_mode = "hostname"                      # avahi meldet den Rechnernamen ohnehin an
+        own = _custom_name() if custom is None else custom
+        if host.lower() == NAME or own:
+            # eigener Stationsname: der Rechnername ist schon daraus abgeleitet (hamscanpi-afgn.local) – kein
+            # zusätzliches hamscanpi.local, sonst streiten sich zwei Pis darum
+            if proc and proc.poll() is None:
+                proc.terminate()
+            proc = None
+            new_mode = "hostname"
         elif not ip:
             new_mode = "no_ip"
         elif not shutil_which("avahi-publish"):
@@ -100,7 +115,7 @@ def run(port=8080, rounds=None, every=30, host=None):
         if new_mode != mode:
             _notice(new_mode, host)
         mode = new_mode
-        name = f"{NAME}.local" if mode in ("hostname", "alias") else f"{host}.local"
+        name = f"{NAME}.local" if mode == "alias" else f"{host}.local"
         _save({"name": name, "host": host, "ip": ip, "mode": mode, "url": f"http://{name}:{port}",
                "updated": time.time()})
         if rounds is None or n < rounds:

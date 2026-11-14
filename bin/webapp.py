@@ -272,6 +272,8 @@ def load_settings():
         "record_seconds": float(scanner_config().get("record_seconds", 5.0)),
         "my_locator": str(data.get("my_locator", "") or "").upper(),
         "my_call": str(data.get("my_call", "") or "").upper(),
+        "station_name": __import__("station").name(data),
+        "station_hostname": __import__("socket").gethostname(),
         "pskreporter": bool(data.get("pskreporter")),
         "watchlist": data.get("watchlist") or [],
         "schedules": data.get("schedules") or [],
@@ -464,6 +466,9 @@ def save_settings(data):
         if loc and not _re.fullmatch(r"[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?", loc):
             raise ValueError("Locator ungültig (z. B. JO31 oder JO31AB)")
         out["my_locator"] = loc
+    if "station_name" in data:
+        import station as STN
+        out["station_name"] = STN.validate(data["station_name"])
     if "my_call" in data:
         c = str(data["my_call"] or "").strip().upper()
         if c and not __import__("re").fullmatch(r"[A-Z0-9/]{3,12}", c):
@@ -1284,6 +1289,9 @@ def watch_and_stations_cycle():
             try:
                 import pskreporter as PSK
                 ant = (scanner_config().get("antennas") or {}).get("pmsdr", "")
+                import station as STN
+                if STN.custom(st):                        # zwei Stationen mit einem Rufzeichen unterscheidbar
+                    ant = f"{STN.name(st)} · {ant}" if ant else STN.name(st)
                 PSK.report(db, st["my_call"], st["my_locator"], ant,
                            log=lambda level, event, **d: APPLOG.log(level, "pskreporter", event, **d))
             except Exception as e:
@@ -2231,6 +2239,11 @@ class Handler(BaseHTTPRequestHandler):
                 ui = load_settings().get("ui_lang")
                 if ui in ("de", "en"):
                     html = html.replace("<head>", f'<head>\n  <meta name="hsp-lang" content="{ui}">', 1)
+                ver = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else ""
+                import station as STN
+                _sn = STN.name(load_settings())
+                html = html.replace("<title>HamScanPi</title>", f"<title>{_sn.replace('<', '').replace('&', '')}</title>", 1)
+                html = html.replace("<head>", f'<head>\n  <meta name="hsp-version" content="{ver}">', 1)
                 data = html.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -2246,7 +2259,12 @@ class Handler(BaseHTTPRequestHandler):
                 name = Path(path[len("/files/"):]).name
                 return self.send_file(REPORTS / name)
             if path == "/api/status":
-                return self.send_json(load_status())
+                st_ = load_status()
+                try:                                     # Version des Servers: nach einem Update lädt sich die Seite neu
+                    st_["version"] = (BASE / "VERSION").read_text().strip()
+                except OSError:
+                    pass
+                return self.send_json(st_)
             if path == "/api/sat/passes":
                 return self.send_json(sat_passes())
             if path == "/api/sat/track":
@@ -2332,7 +2350,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"config": WX.cfg(), "state": WX.state()})
             if path == "/api/update":
                 import subprocess as _sp
-                import housekeeping as HK
                 running = _sp.run(["systemctl", "is-active", "hamscanpi-update"], capture_output=True, text=True).stdout.strip()
                 try:
                     tail = (BASE / "log" / "update.log").read_text(encoding="utf-8", errors="replace")[-6000:]
@@ -2343,11 +2360,17 @@ class Handler(BaseHTTPRequestHandler):
                 cur = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "?"
                 import health as _H
                 return self.send_json({"version": cur, "latest": up.get("latest"), "checked": up.get("checked"),
-                                       "check_error": up.get("error"), "check_days": _H.update_days(load_settings()),
+                                       "check_error": up.get("error"), "check_days": _H.update_days(read_json(SETTINGS, {})),
                                        "newer": bool(up.get("latest") and HK._vtuple(up["latest"]) > HK._vtuple(cur)),
                                        "running": running in ("activating", "active"),
                                        "state": running, "log": tail, "git": (BASE / ".git").exists(),
                                        "unit": _sp.run(["systemctl", "cat", "hamscanpi-update"], capture_output=True).returncode == 0})
+            if path == "/api/wifi":
+                import netheal as NH
+                return self.send_json(dict(NH.status(), networks=NH.networks()))
+            if path == "/api/wifi/scan":
+                import netheal as NH
+                return self.send_json({"visible": NH.scan()})
             if path == "/api/location-check":
                 lc = read_json(BASE / "data" / "location_check.json", None)
                 return self.send_json({"pending": bool(lc), **(lc or {}), "locator": load_settings().get("my_locator", "")})
@@ -2543,6 +2566,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.gate(path):
                 return
+            if path in ("/api/wifi/add", "/api/wifi/remove"):
+                import netheal as NH
+                n = int(self.headers.get("Content-Length") or 0)
+                data = json.loads(self.rfile.read(n) or b"{}") if n else {}
+                if path.endswith("add"):
+                    NH.add_fallback(data.get("ssid"), data.get("psk") or "")
+                    APPLOG.log("INFO", "webapp", "wifi_fallback_added", ssid=data.get("ssid"))
+                else:
+                    NH.remove_fallback(data.get("name"))
+                    APPLOG.log("INFO", "webapp", "wifi_fallback_removed", name=data.get("name"))
+                return self.send_json({"ok": True, "networks": NH.networks()})
             if path == "/api/update/settings":
                 import health as _H
                 n = int(self.headers.get("Content-Length") or 0)
@@ -2667,6 +2701,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "auth": AUTH.status()})
             if path == "/api/settings":
                 res = save_settings(data)
+                if "station_name" in data:                   # Rechnername im Netz mitziehen
+                    import station as STN
+                    import netheal as NH
+                    want = STN.hostname_for(res.get("station_name"))
+                    ok, out_ = NH.helper("hostname", want, timeout=30)
+                    APPLOG.log("INFO" if ok else "WARN", "webapp", "station_renamed", name=res.get("station_name"),
+                               hostname=want, ok=ok, error=None if ok else out_[-200:])
+                    res = dict(res, station_hostname=__import__("socket").gethostname(),
+                               hostname_error=None if ok else (out_.splitlines() or ["Rechnername nicht geändert"])[-1])
                 # Satelliten eingeschaltet oder Auswahl/Prioritäten geändert: 60 s Bedenkzeit, bevor ein Überflug
                 # startet und dafür womöglich einen Scan unterbricht
                 tb = data.get("toggle_band") if isinstance(data.get("toggle_band"), dict) else {}
