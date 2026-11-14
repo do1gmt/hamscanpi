@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.06 – 2026-11-15
+
+- **Readable error messages** by mail/Telegram/ntfy (`bin/errtext.py`): what happened, whether HamScanPi handles it
+  itself, and "What to do" only when something is needed – instead of "scheduler / loop_exception" and a raw data
+  record. Unknown events as "name: value" lines without long program output; the technical name stays at the end
+  for searching the log.
+- **Live decodes show the band** (e.g. "40m FT8 …"; frequency outside a band: MHz).
+- **WordPress plugin 1.4.0 – one access per Pi:** role "SSTV-Melder" (may only send images); Settings →
+  SSTV gallery → *Access for the Pis* creates a user with an application password per Pi. The image list shows
+  "Sent by" (station name of the Pi and user) with a filter, the log names the station, shortcode `station="…"`
+  shows only one Pi's images. Older images get their station from the data sent with them. The approve link
+  reaches HamScanPi also for images sent by an SSTV-Melder; links point to the unfiltered gallery page.
+- Self-test section 66.
+
 ## 1.8.05 – 2026-11-14
 
 - **Fix: PMSDR heard nothing** – the sound card recorded from *Mic* instead of *Line* (after re-plugging, e.g.

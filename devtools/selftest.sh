@@ -2316,5 +2316,40 @@ assert "if (u === 'pmsdr-control') continue" in js
 assert "createComment('slot')" in lj and "c.appendChild(p); moved.push(p)" not in lj
 PY
 
+echo "== 66 Lesbare Fehlermeldungen, Band bei Live-Dekodierungen, SSTV-Melder je Pi"
+(cd bin && python3 - "$SRC" <<'PY') && ok "Fehler als Klartext mit „Was tun“ nur wenn nötig, Live-Dekodierung mit Band, Plugin: Rolle SSTV-Melder und Station je Bild" || bad "Fehlertexte/Live-Band/Melder"
+import sys
+from pathlib import Path
+import errtext as ET, notify as N, live_decode as LD
+t, b = ET.text("scheduler", "loop_exception", {"error": "FileNotFoundError: x", "where": ["lang"]})
+assert t == "Zeitplaner: eine Runde fehlgeschlagen" and "Was tun:" in b and "lang" not in b and "(scheduler / loop_exception)" in b
+t, b = ET.text("scanner", "device_open_failed", {"device": "pmsdr", "error": "Soundkarte fehlt"})
+assert "pmsdr" in t and "Was tun" not in b
+t, b = ET.text("webapp", "neu_unbekannt", {"x": 1, "output_tail": "z" * 50})
+assert t == "Dashboard: Fehler" and "x: 1" in b and "zzz" not in b
+t, b = ET.text("scheduler", "loop_exception", {"error": "e"}, en=True); assert t.startswith("Scheduler")
+sent = []
+N.cfg = lambda: {"enabled": True, "on_error": True, "throttle_min": 0}
+N._throttled = lambda k, m: False
+N._is_en = lambda: False
+N.send_all = lambda title, body, c, **k: sent.append((title, body))
+N.notify_error("housekeeping", "pass_aborted", {"stage": "Aufnahme", "hint": "Rohdaten …"})
+assert sent and sent[0][0] == "⚠ Überflug nicht beendet" and "{" not in sent[0][1], sent
+LD.band_of = lambda f: "40m" if 7e6 <= f <= 7.2e6 else "Live"
+cls = next(v for v in vars(LD).values() if isinstance(v, type) and hasattr(v, "_add") and hasattr(v, "status"))
+o = cls.__new__(cls); import threading, collections
+o.lock, o.seq, o.events, o.freq_hz = threading.Lock(), 0, collections.deque(maxlen=100), 7_074_000
+o._add("FT8", "CQ DL1ABC JO31")
+o.freq_hz = 145_500_000; o._add("APRS", "x")
+ev = list(o.events)
+assert ev[1]["band"] == "40m" and ev[0]["band"] is None, ev
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert "e.band || fmtMHz(e.freq_hz)" in js
+php = (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php").read_text()
+for k in ("add_role('hsp_sstv_melder'", "'_hsp_station'", "'hsp_from'", "hsp_sstv_pi_user", "create_new_application_password",
+          "'permission_callback' => 'hsp_sstv_can_send'", "admin_url('post.php?post='"):
+    assert k in php, k
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

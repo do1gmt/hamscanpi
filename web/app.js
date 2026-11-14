@@ -1714,7 +1714,9 @@
     const tm = t => tfmt(t, { date: false, sec: true });
     $('liveDecCount').textContent = (d.events || []).length ? `${d.events.length}` : '';
     if (!(d.events || []).length) return;
-    $('liveDecList').innerHTML = (d.events || []).slice(0, 60).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small> <b class="px">${esc(e.type)}</b>`
+    $('liveDecList').innerHTML = (d.events || []).slice(0, 60).map(e => `<div class="live-dec-ev"><small class="muted">${tm(e.t)}</small>`
+      + (e.band || e.freq_hz ? ` <span class="badge badge-band px" title="${e.freq_hz ? fmtMHz(e.freq_hz) + ' MHz' : ''}">${esc(e.band || fmtMHz(e.freq_hz) + ' MHz')}</span>` : '')
+      + ` <b class="px">${esc(e.type)}</b>`
       + (e.snr != null ? ` <small class="muted">${e.snr > 0 ? '+' : ''}${e.snr} dB · ${e.audio_hz} Hz</small>` : '')
       + ` <span class="no-i18n">${esc(e.text)}</span>${e.detail ? ` <small class="muted">${esc(e.detail)}</small>` : ''}`
       + (e.img ? `<br><a href="${esc(e.img)}" target="_blank" rel="noopener"><img class="live-sstv" src="${esc(e.img)}" alt="SSTV-Bild"></a>` : '') + `</div>`).join('');

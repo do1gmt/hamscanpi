@@ -173,8 +173,15 @@ class LiveDecoders:
     def _add(self, typ, text, **kw):
         with self.lock:
             self.seq += 1
+            if getattr(self, "_band_f", None) != self.freq_hz:          # Band dazu (Dashboard: „40m · FT8“), je Frequenz einmal
+                try:
+                    b = band_of(self.freq_hz) if self.freq_hz else None
+                except Exception:
+                    b = None
+                self._band_f, self._band = self.freq_hz, (None if b == "Live" else b)
+            band = self._band
             self.events.appendleft(dict(seq=self.seq, t=time.time(), type=typ, text=text,
-                                        freq_hz=self.freq_hz, **kw))
+                                        freq_hz=self.freq_hz, band=band, **kw))
 
     def status(self, since=0):
         with self.lock:

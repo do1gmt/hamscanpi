@@ -89,9 +89,10 @@ def notify_error(component, event, data):
         return
     if _throttled("error", float(c.get("throttle_min", 30))):
         return
-    send_all(f"Fehler: {component} / {event}",
-             f"Komponente: {component}\nEreignis: {event}\n\n{json.dumps(data, ensure_ascii=False, indent=2)}\n", c,
-             priority="high")
+    # lesbar: was ist passiert, behebt HamScanPi es selbst, was ist zu tun (bin/errtext.py) – statt Rohdaten
+    import errtext as ET
+    title, body = ET.text(component, event, data, en=_is_en())
+    send_all("⚠ " + title, body + "\n", c, priority="high")
 
 
 def push_on(c):

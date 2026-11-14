@@ -1,7 +1,7 @@
 === HamScanPi SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.4.0
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von HamScanPi und zeigt sie als Galerie.
@@ -31,12 +31,22 @@ Empfängt SSTV-Bilder von HamScanPi und zeigt sie als Galerie.
 * Vorlage ins Theme kopieren: <theme>/hamscanpi-sstv/galerie.php
 * Filter: hsp_sstv_item, hsp_sstv_insert_status
 
+== Mehrere Pis ==
+Je Pi einen Benutzer mit der Rolle „SSTV-Melder“ anlegen (Einstellungen → SSTV-Galerie → Zugang für die Pis) und in
+HamScanPi unter Einstellungen → Webseite eintragen. Jedes Bild trägt den Stationsnamen des Pi (HamScanPi →
+Einstellungen → Station); die Liste „SSTV-Bilder“ lässt sich danach filtern.
+
 == Datenschutz ==
 Übertragen werden Bild, Satelliten- und Empfangsangaben, Rufzeichen, Locator, Stationsname und Werte des
 Raspberry Pi (Temperatur, Last, Speicher). Keine IP- oder MAC-Adressen, kein WLAN, keine Zugangsdaten. Station
 und Pi-Werte lassen sich in den Einstellungen ausblenden.
 
 == Änderungen ==
+= 1.4.0 =
+* Rolle „SSTV-Melder“ (darf nur Bilder einsenden); unter Einstellungen → SSTV-Galerie → Zugang für die Pis je Pi einen Benutzer mit Anwendungspasswort anlegen.
+* Liste der SSTV-Bilder: Spalte „Eingesandt von“ (Stationsname des Pi und Benutzer), Filter nach Station; Protokoll mit Station.
+* Kurzcode station="…": nur Bilder eines Pi.
+* Freigabe-Link für HamScanPi auch bei Einsendungen eines SSTV-Melders; Links zeigen auf die Galerie ohne Filter.
 = 1.3.1 =
 * Galerie nie breiter als der Inhaltsbereich des Themes (auch wenn der Kurzcode außerhalb eines Inhaltsrahmens steht), am Handy mit Rand; „Größte Breite“ einstellbar.
 = 1.3.0 =

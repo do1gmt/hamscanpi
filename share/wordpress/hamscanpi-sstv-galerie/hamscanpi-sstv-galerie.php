@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HamScanPi SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von HamScanPi (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.3.1
+ * Version:           1.4.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            HamScanPi
@@ -13,6 +13,8 @@
  *  - Einstellungen → SSTV-Galerie: Reihenfolge, Gruppierung (Tag, Quelle, Überflug), Zeitzone der Angaben, Filterknöpfe,
  *    Farben, Rundung, Bildgröße, Überblenddauer, eigenes CSS, Plugin-CSS ganz aus.
  *  - Je Bild (SSTV-Bilder → bearbeiten): Empfangszeit, Quelle, „hervorheben“ – die Galerie sortiert sofort neu.
+ *  - Mehrere Pis: je Pi ein Benutzer mit der Rolle „SSTV-Melder“ (darf nur Bilder einsenden). Liste und Protokoll
+ *    zeigen, welcher Pi (Stationsname) und welcher Benutzer ein Bild geschickt hat; Kurzcode-Filter station="…".
  *  - Vorlage: templates/galerie.php ins Theme kopieren nach  <theme>/hamscanpi-sstv/galerie.php  und dort ändern.
  *  - CSS-Variablen (--hsp-…) im Theme überschreiben, z. B.  .hsp-galerie { --hsp-accent: #c00; }
  *  - Filter: hsp_sstv_item (ein Bild für die Ausgabe), hsp_sstv_insert_status (Status beim Empfang).
@@ -22,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.3.1');
+define('HSP_SSTV_VERSION', '1.4.0');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -61,6 +63,55 @@ function hsp_sstv_opts()
     return wp_parse_args(is_array($o) ? $o : array(), hsp_sstv_defaults());
 }
 
+/* ------------------------------------------------------------------ Rolle „SSTV-Melder“ */
+
+/** Rolle mit dem Nötigsten: lesen, Dateien hochladen, SSTV-Bilder einsenden (und, wenn erlaubt, gleich veröffentlichen)
+ *  – kein Zugang zu Beiträgen, Seiten oder Einstellungen. Wird beim Laden angelegt (auch nach einem Plugin-Update). */
+function hsp_sstv_roles()
+{
+    if (get_option('hsp_sstv_roles') === '1') {
+        return;
+    }
+    remove_role('hsp_sstv_melder');
+    add_role('hsp_sstv_melder', 'SSTV-Melder', array('read' => true, 'upload_files' => true, 'hsp_sstv_send' => true,
+                                                     'hsp_sstv_publish' => true));
+    foreach (array('administrator', 'editor', 'author') as $r) {
+        $role = get_role($r);
+        if ($role) {
+            $role->add_cap('hsp_sstv_send');
+            $role->add_cap('hsp_sstv_publish');
+        }
+    }
+    update_option('hsp_sstv_roles', '1');
+}
+add_action('init', 'hsp_sstv_roles', 5);
+
+/** Ältere Bilder (vor 1.4): Stationsname aus den mitgeschickten Angaben übernehmen – einmalig, für Spalte und Filter. */
+add_action('admin_init', function () {
+    if (get_option('hsp_sstv_station_meta') === '1') {
+        return;
+    }
+    $ids = get_posts(array('post_type' => 'hsp_sstv', 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => 2000,
+                           'meta_query' => array(array('key' => '_hsp_station', 'compare' => 'NOT EXISTS'))));
+    foreach ($ids as $id) {
+        $m = json_decode((string) get_post_meta($id, '_hsp_meta', true), true);
+        if (is_array($m) && !empty($m['summary']['station'])) {
+            update_post_meta($id, '_hsp_station', mb_substr((string) $m['summary']['station'], 0, 80));
+        }
+    }
+    update_option('hsp_sstv_station_meta', '1');
+});
+
+function hsp_sstv_can_send()
+{
+    return current_user_can('hsp_sstv_send') || current_user_can('upload_files');
+}
+
+function hsp_sstv_can_publish()
+{
+    return current_user_can('hsp_sstv_publish') || current_user_can('publish_posts');
+}
+
 /* ------------------------------------------------------------------ Inhaltstyp und Quellen */
 
 add_action('init', function () {
@@ -92,12 +143,12 @@ add_action('init', function () {
 add_action('rest_api_init', function () {
     register_rest_route(HSP_SSTV_NS, '/ping', array(
         'methods'             => 'GET',
-        'permission_callback' => function () { return current_user_can('upload_files'); },
+        'permission_callback' => 'hsp_sstv_can_send',
         'callback'            => 'hsp_sstv_ping',
     ));
     register_rest_route(HSP_SSTV_NS, '/images', array(
         'methods'             => 'POST',
-        'permission_callback' => function () { return current_user_can('upload_files'); },
+        'permission_callback' => 'hsp_sstv_can_send',
         'callback'            => 'hsp_sstv_receive',
     ));
     register_rest_route(HSP_SSTV_NS, '/gallery', array(
@@ -109,6 +160,7 @@ add_action('rest_api_init', function () {
             'per_page' => array('default' => 48, 'sanitize_callback' => function ($v) { return absint($v); }),
             // eigene Hülle: sanitize_title() nähme sonst das Anfrage-Objekt als Ersatzwert (2. Argument)
             'quelle'   => array('default' => '', 'sanitize_callback' => function ($v) { return sanitize_title((string) $v); }),
+            'station'  => array('default' => '', 'sanitize_callback' => function ($v) { return mb_substr(sanitize_text_field((string) $v), 0, 80); }),
         ),
     ));
 });
@@ -121,7 +173,7 @@ function hsp_sstv_ping()
         'version'     => HSP_SSTV_VERSION,
         'site'        => get_bloginfo('name'),
         'user'        => $u ? $u->user_login : '',
-        'can_publish' => current_user_can('publish_posts'),
+        'can_publish' => hsp_sstv_can_publish(),
         'max_mb'      => (int) hsp_sstv_opts()['max_mb'],
     );
 }
@@ -214,8 +266,9 @@ function hsp_sstv_answer($id, $dup)
         $page = get_option('hsp_sstv_page');
         $link = $page ? get_permalink((int) $page) . '#sstv-' . $id : wp_get_attachment_url(get_post_thumbnail_id($id));
     }
+    // Link zum Freigeben für den Menschen am Dashboard – auch wenn der einsendende Benutzer (SSTV-Melder) selbst nicht bearbeiten darf
     return array('ok' => true, 'id' => $id, 'status' => $p ? $p->post_status : '', 'duplicate' => $dup, 'link' => $link,
-                 'edit' => get_edit_post_link($id, 'raw'));
+                 'edit' => admin_url('post.php?post=' . (int) $id . '&action=edit'));
 }
 
 /** Protokoll der letzten 100 Empfänge (Einstellungen → SSTV-Galerie) – zur Fehlersuche. */
@@ -232,12 +285,13 @@ function hsp_sstv_receive(WP_REST_Request $req)
 {
     $r = hsp_sstv_receive_inner($req);
     $src = json_decode((string) $req->get_param('meta'), true);
+    $sta = is_array($src) && isset($src['summary']['station']) ? mb_substr(sanitize_text_field((string) $src['summary']['station']), 0, 80) : '';
     $src = is_array($src) && isset($src['summary']['source']) ? mb_substr(sanitize_text_field((string) $src['summary']['source']), 0, 80) : '';
     if (is_wp_error($r)) {
-        hsp_sstv_log('abgelehnt', array('source' => $src, 'reason' => $r->get_error_message()));
+        hsp_sstv_log('abgelehnt', array('source' => $src, 'station' => $sta, 'reason' => $r->get_error_message()));
     } else {
         hsp_sstv_log($r['duplicate'] ? 'schon vorhanden' : ($r['status'] === 'publish' ? 'veröffentlicht' : 'Entwurf'),
-                     array('source' => $src, 'id' => $r['id']));
+                     array('source' => $src, 'station' => $sta, 'id' => $r['id']));
     }
     return $r;
 }
@@ -275,7 +329,7 @@ function hsp_sstv_receive_inner(WP_REST_Request $req)
     if ($o['status_mode'] === 'draft' || $o['status_mode'] === 'publish') {
         $want = $o['status_mode'];
     }
-    if ($want === 'publish' && !current_user_can('publish_posts')) {
+    if ($want === 'publish' && !hsp_sstv_can_publish()) {
         $want = 'pending';
     }
     $manual = (bool) $req->get_param('manual');
@@ -316,6 +370,14 @@ function hsp_sstv_receive_inner(WP_REST_Request $req)
     if ($manual) {
         update_post_meta($id, '_hsp_manual', 1);
     }
+    // wer hat es geschickt: Stationsname des Pi (Einstellungen → Station) und WordPress-Benutzer
+    if (!empty($sum['station'])) {
+        update_post_meta($id, '_hsp_station', mb_substr((string) $sum['station'], 0, 80));
+    }
+    $u = wp_get_current_user();
+    if ($u && $u->ID) {
+        update_post_meta($id, '_hsp_user', $u->user_login);
+    }
     wp_set_object_terms($id, $source, 'hsp_sat');
     return hsp_sstv_answer($id, false);
 }
@@ -349,6 +411,7 @@ function hsp_sstv_item($id)
         'time'     => $lt->format('H:i:s'),
         'tz'       => hsp_sstv_tzlabel($lbl),
         'featured' => (bool) get_post_meta($id, '_hsp_featured', true),
+        'station'  => (string) get_post_meta($id, '_hsp_station', true),
         'source'   => $terms && !is_wp_error($terms) ? $terms[0]->name : '',
         'slug'     => $terms && !is_wp_error($terms) ? $terms[0]->slug : '',
         'summary'  => $meta['summary'],
@@ -369,6 +432,9 @@ function hsp_sstv_gallery_rest(WP_REST_Request $req)
     $tax = $req['quelle'] ? array(array('taxonomy' => 'hsp_sat', 'field' => 'slug', 'terms' => $req['quelle'])) : null;
     if ($tax) {
         $args['tax_query'] = $tax;
+    }
+    if ($req['station'] !== '' && $req['station'] !== null) {
+        $args['meta_query'] = array(array('key' => '_hsp_station', 'value' => $req['station']));
     }
     $q = new WP_Query($args);
     $items = array_map('hsp_sstv_item', wp_list_pluck($q->posts, 'ID'));
@@ -427,15 +493,21 @@ function hsp_sstv_assets()
 
 add_shortcode('sstv_galerie', function ($atts) {
     $o = hsp_sstv_opts();
-    $a = shortcode_atts(array('quelle' => '', 'pro_seite' => $o['per_page'], 'statistik' => 'ja'), $atts, 'sstv_galerie');
-    if (get_the_ID() && (int) get_option('hsp_sstv_page') !== (int) get_the_ID()) {
-        update_option('hsp_sstv_page', (int) get_the_ID());     // für Links aus HamScanPi
+    $a = shortcode_atts(array('quelle' => '', 'station' => '', 'pro_seite' => $o['per_page'], 'statistik' => 'ja'), $atts, 'sstv_galerie');
+    // Seite für Links aus HamScanPi: die Galerie ohne Filter (eine Seite nur mit ISS oder nur einem Pi zeigte nicht jedes Bild);
+    // eine gefilterte Seite nur, solange es noch keine gültige gibt
+    $cur = (int) get_option('hsp_sstv_page');
+    $unfiltered = $a['quelle'] === '' && $a['station'] === '';
+    if (get_the_ID() && $cur !== (int) get_the_ID() && ($unfiltered || !$cur || get_post_status($cur) !== 'publish')) {
+        update_option('hsp_sstv_page', (int) get_the_ID());
     }
     hsp_sstv_assets();
     $hsp = array(
-        'endpoint'  => esc_url_raw(rest_url(HSP_SSTV_NS . '/gallery')),
+        'endpoint'  => esc_url_raw(add_query_arg($a['station'] !== '' ? array('station' => rawurlencode(sanitize_text_field($a['station']))) : array(),
+                                                 rest_url(HSP_SSTV_NS . '/gallery'))),
         'per_page'  => max(1, min(100, (int) $a['pro_seite'])),
         'quelle'    => sanitize_title($a['quelle']),
+        'station'   => sanitize_text_field($a['station']),
         'statistik' => $a['statistik'] !== 'nein',
     );
     $tpl = locate_template('hamscanpi-sstv/galerie.php');
@@ -455,11 +527,20 @@ add_filter('manage_hsp_sstv_posts_columns', function ($c) {
         $n[$k] = $v;
     }
     $n['hsp_info'] = 'Empfang';
+    $n['hsp_from'] = 'Eingesandt von';
     return $n;
 });
 add_action('manage_hsp_sstv_posts_custom_column', function ($col, $id) {
     if ($col === 'hsp_thumb') {
         echo get_the_post_thumbnail($id, array(80, 64));
+    } elseif ($col === 'hsp_from') {
+        $st = (string) get_post_meta($id, '_hsp_station', true);
+        $us = (string) get_post_meta($id, '_hsp_user', true);
+        if ($st !== '') {
+            echo '<a href="' . esc_url(add_query_arg(array('post_type' => 'hsp_sstv', 'hsp_station' => $st), admin_url('edit.php'))) . '"><b>'
+                 . esc_html($st) . '</b></a>';
+        }
+        echo $us !== '' ? '<br><small>' . esc_html($us) . '</small>' : '';
     } elseif ($col === 'hsp_info') {
         $m = json_decode((string) get_post_meta($id, '_hsp_meta', true), true);
         $s = is_array($m) && isset($m['summary']) ? $m['summary'] : array();
@@ -497,6 +578,61 @@ add_action('add_meta_boxes_hsp_sstv', function () {
             echo '</tbody></table>';
         }
     }, 'hsp_sstv', 'normal', 'high');
+});
+
+/** Liste der SSTV-Bilder nach Station (Pi) filtern. */
+add_action('restrict_manage_posts', function ($type) {
+    if ($type !== 'hsp_sstv') {
+        return;
+    }
+    global $wpdb;
+    $all = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s ORDER BY meta_value", '_hsp_station'));
+    if (count($all) < 2) {
+        return;
+    }
+    $cur = isset($_GET['hsp_station']) ? sanitize_text_field(wp_unslash($_GET['hsp_station'])) : '';
+    echo '<select name="hsp_station"><option value="">Alle Stationen</option>';
+    foreach ($all as $st) {
+        echo '<option value="' . esc_attr($st) . '"' . selected($cur, $st, false) . '>' . esc_html($st) . '</option>';
+    }
+    echo '</select>';
+});
+add_action('pre_get_posts', function ($q) {
+    if (!is_admin() || !$q->is_main_query() || $q->get('post_type') !== 'hsp_sstv' || empty($_GET['hsp_station'])) {
+        return;
+    }
+    $q->set('meta_query', array(array('key' => '_hsp_station', 'value' => sanitize_text_field(wp_unslash($_GET['hsp_station'])))));
+});
+
+/** Zugang für einen Pi: Benutzer mit der Rolle „SSTV-Melder“ und Anwendungspasswort anlegen (einmal angezeigt). */
+add_action('admin_post_hsp_sstv_pi_user', function () {
+    if (!current_user_can('create_users') || !check_admin_referer('hsp_sstv_pi_user')) {
+        wp_die('Keine Berechtigung');
+    }
+    $login = sanitize_user(wp_unslash(isset($_POST['login']) ? $_POST['login'] : ''), true);
+    $back = admin_url('options-general.php?page=hsp-sstv#pis');
+    if ($login === '' || username_exists($login)) {
+        set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('err' => $login === '' ? 'Bitte einen Namen eingeben.' : 'Diesen Benutzer gibt es schon.'), 300);
+        wp_safe_redirect($back);
+        exit;
+    }
+    $host = wp_parse_url(home_url(), PHP_URL_HOST);
+    $uid = wp_insert_user(array('user_login' => $login, 'user_pass' => wp_generate_password(32, true, true),
+                                'user_email' => $login . '@hamscanpi.invalid', 'display_name' => $login,
+                                'role' => 'hsp_sstv_melder', 'description' => 'HamScanPi – sendet SSTV-Bilder (' . $host . ')'));
+    if (is_wp_error($uid)) {
+        set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('err' => $uid->get_error_message()), 300);
+        wp_safe_redirect($back);
+        exit;
+    }
+    $pw = class_exists('WP_Application_Passwords') ? WP_Application_Passwords::create_new_application_password($uid, array('name' => 'HamScanPi')) : null;
+    if (!$pw || is_wp_error($pw)) {
+        set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('err' => 'Benutzer angelegt, aber kein Anwendungspasswort möglich (WordPress-Seite ohne https?) – unter Benutzer → ' . $login . ' von Hand erzeugen.'), 300);
+    } else {
+        set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('login' => $login, 'pw' => $pw[0]), 300);
+    }
+    wp_safe_redirect($back);
+    exit;
 });
 
 /** Empfangszeit, Quelle und „hervorheben“ je Bild – danach sortiert die Galerie das Bild neu ein. */
@@ -609,6 +745,7 @@ function hsp_sstv_settings_page()
     <div class="wrap">
         <h1>SSTV-Galerie</h1>
         <p>Auf einer Seite den Kurzcode <code>[sstv_galerie]</code> einfügen. Möglich: <code>quelle="iss"</code> (nur eine Quelle),
+           <code>station="HamScanPi-AFGN"</code> (nur Bilder dieses Pi),
            <code>pro_seite="48"</code>, <code>statistik="nein"</code>. Neue Bilder von HamScanPi erscheinen unter <a href="<?php echo esc_url(admin_url('edit.php?post_type=hsp_sstv')); ?>">SSTV-Bilder</a>.</p>
         <form method="post" action="options.php">
             <?php settings_fields('hsp_sstv'); ?>
@@ -667,6 +804,30 @@ function hsp_sstv_settings_page()
             <?php submit_button(); ?>
         </form>
 
+        <h2 id="pis">Zugang für die Pis</h2>
+        <p>Am besten bekommt jeder Pi einen eigenen Benutzer mit der Rolle <b>SSTV-Melder</b>: der darf nur Bilder einsenden –
+           keine Beiträge, Seiten oder Einstellungen. In der Liste der SSTV-Bilder und im Protokoll steht dann, von welchem Pi
+           (Stationsname aus HamScanPi → Einstellungen → Station) und welchem Benutzer ein Bild kam. Einzelnen Zugang sperren:
+           unter Benutzer das Anwendungspasswort widerrufen.</p>
+        <?php $m = get_transient('hsp_sstv_pi_msg_' . get_current_user_id()); delete_transient('hsp_sstv_pi_msg_' . get_current_user_id()); ?>
+        <?php if (!empty($m['pw'])) : ?>
+            <div class="notice notice-success"><p><b>Benutzer <?php echo esc_html($m['login']); ?> angelegt.</b> In HamScanPi unter
+            Einstellungen → Webseite eintragen – das Passwort erscheint nur jetzt:</p>
+            <p>Benutzer: <code><?php echo esc_html($m['login']); ?></code> · Anwendungspasswort: <code style="font-size:1.1em"><?php echo esc_html($m['pw']); ?></code></p></div>
+        <?php elseif (!empty($m['err'])) : ?>
+            <div class="notice notice-error"><p><?php echo esc_html($m['err']); ?></p></div>
+        <?php endif; ?>
+        <?php $mel = get_users(array('role' => 'hsp_sstv_melder', 'fields' => array('ID', 'user_login'))); if ($mel) : ?>
+            <p>Vorhandene SSTV-Melder: <?php echo implode(', ', array_map(function ($u) { return '<a href="' . esc_url(get_edit_user_link($u->ID)) . '">' . esc_html($u->user_login) . '</a>'; }, $mel)); ?></p>
+        <?php endif; ?>
+        <?php if (current_user_can('create_users')) : ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="hsp_sstv_pi_user"><?php wp_nonce_field('hsp_sstv_pi_user'); ?>
+            <p><label>Name für den Pi <input type="text" name="login" placeholder="z. B. pi-afgn" class="regular-text" required></label>
+            <?php submit_button('Benutzer mit Anwendungspasswort anlegen', 'secondary', 'submit', false); ?></p>
+        </form>
+        <?php endif; ?>
+
         <h2>Galerie-Seite anlegen</h2>
         <?php $page = (int) get_option('hsp_sstv_page'); if ($page && get_post_status($page)) : ?>
             <p>Die Galerie steht auf <a href="<?php echo esc_url(get_permalink($page)); ?>"><?php echo esc_html(get_the_title($page)); ?></a>
@@ -692,10 +853,11 @@ function hsp_sstv_settings_page()
         <h2>Protokoll</h2>
         <?php $log = array_reverse((array) get_option('hsp_sstv_log', array())); ?>
         <?php if (!$log) : ?><p>Noch nichts empfangen.</p><?php else : ?>
-        <table class="widefat striped"><thead><tr><th>Zeit (UTC)</th><th>Ergebnis</th><th>Quelle</th><th>Benutzer</th><th>Hinweis</th></tr></thead><tbody>
+        <table class="widefat striped"><thead><tr><th>Zeit (UTC)</th><th>Ergebnis</th><th>Quelle</th><th>Station (Pi)</th><th>Benutzer</th><th>Hinweis</th></tr></thead><tbody>
         <?php foreach (array_slice($log, 0, 50) as $e) : ?>
             <tr><td><?php echo esc_html(gmdate('Y-m-d H:i:s', (int) $e['t'])); ?></td><td><?php echo esc_html($e['result']); ?></td>
                 <td><?php echo esc_html(isset($e['source']) ? $e['source'] : ''); ?><?php if (!empty($e['id'])) : ?> · <a href="<?php echo esc_url(get_edit_post_link((int) $e['id'])); ?>">#<?php echo (int) $e['id']; ?></a><?php endif; ?></td>
+                <td><?php echo esc_html(isset($e['station']) ? $e['station'] : ''); ?></td>
                 <td><?php echo esc_html($e['user']); ?></td><td><?php echo esc_html(isset($e['reason']) ? $e['reason'] : ''); ?></td></tr>
         <?php endforeach; ?></tbody></table>
         <?php endif; ?>

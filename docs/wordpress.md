@@ -8,9 +8,13 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
 
 1. **Plugin holen:** Dashboard → Einstellungen → Webseite → „herunterladen“ (`hamscanpi-sstv-galerie.zip`).
 2. **In WordPress:** Plugins → Installieren → Plugin hochladen → ZIP wählen → aktivieren.
-3. **Anwendungspasswort:** WordPress → Benutzer → Profil → *Anwendungspasswörter* → Name „HamScanPi“ →
-   „Neues Anwendungspasswort hinzufügen“. Das Passwort wird nur einmal angezeigt – gleich kopieren.
-   Es lässt sich dort jederzeit widerrufen; das eigentliche WordPress-Passwort braucht der Pi nicht.
+3. **Zugang für den Pi:** WordPress → Einstellungen → SSTV-Galerie → *Zugang für die Pis* → Namen eingeben (z. B.
+   `pi-afgn`) → „Benutzer mit Anwendungspasswort anlegen“. Der Benutzer bekommt die Rolle **SSTV-Melder**: er darf
+   nur Bilder einsenden, keine Beiträge, Seiten oder Einstellungen. Benutzername und Anwendungspasswort erscheinen
+   einmal – gleich kopieren. Mehrere Pis: je Pi einen eigenen Benutzer; in der Liste *SSTV-Bilder* steht dann unter
+   „Eingesandt von“, welcher Pi (Stationsname aus HamScanPi → Einstellungen → Station) und welcher Benutzer ein Bild
+   geschickt hat, und es lässt sich danach filtern. Sperren: unter Benutzer das Anwendungspasswort widerrufen.
+   (Von Hand geht es auch: Benutzer → Profil → *Anwendungspasswörter*.)
 4. **In HamScanPi:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
    „SSTV-Bilder hochladen“ an → „Verbindung prüfen“ → „Testbild senden“.
 5. **Galerie-Seite:** WordPress → Einstellungen → SSTV-Galerie → *Galerie-Seite anlegen*. Die Seite bekommt
@@ -18,7 +22,8 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
    Einleitung) und darunter die Galerie; als Seitenvorlage die der übrigen Seiten wählen (beim DO1GMT-Theme
    „DO1GMT Editierbare Theme-Seite“). Danach ins Menü aufnehmen (Design → Menüs), z. B. unter „Satelliten“.
    Von Hand geht es auch: irgendeine Seite mit dem Kurzcode `[sstv_galerie]`; möglich ist
-   `[sstv_galerie quelle="iss-zarya" pro_seite="48" statistik="nein"]`.
+   `[sstv_galerie quelle="iss-zarya" station="HamScanPi-AFGN" pro_seite="48" statistik="nein"]`
+   (`station`: nur Bilder dieses Pi).
 6. **Freigeben:** Neue Bilder kommen zunächst als Entwurf (Menü *SSTV-Bilder*). Das Bild prüfen,
    „Veröffentlichen“ – oder in der Liste mehrere auf einmal. Läuft alles, in HamScanPi „sofort veröffentlichen“
    wählen.
