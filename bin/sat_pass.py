@@ -954,32 +954,10 @@ def detach():
         pass
 
 
-COMPASS = ("N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
-
-
-def _dir(az):
-    return f"{az:.0f}° ({COMPASS[int((az % 360) / 22.5 + 0.5) % 16]})"
-
-
-def pass_geometry(tr, t):
-    """Überflug um t: Aufgang, höchster Punkt, Untergang (je Zeit, Azimut/Elevation) – in 15-s-Schritten."""
-    pts = []
-    for k in range(-100, 101):
-        tt = t + k * 15
-        try:
-            el, az = tr.look(tt)[:2]
-        except Exception:
-            continue
-        pts.append((tt, el, az))
-    i0 = min(range(len(pts)), key=lambda i: abs(pts[i][0] - t))
-    a = i0
-    while a > 0 and pts[a - 1][1] >= 0:
-        a -= 1
-    b = i0
-    while b < len(pts) - 1 and pts[b + 1][1] >= 0:
-        b += 1
-    top = max(pts[a:b + 1], key=lambda p: p[1])
-    return pts[a], top, pts[b]
+# Himmelsrichtung und Überflug-Geometrie liegen in satellites.py (auch für das Nachreichen aus dem Dashboard)
+COMPASS = SAT.COMPASS
+_dir = SAT.compass
+pass_geometry = SAT.pass_geometry
 
 
 def publish_sstv(ch, hits, tr, src, t0, until, tune):
@@ -995,26 +973,7 @@ def publish_sstv(ch, hits, tr, src, t0, until, tune):
             if not s or not Path(s["png"]).exists():
                 continue
             t = s["t"]
-            el, az, rng, rr = tr.look(t)
-            dop = tr.doppler_hz(ch.f0, t)
-            aos, top, los = pass_geometry(tr, t)
-            try:
-                ep = (tr.sat.jdsatepoch + tr.sat.jdsatepochF - 2440587.5) * 86400.0
-                tle_age = f"{(time.time() - ep) / 86400:.1f} Tage"
-            except Exception:
-                tle_age = None
-            sat_rows = [["Satellit", f"{sat.get('name')} ({SAT.OBJECTS.get(sat['norad'], '')})".replace(" ()", "")],
-                        ["NORAD-Nummer", str(sat["norad"]) if str(sat["norad"]).isdigit() else None],
-                        ["Frequenz (Soll)", f"{ch.f0 / 1e6:.4f} MHz"],
-                        ["Empfangen auf", f"{(ch.f0 + dop) / 1e6:.4f} MHz"],
-                        ["Doppler beim Bild", f"{dop / 1e3:+.2f} kHz"],
-                        ["Aufgang", f"{PUB.utc(aos[0], False)} · {_dir(aos[2])}"],
-                        ["Höchster Punkt", f"{PUB.utc(top[0], False)} · {top[1]:.0f}° Elevation · {_dir(top[2])}"],
-                        ["Untergang", f"{PUB.utc(los[0], False)} · {_dir(los[2])}"],
-                        ["Beim Bild: Elevation", f"{el:.1f}°"], ["Beim Bild: Richtung", _dir(az)],
-                        ["Beim Bild: Entfernung", f"{rng:,.0f} km".replace(",", ".")],
-                        ["Beim Bild: Bewegung", f"{'nähert sich' if rr < 0 else 'entfernt sich'} mit {abs(rr):.2f} km/s"],
-                        ["Alter der Bahndaten", tle_age]]
+            sat_rows, geo = PUB.sat_rows(tr, sat, ch.f0, t)
             rx_rows = [["Signal beim Bild", f"{s['snr_db']:.1f} dB über dem Rauschen"],
                        ["Signal Spitze im Überflug", f"{st.get('max_db')} dB" if st.get("max_db") is not None else None],
                        ["Signal 90-%-Wert", f"{st.get('p90_db')} dB" if st.get("p90_db") is not None else None],
@@ -1027,12 +986,12 @@ def publish_sstv(ch, hits, tr, src, t0, until, tune):
                        ["Abstimmung / Abtastrate", f"{tune / 1e6:.4f} MHz · {src.rate / 1000:.0f} kS/s"],
                        ["Antenne", getattr(src, "antenna", None)],
                        ["Doppler-Korrektur", "laufend nach Bahndaten (SGP4)"]]
-            sec = [{"title": "Satellit und Überflug", "rows": [r for r in sat_rows if r[1]]},
+            sec = [{"title": "Satellit und Überflug", "rows": sat_rows},
                    {"title": "Empfang", "rows": [r for r in rx_rows if r[1]]}]
             obj = SAT.OBJECTS.get(sat["norad"]) or sat.get("name") or sat["id"]     # Galerie: nach Satellit gruppiert
             meta = PUB.build(obj, t, s, sec,
                              {"kind": "satellite", "norad": str(sat["norad"]), "freq_hz": round(ch.f0),
-                              "max_el": round(top[1], 1), "el": round(el, 1), "snr_db": round(s["snr_db"], 1)})
+                              "max_el": geo["max_el"], "el": geo["el"], "snr_db": round(s["snr_db"], 1)})
             PUB.enqueue(s["png"], meta, key=f"{socket.gethostname()}-{Path(s['png']).name}")
     except Exception as e:
         applog("WARN", "satellite", "publish_prepare_failed", error=f"{type(e).__name__}: {e}")

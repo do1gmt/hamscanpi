@@ -22,6 +22,8 @@
 }
 .hsp-galerie { color: var(--hsp-text); margin: 1rem 0 2rem; }
 .hsp-galerie *, .hsp-lb * { box-sizing: border-box; }
+/* „hidden“ muss gewinnen – sonst stünden Nachladeknopf und leere Filterleiste da, obwohl es nichts gibt */
+.hsp-galerie [hidden] { display: none !important; }
 
 /* Kopf: Zahlen */
 .hsp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--hsp-gap); margin-bottom: 1.2rem; }

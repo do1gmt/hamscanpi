@@ -2027,5 +2027,79 @@ for f in ("health.py", "netheal.py", "notify.py"):
     assert "time.localtime(" not in "".join(l for l in Path(f).read_text().splitlines() if "strftime" in l and "%H:%M" in l), f
 PY
 
+echo "== 60 SSTV-Bild von Hand auf die Webseite (Knopf in der Trefferkarte)"
+(cd bin && python3 - "$SRC" <<'PY') && ok "Nachreichen: auch bei ausgeschaltetem Hochladen und unter der Mindest-Vollständigkeit, gleiche Kennung, ohne Pi-Werte von jetzt, Zustand in der Trefferliste" || bad "Nachreichen"
+import base64, json, sqlite3, tempfile, threading, time, http.server
+from pathlib import Path
+import publish as P, satellites as SAT
+d = Path(tempfile.mkdtemp()); P.QUEUE = d / "q.json"; P.LOG = d / "l.json"
+got = []
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        meta = json.loads(body.split(b'name="meta"\r\n\r\n')[1].split(b"\r\n--")[0])
+        got.append((meta, b'name="manual"' in body))
+        b = json.dumps({"ok": True, "id": len(got), "status": "publish", "link": f"http://x/#sstv-{len(got)}", "edit": "http://x/e"}).encode()
+        self.send_response(200); self.end_headers(); self.wfile.write(b)
+srv = http.server.HTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+c = {"enabled": False, "url": "", "user": "tom", "app_password": "pw", "status": "publish", "min_complete": 60}
+P.cfg = lambda settings=None: dict(c)
+rep = Path("../reports"); rep.mkdir(exist_ok=True)
+png = rep / "20261114_171500_Satelliten_iss_0_sstv.png"; P.test_image(png)
+row = {"band": "Satelliten", "segment_id": "iss", "rf_hz": 145800000, "snr_db": 18.2, "note": "SSTV PD120 (ISS), 45 % der Zeilen",
+       "antenna": "X-50", "time": "2026-11-14T17:30:00", "sideband": None, "recording_path": "x/20261114_171500_Satelliten_iss_0.wav"}
+try:
+    P.manual(row, png); raise AssertionError("ohne Webseite vorgemerkt")
+except ValueError as e:
+    assert "Einstellungen" in str(e)
+c["url"] = f"http://127.0.0.1:{srv.server_port}"
+assert P.enqueue(png, {"image": {"complete": 1}}, key="auto-1") is None          # automatisch aus: nichts vorgemerkt
+P.QUEUE.write_text(json.dumps([{"key": "auto-0", "uid": "a0", "added": time.time(), "tries": 0, "next": 0, "ready": 0, "png": str(png), "meta": {}}]))
+uid = P.manual(row, png)
+assert P.states()[P.key_for(png)]["state"] == "wartet"
+assert P.tick() == 1 and [e["key"] for e in P.queue()] == ["auto-0"]            # automatischer bleibt liegen
+meta, man = got[-1]
+assert man and meta["summary"]["manual"] is True and meta["summary"]["source"] == "ISS" and meta["summary"]["mode"] == "PD120"
+assert meta["summary"]["complete"] == 0.45 and meta["summary"]["time_utc"] == "2026-11-14T17:15:00Z"
+titles = [s["title"] for s in meta["sections"]]
+assert not any(t.startswith("Raspberry Pi") for t in titles) and "Empfang" in titles, titles
+st = P.states()[P.key_for(png)]; assert st["state"] == "veröffentlicht" and st["link"].endswith("#sstv-1")
+assert P.key_for(png) == f"{__import__('socket').gethostname()}-{png.name}"    # wie automatisch: Seite legt es nur einmal an
+# Kurzwelle
+png2 = rep / "20261114_160000_20m_14230000Hz_sstv0_sstv.png"; P.test_image(png2)
+P.manual({"band": "20m", "segment_id": "s", "rf_hz": 14231900, "snr_db": 9.1, "note": "SSTV Martin 1", "antenna": "Dipol",
+          "time": "2026-11-14T16:03:00", "sideband": "USB", "recording_path": "y/20261114_160000_20m_14230000Hz_sstv0.wav"}, png2)
+P.tick(); m2 = got[-1][0]
+assert m2["summary"]["source"] == "Kurzwelle 20m" and m2["summary"]["kind"] == "hf" and m2["summary"]["mode"] == "Martin 1"
+# Satellit mit Bahndaten: Überflug wie beim automatischen Hochladen
+tle = ["ISS (ZARYA)", "1 25544U 98067A   20316.41516162  .00001589  00000+0  36499-4 0  9995",
+       "2 25544  51.6454 339.9628 0001882  94.8340 265.2864 15.49409479254842"]
+tr = SAT.Tracker(tle, 49.3, 10.6)
+rows, geo = P.sat_rows(tr, next(s for s in SAT.SATELLITES if s["id"] == "iss"), 145.8e6, 1605088800)
+lab = [r[0] for r in rows]
+assert {"Aufgang", "Höchster Punkt", "Untergang", "Doppler beim Bild", "Alter der Bahndaten"} <= set(lab) and isinstance(geo["max_el"], float)
+assert rows[0] == ["Satellit", "ISS"], rows[0]
+srv.shutdown()
+# Trefferliste trägt den Zustand
+import webapp as W
+W.ensure_schema(); db = W.db_connect()
+sid = db.execute("INSERT INTO scan (time, band, center_hz, noise_db, rms_i, rms_q) VALUES (?,?,?,?,?,?)",
+                 ("2026-11-14T17:30:00+00:00", "Satelliten", 145800000, 0, 0, 0)).lastrowid
+db.execute("INSERT INTO peak (scan_id, rf_hz, offset_hz, level_db, snr_db, recording_path, mode, segment_id) VALUES (?,?,?,?,?,?,?,?)",
+           (sid, 145800000, 0, 18, 18, "x/20261114_171500_Satelliten_iss_0.wav", "sstv", "iss"))
+db.commit(); db.close()
+h = [x for x in W.list_hits({"mode": "sstv", "limit": 50}) if x["files"].get("sstv", "").endswith("iss_0_sstv.png")]
+assert h and h[0]["pub"]["state"] == "veröffentlicht", h[:1]
+import sys
+src = Path("webapp.py").read_text(); js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert '"/api/publish/hit"' in src and "sstv_manual_queued" in src and "data-act=\"pub\"" in js and "pubCell(h.pub)" in js
+PY
+grep -q "'manual_status'" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
+  && grep -q "min(\$t, time())" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
+  && grep -q '.hsp-galerie \[hidden\]' "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.css" \
+  && grep -q "IntersectionObserver" "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js" \
+  && ok "Plugin 1.3: Anordnung einstellbar, Nachladeknopf nur bei weiteren Bildern, nie geplante Beiträge" || bad "Plugin 1.3"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

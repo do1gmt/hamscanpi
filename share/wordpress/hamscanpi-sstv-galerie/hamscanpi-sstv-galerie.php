@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HamScanPi SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von HamScanPi (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            HamScanPi
@@ -10,7 +10,9 @@
  * Text Domain:       hsp-sstv
  *
  * Anpassen ohne das Plugin zu ändern:
- *  - Einstellungen → SSTV-Galerie: Farben, Rundung, Bildgröße, Überblenddauer, eigenes CSS, Plugin-CSS ganz aus.
+ *  - Einstellungen → SSTV-Galerie: Reihenfolge, Gruppierung (Tag, Quelle, Überflug), Zeitzone der Angaben, Filterknöpfe,
+ *    Farben, Rundung, Bildgröße, Überblenddauer, eigenes CSS, Plugin-CSS ganz aus.
+ *  - Je Bild (SSTV-Bilder → bearbeiten): Empfangszeit, Quelle, „hervorheben“ – die Galerie sortiert sofort neu.
  *  - Vorlage: templates/galerie.php ins Theme kopieren nach  <theme>/hamscanpi-sstv/galerie.php  und dort ändern.
  *  - CSS-Variablen (--hsp-…) im Theme überschreiben, z. B.  .hsp-galerie { --hsp-accent: #c00; }
  *  - Filter: hsp_sstv_item (ein Bild für die Ausgabe), hsp_sstv_insert_status (Status beim Empfang).
@@ -20,7 +22,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.2.0');
+define('HSP_SSTV_VERSION', '1.3.0');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -44,6 +46,11 @@ function hsp_sstv_defaults()
         'custom_css'  => '',
         'show_station'=> 1,
         'show_pi'     => 1,
+        'order'       => 'desc',      // desc = neueste zuerst | asc = älteste zuerst
+        'group'       => 'day',       // day | source | pass (Überflug) | none
+        'date_zone'   => 'station',   // station = wie in HamScanPi eingestellt | utc | site = Zeitzone dieser WordPress-Seite
+        'chips'       => 'count',     // Filterknöpfe je Quelle: count = nach Anzahl | alpha = alphabetisch | off = keine
+        'manual_status' => 'same',    // von Hand nachgereichte Bilder: same = wie automatische | draft = immer Entwurf
     );
 }
 
@@ -126,7 +133,7 @@ function hsp_sstv_clean_meta($m)
         return $out;
     }
     $keys = array('source', 'time_utc', 'mode', 'complete', 'call', 'locator', 'station', 'kind', 'norad', 'freq_hz',
-                  'max_el', 'el', 'snr_db', 'band', 'tz');
+                  'max_el', 'el', 'snr_db', 'band', 'tz', 'manual');
     $sum = isset($m['summary']) && is_array($m['summary']) ? $m['summary'] : array();
     foreach ($keys as $k) {
         if (isset($sum[$k]) && is_scalar($sum[$k])) {
@@ -155,6 +162,13 @@ function hsp_sstv_clean_meta($m)
 /** Zeitzone, in der HamScanPi die Zeiten anzeigt (UTC oder Ortszeit des Pi) – die Galerie folgt ihr. */
 function hsp_sstv_zone($sum)
 {
+    $mode = hsp_sstv_opts()['date_zone'];
+    if ($mode === 'utc') {
+        return new DateTimeZone('UTC');
+    }
+    if ($mode === 'site') {
+        return wp_timezone();
+    }
     $tz = isset($sum['tz']) ? (string) $sum['tz'] : 'UTC';
     try {
         return new DateTimeZone(in_array($tz, timezone_identifiers_list(), true) ? $tz : 'UTC');
@@ -263,11 +277,17 @@ function hsp_sstv_receive_inner(WP_REST_Request $req)
     if ($want === 'publish' && !current_user_can('publish_posts')) {
         $want = 'pending';
     }
+    $manual = (bool) $req->get_param('manual');
+    if ($manual && $o['manual_status'] === 'draft') {     // von Hand nachgereicht: auf Wunsch immer erst prüfen
+        $want = 'draft';
+    }
     $want = apply_filters('hsp_sstv_insert_status', $want, $meta);
     $source = !empty($sum['source']) ? $sum['source'] : 'SSTV';
     $lt = hsp_sstv_local($t, $sum);
     $title = sprintf('%s · %s · %s %s', $source, !empty($sum['mode']) ? $sum['mode'] : 'SSTV', $lt->format('Y-m-d H:i'), hsp_sstv_tzlabel($lt->format('T')));
-    $gmt = gmdate('Y-m-d H:i:s', $t);
+    // Beitragsdatum nie in der Zukunft: geht die Uhr des Pi etwas vor, machte WordPress aus „veröffentlichen“
+    // sonst einen geplanten Beitrag. Sortiert wird ohnehin nach der Empfangszeit (_hsp_time).
+    $gmt = gmdate('Y-m-d H:i:s', min($t, time()));
     $id = wp_insert_post(array('post_type' => 'hsp_sstv', 'post_status' => $want, 'post_title' => $title,
                                'post_date_gmt' => $gmt, 'post_date' => get_date_from_gmt($gmt)), true);
     if (is_wp_error($id)) {
@@ -291,6 +311,9 @@ function hsp_sstv_receive_inner(WP_REST_Request $req)
     }
     if (isset($sum['complete'])) {
         update_post_meta($id, '_hsp_complete', (float) $sum['complete']);
+    }
+    if ($manual) {
+        update_post_meta($id, '_hsp_manual', 1);
     }
     wp_set_object_terms($id, $source, 'hsp_sat');
     return hsp_sstv_answer($id, false);
@@ -324,6 +347,7 @@ function hsp_sstv_item($id)
         'day'      => $lt->format('Y-m-d'),          // Tag und Uhrzeit in der Zeit, die HamScanPi eingestellt hat
         'time'     => $lt->format('H:i:s'),
         'tz'       => hsp_sstv_tzlabel($lbl),
+        'featured' => (bool) get_post_meta($id, '_hsp_featured', true),
         'source'   => $terms && !is_wp_error($terms) ? $terms[0]->name : '',
         'slug'     => $terms && !is_wp_error($terms) ? $terms[0]->slug : '',
         'summary'  => $meta['summary'],
@@ -336,16 +360,32 @@ function hsp_sstv_item($id)
 
 function hsp_sstv_gallery_rest(WP_REST_Request $req)
 {
+    $o = hsp_sstv_opts();
     $per = max(1, min(100, (int) $req['per_page']));
     $args = array('post_type' => 'hsp_sstv', 'post_status' => 'publish', 'posts_per_page' => $per,
-                  'paged' => max(1, (int) $req['page']), 'meta_key' => '_hsp_time', 'orderby' => 'meta_value_num', 'order' => 'DESC');
-    if ($req['quelle']) {
-        $args['tax_query'] = array(array('taxonomy' => 'hsp_sat', 'field' => 'slug', 'terms' => $req['quelle']));
+                  'paged' => max(1, (int) $req['page']), 'meta_key' => '_hsp_time', 'orderby' => 'meta_value_num',
+                  'order' => $o['order'] === 'asc' ? 'ASC' : 'DESC');
+    $tax = $req['quelle'] ? array(array('taxonomy' => 'hsp_sat', 'field' => 'slug', 'terms' => $req['quelle'])) : null;
+    if ($tax) {
+        $args['tax_query'] = $tax;
     }
     $q = new WP_Query($args);
     $items = array_map('hsp_sstv_item', wp_list_pluck($q->posts, 'ID'));
     $out = array('items' => $items, 'total' => (int) $q->found_posts, 'pages' => (int) $q->max_num_pages);
     if ((int) $req['page'] === 1) {
+        // Anordnung für das Skript (gilt auch für eine ins Theme kopierte Vorlage)
+        $out['opts'] = array('group' => $o['group'], 'chips' => $o['chips'], 'order' => $o['order']);
+        $fa = array('post_type' => 'hsp_sstv', 'post_status' => 'publish', 'posts_per_page' => 12, 'fields' => 'ids',
+                    'no_found_rows' => true, 'meta_query' => array(array('key' => '_hsp_featured', 'value' => '1')),
+                    'orderby' => 'date', 'order' => 'DESC');
+        if ($tax) {
+            $fa['tax_query'] = $tax;
+        }
+        $out['featured'] = array_map('hsp_sstv_item', get_posts($fa));
+        $la = array('post_type' => 'hsp_sstv', 'post_status' => 'publish', 'posts_per_page' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+                    'meta_key' => '_hsp_time', 'orderby' => 'meta_value_num', 'order' => 'DESC');
+        $latest = get_posts($la);                       // „zuletzt empfangen“ – auch bei „älteste zuerst“
+        $out['latest'] = $latest ? hsp_sstv_item((int) $latest[0]) : null;
         $terms = get_terms(array('taxonomy' => 'hsp_sat', 'hide_empty' => true));
         $out['sources'] = array();
         foreach (is_wp_error($terms) ? array() : $terms as $tm) {
@@ -421,10 +461,23 @@ add_action('manage_hsp_sstv_posts_custom_column', function ($col, $id) {
         $s = is_array($m) && isset($m['summary']) ? $m['summary'] : array();
         echo esc_html(trim(sprintf('%s · %s %%%s', isset($s['mode']) ? $s['mode'] : '', isset($s['complete']) ? round($s['complete'] * 100) : '?',
                                    isset($s['max_el']) ? ' · max. ' . $s['max_el'] . '°' : '')));
+        $t = (int) get_post_meta($id, '_hsp_time', true);
+        if ($t) {
+            $lt = hsp_sstv_local($t, $s);
+            echo '<br>' . esc_html($lt->format('d.m.Y H:i') . ' ' . hsp_sstv_tzlabel($lt->format('T')));
+        }
+        if (get_post_meta($id, '_hsp_featured', true)) {
+            echo '<br><b>★ hervorgehoben</b>';
+        }
+        if (get_post_meta($id, '_hsp_manual', true)) {
+            echo '<br><i>von Hand nachgereicht</i>';
+        }
     }
 }, 10, 2);
 
 add_action('add_meta_boxes_hsp_sstv', function () {
+    remove_meta_box('tagsdiv-hsp_sat', 'hsp_sstv', 'side');      // Quelle: eigenes Feld (genau eine je Bild)
+    add_meta_box('hsp_sstv_sort', 'Einordnung in der Galerie', 'hsp_sstv_sort_box', 'hsp_sstv', 'side', 'high');
     add_meta_box('hsp_sstv_info', 'Angaben von HamScanPi', function ($post) {
         $m = json_decode((string) get_post_meta($post->ID, '_hsp_meta', true), true);
         if (!is_array($m) || empty($m['sections'])) {
@@ -440,6 +493,48 @@ add_action('add_meta_boxes_hsp_sstv', function () {
             echo '</tbody></table>';
         }
     }, 'hsp_sstv', 'normal', 'high');
+});
+
+/** Empfangszeit, Quelle und „hervorheben“ je Bild – danach sortiert die Galerie das Bild neu ein. */
+function hsp_sstv_sort_box($post)
+{
+    wp_nonce_field('hsp_sstv_sort', 'hsp_sstv_sort_nonce');
+    $t = (int) get_post_meta($post->ID, '_hsp_time', true);
+    $t = $t ? $t : (int) get_post_time('U', true, $post);
+    $terms = wp_get_object_terms($post->ID, 'hsp_sat', array('fields' => 'names'));
+    $src = $terms && !is_wp_error($terms) ? $terms[0] : '';
+    $all = get_terms(array('taxonomy' => 'hsp_sat', 'hide_empty' => false, 'fields' => 'names'));
+    ?>
+    <p><label for="hsp_time"><b>Empfangszeit (UTC)</b></label><br>
+       <input type="datetime-local" id="hsp_time" name="hsp_time" step="1" value="<?php echo esc_attr(gmdate('Y-m-d\TH:i:s', $t)); ?>" style="width:100%"></p>
+    <p><label for="hsp_src"><b>Quelle</b> (Satellit, Band …)</label><br>
+       <input type="text" id="hsp_src" name="hsp_src" list="hsp_src_list" value="<?php echo esc_attr($src); ?>" style="width:100%">
+       <datalist id="hsp_src_list"><?php foreach (is_wp_error($all) ? array() : $all as $n) : ?><option value="<?php echo esc_attr($n); ?>"><?php endforeach; ?></datalist></p>
+    <p><label><input type="checkbox" name="hsp_featured" value="1" <?php checked((bool) get_post_meta($post->ID, '_hsp_featured', true)); ?>>
+       <b>hervorheben</b> – steht zusätzlich oben in der Galerie</label></p>
+    <p class="description">Die Zeit wird in UTC eingegeben; angezeigt wird sie in der Galerie wie unter Einstellungen → SSTV-Galerie gewählt.</p>
+    <?php
+}
+
+add_action('save_post_hsp_sstv', function ($id) {
+    if (!isset($_POST['hsp_sstv_sort_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['hsp_sstv_sort_nonce'])), 'hsp_sstv_sort')
+        || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || !current_user_can('edit_post', $id)) {
+        return;
+    }
+    $raw = isset($_POST['hsp_time']) ? sanitize_text_field(wp_unslash($_POST['hsp_time'])) : '';
+    $d = $raw !== '' ? DateTime::createFromFormat('!Y-m-d\TH:i:s', strlen($raw) === 16 ? $raw . ':00' : $raw, new DateTimeZone('UTC')) : false;
+    $t = $d ? $d->getTimestamp() : (int) get_post_meta($id, '_hsp_time', true);
+    if (!$t) {                                          // ohne Zeit fehlte das Bild sonst in der Galerie
+        $t = (int) get_post_time('U', true, $id);
+    }
+    update_post_meta($id, '_hsp_time', $t);
+    $src = isset($_POST['hsp_src']) ? mb_substr(sanitize_text_field(wp_unslash($_POST['hsp_src'])), 0, 80) : '';
+    wp_set_object_terms($id, $src !== '' ? $src : 'SSTV', 'hsp_sat');
+    if (!empty($_POST['hsp_featured'])) {
+        update_post_meta($id, '_hsp_featured', 1);
+    } else {
+        delete_post_meta($id, '_hsp_featured');
+    }
 });
 
 /** Galerie-Seite anlegen: Seitenkopf wie die übrigen Seiten des Themes (page-hero mit eyebrow), darunter die Galerie. */
@@ -489,6 +584,14 @@ add_action('admin_init', function () {
             $o[$k] = empty($in[$k]) ? 0 : 1;
         }
         $o['custom_css'] = isset($in['custom_css']) ? wp_strip_all_tags((string) $in['custom_css']) : '';
+        $pick = function ($k, $allowed) use ($in, $d) {
+            return isset($in[$k]) && in_array($in[$k], $allowed, true) ? $in[$k] : $d[$k];
+        };
+        $o['order'] = $pick('order', array('desc', 'asc'));
+        $o['group'] = $pick('group', array('day', 'source', 'pass', 'none'));
+        $o['date_zone'] = $pick('date_zone', array('station', 'utc', 'site'));
+        $o['chips'] = $pick('chips', array('count', 'alpha', 'off'));
+        $o['manual_status'] = $pick('manual_status', array('same', 'draft'));
         return $o;
     }));
 });
@@ -510,6 +613,34 @@ function hsp_sstv_settings_page()
                     <option value="draft" <?php selected($o['status_mode'], 'draft'); ?>>immer als Entwurf (ich gebe frei)</option>
                     <option value="publish" <?php selected($o['status_mode'], 'publish'); ?>>immer sofort veröffentlichen</option>
                 </select></td></tr>
+                <tr><th>Von Hand nachgereicht</th><td><select name="<?php echo esc_attr($f('manual_status')); ?>">
+                    <option value="same" <?php selected($o['manual_status'], 'same'); ?>>wie automatisch empfangene</option>
+                    <option value="draft" <?php selected($o['manual_status'], 'draft'); ?>>immer als Entwurf (ich gebe frei)</option>
+                </select><p class="description">Bilder, die in HamScanPi über „Auf Webseite“ in der Trefferkarte geschickt werden.</p></td></tr>
+            </table>
+            <h2>Anordnung</h2>
+            <table class="form-table" role="presentation">
+                <tr><th>Reihenfolge</th><td><select name="<?php echo esc_attr($f('order')); ?>">
+                    <option value="desc" <?php selected($o['order'], 'desc'); ?>>neueste zuerst</option>
+                    <option value="asc" <?php selected($o['order'], 'asc'); ?>>älteste zuerst</option></select></td></tr>
+                <tr><th>Gruppieren</th><td><select name="<?php echo esc_attr($f('group')); ?>">
+                    <option value="day" <?php selected($o['group'], 'day'); ?>>nach Tag</option>
+                    <option value="source" <?php selected($o['group'], 'source'); ?>>nach Quelle (Satellit, Band)</option>
+                    <option value="pass" <?php selected($o['group'], 'pass'); ?>>nach Überflug (Bilder einer Quelle mit weniger als 20 min Abstand)</option>
+                    <option value="none" <?php selected($o['group'], 'none'); ?>>nicht gruppieren</option></select></td></tr>
+                <tr><th>Datum und Uhrzeit in</th><td><select name="<?php echo esc_attr($f('date_zone')); ?>">
+                    <option value="station" <?php selected($o['date_zone'], 'station'); ?>>wie in HamScanPi eingestellt (UTC oder Ortszeit der Station)</option>
+                    <option value="utc" <?php selected($o['date_zone'], 'utc'); ?>>immer UTC</option>
+                    <option value="site" <?php selected($o['date_zone'], 'site'); ?>>Zeitzone dieser Seite (<?php echo esc_html(wp_timezone_string()); ?>)</option></select>
+                    <p class="description">Jede Uhrzeit trägt ihre Kennung (UTC, MEZ, MESZ …).</p></td></tr>
+                <tr><th>Filterknöpfe je Quelle</th><td><select name="<?php echo esc_attr($f('chips')); ?>">
+                    <option value="count" <?php selected($o['chips'], 'count'); ?>>nach Anzahl der Bilder</option>
+                    <option value="alpha" <?php selected($o['chips'], 'alpha'); ?>>alphabetisch</option>
+                    <option value="off" <?php selected($o['chips'], 'off'); ?>>ausblenden</option></select>
+                    <p class="description">Quellen umbenennen: <a href="<?php echo esc_url(admin_url('edit-tags.php?taxonomy=hsp_sat&post_type=hsp_sstv')); ?>">SSTV-Bilder → Quellen</a>. Empfangszeit, Quelle und „hervorheben“ je Bild beim Bearbeiten des Bildes.</p></td></tr>
+            </table>
+            <h2>Aussehen</h2>
+            <table class="form-table" role="presentation">
                 <tr><th>Akzentfarbe</th><td><input type="text" name="<?php echo esc_attr($f('accent')); ?>" value="<?php echo esc_attr($o['accent']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Kartenhintergrund</th><td><input type="text" name="<?php echo esc_attr($f('card_bg')); ?>" value="<?php echo esc_attr($o['card_bg']); ?>" placeholder="leer = vom Theme"></td></tr>
                 <tr><th>Schrift</th><td><input type="text" name="<?php echo esc_attr($f('text')); ?>" value="<?php echo esc_attr($o['text']); ?>" placeholder="leer = vom Theme"></td></tr>

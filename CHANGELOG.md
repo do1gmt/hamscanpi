@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.00 – 2026-11-14
+
+- **SSTV image to the website by hand:** button *↑ Auf Webseite* in every SSTV hit card – also when automatic
+  upload is off or the image was below the minimum completeness. Details from the database (satellite with pass
+  geometry from the orbital data when they fit the day of the image, frequency, signal, antenna, station; no Pi
+  values from now). Same key as the automatic upload, so never twice on the site. The card shows the state
+  (queued, on the website · view, draft · approve in WordPress, error · try again). Endpoint `POST /api/publish/hit`,
+  logged as `sstv_manual_queued`. Satellite rows shared with the automatic upload (`publish.sat_rows`,
+  `satellites.pass_geometry`/`compass`); upload log keeps 300 entries.
+- **WordPress plugin 1.3.0:** *Weitere Bilder laden* only appears when there really are more images (the CSS
+  display rule overrode `hidden`, so it also showed with 0 or 1 image); further images load by themselves when the
+  visitor reaches the end, the button stays as fallback with the remaining count. Settings → **Anordnung**: order
+  (newest/oldest first), grouping (day, source, pass, none), date/time zone (as in HamScanPi, UTC, site), filter
+  buttons (by count, alphabetical, hidden), hand-sent images as automatic or always draft. Per image: receive time,
+  source and *hervorheben* (featured row on top). Post date never in the future (a Pi clock running slightly ahead
+  turned *publish* into a scheduled post).
+- Self-test section 60.
+
 ## 1.7.99 – 2026-11-14
 
 - **Times: UTC or local time** (Settings → Station → Times, default UTC): one central formatting in the dashboard

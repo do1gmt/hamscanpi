@@ -45,12 +45,44 @@ merkt sich der Pi die Bilder und schickt sie später (Wartezeit bis 1 h, nach 14
 Live-Bild geht erst, wenn es 90 s nicht mehr gewachsen ist. Jedes Bild hat eine feste Kennung – ein
 wiederholter Versuch legt in WordPress kein zweites an.
 
+## Von Hand nachreichen
+
+In jeder SSTV-Trefferkarte (Treffer → SSTV, Karte öffnen) steht neben „Bild herunterladen“ der Knopf
+**↑ Auf Webseite**. Er schickt das Bild mit den Angaben aus der Datenbank: Satellit, Frequenz, Signal, Antenne,
+Station; beim Satelliten mit Überflug (Aufgang, höchster Punkt, Untergang, Doppler), solange die Bahndaten zum
+Tag des Bildes passen (bis 30 Tage). Pi-Werte fehlen hier bewusst – die von jetzt sagen über den Empfang nichts.
+
+- Geht auch, wenn das automatische Hochladen aus ist und unter der Mindest-Vollständigkeit – du entscheidest.
+- Gleiche Kennung wie beim automatischen Hochladen: ein Bild steht nie doppelt auf der Seite.
+- Danach zeigt die Karte den Zustand: *wird in der nächsten Minute hochgeladen*, *auf der Webseite · ansehen*,
+  *als Entwurf · in WordPress freigeben*, oder bei einem Fehler den Grund und *erneut versuchen*.
+- In WordPress: Einstellungen → SSTV-Galerie → *Von Hand nachgereicht*: wie automatische oder immer als Entwurf.
+  In der Liste der SSTV-Bilder sind sie mit „von Hand nachgereicht“ markiert.
+
+## Anordnung in der Galerie
+
+Einstellungen → SSTV-Galerie → **Anordnung**:
+
+- **Reihenfolge:** neueste oder älteste zuerst.
+- **Gruppieren:** nach Tag, nach Quelle (Satellit, Band), nach Überflug (Bilder einer Quelle mit weniger als
+  20 min Abstand) oder gar nicht.
+- **Datum und Uhrzeit in:** wie in HamScanPi eingestellt (UTC oder Ortszeit der Station), immer UTC oder die
+  Zeitzone der WordPress-Seite – immer mit Kennung.
+- **Filterknöpfe je Quelle:** nach Anzahl, alphabetisch oder ausblenden.
+
+Je Bild (SSTV-Bilder → Bild bearbeiten → *Einordnung in der Galerie*): **Empfangszeit** (UTC), **Quelle** und
+**hervorheben** (steht zusätzlich oben unter „★ Hervorgehoben“). Die Galerie sortiert sofort neu. Quellen
+umbenennen: SSTV-Bilder → Quellen.
+
+Weitere Bilder lädt die Galerie beim Herunterscrollen von selbst; der Knopf *Weitere Bilder laden (noch …)*
+erscheint nur, wenn es wirklich noch Bilder gibt.
+
 ## Protokoll
 
 - **WordPress:** Einstellungen → SSTV-Galerie → *Protokoll*: die letzten 100 Empfänge mit Zeit (UTC), Ergebnis
   (Entwurf, veröffentlicht, schon vorhanden, abgelehnt mit Grund), Quelle und Benutzer.
 - **HamScanPi:** Einstellungen → Webseite → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
-  Ereignisse `sstv_uploaded`, `sstv_upload_failed`, `publish_set`.
+  Ereignisse `sstv_uploaded`, `sstv_upload_failed`, `sstv_manual_queued`, `publish_set`.
 
 ## Aussehen anpassen
 
@@ -69,5 +101,5 @@ in der Farbe des Themes.
 
 ## Schnittstelle
 
-`/wp-json/hsp-sstv/v1/ping` (GET, angemeldet), `/images` (POST multipart: `image`, `meta` JSON, `uid`, `status`;
+`/wp-json/hsp-sstv/v1/ping` (GET, angemeldet), `/images` (POST multipart: `image`, `meta` JSON, `uid`, `status`, `manual`;
 angemeldet, Recht „Dateien hochladen“), `/gallery?page=&per_page=&quelle=` (GET, öffentlich, nur veröffentlichte).

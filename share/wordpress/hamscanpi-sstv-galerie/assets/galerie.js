@@ -1,5 +1,6 @@
-/* HamScanPi SSTV-Galerie: lädt die Bilder über die WordPress-Schnittstelle, gruppiert nach Tag (UTC), Filter je
- * Quelle, Lightbox mit Überblenden, Pfeiltasten, Wischen und Infotafel. Direktlink: …/seite/#sstv-123 */
+/* HamScanPi SSTV-Galerie: lädt die Bilder über die WordPress-Schnittstelle, gruppiert (Tag, Quelle, Überflug
+ * oder gar nicht – Einstellungen → SSTV-Galerie), Filter je Quelle, Lightbox mit Überblenden, Pfeiltasten, Wischen
+ * und Infotafel. Weitere Bilder kommen beim Herunterscrollen von selbst. Direktlink: …/seite/#sstv-123 */
 (function () {
   'use strict';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -15,32 +16,57 @@
     this.endpoint = root.dataset.endpoint;
     this.per = Number(root.dataset.perPage) || 48;
     this.quelle = root.dataset.quelle || '';
-    this.items = []; this.page = 0; this.pages = 1; this.filter = '';
+    this.items = []; this.view = []; this.featured = []; this.page = 0; this.pages = 1; this.total = 0; this.busy = false;
+    this.opts = { group: 'day', chips: 'count', order: 'desc' };
     this.$stats = root.querySelector('.hsp-stats'); this.$filter = root.querySelector('.hsp-filter');
     this.$days = root.querySelector('.hsp-days'); this.$more = root.querySelector('.hsp-more');
     var self = this;
-    if (this.$more) this.$more.addEventListener('click', function () { self.load(); });
+    if (this.$more) {
+      this.$more.addEventListener('click', function () { self.load(); });
+      // Nachladen von selbst, sobald der Besucher unten ankommt; der Knopf bleibt nur als Ersatz
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (en) { if (en[0].isIntersecting) self.more(); }, { rootMargin: '0px 0px 400px 0px' }).observe(this.$more);
+      }
+    }
     this.load(true);
+  }
+  Gallery.prototype.more = function () {
+    if (this.busy || this.page >= this.pages || !this.$more || this.$more.hidden) return;
+    var r = this.$more.getBoundingClientRect();
+    if (r.top < window.innerHeight + 400) this.load(false);
   }
   Gallery.prototype.load = function (first) {
     var self = this, url = this.endpoint + (this.endpoint.indexOf('?') < 0 ? '?' : '&') + 'page=' + (this.page + 1) + '&per_page=' + this.per
       + (this.quelle ? '&quelle=' + encodeURIComponent(this.quelle) : '');
-    if (this.$more) this.$more.disabled = true;
+    if (this.busy) return;
+    this.busy = true;
+    if (this.$more) { this.$more.disabled = true; this.$more.textContent = 'Bilder werden geladen …'; }
+    var failed = false, reset = this.page === 0;
     fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
-      self.page += 1; self.pages = d.pages || 1;
+      if (reset) { self.items = []; if (d.featured) self.featured = d.featured; }
+      self.page += 1; self.pages = d.pages || 0; self.total = d.total || 0;
       self.items = self.items.concat(d.items || []);
+      if (d.opts) self.opts = d.opts;
       if (first) { self.stats(d); self.chips(d.sources || []); }
       self.render();
       if (first) self.openFromHash();
     }).catch(function () {
-      self.$days.innerHTML = '<p class="hsp-empty">Die Bilder ließen sich gerade nicht laden.</p>';
+      failed = true;
+      if (!self.items.length) self.$days.innerHTML = '<p class="hsp-empty">Die Bilder ließen sich gerade nicht laden.</p>';
     }).then(function () {
-      if (self.$more) { self.$more.disabled = false; self.$more.hidden = self.page >= self.pages; }
+      self.busy = false;
+      if (!self.$more) return;
+      var rest = Math.max(0, self.total - self.items.length);
+      // nur zeigen, wenn es wirklich noch Bilder gibt (oder nach einem Fehler zum erneuten Versuch)
+      self.$more.hidden = failed ? false : !(self.page < self.pages && rest > 0);
+      self.$more.disabled = false;
+      self.$more.textContent = failed ? 'Erneut versuchen' : 'Weitere Bilder laden' + (rest ? ' (noch ' + rest + ')' : '');
+      if (!failed) self.more();                    // Seite noch nicht voll: gleich weiter
     });
   };
   Gallery.prototype.stats = function (d) {
     if (!this.$stats) return;
-    var src = d.sources || [], b = d.best, first = this.items[0];
+    var src = d.sources || [], b = d.best, first = d.latest || this.items[0];
     var box = function (v, t) { return '<div class="hsp-stat"><b>' + v + '</b><span>' + t + '</span></div>'; };
     var h = box(d.total || 0, 'SSTV-Bilder') + box(src.length, src.length === 1 ? 'Quelle' : 'Quellen');
     if (first) h += box(esc(first.day.slice(8, 10) + '.' + first.day.slice(5, 7) + '.' + first.day.slice(0, 4)), 'zuletzt empfangen');
@@ -48,40 +74,79 @@
     this.$stats.innerHTML = h;
   };
   Gallery.prototype.chips = function (src) {
-    if (!this.$filter || this.quelle || src.length < 2) { if (this.$filter) this.$filter.hidden = true; return; }
+    if (!this.$filter || this.quelle || src.length < 2 || this.opts.chips === 'off') { if (this.$filter) this.$filter.hidden = true; return; }
     var self = this, total = src.reduce(function (a, s) { return a + s.count; }, 0);
+    src = src.slice().sort(this.opts.chips === 'alpha' ? function (a, b) { return a.name.localeCompare(b.name, 'de'); }
+      : function (a, b) { return b.count - a.count || a.name.localeCompare(b.name, 'de'); });
+    this.sourceOrder = src.map(function (s) { return s.slug; });
     this.$filter.innerHTML = '<button type="button" class="hsp-chip on" data-s="">Alle<span class="n">' + total + '</span></button>'
       + src.map(function (s) { return '<button type="button" class="hsp-chip" data-s="' + esc(s.slug) + '">' + esc(s.name) + '<span class="n">' + s.count + '</span></button>'; }).join('');
     this.$filter.addEventListener('click', function (e) {
       var c = e.target.closest('.hsp-chip'); if (!c) return;
       self.$filter.querySelectorAll('.hsp-chip').forEach(function (x) { x.classList.toggle('on', x === c); });
       // gefiltert neu vom Server (dort sind auch die noch nicht geladenen Bilder dieser Quelle)
-      self.quelle = c.dataset.s; self.items = []; self.page = 0; self.load(false);
+      self.quelle = c.dataset.s; self.page = 0; self.pages = 1; self.load(false);
     });
   };
-  Gallery.prototype.visible = function () { return this.items; };
+  // Gruppen nach Einstellung; this.view = Reihenfolge wie angezeigt (für die Lightbox)
+  Gallery.prototype.groups = function () {
+    var list = this.items, G = this.opts.group, out = [], idx = {};
+    var n = function (k) { return k + (k === 1 ? ' Bild' : ' Bilder'); };
+    var head = [];
+    if (this.featured.length && !this.quelle) head.push({ title: '★ Hervorgehoben', small: n(this.featured.length), items: this.featured.slice() });
+    if (G === 'none') return head.concat([{ title: '', items: list.slice() }]);
+    if (G === 'pass') {                                  // Bilder einer Quelle mit weniger als 20 min Abstand = ein Überflug
+      var open = {};
+      list.forEach(function (it) {
+        var k = it.slug || it.source, g = open[k];
+        if (!g || Math.abs(it.t - g.last) > 1200) { g = open[k] = { items: [], src: it.source, first: it, max: null }; out.push(g); }
+        g.items.push(it); g.last = it.t;
+        var e = it.summary && it.summary.max_el; if (e != null && (g.max == null || e > g.max)) g.max = e;
+      });
+      out.forEach(function (g) {
+        g.title = esc(g.src) + ' · ' + dayLabel(g.first.day);
+        g.small = utc(g.first.time, g.first.tz) + ' · ' + n(g.items.length) + (g.max != null ? ' · max. ' + esc(g.max) + '°' : '');
+      });
+      return head.concat(out);
+    }
+    list.forEach(function (it) {
+      var k = G === 'source' ? (it.slug || it.source) : it.day;
+      if (!idx[k]) { idx[k] = { key: k, items: [], src: it.source, day: it.day, tz: it.tz }; out.push(idx[k]); }
+      idx[k].items.push(it);
+    });
+    if (G === 'source') {
+      var so = this.sourceOrder || [];
+      out.sort(function (a, b) { return ((so.indexOf(a.key) + 1) || 999) - ((so.indexOf(b.key) + 1) || 999) || b.items.length - a.items.length; });
+    }
+    out.forEach(function (g) {
+      g.title = G === 'source' ? esc(g.src) : dayLabel(g.day);
+      g.small = n(g.items.length) + (G === 'day' ? ' · Datum in ' + esc(g.tz || 'UTC') : '');
+    });
+    return head.concat(out);
+  };
   Gallery.prototype.render = function () {
-    var list = this.visible(), groups = {}, order = [];
-    list.forEach(function (it, i) { if (!groups[it.day]) { groups[it.day] = []; order.push(it.day); } groups[it.day].push(i); });
-    if (!list.length) { this.$days.innerHTML = '<p class="hsp-empty">Noch keine Bilder veröffentlicht.</p>'; return; }
-    this.$days.innerHTML = order.map(function (d) {
-      var ids = groups[d];
-      return '<section class="hsp-day"><h3>' + dayLabel(d) + ' <small>' + ids.length + (ids.length === 1 ? ' Bild' : ' Bilder') + ' · Datum in ' + esc(list[ids[0]].tz || 'UTC') + '</small></h3><div class="hsp-grid">'
-        + ids.map(function (i) {
-          var it = list[i], s = it.summary || {};
-          return '<button type="button" class="hsp-card" data-i="' + i + '" aria-label="' + esc(it.source + ', ' + it.time_utc + ' UTC') + '">'
+    if (!this.items.length) { this.view = []; this.$days.innerHTML = '<p class="hsp-empty">Noch keine Bilder veröffentlicht.</p>'; return; }
+    var view = [], G = this.opts.group;
+    this.$days.innerHTML = this.groups().map(function (g) {
+      return '<section class="hsp-day">' + (g.title ? '<h3>' + g.title + ' <small>' + (g.small || '') + '</small></h3>' : '') + '<div class="hsp-grid">'
+        + g.items.map(function (it) {
+          var i = view.push(it) - 1, s = it.summary || {};
+          // Beschriftung: was die Überschrift nicht schon sagt
+          var head = G === 'source' ? esc(it.day.slice(8, 10) + '.' + it.day.slice(5, 7) + '.' + it.day.slice(0, 4)) : G === 'pass' ? '' : esc(it.source);
+          return '<button type="button" class="hsp-card" data-i="' + i + '" aria-label="' + esc(it.source + ', ' + it.day + ' ' + it.time + ' ' + (it.tz || 'UTC')) + '">'
             + (it.thumb ? '<img loading="lazy" decoding="async" src="' + esc(it.thumb.url) + '" alt="">' : '')
             + '<div class="hsp-bar" title="' + pct(s.complete) + ' % der Zeilen"><i style="width:' + pct(s.complete) + '%"></i></div>'
-            + '<div class="cap"><b>' + esc(it.source) + '</b><span>' + utc(it.time || it.time_utc.slice(11, 19), it.tz) + ' · ' + esc(s.mode || 'SSTV')
-            + (s.max_el != null ? ' · max. ' + esc(s.max_el) + '°' : '') + '</span></div></button>';
+            + '<div class="cap">' + (head ? '<b>' + head + '</b>' : '') + '<span>' + utc(it.time || it.time_utc.slice(11, 19), it.tz) + ' · ' + esc(s.mode || 'SSTV')
+            + (s.max_el != null && G !== 'pass' ? ' · max. ' + esc(s.max_el) + '°' : '') + '</span></div></button>';
         }).join('') + '</div></section>';
     }).join('');
+    this.view = view;
     var self = this;
     this.$days.querySelectorAll('.hsp-card').forEach(function (b) { b.addEventListener('click', function () { LB.open(self, Number(b.dataset.i)); }); });
   };
   Gallery.prototype.openFromHash = function () {
     var m = /^#sstv-(\d+)$/.exec(location.hash); if (!m) return;
-    var i = this.items.findIndex(function (x) { return String(x.id) === m[1]; });
+    var i = this.view.findIndex(function (x) { return String(x.id) === m[1]; });
     if (i >= 0) LB.open(this, i);
   };
 
@@ -139,19 +204,25 @@
       if (this.last && this.last.focus) this.last.focus();
     },
     go: function (d) {
-      var n = this.g.items.length; if (n < 2) return;
-      var i = this.i + d;
-      if (i >= n && this.g.page < this.g.pages) {     // am Ende: nächste Seite nachladen
-        var self = this, before = n;
+      var n = this.g.view.length, i = this.i + d;
+      if (i >= n && this.g.page < this.g.pages) {     // am Ende: nächste Seite nachladen, dann das Bild nach dem jetzigen
+        var self = this, id = this.g.view[this.i].id, before = this.g.items.length;
         this.g.load(false);
-        var wait = setInterval(function () { if (self.g.items.length > before) { clearInterval(wait); self.show(before); } }, 150);
+        var wait = setInterval(function () {
+          if (self.g.items.length > before) {
+            clearInterval(wait);
+            var k = self.g.view.findIndex(function (x) { return x.id === id; });
+            self.show(Math.min(self.g.view.length - 1, k + 1));
+          }
+        }, 150);
         setTimeout(function () { clearInterval(wait); }, 8000);
         return;
       }
+      if (n < 2) return;
       this.show((i + n) % n);
     },
     show: function (i, instant) {
-      var it = this.g.items[i]; if (!it || !it.full) return;
+      var it = this.g.view[i]; if (!it || !it.full) return;
       this.i = i;
       var next = this.imgs[1 - this.front], cur = this.imgs[this.front], self = this;
       next.onload = function () {
@@ -162,7 +233,7 @@
       if (next.src === it.full.url && next.complete) next.onload();      // schon geladen: kein neues load-Ereignis
       else next.src = it.full.url;
       var s = it.summary || {};
-      this.el.querySelector('.hsp-count').textContent = (i + 1) + ' / ' + this.g.items.length + (this.g.page < this.g.pages ? '+' : '');
+      this.el.querySelector('.hsp-count').textContent = (i + 1) + ' / ' + this.g.view.length + (this.g.page < this.g.pages ? '+' : '');
       this.el.querySelector('.hsp-caption').innerHTML = '<b>' + esc(it.source) + '</b> · ' + esc(s.mode || 'SSTV') + ' · ' + pct(s.complete) + ' %'
         + '<small>' + esc(dayLabel(it.day)) + ', ' + utc(it.time || it.time_utc.slice(11, 19), it.tz) + (s.call ? ' · empfangen von ' + esc(s.call) : '') + (s.locator ? ' (' + esc(s.locator) + ')' : '') + '</small>';
       this.el.querySelector('.hsp-info').innerHTML = (it.sections || []).map(function (sec) {
@@ -172,7 +243,7 @@
         }).join('') + '</dl>';
       }).join('') + '<h4>Bild</h4><dl><dt>Originaldatei</dt><dd><a href="' + esc(it.full.url) + '" target="_blank" rel="noopener" style="color:inherit">' + it.full.w + ' × ' + it.full.h + ' Pixel öffnen</a></dd></dl>';
       history.replaceState(null, '', '#sstv-' + it.id);
-      [i - 1, i + 1].forEach(function (k) { var x = self.g.items[k]; if (x && x.full) { var p = new Image(); p.src = x.full.url; } });  // Nachbarn vorladen
+      [i - 1, i + 1].forEach(function (k) { var x = self.g.view[k]; if (x && x.full) { var p = new Image(); p.src = x.full.url; } });  // Nachbarn vorladen
     }
   };
 

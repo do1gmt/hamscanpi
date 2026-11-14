@@ -374,7 +374,10 @@ a.brand:hover .brand-name { opacity: .85; }
 .sysgrid .stat span { font-size: .7rem; display: block; overflow-wrap: anywhere; }
 .sysgrid .stat.warn { border: 1px solid var(--amber); } .sysgrid .stat.warn b { color: var(--amber); }
 .sysgrid .stat.bad { border: 1px solid var(--red); } .sysgrid .stat.bad b { color: var(--red); }
-.sstv-dl { margin-top: .3rem; }
+.sstv-dl { margin-top: .3rem; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
+.pub-st { font-size: .85rem; color: var(--muted); }
+.pub-st.ok { color: var(--green); }
+.pub-st.err { color: var(--red); }
 
 .badge-watch { background: rgba(245,185,66,.15); color: var(--amber); border: 1px solid rgba(245,185,66,.4); }
 .stations-table td { white-space: nowrap; }

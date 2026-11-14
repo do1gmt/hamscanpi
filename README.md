@@ -463,7 +463,8 @@ time) and are shown converted. Times burnt into images (waterfalls) stay UTC and
 ## SSTV images on your website
 
 Every SSTV image (satellite, HF, Live) can go to your own WordPress site with all details on satellite, pass,
-reception, station and Pi – shown there as a gallery grouped by day with a lightbox. The WordPress plugin is in
+reception, station and Pi – shown there as a gallery (grouped by day, source or pass, adjustable in WordPress)
+with a lightbox. Older or rejected images can be sent by hand with *↑ Auf Webseite* in the hit card. The WordPress plugin is in
 `share/wordpress/` (download it in *Settings → Website*); set-up, what is sent and how to adapt the look:
 [docs/wordpress.md](docs/wordpress.md).
 

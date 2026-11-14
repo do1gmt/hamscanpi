@@ -14,11 +14,17 @@ Seite kein zweites an.
 
 Die Angaben kommen als fertig beschriftete Abschnitte (Bild, Satellit, Empfang, Station, Raspberry Pi) – neue
 Angaben erscheinen auf der Seite ohne Plugin-Update. Nie übertragen: IP- und MAC-Adressen, WLAN, Zugangsdaten.
+
+Von Hand nachreichen: Knopf „Auf Webseite“ in jeder SSTV-Trefferkarte (manual()). Geht auch, wenn das automatische
+Hochladen aus ist oder das Bild unter der Mindest-Vollständigkeit lag; gleiche Kennung wie automatisch, also nie
+doppelt auf der Seite. Die Angaben kommen aus der Datenbank, beim Satelliten mit Überflug aus den Bahndaten.
 """
 import base64
+import calendar
 import hashlib
 import json
 import os
+import re
 import socket
 import time
 import urllib.error
@@ -99,16 +105,33 @@ def read_log():
 
 
 def _log(entry):
-    _write(LOG, (read_log() + [entry])[-100:])
+    _write(LOG, (read_log() + [entry])[-300:])
 
 
-def enqueue(png, meta, key=None, settle_s=0):
-    """Bild zum Hochladen vormerken. key: gleiche Kennung = Eintrag auffrischen (wachsendes Live-Bild)."""
+def key_for(png):
+    """Feste Kennung je Bild – automatisch und von Hand gleich (die Seite legt es nur einmal an)."""
+    return f"{socket.gethostname()}-{Path(png).name}"
+
+
+def states():
+    """{Kennung: Zustand} aus Warteschlange und Protokoll – für die Anzeige in den Trefferkarten."""
+    out = {}
+    for e in read_log():
+        out[e["key"]] = {"state": e.get("state"), "link": e.get("link"), "edit": e.get("edit"), "t": e.get("t"),
+                         "error": e.get("error")}
+    for e in queue():
+        out[e["key"]] = {"state": "wartet", "error": e.get("error"), "t": e.get("added")}
+    return out
+
+
+def enqueue(png, meta, key=None, settle_s=0, manual=False):
+    """Bild zum Hochladen vormerken. key: gleiche Kennung = Eintrag auffrischen (wachsendes Live-Bild).
+    manual: von Hand nachgereicht – auch bei ausgeschaltetem automatischem Hochladen, ohne Mindest-Vollständigkeit."""
     c = cfg()
-    if not (c["enabled"] and c["url"]):
+    if not ((c["enabled"] or manual) and c["url"]):
         return None
     png = str(png)
-    key = key or f"{socket.gethostname()}-{Path(png).name}"
+    key = key or key_for(png)
     q = queue()
     now = time.time()
     e = next((x for x in q if x["key"] == key), None)
@@ -116,6 +139,8 @@ def enqueue(png, meta, key=None, settle_s=0):
         e = {"key": key, "uid": hashlib.sha1(key.encode()).hexdigest()[:20], "added": now, "tries": 0, "next": 0}
         q.append(e)
     e.update(png=png, meta=meta, ready=now + settle_s)
+    if manual:
+        e.update(manual=True, tries=0, next=0, error=None)
     _write(QUEUE, q[-500:])
     return e["uid"]
 
@@ -165,10 +190,13 @@ def ping(c=None):
     return _request(c, "/ping", timeout=20)
 
 
-def upload(c, png, meta, uid, status):
+def upload(c, png, meta, uid, status, manual=False):
     data = Path(png).read_bytes()
     ctype = "image/png" if str(png).endswith(".png") else "image/jpeg"
-    body, ct = _multipart({"meta": json.dumps(meta, ensure_ascii=False), "uid": uid, "status": status},
+    f = {"meta": json.dumps(meta, ensure_ascii=False), "uid": uid, "status": status}
+    if manual:
+        f["manual"] = 1                               # Plugin: „Hand-Uploads immer als Entwurf“ möglich
+    body, ct = _multipart(f,
                           {"image": (Path(png).name, data, ctype)})
     return _request(c, "/images", data=body, headers={"Content-Type": ct}, timeout=120)
 
@@ -187,10 +215,13 @@ def tick(now=None, log=None):
     if not q:
         return 0
     now = now or time.time()
-    if not (c["enabled"] and c["url"] and c["user"] and c["app_password"]):
+    if not (c["url"] and c["user"] and c["app_password"]):
         return 0
     keep, sent, changed = [], 0, False
     for i, e in enumerate(q):
+        if not c["enabled"] and not e.get("manual"):     # automatisches Hochladen aus: nur Nachgereichtes geht
+            keep.append(e)
+            continue
         if now - e["added"] > MAX_AGE_S:
             _log({"t": now, "key": e["key"], "state": "aufgegeben", "error": e.get("error")}); changed = True
             continue
@@ -200,12 +231,12 @@ def tick(now=None, log=None):
         if not Path(e["png"]).exists():
             _log({"t": now, "key": e["key"], "state": "Bild fehlt", "error": "Datei gelöscht, bevor sie hochging"}); changed = True
             continue
-        if _complete(e["meta"]) < c["min_complete"]:
+        if not e.get("manual") and _complete(e["meta"]) < c["min_complete"]:
             _log({"t": now, "key": e["key"], "state": "zu unvollständig",
                   "error": f"{_complete(e['meta']):.0f} % < {c['min_complete']} %", "sat": _sat(e)}); changed = True
             continue
         try:
-            r = upload(c, e["png"], e["meta"], e["uid"], c["status"])
+            r = upload(c, e["png"], e["meta"], e["uid"], c["status"], manual=bool(e.get("manual")))
             _log({"t": now, "key": e["key"], "state": "veröffentlicht" if r.get("status") == "publish" else "Entwurf",
                   "link": r.get("link"), "edit": r.get("edit"), "sat": _sat(e), "dup": r.get("duplicate", False)})
             sent += 1; changed = True
@@ -287,8 +318,9 @@ def _tz():
     return "UTC" if TF.mode() == "utc" else (TF.tzname() or "UTC")
 
 
-def build(source, t_img, image, sections, summary_extra=None):
-    """Gemeinsamer Rahmen: summary (zum Filtern/Gruppieren auf der Seite) + beschriftete Abschnitte."""
+def build(source, t_img, image, sections, summary_extra=None, pi=True):
+    """Gemeinsamer Rahmen: summary (zum Filtern/Gruppieren auf der Seite) + beschriftete Abschnitte.
+    pi=False: von Hand nachgereicht – der Zustand des Pi von jetzt sagt über den Empfang nichts."""
     st, st_sec = station_section()
     img_rows = [["Modus", image.get("mode")], ["Vollständigkeit", f"{image.get('complete', 0) * 100:.0f} % der Zeilen"],
                 ["Empfangen", utc(t_img)]]
@@ -300,7 +332,125 @@ def build(source, t_img, image, sections, summary_extra=None):
                "complete": round(float(image.get("complete") or 0), 3), "call": st["call"], "locator": st["locator"],
                "station": st["name"], "tz": _tz(), **(summary_extra or {})}
     return {"v": 1, "summary": summary, "image": {"mode": image.get("mode"), "complete": image.get("complete")},
-            "sections": [{"title": "Bild", "rows": img_rows}, *sections, st_sec, pi_section()]}
+            "sections": [{"title": "Bild", "rows": img_rows}, *sections, st_sec, *([pi_section()] if pi else [])]}
+
+
+# ------------------------------------------------------------------ Satellit
+def _sat_name(sat):
+    """„ISS“ bzw. „UmKA-1 (UMKA-1 (RS40S))“ – den Objektnamen nur, wenn er etwas hinzufügt."""
+    import satellites as SAT
+    obj = SAT.OBJECTS.get(sat["norad"]) or ""
+    return sat.get("name") if not obj or obj == sat.get("name") else f"{sat.get('name')} ({obj})"
+
+
+def sat_rows(tr, sat, f0, t):
+    """Satellit und Überflug zum Zeitpunkt t (automatisch nach dem Überflug und beim Nachreichen gleich)."""
+    import satellites as SAT
+    el, az, rng, rr = tr.look(t)
+    dop = tr.doppler_hz(f0, t)
+    aos, top, los = SAT.pass_geometry(tr, t)
+    try:
+        ep = (tr.sat.jdsatepoch + tr.sat.jdsatepochF - 2440587.5) * 86400.0
+        tle_age = f"{abs(t - ep) / 86400:.1f} Tage"
+    except Exception:
+        tle_age = None
+    d = SAT.compass
+    rows = [["Satellit", _sat_name(sat)],
+            ["NORAD-Nummer", str(sat["norad"]) if str(sat["norad"]).isdigit() else None],
+            ["Frequenz (Soll)", f"{f0 / 1e6:.4f} MHz"],
+            ["Empfangen auf", f"{(f0 + dop) / 1e6:.4f} MHz"],
+            ["Doppler beim Bild", f"{dop / 1e3:+.2f} kHz"],
+            ["Aufgang", f"{utc(aos[0], False)} · {d(aos[2])}"],
+            ["Höchster Punkt", f"{utc(top[0], False)} · {top[1]:.0f}° Elevation · {d(top[2])}"],
+            ["Untergang", f"{utc(los[0], False)} · {d(los[2])}"],
+            ["Beim Bild: Elevation", f"{el:.1f}°"], ["Beim Bild: Richtung", d(az)],
+            ["Beim Bild: Entfernung", f"{rng:,.0f} km".replace(",", ".")],
+            ["Beim Bild: Bewegung", f"{'nähert sich' if rr < 0 else 'entfernt sich'} mit {abs(rr):.2f} km/s"],
+            ["Alter der Bahndaten", tle_age]]
+    return [r for r in rows if r[1]], {"max_el": round(top[1], 1), "el": round(el, 1)}
+
+
+# ------------------------------------------------------------------ von Hand nachreichen
+_NOTE = re.compile(r"SSTV\s+([^,(]+?)\s*(?:[,(]|$)")              # „SSTV Robot 36 (ISS), …“ → Robot 36
+_PCT = re.compile(r"(\d+)\s*%\s*der Zeilen")
+
+
+def _image_info(rec_path, note):
+    """Modus und Vollständigkeit aus Notiz bzw. Dekoder-Ergebnis des Treffers."""
+    texts = [note or ""]
+    try:
+        d = json.loads((BASE / "reports" / f"{Path(rec_path).stem}_decode.json").read_text(encoding="utf-8"))
+        texts += [x.get("text") or "" for x in d.get("decoders", []) if x.get("type") == "SSTV"]
+    except Exception:
+        pass
+    mode = complete = None
+    for t in texts:
+        m = _NOTE.search(t)
+        mode = mode or (m.group(1) if m else None)
+        m = _PCT.search(t)
+        complete = complete if complete is not None else (int(m.group(1)) / 100 if m else None)
+    return {"mode": mode or "unbekannt", "complete": complete if complete is not None else 1.0}
+
+
+def _t_from_stem(stem, fallback):
+    try:
+        return calendar.timegm(time.strptime(stem[:15], "%Y%m%d_%H%M%S"))
+    except ValueError:
+        return fallback
+
+
+def manual(row, png):
+    """SSTV-Treffer aus der Datenbank von Hand hochladen. row: band, segment_id, rf_hz, snr_db, note, antenna, time,
+    sideband, recording_path. Rückgabe Kennung (oder ValueError mit Hinweis für das Dashboard)."""
+    c = cfg()
+    if not (c["url"] and c["user"] and c["app_password"]):
+        raise ValueError("Webseite noch nicht eingerichtet – Einstellungen → Webseite")
+    if not Path(png).exists():
+        raise ValueError("Bild nicht mehr vorhanden")
+    rec = row.get("recording_path") or str(png)
+    try:
+        t_scan = calendar.timegm(time.strptime(str(row.get("time"))[:19], "%Y-%m-%dT%H:%M:%S"))
+    except ValueError:
+        t_scan = os.path.getmtime(png)
+    t = _t_from_stem(Path(rec).stem, t_scan)
+    img = _image_info(rec, row.get("note"))
+    rf = float(row.get("rf_hz") or 0)
+    rx = [["Signal", f"{float(row.get('snr_db') or 0):.1f} dB über dem Rauschen"], ["Antenne", row.get("antenna")],
+          ["Übertragung", "von Hand aus dem Dashboard nachgereicht"]]
+    if row.get("band") == "Satelliten":
+        import satellites as SAT
+        sat = next((x for x in SAT.SATELLITES if x["id"] == row.get("segment_id")), None)
+        if sat is None:
+            raise ValueError("Satellit nicht mehr in der Liste")
+        f0 = float(sat["center_hz"])
+        obj = SAT.OBJECTS.get(sat["norad"]) or sat.get("name") or sat["id"]
+        extra = {"kind": "satellite", "norad": str(sat["norad"]), "freq_hz": round(f0), "snr_db": round(float(row.get("snr_db") or 0), 1)}
+        secs = []
+        try:
+            s = json.loads((BASE / "config" / "web_settings.json").read_text(encoding="utf-8"))
+            lat, lon = SAT.locator_to_latlon(s.get("my_locator", ""))
+            tles, _ = SAT.load_tles(fetch=False)
+            tr = SAT.Tracker(tles[sat["norad"]], lat, lon)
+            ep = (tr.sat.jdsatepoch + tr.sat.jdsatepochF - 2440587.5) * 86400.0
+            if abs(t - ep) > 30 * 86400:                    # Bahndaten passen nicht mehr zum Tag des Bildes
+                raise ValueError("Bahndaten zu alt")
+            rows, geo = sat_rows(tr, sat, f0, t)
+            extra.update(geo)
+            secs.append({"title": "Satellit und Überflug", "rows": rows})
+        except Exception:
+            secs.append({"title": "Satellit", "rows": [["Satellit", _sat_name(sat)],
+                                                      ["Frequenz (Soll)", f"{f0 / 1e6:.4f} MHz"]]})
+        secs.append({"title": "Empfang", "rows": [r for r in rx if r[1]]})
+        source = obj
+    else:
+        band = row.get("band") or "?"
+        rx = [["Band", band], ["Bildmitte (1900 Hz)", f"{rf / 1e6:.4f} MHz"], ["Seitenband", row.get("sideband")]] + rx
+        secs = [{"title": "Empfang", "rows": [r for r in rx if r[1]]}]
+        source = f"Kurzwelle {band}"
+        extra = {"kind": "hf", "band": band, "freq_hz": round(rf)}
+    extra["manual"] = True
+    meta = build(source, t, img, secs, extra, pi=False)
+    return enqueue(png, meta, key=key_for(png), manual=True)
 
 
 def test_image(path):

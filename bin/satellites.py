@@ -449,6 +449,35 @@ class Tracker:
         return math.degrees(lat), (math.degrees(lon) + 540) % 360 - 180, h
 
 
+
+COMPASS = ("N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
+
+
+def compass(az):
+    return f"{az:.0f}° ({COMPASS[int((az % 360) / 22.5 + 0.5) % 16]})"
+
+
+def pass_geometry(tr, t):
+    """Überflug um t: Aufgang, höchster Punkt, Untergang (je Zeit, Azimut/Elevation) – in 15-s-Schritten."""
+    pts = []
+    for k in range(-100, 101):
+        tt = t + k * 15
+        try:
+            el, az = tr.look(tt)[:2]
+        except Exception:
+            continue
+        pts.append((tt, el, az))
+    i0 = min(range(len(pts)), key=lambda i: abs(pts[i][0] - t))
+    a = i0
+    while a > 0 and pts[a - 1][1] >= 0:
+        a -= 1
+    b = i0
+    while b < len(pts) - 1 and pts[b + 1][1] >= 0:
+        b += 1
+    top = max(pts[a:b + 1], key=lambda p: p[1])
+    return pts[a], top, pts[b]
+
+
 def track(norad, aos, los, locator, step=10.0, pad=300.0):
     """Bahn eines Überflugs für die Ansicht im Dashboard: alle step Sekunden von aos-pad bis los+pad
     Höhe, Richtung, Entfernung, Radialgeschwindigkeit (für den Doppler) und der Punkt unter dem

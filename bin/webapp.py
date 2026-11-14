@@ -778,10 +778,20 @@ def list_hits(params):
     rows = db.execute(sql, args).fetchall()
     db.close()
     out = []
+    pub = None                                  # Webseite: Zustand je SSTV-Bild (einmal je Abruf gelesen)
     for r in rows:
         files = hit_files(r["recording_path"])
         if "iq" in files:
             files["iq"] += str(r["id"])
+        pst = None
+        if "sstv" in files:
+            try:
+                import publish as PUB
+                if pub is None:
+                    pub = PUB.states()
+                pst = pub.get(PUB.key_for(files["sstv"]))
+            except Exception:
+                pub = pub or {}
         mode_v = r["mode"] or "unknown"
         sg, device = seg_index.get((r["band"], r["segment_id"]), ({}, "pmsdr"))
         out.append({
@@ -802,6 +812,7 @@ def list_hits(params):
             "audio": r["audio"], "audio_score": r["audio_score"],
             "watch": r["watch"] or "",
             "antenna": r["antenna"] or "",
+            "pub": pst,
         })
     return out
 
@@ -3044,6 +3055,22 @@ class Handler(BaseHTTPRequestHandler):
                 write_json(SETTINGS, st)
                 APPLOG.log("INFO", "webapp", "publish_set", enabled=c["enabled"], url=c["url"], status=c["status"])
                 return self.send_json({"ok": True, "cfg": PUB.public_cfg(st)})
+            if path == "/api/publish/hit":
+                # SSTV-Bild eines Treffers von Hand auf die Webseite (gleiche Kennung wie automatisch: nie doppelt)
+                import publish as PUB
+                pid = int(data["peak_id"])
+                db = db_connect()
+                has_ant = "antenna" in {c[1] for c in db.execute("PRAGMA table_info(scan)")}
+                r = db.execute(f"""SELECT p.id, p.rf_hz, p.snr_db, p.note, p.mode, p.sideband, p.segment_id,
+                                   p.recording_path, s.band, s.time, {'s.antenna' if has_ant else 'NULL'} AS antenna
+                                   FROM peak p JOIN scan s ON s.id = p.scan_id WHERE p.id = ?""", (pid,)).fetchone()
+                db.close()
+                if not r or r["mode"] != "sstv":
+                    raise ValueError("Kein SSTV-Treffer")
+                png = REPORTS / f"{Path(r['recording_path'] or '').stem}_sstv.png"
+                uid = PUB.manual(dict(r), png)
+                APPLOG.log("INFO", "webapp", "sstv_manual_queued", peak_id=pid, band=r["band"], uid=uid)
+                return self.send_json({"ok": True, "pub": PUB.states().get(PUB.key_for(png))})
             if path == "/api/publish/test":
                 import publish as PUB
                 c = PUB.cfg()

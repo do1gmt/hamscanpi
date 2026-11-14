@@ -783,6 +783,17 @@
   function player(title, src, extra = '') {
     return `<div class="player"><div class="player-title"><span>${title}</span>${extra}</div><audio controls preload="none" src="${src}"></audio></div>`;
   }
+  // SSTV-Bild auf die eigene Webseite: Zustand aus Warteschlange/Protokoll, Knopf zum Nachreichen
+  function pubCell(p) {
+    const btn = (t) => `<button type="button" class="btn btn-small" data-act="pub" title="Mit allen Angaben zu Empfang und Station auf die eigene WordPress-Seite (Einstellungen → Webseite). Schon hochgeladene Bilder erscheinen dort nicht doppelt.">${t}</button>`;
+    const s = p && p.state;
+    if (s === 'veröffentlicht') return ` <span class="pub-st ok">✓ Auf der Webseite${p.link ? ` · <a href="${esc(p.link)}" target="_blank" rel="noopener">ansehen</a>` : ''}</span>`;
+    if (s === 'Entwurf') return ` <span class="pub-st ok">✓ Als Entwurf auf der Webseite${p.edit ? ` · <a href="${esc(p.edit)}" target="_blank" rel="noopener">in WordPress freigeben</a>` : ''}</span>`;
+    if (s === 'wartet') return p.error ? ` ${btn('↑ Erneut versuchen')} <span class="pub-st err" title="${esc(p.error)}">Upload hängt: ${esc(p.error)}</span>`
+      : ` <span class="pub-st">⏳ Wird in der nächsten Minute hochgeladen</span>`;
+    const why = { 'zu unvollständig': 'automatisch nicht hochgeladen (zu unvollständig)', 'aufgegeben': 'Upload aufgegeben', 'Bild fehlt': 'Bild fehlte beim Upload' }[s];
+    return ` ${btn('↑ Auf Webseite')}${why ? ` <span class="pub-st">${why}</span>` : ''}`;
+  }
   function fillBody(el, h) {
     const body = el.querySelector('.hit-body'); body.__data = h;
     const f = h.files || {};
@@ -792,7 +803,7 @@
       const stamp = (h.time || '').replace(/[-:]/g, '').slice(0, 15).replace('T', '_');
       const fname = `hamscanpi_${h.band}_${fmtMHz(h.rf_hz)}MHz_${stamp}Z.png`.replace(/[^A-Za-z0-9_.-]/g, '_');
       html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">
-        <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a></div>`;
+        <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a>${pubCell(h.pub)}</div>`;
     }
     // Spektrum zunächst verdeckt: erst hören und überlegen, dann aufdecken (Übungsgelände zum Signale lernen).
     // Das Bild wird erst beim Aufdecken geladen; Abhören und Abstimmen funktionieren auch verdeckt.
@@ -911,6 +922,14 @@
       specBtn.textContent = wrap.hidden ? 'Spektrum zeigen' : 'Spektrum verbergen';
     });
     body.querySelector('[data-act=live]').addEventListener('click', () => window.__liveFromHit(h));
+    body.querySelector('[data-act=pub]')?.addEventListener('click', async (ev) => {
+      const b = ev.currentTarget; b.disabled = true;
+      try {
+        const r = await post('/api/publish/hit', { peak_id: h.id });
+        h.pub = r.pub; b.closest('.sstv-dl').innerHTML = b.closest('.sstv-dl').firstElementChild.outerHTML + pubCell(h.pub);
+        toast('✓ Bild vorgemerkt – geht in der nächsten Minute auf die Webseite');
+      } catch (e) { b.disabled = false; toast('Nicht hochgeladen: ' + e.message, 6000, true); }
+    });
     body.querySelector('[data-act=protect]').addEventListener('click', async () => { try { await post('/api/protect-hit', { peak_id: h.id, protected: !h.protected }); toast(h.protected ? 'Schutz aufgehoben' : 'Treffer wird behalten'); loadHits(); loadStats(); } catch (e) { toast('Fehler: ' + e.message); } });
     body.querySelector('[data-act=delete]').addEventListener('click', async () => { if (!confirm(`Treffer ${fmtMHz(h.rf_hz)} MHz löschen?`)) return; try { await post('/api/delete-hit', { peak_id: h.id }); toast('Gelöscht'); loadHits(); loadStats(); loadDeletionLog(); } catch (e) { toast('Fehler: ' + e.message); } });
     body.querySelector('[data-act=note]').addEventListener('click', async () => { try { await post('/api/note', { peak_id: h.id, note: body.querySelector('.note').value }); toast('Notiz gespeichert'); loadHits(); } catch (e) { toast('Fehler: ' + e.message); } });
