@@ -111,6 +111,12 @@ def pmsdr_info(freqs=(3_573_000, 7_074_000, 14_074_000), secs=1.5):
     except Exception as e:
         out.append(f"Soundkarte: {e}")
         return "\n".join(out) + "\n"
+    try:
+        was = DEV.capture_input(card, cfg.get("alsa_capture_source", "Line"))
+        if was:
+            out.append(f"== Aufnahme-Eingang stand auf „{was}“ – auf Line umgestellt (die PMSDR liefert Line-Pegel)")
+    except Exception:
+        pass
     # Empfangstest – nicht, während Scan, Überflug oder Live die PMSDR benutzen
     import fcntl
     live = BASE / "data" / "live.lock"

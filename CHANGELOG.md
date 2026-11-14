@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.05 – 2026-11-14
+
+- **Fix: PMSDR heard nothing** – the sound card recorded from *Mic* instead of *Line* (after re-plugging, e.g.
+  into a hub, ALSA often falls back to the default). The diagnostics showed −89 dBFS on all bands. HamScanPi now
+  sets the capture input of the PMSDR sound card to Line when it opens it (once per card, logged as
+  `pmsdr_input_set`; `alsa_capture_source` in scanner.json, empty = leave alone). The diagnostics report a
+  corrected input.
+- **Fix: Live sent 437 MHz to the PMSDR** ("FreqProgSi570: error in calculation") when tuning from short wave to a
+  UHF frequency: Live now restarts with the right receiver; the PMSDR refuses frequencies above 60 MHz.
+- **Interrupted passes are no error any more:** a pass ended by a reboot or a stopped recording process is marked
+  "interrupted" right away (pid and boot id are recorded) and logged as a warning `pass_interrupted` – instead of
+  an error `pass_aborted` by Telegram two hours later. The recovery hint only appears when raw data exist.
+- **PMSDR control under System → Services** (with *Restart*; sudo rule extended) instead of a tile under Status.
+- **Fix: "Notices" card stuck at the bottom of System** – restoring the saved card order appended cards at the end
+  of the tab (below the columns); now only the cards' own places are reassigned.
+- **Fix: quick clicks on satellites/segments were undone for a few seconds** (and a click then flipped the wrong
+  way): saves run one after another and the Pi's answer is applied only when nothing was clicked meanwhile;
+  deselecting the last entry no longer silently means "whole band" (all satellites on) – it says to untick the band.
+- Self-test section 65.
+
 ## 1.8.04 – 2026-11-14
 
 - **Diagnostics package: `pmsdr.txt`** – control program (status and log), USB devices, sound cards, the sound

@@ -285,8 +285,24 @@ def run(settings, bulk_delete, log):
     try:
         import satellites as SAT
         res = SAT.read_results()
+        try:
+            boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        except OSError:
+            boot = None
         for key, r in res.items():
             if r.get("state") not in ("running", "evaluating"):
+                continue
+            # Prozess weg (Pi neu gestartet, Dienst neu gestartet): gleich als unterbrochen vermerken – kein
+            # „Fehler“ zwei Stunden später (so kam nach einem Neustart aus dem Dashboard ein Fehler per Telegram)
+            pid = r.get("pid")
+            gone = (r.get("boot") and boot and r["boot"] != boot) or (pid and not Path(f"/proc/{pid}").exists())
+            if gone:
+                restarted = bool(r.get("boot") and boot and r["boot"] != boot)
+                why = "Pi neu gestartet" if restarted else "Aufnahmeprozess beendet"
+                SAT.write_result(key, state="cancelled", error=f"unterbrochen – {why}")
+                raw = sat_raw_orphans()
+                log("WARN", "pass_interrupted", key=key, channels=r.get("channels"), reason=why,
+                    **({"hint": "Rohdaten lassen sich 48 h lang mit bin/sat_recover.py auswerten"} if raw else {}))
                 continue
             age = now - float(r.get("updated") or r.get("started") or now)
             limit = 3600 if r.get("state") == "evaluating" else 2 * 3600

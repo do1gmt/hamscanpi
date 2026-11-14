@@ -101,6 +101,36 @@ def recording_name(band, rf_hz):
 
 # ------------------------------------------------------------------ PMSDR
 
+_MIXER_OK = set()
+
+
+def capture_input(card, want="Line"):
+    """Aufnahme-Eingang der PMSDR-Soundkarte auf Line stellen (die PMSDR liefert I/Q mit Line-Pegel). Nach dem
+    Umstecken (anderer USB-Anschluss, Hub) stellt ALSA die Karte oft auf den Vorgabewert „Mic“ zurück – dann kommt
+    praktisch nichts an (so geschehen: −89 dBFS auf allen Bändern). Einmal je Karte und Prozess; Karten ohne
+    Eingangswahl bleiben unberührt. want="" schaltet das ab (Einstellung alsa_capture_source in scanner.json)."""
+    if not want or card in _MIXER_OK:
+        return None
+    _MIXER_OK.add(card)
+    try:
+        r = subprocess.run(["amixer", "-c", str(card), "cget", "name=PCM Capture Source"], capture_output=True,
+                           text=True, timeout=5)
+        if r.returncode != 0:
+            return None
+        items = dict(re.findall(r"Item #(\d+) '([^']+)'", r.stdout))
+        cur = re.search(r": values=(\d+)", r.stdout)
+        cur = items.get(cur.group(1)) if cur else None
+        if want not in items.values() or cur == want:
+            return None
+        subprocess.run(["amixer", "-q", "-c", str(card), "cset", "name=PCM Capture Source", want], timeout=5)
+        subprocess.run(["amixer", "-q", "-c", str(card), "cset", f"name={want} Capture Switch", "on"], timeout=5)
+        _applog("WARN", "scanner", "pmsdr_input_set", card=card, was=cur, now=want,
+                hint="Aufnahme-Eingang der Soundkarte stand nicht auf Line – umgestellt")
+        return cur
+    except Exception:
+        return None
+
+
 class PmsdrDevice:
     name = "pmsdr"
 
@@ -108,6 +138,7 @@ class PmsdrDevice:
         self.cfg = cfg
         self.rate = int(cfg["sample_rate"])
         self.card, self.dev = self._find_alsa(cfg["alsa_name"], int(cfg["alsa_device"]))
+        capture_input(self.card, cfg.get("alsa_capture_source", "Line"))
         self.fifo_fd = self._open_fifo(cfg["fifo"])
         self.center = None
 
@@ -155,6 +186,8 @@ class PmsdrDevice:
             time.sleep(0.5)
 
     def tune(self, center):
+        if not 10_000 <= int(center) <= 60_000_000:       # PMSDR: bis 55 MHz (darüber rechnet der Si570 falsch)
+            raise ValueError(f"{int(center) / 1e6:.3f} MHz liegt außerhalb der PMSDR (bis 55 MHz)")
         cmd = f"f {int(center)}\n".encode("ascii")
         try:
             os.write(self.fifo_fd, cmd)

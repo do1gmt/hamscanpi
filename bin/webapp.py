@@ -2049,6 +2049,25 @@ def _gain_value(v):
     return 0 if g <= 0 else max(0.9, min(49.6, g))
 
 
+def live_device_for(freq, settings=None):
+    """Gerät nach der Frequenz: Kurzwelle an die PMSDR, alles ab 24 MHz an den Stick – sonst das unter Scan gewählte
+    (der Suchlauf landete sonst bei 7 MHz auf dem Stick und sprang auf 24 MHz). Unter 24 MHz kann auch ein Stick mit
+    Direktabtastung (z. B. NESDR SMArt v5) übernehmen."""
+    hw = DEV.detect_hardware()
+    import sdrcaps as SC
+    main = STK.effective_main()
+    rtl_hf, rtl_hf_why = SC.hf_ok(main) if hw["rtlsdr"]["present"] else (False, "kein Stick angesteckt")
+    if freq < 30_000_000 and hw["pmsdr"]["present"]:
+        return "pmsdr"
+    if hw["rtlsdr"]["present"] and (freq >= 24_000_000 or rtl_hf):
+        return "rtlsdr"
+    if freq < 24_000_000:
+        raise ValueError(f"Unter 24 MHz braucht es die PMSDR oder einen Stick mit Kurzwelle – {rtl_hf_why}")
+    if freq > 60_000_000 and not hw["rtlsdr"]["present"]:
+        raise ValueError("Über 60 MHz braucht es einen RTL-SDR-Stick – keiner angesteckt")
+    return (settings or load_settings())["active_device"]
+
+
 def live_start(data):
     global _live
     with _live_lock:
@@ -2064,23 +2083,7 @@ def live_start(data):
             _live.stop()
         settings = load_settings()
         freq = int(float(data.get("freq_hz", 145500000)))
-        device = data.get("device")
-        if not device:
-            # Gerät nach der Frequenz: Kurzwelle an die PMSDR, alles ab 24 MHz an den Stick – sonst das
-            # unter Scan gewählte (der Suchlauf landete sonst bei 7 MHz auf dem Stick und sprang auf 24 MHz)
-            # Unter 24 MHz kann auch ein Stick mit Direktabtastung (z. B. NESDR SMArt v5) übernehmen
-            hw = DEV.detect_hardware()
-            import sdrcaps as SC
-            main = STK.effective_main()
-            rtl_hf, rtl_hf_why = SC.hf_ok(main) if hw["rtlsdr"]["present"] else (False, "kein Stick angesteckt")
-            if freq < 30_000_000 and hw["pmsdr"]["present"]:
-                device = "pmsdr"
-            elif hw["rtlsdr"]["present"] and (freq >= 24_000_000 or rtl_hf):
-                device = "rtlsdr"
-            elif freq < 24_000_000:
-                raise ValueError(f"Unter 24 MHz braucht es die PMSDR oder einen Stick mit Kurzwelle – {rtl_hf_why}")
-            else:
-                device = settings["active_device"]
+        device = data.get("device") or live_device_for(freq, settings)
         mode = str(data.get("mode", "nfm"))
         if mode not in ("nfm", "wfm", "am", "usb", "lsb"):
             mode = "nfm"
@@ -2983,6 +2986,15 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/live/stop":
                 return self.send_json({"ok": True, "live": live_stop()})
             if path == "/api/live/tune":
+                # andere Frequenz außerhalb des Geräts (z. B. von Kurzwelle auf 70 cm): Live mit dem passenden Gerät
+                # neu starten – vorher bekam die PMSDR 437 MHz geschickt („FreqProgSi570: error in calculation“)
+                if data.get("freq_hz") and _live and _live.running:
+                    f = int(float(data["freq_hz"]))
+                    want = live_device_for(f)
+                    if want != _live.device:
+                        st = live_start({"freq_hz": f, "mode": data.get("mode") or _live.mode,
+                                         "squelch_db": data.get("squelch_db", _live.squelch_db), "device": want})
+                        return self.send_json({"ok": True, "live": st, "device_changed": want})
                 with _live_lock:
                     if not (_live and _live.running):
                         raise ValueError("Kein Live-Empfang aktiv")

@@ -180,8 +180,8 @@ ok "$(t "hamscanpi-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), -
 # sudo-Regel: genau diese Befehle ohne Passwort (Knöpfe im Dashboard und auf der Notfall-Seite)
 SC="$(command -v systemctl || echo /usr/bin/systemctl)"
 TMPS="$(mktemp)"
-printf '# HamScanPi: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
-    "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
+printf '# HamScanPi: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block restart pmsdr-control, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
+    "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
 if visudo -cf "$TMPS" >/dev/null 2>&1; then
     install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hamscanpi
     ok "$(t "sudo-Regel für die Knöpfe im Dashboard" "sudo rule for the dashboard buttons")"

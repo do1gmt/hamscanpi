@@ -4,7 +4,7 @@ und die Notfall-Seite (bin/rescue.py, eigener Dienst auf Port 8081).
 
 Neu starten braucht root: das Update legt /etc/sudoers.d/hamscanpi an, das genau diese Befehle ohne Passwort
 erlaubt (und sonst nichts):
-  systemctl --no-block restart hamscanpi-web | hamscanpi-scheduler | hamscanpi-rescue
+  systemctl --no-block restart hamscanpi-web | hamscanpi-scheduler | hamscanpi-rescue | hamscanpi-mdns | pmsdr-control
   systemctl reboot
 „--no-block“: systemd übernimmt den Auftrag sofort – auch wenn der Webserver sich damit selbst neu startet.
 """
@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 UNITS = {"hamscanpi-web": "Webserver", "hamscanpi-scheduler": "Zeitplaner", "hamscanpi-rescue": "Notfall-Seite",
-         "hamscanpi-mdns": "Name im Netz"}
+         "hamscanpi-mdns": "Name im Netz", "pmsdr-control": "PMSDR-Steuerung"}      # nur angezeigt, wenn eingerichtet
 SYSTEMCTL = shutil.which("systemctl") or "/usr/bin/systemctl"
 
 

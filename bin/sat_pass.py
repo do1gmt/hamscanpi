@@ -1039,8 +1039,12 @@ def main():
            freq_mhz=[f"{c['center_hz']/1e6:.3f}" for c in chans],
            until=datetime.fromtimestamp(until, timezone.utc).isoformat(timespec="seconds"))
     print(f"{name} ({labels} MHz): Aufnahme bis {time.strftime('%H:%M:%S', time.gmtime(until))} UTC")
-    for k in keys:
-        SAT.write_result(k, state="running", channels=ids, started=time.time())
+    try:
+        _boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        _boot = None
+    for k in keys:                                            # pid/boot: ein Neustart zählt nicht als „abgestürzt“
+        SAT.write_result(k, state="running", channels=ids, started=time.time(), pid=os.getpid(), boot=_boot)
 
     RECDIR.mkdir(parents=True, exist_ok=True)
     REPORTS.mkdir(parents=True, exist_ok=True)

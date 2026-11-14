@@ -33,15 +33,20 @@
     conts.forEach(function (c) { byKey[c.dataset.lkey] = c; });
     Object.keys(state.order).forEach(function (k) {
       var c = byKey[k]; if (!c) return;
-      var root = k.slice(-5) === '-root', moved = [];
+      var root = k.slice(-5) === '-root', want = [];
       state.order[k].forEach(function (id) {
         var p = document.getElementById(id);
         if (!p || !p.classList.contains('panel') || viewOf(p) !== c.dataset.lview) return;
         if (root ? p.parentElement !== c : !p.parentElement.classList.contains('col')) return;   // nicht zwischen Ebenen
-        c.appendChild(p); moved.push(p);
+        if (want.indexOf(p) < 0) want.push(p);
       });
-      // Karten, die in der gespeicherten Anordnung fehlen (neu nach einem Update), bleiben dahinter in ihrer Reihenfolge
-      panelsOf(c).forEach(function (p) { if (moved.indexOf(p) < 0) c.appendChild(p); });
+      // Karten, die in der gespeicherten Anordnung fehlen (neu nach einem Update), kommen dahinter in ihrer Reihenfolge
+      var cur = panelsOf(c);
+      cur.forEach(function (p) { if (want.indexOf(p) < 0) want.push(p); });
+      // nur die Plätze der Karten neu belegen – andere Teile des Reiters (Spalten, Sprungleiste) bleiben, wo sie sind.
+      // Vorher hängte appendChild die Karten ans Ende: „Hinweise“ rutschte unter die Spalten und ließ sich nicht zurückziehen.
+      var marks = cur.map(function (p) { var m = document.createComment('slot'); c.insertBefore(m, p); return m; });
+      marks.forEach(function (m, i) { var p = want[i]; if (p) c.insertBefore(p, m); m.remove(); });
     });
     state.folded.forEach(function (id) { var p = document.getElementById(id); if (p) p.classList.add('folded'); });
   }

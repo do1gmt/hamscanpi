@@ -2277,5 +2277,44 @@ assert "var(--hsp-max, var(--max" in css and "margin: 1rem auto 2rem" in css
 assert "'max_w'" in (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php").read_text()
 PY
 
+echo "== 65 PMSDR-Eingang, Gerätewechsel beim Abstimmen, unterbrochener Überflug, Karten und schnelle Klicks"
+(cd bin && python3 - "$SRC" <<'PY') && ok "Soundkarten-Eingang auf Line, keine UHF an die PMSDR, Neustart = unterbrochen (kein Fehler), PMSDR unter Dienste, Klicks werden nicht zurückgesetzt" || bad "PMSDR/Live/Überflug/Dashboard"
+import json, os, subprocess, sys, time
+from pathlib import Path
+import devices as DEV
+calls = []
+def fake_run(cmd, **k):
+    calls.append(cmd)
+    out = "numid=16,iface=MIXER,name='PCM Capture Source'\n  ; Item #0 'Mic'\n  ; Item #1 'Line'\n  : values=0\n" if "cget" in cmd else ""
+    return subprocess.CompletedProcess(cmd, 0, out, "")
+real = DEV.subprocess.run; DEV.subprocess.run = fake_run
+assert DEV.capture_input(7) == "Mic" and any(c[-1] == "Line" and "cset" in c for c in calls)
+n = len(calls); assert DEV.capture_input(7) is None and len(calls) == n          # einmal je Karte
+assert DEV.capture_input(8, "") is None
+DEV.subprocess.run = real
+pm = DEV.PmsdrDevice.__new__(DEV.PmsdrDevice); pm.fifo_fd = -1; pm.cfg = {"fifo": "/x"}
+try:
+    pm.tune(437_560_000); raise AssertionError("UHF an die PMSDR")
+except ValueError as e:
+    assert "außerhalb der PMSDR" in str(e)
+src = Path("webapp.py").read_text()
+assert "def live_device_for" in src and "want != _live.device" in src
+import services as SV
+assert SV.UNITS.get("pmsdr-control") and "restart pmsdr-control" in Path("setup_system.sh").read_text()
+# Überflug durch Neustart unterbrochen: sofort „abgebrochen“, Warnung statt Fehler
+import satellites as SAT, housekeeping as HK
+logs = []
+SAT.write_result("t_1", state="running", channels=["iss"], started=time.time() - 300, pid=999999, boot="alter-start")
+HK.run({}, lambda d: (0, 0), lambda *a, **k: logs.append((a, k)))
+r = SAT.read_results()["t_1"]
+assert r["state"] == "cancelled" and "neu gestartet" in r["error"], r
+assert any(a[1] == "pass_interrupted" for a, k in logs) and not any(a[1] == "pass_aborted" for a, k in logs), logs
+assert "pid=os.getpid(), boot=_boot" in Path("sat_pass.py").read_text()
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text(); lj = (Path(sys.argv[1]) / "web" / "layout.js").read_text()
+assert "saveChain" in js and "if (!pending.length && !saveTimer)" in js and "Mindestens einer bleibt gewählt" in js
+assert "if (u === 'pmsdr-control') continue" in js
+assert "createComment('slot')" in lj and "c.appendChild(p); moved.push(p)" not in lj
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

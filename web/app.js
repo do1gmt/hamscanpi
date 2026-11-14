@@ -176,6 +176,7 @@
   }
 
   async function loadSettings() {
+    if (pending.length || saveTimer) return;                 // ungespeicherte Klicks nicht vom alten Stand überschreiben
     settings = await api('/api/settings');
     tzApply(settings);
     setTimeout(() => { try { renderCountry(); } catch (e) { } try { applyLiveState(); } catch (e) { } }, 0);
@@ -215,21 +216,27 @@
   // Jede Änderung geht als Einzelschritt an den Server (nicht die ganze Liste): war eine zweite
   // Browserseite mit altem Stand offen, schrieb sie früher ihre alte Auswahl zurück
   const pending = [];
+  // Speichern der Reihe nach (nie zwei Stapel gleichzeitig). Die Antwort des Pi wird nur übernommen, wenn danach
+  // nichts mehr angeklickt wurde – sonst setzte sie schnell nacheinander angeklickte Satelliten/Abschnitte für ein
+  // paar Sekunden zurück, und ein erneuter Klick kippte sie in die falsche Richtung.
+  let saveChain = Promise.resolve();
   function scheduleSave(what, change) {
     if (change) pending.push(change);
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
+    saveTimer = setTimeout(() => { saveTimer = null; saveChain = saveChain.then(() => flushSave(what)); }, 400);
+  }
+  async function flushSave(what) {
+    {
       const todo = pending.splice(0);
       try {
         let d;
         for (const ch of todo) d = await post('/api/settings', ch);
         if (!todo.length) d = await post('/api/settings', { scan_interval_minutes: Number($('interval').value) });
-        settings = Object.assign(settings, d.settings);
-        renderBands();
+        if (!pending.length && !saveTimer) { settings = Object.assign(settings, d.settings); renderBands(); }
         loadEstimate();
         note(what === 'scan' ? $('scanSaveNote') : $('bandSaveNote'), '✓ gespeichert');
       } catch (e) { note(what === 'scan' ? $('scanSaveNote') : $('bandSaveNote'), 'Fehler: ' + e.message, true); }
-    }, 400);
+    }
   }
   $('interval').addEventListener('change', () => { scheduleSave('scan'); setTimeout(loadEstimate, 600); });
   function intervalLabel(m) { return m === 0 ? 'aus' : m < 60 ? `alle ${m} min` : m === 60 ? 'jede Stunde' : `alle ${m / 60} Stunden`; }
@@ -389,7 +396,9 @@
         c.addEventListener('click', () => {
           let list = all ? [] : chosen.filter(x => x !== 'all');
           list = on ? list.filter(x => x !== s.id) : [...list, s.id];
-          settings.selected_segments[b.name] = list.length ? list : ['all'];
+          // den letzten Abschnitt abwählen hieße „ganzes Band“ (bei Satelliten: plötzlich alle an) – nicht still tun
+          if (!list.length) { toast(EN ? 'At least one entry stays selected – to switch the whole band off, untick it above' : 'Mindestens einer bleibt gewählt – zum Ausschalten das Band oben abwählen', 4000, false); return; }
+          settings.selected_segments[b.name] = list;
           renderBands(); scheduleSave('bands', { toggle_segment: { band: b.name, id: s.id, on: !on } });
         });
         chips.appendChild(c);
@@ -2240,7 +2249,8 @@
     }
     if (s.time_sync != null) { tile(s.time_sync ? 'ja' : 'nein', 'Uhr synchron (NTP)', s.time_sync ? '' : 'bad'); if (!s.time_sync) warn.push('Die Uhr des Pi ist nicht synchron – Satellitenzeiten und Doppler werden ungenau.'); }
     const svc = s.services || {};
-    for (const [u, st] of Object.entries(svc)) { if (u === 'pmsdr-control' && st !== 'active' && st !== 'activating') continue; tile(st === 'active' ? 'läuft' : st, u, st === 'active' ? '' : 'warn'); }
+    // die PMSDR-Steuerung steht unter System → Dienste (mit „Neu starten“), nicht hier
+    for (const [u, st] of Object.entries(svc)) { if (u === 'pmsdr-control') continue; tile(st === 'active' ? 'läuft' : st, u, st === 'active' ? '' : 'warn'); }
     // Systemlaufwerk: Schreiblast (verschleißt SD-Karten) und wo der Swap liegt
     const sto = s.storage;
     if (sto && sto.disk) {
