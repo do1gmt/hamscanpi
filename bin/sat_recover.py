@@ -3,7 +3,8 @@
 Liegengebliebene Satelliten-Rohaufnahmen nachträglich auswerten.
 
 sat_pass.py schreibt während eines Überflugs je FM-Kanal eine Rohdatei
-recordings/.sat_<kanal>_<pid>.raw (I/Q, float32, 24 kHz, Doppler schon heraus) und löscht sie nach
+recordings/.sat_<kanal>_<pid>.r16 (I/Q, int16, 24 kHz, Doppler schon heraus; bis 1.7.94 .raw mit float32)
+und löscht sie nach
 der Auswertung. Wurde die Auswertung abgebrochen (z. B. vom System bei Speichermangel), bleibt die
 Datei liegen – mit ihr lassen sich SSTV-Bilder, APRS-Pakete und Sprachdurchgänge noch retten.
 
@@ -23,7 +24,7 @@ import satellites as SAT                                  # noqa: E402
 import sat_pass as SP                                     # noqa: E402
 
 RATE = 24000
-NAME = re.compile(r"^\.sat_(?P<id>[a-z0-9_]+?)_(?P<tag>[0-9a-z]+)\.raw$")
+NAME = re.compile(r"^\.sat_(?P<id>[a-z0-9_]+?)_(?P<tag>[0-9a-z]+)\.(raw|r16)$")
 
 
 def channel_from_raw(path):
@@ -33,25 +34,24 @@ def channel_from_raw(path):
     sat = SAT.BY_ID[m.group("id")]
     if sat["kind"] != "fm":
         return None
-    raw = np.memmap(path, dtype=np.float32, mode="r")
-    n = len(raw) // 2
+    z, k = SP.open_iq(path)
+    n = len(z)
     if n < RATE * 5:
         return None
-    z = raw[: 2 * n].reshape(-1, 2)
     ch = SP.Channel.__new__(SP.Channel)                    # ohne __init__: keine neue Rohdatei anlegen
     ch.sat, ch.f0, ch.kind, ch.tmp, ch.hits = sat, float(sat["center_hz"]), "fm", path, []
-    ch.aud = path.with_suffix(".aud")                       # Ton auf die Karte, wie bei der Aufnahme
+    ch.aud = path.with_suffix(".a16")                       # Ton auf die Karte, wie bei der Aufnahme
     ch.aud_n, pw = 0, []
     af = open(ch.aud, "wb")
     step = RATE // 10                                      # 0,1 s, wie bei der Aufnahme
     prev = 0j
     for a in range(0, n, RATE * 10):                       # blockweise: wenig Speicher
         b = min(n, a + RATE * 10)
-        c = z[a:b, 0].astype(np.float64) + 1j * z[a:b, 1].astype(np.float64)
+        c = (z[a:b, 0].astype(np.float64) + 1j * z[a:b, 1].astype(np.float64)) * k
         pr = np.concatenate(([prev], c[:-1]))
         prev = c[-1]
         a_ = (np.angle(c * np.conj(pr)) * RATE / (2 * np.pi) / 5000.0).astype(np.float32)
-        af.write(a_.tobytes())
+        af.write(SP.to_i16(a_, SP.AUD_SCALE).tobytes())
         ch.aud_n += len(a_)
         p = np.abs(c) ** 2
         pw.extend(float(np.mean(p[k:k + step])) for k in range(0, len(p) - step + 1, step))
@@ -68,7 +68,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
-    files = sorted(SP.RECDIR.glob(".sat_*.raw"), key=lambda p: p.stat().st_mtime)
+    files = sorted([*SP.RECDIR.glob(".sat_*.raw"), *SP.RECDIR.glob(".sat_*.r16")], key=lambda p: p.stat().st_mtime)
     if not files:
         print("Keine liegengebliebenen Rohaufnahmen.")
         return

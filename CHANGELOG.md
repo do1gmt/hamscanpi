@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.7.95 – 2026-11-14
+
+- **Cards can be moved and folded** – handle ⠿ top right of every card: drag with mouse or finger (the page
+  scrolls along at the edge), or focus it and use ↑/↓; ▾ folds a card. Stored per browser (phone and PC
+  separately), *Settings → Station → Reset layout*. Runs in the browser only – no load on the Pi.
+- **Less writing to the SD card:** satellite passes wrote 24 kHz I/Q and audio as 32-bit float per FM channel
+  (≈ 17 MB/min – on the test Pi 85 % of 6 GB/day); now 16-bit (half; the stick delivers 8 bits, nothing is
+  lost). Old `.raw/.aud` files are still read (`sat_recover.py`, clean-up). The level meter (every second) and
+  the heartbeats (every 10 s) moved to RAM (`/dev/shm`). The diagnostics contain `io.txt` (writes in 10 s per
+  process, where `/tmp` lives).
+- Fix: notice **"Automatic backup failed"** could not be acknowledged and the red line stayed – both now go away
+  when the automatic backup is switched off or another target is chosen. Acknowledged notices disappear from the
+  list (the tick box shows them again); if the problem comes back, they reappear.
+- Fix: choosing the **antenna in the scan box** went to the stick ("no main stick") when the settings were not
+  loaded yet – it now always goes to the receiver that actually scans.
+- **Scan although "off":** the scheduler no longer assumes "every 30 min" when the settings file is momentarily
+  unreadable (scans nothing and logs it); a scan request left over from before a restart expires after 10 min.
+  With "off" and the band *Satellites* on, the scan box says that passes are still recorded.
+- "Main stick missing" looked like an alarm – now a neutral "not plugged in"; yellow only when no receiver is
+  plugged in at all. The "NOT PLUGGED IN" badge is grey.
+- **Pop-ups** at the bottom are bigger: green with ✓ for saved, red for errors (they stay until tapped).
+  **Card headings** bigger, full text colour, coloured bar on the left.
+- **System → Raspberry Pi:** address as a link (`http://<host>.local:<port>` and the IP), router, DNS servers,
+  per interface the MAC address; Wi-Fi with network, 2.4/5 GHz and channel, signal, link speed and access point;
+  cable with speed.
+- Colour themes **Ocean, Forest, Valve, Aubergine** (besides Automatic, Dark, Light, High contrast, Night).
+- `favicon.ico` for browsers without SVG icons.
+- Self-test section 57.
+
 ## 1.7.94 – 2026-11-14
 
 - Fix: **PMSDR control program still missing after 1.7.93** on the 64-bit Pi OS: the bundled `./configure`

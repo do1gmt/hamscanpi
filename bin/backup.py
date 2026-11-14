@@ -373,10 +373,28 @@ def run_auto(cfg=None, log=print):
     return st
 
 
+def reset_error():
+    """Alte Fehlermeldung vergessen (Sicherung ausgeschaltet, anderes Ziel gewählt): Hinweis und rote Zeile weg."""
+    st = auto_state()
+    if st.get("error") or st.get("tried_day"):
+        st.pop("error", None); st.pop("tried_day", None)
+        try:
+            AUTO_STATE.write_text(json.dumps(st), encoding="utf-8")
+        except OSError:
+            pass
+    try:
+        import notices as NT
+        NT.clear("auto_backup", "Einstellung geändert")
+    except Exception:
+        pass
+
+
 def auto_tick(log=None):
     """Vom Scheduler einmal je Minute: fällig? (zur eingestellten Stunde, täglich bzw. sonntags, einmal)"""
     cfg = auto_cfg()
     if not cfg.get("enabled"):
+        if auto_state().get("error"):
+            reset_error()                                      # ausgeschaltet: alter Fehler zählt nicht mehr
         return
     lt = time.localtime()
     if lt.tm_hour != int(cfg.get("hour", 3)) or (cfg.get("interval") == "weekly" and lt.tm_wday != 6):

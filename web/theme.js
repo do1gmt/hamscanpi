@@ -1,8 +1,10 @@
 /* HamScanPi – Design (hell/dunkel/…) je Browser. Wird im <head> geladen, damit die Seite gleich richtig erscheint.
  * auto = wie das Gerät (hell oder dunkel), light, dark, contrast (hoher Kontrast), night (rot, für die Nacht). */
 (function () {
-  var LIST = [['auto', 'Automatisch'], ['dark', 'Dunkel'], ['light', 'Hell'], ['contrast', 'Hoher Kontrast'], ['night', 'Nacht (rot)']];
-  var BAR = { dark: '#0f1620', light: '#ffffff', contrast: '#000000', night: '#080000' };
+  var LIST = [['auto', 'Automatisch'], ['dark', 'Dunkel'], ['light', 'Hell'], ['ocean', 'Ozean'], ['forest', 'Wald'], ['tube', 'Röhre'],
+              ['aubergine', 'Aubergine'], ['contrast', 'Hoher Kontrast'], ['night', 'Nacht (rot)']];
+  var BAR = { dark: '#0f1620', light: '#ffffff', contrast: '#000000', night: '#080000', ocean: '#071a2b', forest: '#0b1a12', tube: '#1a1208',
+              aubergine: '#170f22' };
   function valid(t) { for (var i = 0; i < LIST.length; i++) if (LIST[i][0] === t) return true; return false; }
   function apply(t) {
     var root = document.documentElement;

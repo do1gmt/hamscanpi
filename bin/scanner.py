@@ -311,7 +311,8 @@ def analyse(i, q, cfg):
 
 
 _METER_HIST = []
-METER_FILE = Path(__file__).resolve().parent.parent / "data" / "meter.json"
+import rundir as _RD  # noqa: E402
+METER_FILE = _RD.path("meter.json")                    # im Arbeitsspeicher (jede Sekunde neu)
 
 
 def scan_meter(band, center, result):

@@ -8,6 +8,7 @@ import time
 import sys
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
 from applog import log as applog
+import rundir as _RD                                       # Dateien im RAM (Lebenszeichen)
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,8 +36,17 @@ def interval_minutes():
         if value <= 0:
             return 0          # automatischer Scan ausgeschaltet
         return max(2, min(value, 1440))
-    except Exception:
-        return DEFAULT_INTERVAL
+    except FileNotFoundError:
+        return DEFAULT_INTERVAL                       # frische Installation
+    except Exception as e:
+        # Datei kurz nicht lesbar (z. B. gerade beim Start): lieber nicht scannen als gegen „aus“ scannen
+        if not _sat_note.get("interval_err"):
+            applog("WARN", "scheduler", "settings_unreadable", error=f"{type(e).__name__}: {e}")
+        _sat_note["interval_err"] = True
+        return 0
+
+
+_sat_note = {}
 
 
 def live_watch_on():
@@ -101,7 +111,7 @@ def scan_watchdog():
     Stick nicht)."""
     if not (cycle_running() and scan_running()) or sat_pass_active():
         return
-    hb = BASE / "data" / "scanner.heartbeat"
+    hb = _RD.path("scanner.heartbeat")
     try:
         age = time.time() - hb.stat().st_mtime
     except OSError:
@@ -573,7 +583,7 @@ while True:
     if _sdn:
         _sdn.notify("WATCHDOG=1")
     try:
-        (BASE / "data" / "scheduler.heartbeat").touch()
+        _RD.path("scheduler.heartbeat").touch()                 # im RAM: schont die Speicherkarte
         if _sysmon:
             try:
                 _sysmon.tick()
@@ -605,12 +615,21 @@ while True:
         except Exception:
             pass
 
-        # manueller Scan
+        # manueller Scan (eine Anforderung, die vor einem Neustart liegen blieb, verfällt nach 10 min)
         if TRIGGER.exists():
             try:
+                _age = time.time() - TRIGGER.stat().st_mtime
                 TRIGGER.unlink()
             except FileNotFoundError:
-                pass
+                _age = 0
+            if _age > 600:
+                applog("INFO", "scheduler", "trigger_expired", age_min=round(_age / 60))
+                continue_trigger = False
+            else:
+                continue_trigger = True
+        else:
+            continue_trigger = False
+        if continue_trigger:
 
             if live_active_now():
                 applog("WARN", "scheduler", "trigger_ignored", reason="live")

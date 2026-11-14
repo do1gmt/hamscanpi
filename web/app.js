@@ -61,7 +61,14 @@
   setInterval(() => { const d = new Date(); $('clock').textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; $('clockLocal').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }, 1000);
 
   let toastTimer;
-  function toast(msg, ms = 2500, err = false) { const t = $('toast'); t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms); }
+  // Einblendung unten: grün = gespeichert/erledigt (✓), rot = Fehler (bleibt, bis man sie antippt), sonst neutral
+  function toast(msg, ms = 2500, err = null) {
+    const t = $('toast'); if (err === null) err = /^(Fehler|Error)\b|fehlgeschlagen|failed/i.test(msg);
+    t.textContent = msg; t.classList.toggle('err', !!err); t.classList.toggle('ok', !err && /^✓/.test(msg));
+    t.classList.add('show'); clearTimeout(toastTimer);
+    if (!err) toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+  $('toast').addEventListener('click', () => $('toast').classList.remove('show'));
   // Rückmeldung zu Einstellungen: steht am Bereich UND unten als Einblendung (immer im Blick, auch wenn der Bereich
   // gerade außer Sicht ist). Das zuletzt geänderte Feld wird kurz grün (gespeichert) oder bleibt rot (Fehler).
   let lastChg = null;
@@ -72,7 +79,7 @@
     if (!msg) return;
     if (!err) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
     if (err || /^✓/.test(msg)) {
-      toast(msg, err ? 8000 : 2800, err);
+      toast(msg, 2800, !!err);
       const f = lastChg && Date.now() - lastChg.t < 6000 && lastChg.el.closest && lastChg.el.closest('.field, .check, td, .stick-card, label');
       if (f) { f.classList.remove('flash-ok', 'save-err'); void f.offsetWidth; f.classList.add(err ? 'save-err' : 'flash-ok'); if (!err) setTimeout(() => f.classList.remove('flash-ok'), 1500); }
     }
@@ -132,6 +139,7 @@
     const o833 = $('liveStep').querySelector('option[value="8333"]');     // 8,33-kHz-Raster gibt es nur im Flugfunk
     if (o833) o833.hidden = o833.disabled = !settings.allow_restricted;
     renderDeviceSwitch();
+    try { renderAntProfiles(); } catch (e) { /* Antennen noch nicht geladen */ }   // Profilwahl passend zum Gerät
     renderBands();
     fillNotify();
   }
@@ -169,14 +177,17 @@
       o.disabled = tooShort && m !== cur;
     }
     const hint = $('intervalHint');
-    if (!estimate.parts || !estimate.parts.length) { hint.textContent = ''; return; }
+    // „aus“ betrifft nur die Bandscans – Überflüge laufen über das Band „Satelliten“ weiter (sah aus wie ein Scan)
+    const satOn = cur === 0 && (settings.selected_bands || []).includes('Satelliten');
+    const satTxt = satOn ? 'Automatischer Scan aus. Satelliten-Überflüge werden trotzdem aufgenommen – zum Abschalten unter „Bänder & Betriebsarten“ das Band „Satelliten“ ausschalten. ' : '';
+    if (!estimate.parts || !estimate.parts.length) { hint.textContent = satTxt; hint.classList.remove('warn-text'); return; }
     const min = Math.ceil(sec / 60);
     const minOk = settings.allowed_intervals.find(m => m > 0 && m * 60 >= sec);
     const det = estimate.parts.map(p => `${p.band} ${p.tunes}× ≈ ${fmtDur(p.seconds)}${p.measured ? '' : ' (geschätzt)'}`).join(', ');
     let txt = `Ein Scan mit dieser Auswahl dauert etwa ${fmtDur(sec)} (${det}, Vor-/Nachlauf ≈ ${fmtDur(estimate.overhead)}).`;
     if (cur > 0 && sec > cur * 60) txt += ` ⚠ Länger als das Intervall – die Scans laufen dann mit 30 s Pause hintereinander, der Stick ist fast nie frei.`;
     else if (minOk) txt += ` Kürzestes sinnvolles Intervall: ${intervalLabel(minOk).replace('alle ', '')}.`;
-    hint.textContent = txt;
+    hint.textContent = satTxt + txt;
     hint.classList.toggle('warn-text', cur > 0 && sec > cur * 60);
   }
   for (const [dev, id] of [['pmsdr', 'rasterPmsdr'], ['rtlsdr', 'rasterRtlsdr']]) {
@@ -1361,7 +1372,9 @@
     pill.hidden = !d.open; $('noticeCount').textContent = d.open;
     pill.classList.toggle('bad', d.worst === 0);
     const showOld = $('noticeShowOld').checked;
-    const items = d.items.filter(r => showOld || (r.active && !r.acked) || (r.active && r.kind === 'state'));
+    // quittierte Hinweise verschwinden (Haken „behobene und quittierte zeigen“ holt sie zurück); kommt der Fehler
+    // neu, erscheinen sie wieder
+    const items = d.items.filter(r => showOld || (r.active && !r.acked));
     const tm = x => new Date(x * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     $('noticeSummary').textContent = d.open ? `${d.open} offen` : 'alles in Ordnung';
     const en = I18N.lang === 'en';
@@ -1419,6 +1432,11 @@
     view.prepend(nav);
   }
   function jumpCurrent() { buildJump(document.querySelector('section.view:not([hidden])')); }
+  document.addEventListener('layoutchange', () => jumpCurrent());          // Karte verschoben/eingeklappt (layout.js)
+  $('layoutReset').addEventListener('click', () => {
+    if (!window.HSPLayout) return;
+    if (confirm(EN ? 'Restore the original order of all cards in this browser?' : 'Ursprüngliche Anordnung aller Karten in diesem Browser wiederherstellen?')) HSPLayout.reset();
+  });
   const topBtn = document.createElement('button');
   topBtn.type = 'button'; topBtn.className = 'to-top'; topBtn.textContent = '↑'; topBtn.title = EN ? 'to the top' : 'nach oben'; topBtn.hidden = true;
   topBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -2249,7 +2267,9 @@
       loadSatPasses();
     } catch (err) { toast('Fehler: ' + err.message); }
   }
-  $('antQuick').addEventListener('change', e => antSelect(e.target.dataset.target, e.target.value));
+  // Ziel erst beim Auswählen bestimmen: das Gerät, das gerade wirklich scannt (beim ersten Zeichnen waren die
+  // Einstellungen evtl. noch nicht geladen – dann ging die Wahl an den Stick, auch wenn die PMSDR scannte)
+  $('antQuick').addEventListener('change', e => antSelect(settings && settings.active_device === 'pmsdr' ? 'pmsdr' : 'rtlsdr', e.target.value));
   document.addEventListener('change', e => { const s2 = e.target.closest('select[data-antsel]'); if (s2) antSelect('rtlsdr', s2.value, 'sticks'); });
   loadAntennas();
 
@@ -2649,8 +2669,10 @@
     const at = [];
     at.push(`<div class="stat ${s.activity === 'idle' ? '' : 'act-on'}"><b>${ACT_TEXT[s.activity] || s.activity}</b><span>gerade</span></div>`);
     if (hw) {
-      at.push(`<div class="stat ${hw.rtlsdr.present ? '' : 'warn'}"><b>${hw.rtlsdr.present ? 'steckt' : 'fehlt'}</b><span>Haupt-Stick${hw.rtlsdr.label ? ': <span class="no-i18n">' + esc(hw.rtlsdr.label) + '</span>' : ''}</span></div>`);
-      at.push(`<div class="stat"><b>${hw.pmsdr.present ? 'steckt' : hw.pmsdr.usb ? 'ohne Audio' : 'abgesteckt'}</b><span>PMSDR (Kurzwelle)</span></div>`);
+      // nicht angesteckt ist ein Zustand, kein Fehler: nur gelb, wenn gar kein Empfänger da ist
+      const none = !hw.rtlsdr.present && !hw.pmsdr.present;
+      at.push(`<div class="stat ${hw.rtlsdr.present ? '' : none ? 'warn' : 'idle'}"><b>${hw.rtlsdr.present ? 'steckt' : 'nicht angesteckt'}</b><span>Haupt-Stick${hw.rtlsdr.label ? ': <span class="no-i18n">' + esc(hw.rtlsdr.label) + '</span>' : ''}</span></div>`);
+      at.push(`<div class="stat ${hw.pmsdr.present ? '' : none ? 'warn' : 'idle'}"><b>${hw.pmsdr.present ? 'steckt' : hw.pmsdr.usb ? 'ohne Soundkarte' : 'nicht angesteckt'}</b><span>PMSDR (Kurzwelle)</span></div>`);
     }
     $('sysActivity').innerHTML = at.join('');
     const procs = s.procs || [];
@@ -2659,9 +2681,24 @@
       + `<tr class="muted"><td>HamScanPi zusammen</td><td class="num">${ownSum.toFixed(0)} MB</td><td></td></tr><tr class="muted"><td>übrige Prozesse</td><td class="num">${s.other_rss_mb} MB</td><td></td></tr>`;
     // Pi
     const pi = s.pi || {}, n = s.net || {};
-    const kv = [['Modell', pi.model], ['System', pi.os], ['Kernel', pi.kernel], ['Python', pi.python], ['Rechnername', n.hostname], ['IP-Adresse', n.ip],
-      n.wlan ? ['WLAN', `${n.wlan.iface}: ${n.wlan.dbm} dBm`] : null, ['läuft seit', s.uptime_h != null ? fmtUp(s.uptime_h) : null]].filter(x => x && x[1] != null);
-    $('sysPi').innerHTML = kv.map(([k, v]) => `<dt>${k}</dt><dd class="no-i18n">${esc(v)}</dd>`).join('');
+    // Adresse zum Anklicken (für alle, die die schöne .local-Adresse übersehen haben), Netz-Einzelheiten mit MAC
+    const port = location.port ? ':' + location.port : '';
+    const lnk = h => `<a href="http://${esc(h)}${port}/">http://${esc(h)}${port}</a>`;
+    const kv = [['Modell', pi.model], ['System', pi.os], ['Kernel', pi.kernel], ['Python', pi.python], ['Rechnername', n.hostname],
+      n.hostname ? ['Im Netz', { html: lnk(n.hostname + '.local') + (n.ip ? ' · ' + lnk(n.ip) : '') }] : null,
+      ['IP-Adresse', n.ip], ['Router', n.gateway], n.dns && n.dns.length ? ['Namensserver', n.dns.join(', ')] : null];
+    for (const f of n.ifaces || []) {
+      if (f.wifi) {
+        const det = f.ssid ? [`„${f.ssid}“`, f.band && f.channel ? `${f.band}, Kanal ${f.channel}` : f.band, f.signal_dbm != null ? `${f.signal_dbm} dBm` : null,
+                              f.tx ? `${f.tx.replace(' MBit/s', '')} MBit/s` : null].filter(Boolean).join(' · ') : 'nicht verbunden';
+        kv.push([`WLAN (${f.name})`, det], [`MAC WLAN`, f.mac]);
+        if (f.bssid) kv.push(['Router-Zugangspunkt', f.bssid]);
+      } else {
+        kv.push([`Kabel (${f.name})`, f.ipv4 && f.ipv4.length ? `verbunden${f.speed_mbit ? ' · ' + f.speed_mbit + ' MBit/s' : ''}` : 'nicht verbunden'], [`MAC Kabel`, f.mac]);
+      }
+    }
+    kv.push(['läuft seit', s.uptime_h != null ? fmtUp(s.uptime_h) : null]);
+    $('sysPi').innerHTML = kv.filter(x => x && x[1] != null).map(([k, v]) => `<dt>${k}</dt><dd class="no-i18n">${v && v.html ? v.html : esc(v)}</dd>`).join('');
   }
 
   // ---------- System: Geräte (SDR-Sticks) ----------

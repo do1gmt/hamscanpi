@@ -7,6 +7,7 @@
 <title>HamScanPi</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/theme.js"></script>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
@@ -19,7 +20,7 @@
     <button type="button" class="notice-pill" id="noticePill" hidden title="Hinweise ansehen (System → Hinweise)">⚠ <span id="noticeCount">0</span></button>
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusPillText">Verbinde …</span></div>
     <div class="clock"><span class="clock-utc" id="clock">--:--:--</span><span class="clock-sep">UTC</span><span class="clock-local" id="clockLocal">--:--:--</span><span class="clock-sep" id="clockZone">Lokal</span></div>
-    <button type="button" class="theme-btn" id="themeBtn" title="Design wechseln (Automatisch, Dunkel, Hell, Hoher Kontrast, Nacht)" aria-label="Design wechseln"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
+    <button type="button" class="theme-btn" id="themeBtn" title="Design wechseln (Automatisch, Dunkel, Hell, Farben, Hoher Kontrast, Nacht)" aria-label="Design wechseln"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
   </div>
 </header>
 <nav class="tabs-main" aria-label="Bereiche">
@@ -35,7 +36,7 @@
 <main class="views">
 
 <section class="view" data-view="hits" hidden>
-<section class="panel">
+<section class="panel" id="panel-hits-1">
     <div class="stats">
       <div class="stat"><b id="statTotal">–</b><span>gespeicherte Treffer</span></div>
       <div class="stat stat-new"><b id="statNew">–</b><span>neu im letzten Lauf</span></div>
@@ -43,7 +44,7 @@
       <div class="stat"><b id="statRejected">–</b><span>verworfen</span></div>
     </div>
   </section>
-<section class="panel panel-filters">
+<section class="panel panel-filters" id="panel-hits-2">
     <div class="chips" id="filterBands"></div>
     <div class="row">
       <label class="field grow"><span>Betriebsart</span><select id="filterMode"><option value="all">Alle</option></select></label>
@@ -67,7 +68,7 @@
 
 
 <section class="view" data-view="scan">
-  <section class="panel panel-mini">
+  <section class="panel panel-mini" id="panel-scan-1">
     <div class="stats stats-mini" id="scanStats">
       <button type="button" class="stat" data-go="hits" title="Zu den Treffern"><b id="ssHits">–</b><span>Treffer 24 h</span></button>
       <div class="stat"><b id="ssRuns">–</b><span id="ssRunsLbl">Scans 24 h</span></div>
@@ -181,7 +182,7 @@
 </section>
 
 <section class="view" data-view="stations" hidden>
-  <section class="panel">
+  <section class="panel" id="panel-stations-1">
     <h2>Gehörte Stationen</h2>
     <p class="hint">Rufzeichen aus FT8/FT4, APRS, CW und RTTY – nur sendende Stationen. Entfernung und Richtung aus dem Locator der Station (FT8, APRS-Position) und deinem eigenen Locator.</p>
     <div class="row filter-row">
@@ -206,7 +207,7 @@
     </div>
     <p class="hint">ADIF ist das Austauschformat der Logbuchprogramme. Der Export ist ein SWL-Log (jede gehörte Aussendung ein Eintrag, SWL=Y) – mit deinem Rufzeichen und Locator aus den Einstellungen.</p>
   </section>
-  <section class="panel">
+  <section class="panel" id="panel-stations-2">
     <h2>Störlinien</h2>
     <p class="hint">Frequenzen, auf denen immer wieder ein Träger ohne Inhalt auftaucht (mindestens 5 Läufe über 2 Stunden, nur Träger, keine Dekodierung) oder die der Satelliten-Wasserfall als örtliche Störung erkannt hat. Treffer dort werden in der Trefferliste ausgeblendet. Typische Quellen: Schaltnetzteile, Monitore, Router, LED-Treiber, Störlinien des Sticks selbst. Mit „keine Störung“ nimmst du eine Frequenz dauerhaft aus.</p>
     <div class="table-wrap"><table class="table interf-table">
@@ -214,14 +215,14 @@
       <tbody id="interfTable"></tbody></table></div>
     <p class="hint" id="interfHidden"></p>
   </section>
-  <section class="panel">
+  <section class="panel" id="panel-stations-3">
     <h2>UKW-Sender (RDS)</h2>
     <p class="hint">Aus den Scans des Bands „Rundfunk“: je Frequenz der Sender mit Kennung (PI), Namen, Programmart und dem zuletzt gesendeten Text. Neue Sender und Überreichweiten (Tropo, Sporadic-E) fallen hier auf.</p>
     <div class="table-wrap"><table class="table fm-table">
       <thead><tr><th>MHz</th><th>Sender</th><th>PI</th><th>Programmart</th><th>Jetzt / Radiotext</th><th>SNR</th><th>Zuletzt (UTC)</th><th title="Anzahl Empfänge">×</th></tr></thead>
       <tbody id="fmTable"></tbody></table></div>
   </section>
-  <section class="panel">
+  <section class="panel" id="panel-stations-4">
     <h2>Aktivität</h2>
     <p class="hint">Wann auf welchem Band etwas zu hören war – Treffer je Abstimmung, damit die Zahl der Scans das Bild nicht verfälscht. Stunden in UTC.</p>
     <div class="row filter-row">
@@ -315,7 +316,7 @@
       <div class="save-note" id="eibiNote" aria-live="polite"></div>
     </details>
   </section>
-  <section class="panel">
+  <section class="panel" id="panel-live-1">
     <h2>Zuletzt gehört</h2>
     <ul class="plain" id="liveHistory"><li>noch nichts</li></ul>
     <p class="hint">Suchlauf: sucht ab der eingestellten Frequenz im gewählten Raster und Demodulator (für UKW-Radio „FM breit“, Raster wird dann 100 kHz), bleibt auf einem Signal stehen, solange es belegt ist, und sucht danach weiter. Anhalten: ◀/▶ oder Hören drücken. Der Regler ist im Suchlauf die Schwelle (0 = 10 dB).</p>
@@ -572,6 +573,10 @@
         <label class="field" title="Gilt nur für diesen Browser. Auch oben rechts mit ◐ umschaltbar."><span>Design</span>
           <select id="uiTheme"></select>
         </label>
+        <div class="field"><span>Anordnung der Karten</span>
+          <p class="hint">Jede Karte lässt sich am Griff ⠿ oben rechts verschieben und mit ▾ einklappen – gilt nur für diesen Browser (Handy und PC getrennt).</p>
+          <div class="actions"><button type="button" class="btn" id="layoutReset">Anordnung zurücksetzen</button></div>
+        </div>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
       </section>
       <section class="panel" id="panel-watch">
@@ -760,5 +765,6 @@
 </aside>
 <script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/layout.js"></script>
 </body>
 </html>

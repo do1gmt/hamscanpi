@@ -241,7 +241,66 @@ def network():
                 except ValueError:
                     pass
                 break
-    return {"ip": ip, "hostname": socket.gethostname(), "wlan": wlan}
+    return {"ip": ip, "hostname": socket.gethostname(), "wlan": wlan, **net_details()}
+
+
+_NETD = {"t": 0.0, "d": {}}
+
+
+def net_details():
+    """Schnittstellen (MAC, IPv4, Kabel-Geschwindigkeit), WLAN (Netz, Frequenz/Band, Kanal, Datenrate), Router und
+    Namensserver – für System → Raspberry Pi. Höchstens alle 30 s neu gelesen (iw ist ein eigener Prozess)."""
+    if time.time() - _NETD["t"] < 30:
+        return _NETD["d"]
+    ifs = []
+    try:
+        names = sorted(n for n in os.listdir("/sys/class/net") if n.startswith(("eth", "en", "wl", "usb")))
+    except OSError:
+        names = []
+    addrs = {}
+    try:
+        out = subprocess.run(["ip", "-o", "-4", "addr", "show"], capture_output=True, text=True, timeout=5).stdout
+        for line in out.splitlines():
+            p = line.split()
+            if len(p) > 3:
+                addrs.setdefault(p[1], []).append(p[3])
+    except Exception:
+        pass
+    for n in names:
+        base = f"/sys/class/net/{n}"
+        d = {"name": n, "mac": (_read(f"{base}/address") or "").strip() or None,
+             "up": (_read(f"{base}/operstate") or "").strip() == "up", "ipv4": addrs.get(n, []),
+             "wifi": os.path.isdir(f"{base}/wireless")}
+        if not d["wifi"]:
+            sp = (_read(f"{base}/speed") or "").strip()
+            d["speed_mbit"] = int(sp) if sp.lstrip("-").isdigit() and int(sp) > 0 else None
+        else:
+            try:
+                out = subprocess.run(["iw", "dev", n, "link"], capture_output=True, text=True, timeout=5).stdout
+                g = lambda rx: (re.search(rx, out) or [None, None])[1]
+                fr = g(r"freq: (\d+(?:\.\d+)?)")
+                d.update(ssid=g(r"SSID: (.+)"), freq_mhz=round(float(fr)) if fr else None,
+                         tx=g(r"tx bitrate: ([\d.]+ MBit/s)"), rx=g(r"rx bitrate: ([\d.]+ MBit/s)"),
+                         signal_dbm=int(g(r"signal: (-?\d+)")) if g(r"signal: (-?\d+)") else None, bssid=g(r"Connected to ([0-9a-f:]{17})"))
+                f = d.get("freq_mhz")
+                if f:
+                    d["band"] = "2,4 GHz" if f < 3000 else "5 GHz" if f < 5950 else "6 GHz"
+                    d["channel"] = (f - 2407) // 5 if 2412 <= f <= 2472 else 14 if f == 2484 else (f - 5000) // 5 if f < 5950 else (f - 5950) // 5
+            except Exception:
+                pass
+        ifs.append(d)
+    gw = None
+    try:
+        for line in (_read("/proc/net/route") or "").splitlines()[1:]:
+            p = line.split()
+            if len(p) > 2 and p[1] == "00000000":
+                gw = socket.inet_ntoa(int(p[2], 16).to_bytes(4, "little"))
+                break
+    except Exception:
+        pass
+    dns = re.findall(r"^nameserver\s+(\S+)", _read("/etc/resolv.conf") or "", re.M)
+    _NETD.update(t=time.time(), d={"ifaces": ifs, "gateway": gw, "dns": dns[:3]})
+    return _NETD["d"]
 
 
 _STATIC = {}

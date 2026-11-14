@@ -110,7 +110,7 @@ def system_status():
                   "used_pct": round(100.0 * du.used / du.total, 1)}
     size, n = _dir_size(BASE / "recordings")
     st["recordings"] = {"gb": round(size / 1e9, 2), "files": n}
-    raw = list((BASE / "recordings").glob(".sat_*.raw"))
+    raw = [*(BASE / "recordings").glob(".sat_*.raw"), *(BASE / "recordings").glob(".sat_*.r16")]
     st["sat_raw"] = {"files": len(raw), "mb": round(sum(p.stat().st_size for p in raw) / 1e6)}
     mem = {}
     try:
@@ -176,7 +176,7 @@ def run(settings, bulk_delete, log):
             log("WARN", "auto_cleanup_failed", error=f"{type(e).__name__}: {e}")
     # 2. liegengebliebene Satelliten-Rohdateien
     now = time.time()
-    for p in [*(BASE / "recordings").glob(".sat_*.raw"), *(BASE / "recordings").glob(".sat_*.aud")]:
+    for p in [q for x in ("raw", "aud", "r16", "a16") for q in (BASE / "recordings").glob(f".sat_*.{x}")]:
         try:
             if now - p.stat().st_mtime > RAW_MAX_AGE_S:
                 mb = round(p.stat().st_size / 1e6)

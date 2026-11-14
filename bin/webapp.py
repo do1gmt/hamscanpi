@@ -547,7 +547,7 @@ def load_status():
         except Exception:
             age = 0
         if age > 180:
-            hb = BASE / "data" / "scheduler.heartbeat"
+            hb = __import__("rundir").path("scheduler.heartbeat")
             alive = hb.exists() and (time.time() - hb.stat().st_mtime) < 60
             st["state"] = "error"
             st["phase"] = "error"
@@ -555,7 +555,7 @@ def load_status():
                              if alive else "Scan angefordert, aber der Scheduler-Dienst läuft nicht (pmsdr-scheduler.service prüfen)")
     # Pegelanzeige: stärkstes Signal im aktuellen Scanfenster bzw. Kanalpegel des laufenden Überflugs
     # (auch etwas ältere Werte: zwischen zwei Fenstern bzw. Bändern bleibt die Anzeige stehen statt zu verschwinden)
-    m = read_json(BASE / "data" / "meter.json", {})
+    m = read_json(__import__("rundir").path("meter.json"), {})
     try:                                                 # nur Werte aus dem laufenden Lauf (nicht vom vorigen)
         run_t0 = datetime.fromisoformat(st["started_at"]).timestamp() if st.get("started_at") else 0
     except Exception:
@@ -575,7 +575,7 @@ def load_status():
         st["hardware"] = DEV.detect_hardware()
     except Exception:
         pass
-    hb = BASE / "data" / "scheduler.heartbeat"
+    hb = __import__("rundir").path("scheduler.heartbeat")
     st["scheduler_alive"] = hb.exists() and (time.time() - hb.stat().st_mtime) < 60
     st["server_time"] = now_iso()
     # nächster automatischer Scan
@@ -2158,7 +2158,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- Antworten
     # ---------------- Zugangsschutz (bin/auth.py)
-    PUBLIC = ("/login", "/api/login")
+    PUBLIC = ("/login", "/api/login", "/favicon.ico")
 
     def client_ip(self):
         return self.client_address[0]
@@ -2252,6 +2252,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 return
+            if path == "/favicon.ico":                   # klassisches Symbol im Browser-Tab (für Browser ohne SVG)
+                return self.send_file(WEB / "favicon.ico", cache=False)
             if path.startswith("/static/"):
                 name = Path(path[len("/static/"):]).name
                 return self.send_file(WEB / name, cache=False)
@@ -2760,7 +2762,7 @@ class Handler(BaseHTTPRequestHandler):
                 save_status({"state": "queued", "phase": "queued", "progress": 0,
                              "message": "Scan wurde angefordert", "run_id": None,
                              "started_at": None, "updated_at": now_iso()})
-                hb = BASE / "data" / "scheduler.heartbeat"
+                hb = __import__("rundir").path("scheduler.heartbeat")
                 if hb.exists() and (time.time() - hb.stat().st_mtime) < 60:
                     TRIGGER.touch()
                     return self.send_json({"ok": True})
@@ -2970,6 +2972,9 @@ class Handler(BaseHTTPRequestHandler):
                 if "dir" in data and str(data["dir"] or "").strip() != c["dir"]:
                     c["dir"] = str(data["dir"] or "").strip()
                     c["target"] = {}                     # eigener Ordner statt USB-Stick/Freigabe
+                old = BK.auto_cfg(read_json(SETTINGS, {}))
+                if (old.get("enabled"), old.get("dir"), old.get("target")) != (c["enabled"], c["dir"], c.get("target")):
+                    BK.reset_error()                     # andere Einstellung: alte Fehlermeldung gilt nicht mehr
                 if c["enabled"] or data.get("run_now"):
                     err = BK.check_dir(c["dir"], c.get("target"))
                     if err:
@@ -3015,6 +3020,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path != "/api/storage/eject":
                     st["auto_backup"] = ab
                     write_json(SETTINGS, st)
+                    BK.reset_error()                     # neues Ziel: alte Fehlermeldung gilt nicht mehr
                 return self.send_json({"ok": True, **STO.status(read_json(SETTINGS, {})),
                                        "auto": BK.auto_cfg(read_json(SETTINGS, {}))})
             if path == "/api/storage/restore":

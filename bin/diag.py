@@ -42,6 +42,43 @@ def _tail(path, max_bytes):
         return b""
 
 
+def _proc_writes():
+    """{pid: (Name, geschriebene Bytes)} – lesbar sind nur die eigenen Prozesse (ohne root)."""
+    out = {}
+    for d in Path("/proc").iterdir():
+        if not d.name.isdigit():
+            continue
+        try:
+            wb = int(next(x for x in (d / "io").read_text().splitlines() if x.startswith("write_bytes")).split()[1])
+            cmd = (d / "cmdline").read_bytes().replace(b"\0", b" ").replace(b"\n", b" ").decode(errors="replace").strip()[:90]
+            out[d.name] = (cmd or d.name, wb)
+        except Exception:
+            continue
+    return out
+
+
+def io_sample(secs=10):
+    """Wer schreibt auf die Speicherkarte? Gesamt (diskstats) und je eigenem Prozess über secs Sekunden,
+    dazu wo /tmp und /dev/shm liegen (RAM oder Karte) und die Einhängeoptionen der Systempartition."""
+    import sysmon as SM
+    disk = SM.root_disk()
+    w0, p0 = SM.disk_written_mb(disk) if disk else None, _proc_writes()
+    time.sleep(secs)
+    w1, p1 = SM.disk_written_mb(disk) if disk else None, _proc_writes()
+    lines = [f"Systemlaufwerk {disk}: in {secs} s {((w1 or 0) - (w0 or 0)):.2f} MB geschrieben"
+             f" (≈ {((w1 or 0) - (w0 or 0)) * 8640 / secs / 1024:.1f} GB/Tag bei gleicher Last)", "",
+             "Eigene Prozesse (Bytes in dieser Zeit · insgesamt seit Start):"]
+    rows = sorted(((p1[k][1] - p0.get(k, (0, 0))[1], p1[k][1], p1[k][0]) for k in p1), reverse=True)
+    for dlt, tot, cmd in rows[:15]:
+        lines.append(f"{dlt / 1024:10.0f} KB  {tot / 1048576:9.1f} MB  {cmd}")
+    tmp = (_run(["findmnt", "-n", "-o", "FSTYPE,SIZE", "--target", "/tmp"]).strip().splitlines() or [""])[0]
+    lines += ["", "Systempartition: " + _run(["findmnt", "-n", "-o", "FSTYPE,OPTIONS", "/"]).strip(),
+              "/tmp: " + (tmp or "?") + (" (Arbeitsspeicher)" if tmp.startswith("tmpfs") else " (Speicherkarte)"),
+              "/dev/shm: " + (_run(["findmnt", "-n", "-o", "FSTYPE,SIZE", "--target", "/dev/shm"]).strip().splitlines() or ["?"])[0],
+              "dirty_writeback_centisecs: " + _run(["cat", "/proc/sys/vm/dirty_writeback_centisecs"]).strip()]
+    return "\n".join(lines) + "\n"
+
+
 def filename():
     return f"hamscanpi-diagnose-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
 
@@ -64,6 +101,7 @@ def write(fileobj, stream=True):
             + "\n" + _run(["swapon", "--show"]) + "\n" + _run(["vcgencmd", "get_throttled"])
             + "\n" + _run(["vcgencmd", "measure_temp"]) + "\n" + _run(["python3", str(BASE / "bin" / "lockinfo.py")]) + "\n" + _run(["journalctl", "--list-boots", "--no-pager"])[-3000:]
             + "\n" + _run(["ps", "aux", "--sort=-rss"])[:20000])
+        add("io.txt", io_sample())                                                    # Schreiblast
         add("log/app.jsonl", _tail(BASE / "log" / "app.jsonl", 5_000_000))
         add("log/satellite.log", _tail(BASE / "log" / "satellite.log", 1_000_000))
         add("log/scan-cycle.log", _tail(BASE / "log" / "scan-cycle.log", 1_000_000))       # Ausgabe der Scanläufe

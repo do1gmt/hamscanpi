@@ -250,14 +250,15 @@ PY
 python3 devtools/sim_lrpt.py /tmp/hsp_lrpt.u8 12 400000 1.0          # Signal auf 137,900 (Abstimmung 137,500)
 python3 bin/sat_pass.py --sats meteor23 --test /tmp/hsp_lrpt.u8 --start $TP --until $((TP+12)) > /tmp/hsp_lrpt.txt
 grep "MHz: max" /tmp/hsp_lrpt.txt
-# Pegelanzeige: die Aufnahme schreibt data/meter.json und räumt sie am Ende weg
-python3 - <<'PY' && ok "Pegelanzeige je Sekunde (meter.json), nach der Aufnahme entfernt" || bad "Pegelanzeige"
-import json, os, subprocess, sys, time
-p = subprocess.Popen([sys.executable, "-c", "import time"]); p.wait()
-assert not os.path.exists("data/meter.json")
-sys.path.insert(0, "bin"); import sat_pass as P
+# Pegelanzeige: die Aufnahme schreibt meter.json in den RAM-Ordner (nicht auf die Karte) und räumt sie am Ende weg
+python3 - <<'PY' && ok "Pegelanzeige je Sekunde (meter.json im Arbeitsspeicher), nach der Aufnahme entfernt" || bad "Pegelanzeige"
+import json, os, sys
+sys.path.insert(0, "bin"); import sat_pass as P, rundir as RD
+m = RD.path("meter.json")
+assert str(m).startswith("/dev/shm/"), m
+assert not m.exists() and not os.path.exists("data/meter.json")
 P.write_meter("satellite", [{"label": "137.900", "db": 3.2, "hist": [1.0, 3.2]}])
-d = json.load(open("data/meter.json")); assert d["items"][0]["db"] == 3.2; os.remove("data/meter.json")
+d = json.load(open(m)); assert d["items"][0]["db"] == 3.2; os.remove(m)
 PY
 grep -q "137.900 MHz: .*stärkste" /tmp/hsp_lrpt.txt && ls reports/*meteor23*_waterfall.png >/dev/null 2>&1 \
   && ok "Signal auf 137,900 erkannt, Wasserfall" || bad "Prüfsatellit"
@@ -881,7 +882,8 @@ fns = [n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.na
 logs = []
 BASE = Path("..").resolve()
 g = {"BASE": BASE, "LOCK": BASE / "data" / "scan.lock", "time": time, "json": json, "subprocess": subprocess,
-     "applog": lambda lv, comp, ev, **d: logs.append(ev), "sat_pass_active": lambda: False, "SCAN_HANG_S": 600}
+     "applog": lambda lv, comp, ev, **d: logs.append(ev), "sat_pass_active": lambda: False, "SCAN_HANG_S": 600,
+     "_RD": __import__("rundir")}
 exec(compile(ast.Module(fns, []), "sched", "exec"), g)
 # Scanner-Attrappe: hält Lauf- und Stick-Sperre, gibt bei scan_yield frei (wie der echte Scanner)
 dummy = f"""
@@ -1700,13 +1702,13 @@ for m in re.finditer(r'<button[^>]*>(Speichern|Netze speichern)</button>', html)
 assert 'data-a="save" hidden>' in js
 for wire in ("autoSave($('antRows')", "autoSave($('panel-backup')", "autoSave($('wxBox')", "autoSave($('notifyForm')", "[data-follow]"):
     assert wire in js, wire
-assert "toast(msg, err ? 8000 : 2800, err)" in js
+assert "toast(msg, 2800, !!err)" in js
 # Kurzwellen-Block ist weg
 assert "hfDevice" not in html and "$('hf" not in js and "renderHfDevice" not in js
 # Designs: jedes Design setzt alle Farbwerte
 root = re.search(r":root \{(.*?)\n\}", css, re.S).group(1)
 toks = {t for t in re.findall(r"--([a-z0-9-]+):", root) if t not in ("radius", "tap", "font", "mono")}
-for th in ("light", "contrast", "night"):
+for th in ("light", "contrast", "night", "ocean", "forest", "tube", "aubergine"):
     blk = re.search(r':root\[data-theme="%s"\] \{(.*?)\}' % th, css, re.S).group(1)
     miss = toks - set(re.findall(r"--([a-z0-9-]+):", blk))
     assert not miss, (th, miss)
@@ -1736,8 +1738,23 @@ r.T.set('night'); if (st.theme !== 'night' || r.attrs['data-theme'] !== 'night' 
 r = run(st); if (r.attrs['data-theme'] !== 'night') throw 'remembered';
 r.T.set('quatsch'); if (r.T.get() !== 'auto') throw 'invalid';
 r = run({}, true); r.T.set('light'); if (r.attrs['data-theme'] !== 'light' || r.metas['color-scheme'].c !== 'light') throw 'blocked storage';
-if (r.T.next() !== 'contrast') throw 'next ' + r.T.next();
+if (r.T.next() !== 'ocean') throw 'next ' + r.T.next();
+for (const th of ['ocean', 'forest', 'tube', 'aubergine']) { r.T.set(th); if (r.attrs['data-theme'] !== th) throw 'theme ' + th; }
 JS
+
+(python3 - "$SRC/web" <<'PY') && ok "jede Karte hat eine feste Kennung (Anordnung je Browser), Griff und Zurücksetzen vorhanden" || bad "Karten verschieben"
+import re, sys
+from pathlib import Path
+w = Path(sys.argv[1]); html = (w / "index.html").read_text(); js = (w / "layout.js").read_text()
+tags = re.findall(r'<(?:section|details) class="panel[^"]*"[^>]*>', html)
+ids = [re.search(r'id="([^"]+)"', t) for t in tags]
+assert all(ids), [t for t, i in zip(tags, ids) if not i]
+ids = [i.group(1) for i in ids]
+assert len(ids) == len(set(ids)), "doppelte Kennung"
+assert '<script src="/static/layout.js"></script>' in html and 'id="layoutReset"' in html
+for k in ("pointerdown", "window.addEventListener('pointermove'", "localStorage", "ArrowUp", "layoutchange"):
+    assert k in js, k
+PY
 
 echo "== 56 Sicherung auf USB-Stick und Netzwerkfreigabe"
 (cd bin && python3 - <<'PY') && ok "Stick erkannt (Systemkarte nicht), Ziel gemerkt, nach Wiederanstecken eingehängt, Auswerfen respektiert, Freigabe alle 10 min, Sicherung vom Ziel einspielbar" || bad "USB/NAS-Sicherung"
@@ -1850,6 +1867,65 @@ bash -n "$H" && ! bash "$H" mount-usb "../../etc" 2>/dev/null && ! bash "$H" mou
   && ! printf 'pi\n\001x\n\n' | bash "$H" nas-cred 2>/dev/null && ! bash "$H" format 2>/dev/null \
   && grep -q "hamscanpi-store" "$SRC/bin/setup_system.sh" && grep -q "cifs-utils" "$SRC/bin/setup_system.sh" \
   && ok "Root-Helfer prüft UUID, Adresse und Zugangsdaten, formatiert nie; Installer richtet ihn ein" || bad "Root-Helfer Sicherungsziel"
+
+echo "== 57 Schreiblast, Scan nach Neustart, Hinweise aufräumen, Netz-Angaben"
+(cd bin && python3 - <<'PY') && ok "Überflug-Zwischendateien int16 (halbe Schreiblast, alte float32 lesbar), Pegel/Lebenszeichen im RAM, Diagnose misst Schreiblast" || bad "Schreiblast"
+import numpy as np, tempfile, os
+from pathlib import Path
+import sat_pass as SP, rundir as RD, diag
+d = Path(tempfile.mkdtemp())
+z = (np.random.randn(48000) + 1j * np.random.randn(48000)).astype(np.complex64) * 0.3
+(d / "a.r16").write_bytes(SP.to_i16(np.stack([z.real, z.imag], 1), SP.IQ_SCALE).tobytes())
+np.stack([z.real, z.imag], 1).astype(np.float32).tofile(d / "a.raw")
+for f in ("a.r16", "a.raw"):
+    m, k = SP.open_iq(d / f)
+    zz = (m[:, 0].astype(np.float32) + 1j * m[:, 1].astype(np.float32)) * k
+    assert np.max(np.abs(zz - z)) < 2e-4, f
+assert (d / "a.r16").stat().st_size * 2 == (d / "a.raw").stat().st_size
+a = (np.random.randn(24000) * 0.8).astype(np.float32)
+(d / "t.a16").write_bytes(SP.to_i16(a, SP.AUD_SCALE).tobytes())
+A = SP.open_audio(d / "t.a16")
+assert len(A) == 24000 and np.max(np.abs(A[100:200] - a[100:200])) < 2e-4 and np.allclose(SP.read_audio(d / "t.a16"), a, atol=2e-4)
+assert str(SP.METER).startswith("/dev/shm/") and str(RD.path("scheduler.heartbeat")).startswith("/dev/shm/")
+t = diag.io_sample(1)
+assert "geschrieben" in t and "/tmp:" in t, t
+PY
+(cd bin && python3 - <<'PY') && ok "„aus“ bleibt aus, auch wenn die Einstellungen kurz nicht lesbar sind; liegengebliebene Scan-Anforderung verfällt" || bad "Scan nach Neustart"
+import ast, json, tempfile
+from pathlib import Path
+src = Path("scheduler.py").read_text()
+fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "interval_minutes")
+d = Path(tempfile.mkdtemp()); f = d / "s.json"
+logs = []
+ns = {"json": json, "SETTINGS": f, "DEFAULT_INTERVAL": 30, "_sat_note": {}, "applog": lambda *a, **k: logs.append(a)}
+exec(compile(ast.Module([fn], []), "x", "exec"), ns)
+assert ns["interval_minutes"]() == 30                      # frische Installation
+f.write_text('{"scan_interval_minutes": 0}'); assert ns["interval_minutes"]() == 0
+f.write_text('{"scan_interval_mi'); assert ns["interval_minutes"]() == 0 and logs, "kaputte Datei darf nicht scannen"
+f.write_text('{"scan_interval_minutes": 10}'); assert ns["interval_minutes"]() == 10
+assert "_age > 600" in src and "trigger_expired" in src
+PY
+(cd bin && python3 - "$SRC" <<'PY') && ok "Sicherung aus/anderes Ziel: alter Fehler und Hinweis verschwinden; quittierte Hinweise ausgeblendet" || bad "Hinweise aufräumen"
+import json, sys, tempfile
+from pathlib import Path
+import backup as BK, notices as NT
+d = Path(tempfile.mkdtemp()); NT.FILE = d / "n.json"; NT.LOCK = d / "n.lock"; BK.AUTO_STATE = d / "bs.json"
+BK.AUTO_STATE.write_text(json.dumps({"error": "Zielordner /mnt/usb gibt es nicht", "tried_day": "2026-11-14"}))
+NT.raise_("auto_backup", "warn", "storage", "Automatische Sicherung fehlgeschlagen", "x", notify=False)
+BK.auto_cfg = lambda settings=None: {"enabled": False}
+BK.auto_tick()
+assert not BK.auto_state().get("error") and not NT.is_active("auto_backup")
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert "showOld || (r.active && !r.acked)" in js
+PY
+(cd bin && python3 - <<'PY') && ok "System → Raspberry Pi: Schnittstellen mit MAC, Router, Namensserver (zwischengespeichert)" || bad "Netz-Angaben"
+import sysmon as M
+n = M.network()
+assert {"ifaces", "gateway", "dns", "hostname"} <= set(n), n
+assert all({"name", "mac", "wifi"} <= set(f) for f in n["ifaces"])
+assert M.net_details() is M.net_details()                  # 30 s zwischengespeichert
+PY
+grep -q '"/favicon.ico"' "$SRC/bin/webapp.py" && [ -s "$SRC/web/favicon.ico" ] && ok "favicon.ico vorhanden" || bad "favicon.ico"
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

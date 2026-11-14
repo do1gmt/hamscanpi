@@ -367,6 +367,13 @@ average), whether it is an SD card, USB drive or NVMe SSD, and where the swap li
 A few hundred MB written per day is fine for a good card for years; several GB per day make an SSD
 worthwhile.
 
+Most of the writing comes from **satellite passes**: during a pass each FM channel writes its I/Q and audio to
+the card (evaluated and deleted afterwards). Since 1.7.95 these files are 16-bit instead of 32-bit float – half
+the amount – and the level meter and heartbeat files that change every second live in RAM (`/dev/shm`). Many
+passes per day (every satellite enabled) still add up; switch off satellites you do not need under *Settings →
+Satellites*. The diagnostics download (*System → Services*) contains `io.txt`: what was written in 10 seconds,
+per HamScanPi process, and whether `/tmp` lives in RAM or on the card.
+
 ### Swap
 
 Raspberry Pi OS Trixie already uses **zram** (swap compressed in RAM) – nothing is swapped to the card:

@@ -29,7 +29,8 @@ RECDIR = BASE / "recordings"
 # Ein Überflug braucht den Stick: der Scheduler legt diese Datei an, der Scan prüft sie zwischen den Schritten und
 # in langen Aufnahmen und gibt den Stick binnen 1–2 s frei (statt erst nach SIGTERM und Aufräumen)
 YIELD_FILE = BASE / "data" / "scan_yield"
-HEARTBEAT = BASE / "data" / "scanner.heartbeat"
+import rundir as _RD  # noqa: E402
+HEARTBEAT = _RD.path("scanner.heartbeat")                   # im RAM
 
 
 class ScanYield(Exception):

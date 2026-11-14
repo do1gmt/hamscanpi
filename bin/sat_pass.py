@@ -45,7 +45,47 @@ DB = BASE / "data" / "scanner.db"
 RECDIR = BASE / "recordings"
 REPORTS = BASE / "reports"
 STATUS = BASE / "data" / "runtime_status.json"
-METER = BASE / "data" / "meter.json"          # Pegel für die Anzeige im Scan-Kasten (jede Sekunde)
+import rundir as _RD                                       # noqa: E402
+METER = _RD.path("meter.json")                # Pegel für die Anzeige im Scan-Kasten (jede Sekunde, im RAM)
+
+
+# Zwischendateien eines FM-Kanals (I/Q 24 kHz, Ton 24 kHz) als int16 statt float32: halb so viel auf die
+# Speicherkarte geschrieben (bei vielen Überflügen am Tag der größte Teil der Schreiblast). Genauigkeit reicht
+# weit: der Stick liefert 8 Bit. Alte Dateien (.raw/.aud, float32) liest die Auswertung weiterhin.
+IQ_SCALE, AUD_SCALE = 8192.0, 4096.0
+
+
+def to_i16(x, scale):
+    return np.clip(np.rint(np.asarray(x, dtype=np.float32) * scale), -32767, 32767).astype(np.int16)
+
+
+class Audio16:
+    """int16-Tondatei, liest sich wie ein float32-Feld (Länge, Ausschnitte)."""
+    def __init__(self, path):
+        self.m = np.memmap(path, dtype=np.int16, mode="r")
+
+    def __len__(self):
+        return len(self.m)
+
+    def __getitem__(self, k):
+        return np.asarray(self.m[k], dtype=np.float32) / AUD_SCALE
+
+
+def open_audio(path):
+    return Audio16(path) if Path(path).suffix == ".a16" else np.memmap(path, dtype=np.float32, mode="r")
+
+
+def read_audio(path):
+    if Path(path).suffix == ".a16":
+        return np.fromfile(path, dtype=np.int16).astype(np.float32) / AUD_SCALE
+    return np.fromfile(path, dtype=np.float32)
+
+
+def open_iq(path):
+    """(Feld [n, 2], Faktor) – int16 (.r16) oder alt float32 (.raw)."""
+    if Path(path).suffix == ".r16":
+        return np.memmap(path, dtype=np.int16, mode="r").reshape(-1, 2), 1.0 / IQ_SCALE
+    return np.memmap(path, dtype=np.float32, mode="r").reshape(-1, 2), 1.0
 
 
 def write_meter(src, items):
@@ -332,11 +372,11 @@ class Channel:
         self.n2 = np.arange(BLOCK // 10)
         self.phase = 0.0
         self.kind = sat["kind"]
-        self.tmp = RECDIR / f".sat_{sat['id']}_{tag}.raw"
+        self.tmp = RECDIR / f".sat_{sat['id']}_{tag}.r16"
         self.tmpf = open(self.tmp, "wb") if self.kind == "fm" else None
         # Ton (24 kHz) während der Aufnahme auf die Karte statt in den Speicher: bei 20 min sind das
         # ~110 MB je FM-Kanal, die sonst bis zur Auswertung im RAM liegen (zwei Kanäle -> Swap am Pi)
-        self.aud = RECDIR / f".sat_{sat['id']}_{tag}.aud"
+        self.aud = RECDIR / f".sat_{sat['id']}_{tag}.a16"
         self.audf = open(self.aud, "wb") if self.kind == "fm" else None
         self.aud_n = 0
         self.chunk, self.chunk_t = [], None
@@ -406,12 +446,12 @@ class Channel:
             return
         c, self.ch_zi = sosfilt(self.ch_lp, bb, zi=self.ch_zi)
         c24 = c[::2]
-        self.tmpf.write(np.stack([c24.real, c24.imag], 1).astype(np.float32).tobytes())
+        self.tmpf.write(to_i16(np.stack([c24.real, c24.imag], 1), IQ_SCALE).tobytes())
         prev = np.concatenate(([self.fm_last], c[:-1]))
         self.fm_last = c[-1]
         d = np.angle(c * np.conj(prev)) * OUT_RATE / (2 * np.pi) / 5000.0
         a24 = resample_poly(d, 1, 2).astype(np.float32)
-        self.audf.write(a24.tobytes())
+        self.audf.write(to_i16(a24, AUD_SCALE).tobytes())
         self.aud_n += len(a24)
         # Rauschabstand: Kanalleistung gegen das Rauschen 14–22 kHz daneben
         S_ = np.abs(np.fft.fft(bb[:4096] * np.hanning(4096))) ** 2
@@ -564,11 +604,11 @@ class Channel:
             return self.hits
         # Ton von der Karte: für APRS nur lesend eingeblendet (bleibt Seitencache, belegt keinen festen
         # Speicher); SSTV braucht eine eigene Kopie, die es während der Tonanalyse überschreibt
-        audio = np.memmap(self.aud, dtype=np.float32, mode="r")
-        raw_iq = np.memmap(self.tmp, dtype=np.float32, mode="r").reshape(-1, 2)
+        audio = open_audio(self.aud)
+        raw_iq, iq_k = open_iq(self.tmp)
 
         def iq(a, b):
-            x = np.asarray(raw_iq[a:b])
+            x = np.asarray(raw_iq[a:b], dtype=np.float32) * iq_k
             return x[:, 0] + 1j * x[:, 1]
         n_iq = len(raw_iq)
         pw_all = np.array(self.snr_track)
@@ -578,7 +618,7 @@ class Channel:
             self._aprs(audio, iq, n_iq, t0, pw_all)
         if sat.get("sstv"):
             import sstv_decode as SD
-            box = [np.fromfile(self.aud, dtype=np.float32)]
+            box = [read_audio(self.aud)]
             del audio                                            # decode_all gibt den Ton nach der Tonanalyse frei
             for k, img in enumerate(SD.decode_all(box, 24000, headless=True)):
                 s0 = int(max(0, img["start_s"] - 1) * 24000)
