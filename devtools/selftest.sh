@@ -2076,7 +2076,7 @@ assert m2["summary"]["source"] == "Kurzwelle 20m" and m2["summary"]["kind"] == "
 tle = ["ISS (ZARYA)", "1 25544U 98067A   20316.41516162  .00001589  00000+0  36499-4 0  9995",
        "2 25544  51.6454 339.9628 0001882  94.8340 265.2864 15.49409479254842"]
 tr = SAT.Tracker(tle, 49.3, 10.6)
-rows, geo = P.sat_rows(tr, next(s for s in SAT.SATELLITES if s["id"] == "iss"), 145.8e6, 1605088800)
+rows, geo = P.sat_rows(tr, next(s for s in SAT.SATELLITES if s["id"] == "iss"), 145.8e6, 1605128580)
 lab = [r[0] for r in rows]
 assert {"Aufgang", "Höchster Punkt", "Untergang", "Doppler beim Bild", "Alter der Bahndaten"} <= set(lab) and isinstance(geo["max_el"], float)
 assert rows[0] == ["Satellit", "ISS"], rows[0]
@@ -2100,6 +2100,91 @@ grep -q "'manual_status'" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi
   && grep -q '.hsp-galerie \[hidden\]' "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.css" \
   && grep -q "IntersectionObserver" "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js" \
   && ok "Plugin 1.3: Anordnung einstellbar, Nachladeknopf nur bei weiteren Bildern, nie geplante Beiträge" || bad "Plugin 1.3"
+
+echo "== 61 Update-Prüfung, Neustart-Meldung, Satellit in der Trefferkarte"
+(cd bin && python3 - "$SRC" <<'PY') && ok "Update-Prüfung: Ausweg über git, letzter Stand bleibt, stündlich neu, Uhr vor, Hinweis nach 3 Tagen; Neustart: geplant/sauber/Strom weg ohne „Was tun“; Satellit beim Aufklappen" || bad "Update/Neustart/Satellit"
+import json, sys, tempfile, time
+from pathlib import Path
+import housekeeping as HK, health as H, notices as NT
+d = Path(tempfile.mkdtemp()); HK.UPDATE_CACHE = d / "u.json"
+calls = []
+class R:
+    def __init__(self, v): self.v = v
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+    def read(self, n): return self.v
+def ok_url(req, timeout=0): calls.append("raw"); return R(b"9.9.9\n")
+def bad_url(req, timeout=0): calls.append("raw"); raise OSError("blockiert")
+HK.urllib.request.urlopen = ok_url
+assert HK.update_check(force=True)["latest"] == "9.9.9" and HK.update_check()["via"] == "raw"
+HK.urllib.request.urlopen = bad_url
+HK._latest_via_git = lambda: "9.9.10"                         # Rohdatei gesperrt, git geht
+c = HK.update_check(force=True); assert c["latest"] == "9.9.10" and c["via"] == "git" and "error" not in c
+def nogit(): raise RuntimeError("Could not resolve host")
+HK._latest_via_git = nogit
+c = HK.update_check(force=True)
+assert c["latest"] == "9.9.10" and "blockiert" in c["error"] and "resolve" in c["error"] and c["fail_since"] and c["ok_at"]
+n = len(calls); HK.update_check(max_age=86400); assert len(calls) == n          # innerhalb der Stunde: nicht neu
+c["checked"] = time.time() - 3700; HK.UPDATE_CACHE.write_text(json.dumps(c))
+HK.update_check(max_age=86400); assert len(calls) == n + 1                     # nach einer Stunde Fehler: neu
+c = json.loads(HK.UPDATE_CACHE.read_text()); c["checked"] = time.time() + 5 * 86400; c.pop("error"); HK.UPDATE_CACHE.write_text(json.dumps(c))
+HK.update_check(max_age=86400); assert len(calls) == n + 2                     # Prüfzeit in der Zukunft zählt nicht
+# Hinweis nach 3 Tagen ohne Erfolg
+NT.STATE = d / "n.json" if hasattr(NT, "STATE") else None
+raised = {}
+H.NT = type("N", (), {"raise_": staticmethod(lambda nid, *a, **k: raised.__setitem__(nid, (a, k))),
+                      "clear": staticmethod(lambda nid: raised.pop(nid, None))})
+H.update_days = lambda settings=None: 1
+c = json.loads(HK.UPDATE_CACHE.read_text()); c.update(error="URLError: x", fail_since=time.time() - 4 * 86400, checked=time.time(), latest="9.9.10")
+HK.UPDATE_CACHE.write_text(json.dumps(c))
+H._upd["th"] = type("T", (), {"is_alive": lambda self: True})()                 # keine echte Abfrage im Test
+if not Path("../VERSION").exists():
+    Path("../VERSION").write_text("1.0.0\n")
+H.check_update({})
+assert "update_check_failed" in raised and "update_available" in raised and "bin/update.sh" in raised["update_check_failed"][1]["cmd"]
+c["fail_since"] = time.time() - 3600; HK.UPDATE_CACHE.write_text(json.dumps(c)); H.check_update({})
+assert "update_check_failed" not in raised
+# Neustart: Ursache
+dd = Path(tempfile.mkdtemp()); now = time.time()
+assert H.reboot_cause("b1", now - 60, dd) == (None, None)
+(dd / "planned_reboot.json").write_text(json.dumps({"t": now - 70, "via": "Dashboard"}))
+assert H.reboot_cause("b1", now - 60, dd) == ("planned", "Dashboard") and not (dd / "planned_reboot.json").exists()
+(dd / "clean_stop.json").write_text(json.dumps({"t": now - 50, "boot": "b1"}))
+assert H.reboot_cause("b1", now - 60, dd) == ("clean", None)
+assert H.reboot_cause("b1", now + 600, dd) == ("unclean", None)               # später noch gelaufen: Strom weg
+assert H.reboot_cause("b0", now - 60, dd) == ("unclean", None)
+for cause in ((None, None), ("planned", "Dashboard"), ("clean", None), ("unclean", None)):    # Meldung je Ursache
+    ev = []
+    H.reboot_cause = lambda p, l, d=None, c=cause: c
+    H.NT = type("N", (), {"event": staticmethod(lambda *a, **k: ev.append((a, k)))})
+    H.check_reboot({"boot_id": "alt", "alive": time.time() - 300, "boot_time": time.time() - 7200})
+    assert ev and "fix" not in ev[0][1] and ("geplant" in ev[0][0][3]) == (cause[0] == "planned"), (cause, ev)
+    assert ("Protokoll" in ev[0][0][4]) == (cause[0] != "planned"), ev
+src = Path("health.py").read_text()
+i = src.index("def check_reboot"); assert "fix=" not in src[i:src.index("# ----", i)], "Neustart-Meldung ohne „Was tun“"
+assert "planned_reboot.json" in Path("services.py").read_text() and "clean_stop.json" in Path("scheduler.py").read_text()
+assert NT.english("Der Pi wurde neu gestartet (vor 2 min), zuletzt erreichbar 14.11. 17:02 UTC. Er wurde nicht heruntergefahren – Strom weg oder abgestürzt. Mögliche Ursachen (Stromschwankungen, Kartenfehler) stehen im Protokoll.").endswith("are in the log.")
+# Satellit in der Trefferkarte
+import webapp as W, satellites as SAT
+W.ensure_schema(); db = W.db_connect()
+sid = db.execute("INSERT INTO scan (time, band, center_hz, noise_db, rms_i, rms_q) VALUES (?,?,?,?,?,?)",
+                 ("2020-11-11T12:00:00+00:00", "Satelliten", 145800000, 0, 0, 0)).lastrowid
+pid = db.execute("INSERT INTO peak (scan_id, rf_hz, offset_hz, level_db, snr_db, recording_path, mode, segment_id) VALUES (?,?,?,?,?,?,?,?)",
+                 (sid, 145800000, 0, 10, 10, "x/20201111_120000_Satelliten_iss_fm.wav", "voice", "iss")).lastrowid
+db.commit(); db.close()
+tle = {"25544": ["ISS (ZARYA)", "1 25544U 98067A   20316.41516162  .00001589  00000+0  36499-4 0  9995",
+                 "2 25544  51.6454 339.9628 0001882  94.8340 265.2864 15.49409479254842"]}
+SAT.load_tles = lambda fetch=True, force=False: ({int(k): v for k, v in tle.items()}, {})
+W.load_settings = lambda: {"my_locator": "JN59UU"}
+r = W.hit_sat_info(pid)
+t = [s["title"] for s in r["sections"]]; rows = {k: v for s in r["sections"] for k, v in s["rows"]}
+assert t == ["Satellit", "Überflug"] and rows["Satellit"] == "ISS" and "Doppler beim Treffer" in rows and "Beim Treffer: Elevation" in rows, r
+assert W.hit_sat_info(999999) == {"sections": []}
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert "hits-day" in js and "/api/hit/sat" in js and "data-kind" in (Path(sys.argv[1]) / "web" / "style.css").read_text().replace('[data-kind', 'data-kind')
+i = js.index("async function loadUpdate"); j = js.index("\n  }\n", i)
+assert js[i:j].count("return d;") == 1 and js[i:j].rstrip().endswith("return d;"), "Update-Karte: Protokoll und Fortschritt nach dem return"
+PY
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

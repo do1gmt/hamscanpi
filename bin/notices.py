@@ -165,7 +165,7 @@ def is_active(nid):
 import re as _re
 
 EN_EXACT = {
-    "System neu gestartet": "System restarted", "Sticks lassen sich nicht abfragen": "Sticks cannot be queried",
+    "System neu gestartet": "System restarted", "System neu gestartet (geplant)": "System restarted (planned)", "Sticks lassen sich nicht abfragen": "Sticks cannot be queried",
     "Haupt-Stick fehlt": "Main stick missing", "Stick mit Allerwelts-Seriennummer": "Stick with a generic serial number",
     "Neuer Stick wartet auf Zuordnung": "New stick waiting for a role", "Kernel-Protokoll nicht lesbar": "Kernel log not readable",
     "Dateisystem nur noch lesbar": "File system is read-only", "Hohe Schreiblast auf der SD-Karte": "High write load on the SD card",
@@ -218,9 +218,15 @@ EN_RX = [
     (r"^Zeitplaner wurde neu gestartet$", "Scheduler was restarted"), (r"^Neuer SDR-Stick: (.+)$", r"New SDR stick: \1"),
     (r"^SDR erkannt: (.+)$", r"SDR detected: \1"), (r"^Python-Paket (\S+) fehlt$", r"Python package \1 missing"),
     (r"^FT8-Dekoder fehlt \((.+)\) – FT8/FT4 werden nicht dekodiert$", r"FT8 decoder missing (\1) – FT8/FT4 are not decoded"),
-    (r"^Der Pi wurde neu gestartet \(vor (\d+) min\), zuletzt erreichbar (.+?)\.(?: Vorher lief er ([\d.]+) (h|Tage)\.)?$",
+    (r"^Der Pi wurde neu gestartet \(vor (\d+) min\), zuletzt erreichbar (.+?)\.(?: Vorher lief er ([\d.]+) (h|Tage)\.)?"
+     r"( Neustart aus (?:dem|der) (Dashboard|Notfallseite)\.| Er wurde ordnungsgemäß heruntergefahren\.| Er wurde nicht heruntergefahren – Strom weg oder abgestürzt\.)?"
+     r"( Mögliche Ursachen \(Stromschwankungen, Kartenfehler\) stehen im Protokoll\.)?$",
      lambda m: f"The Pi was restarted ({m.group(1)} min ago), last reachable {m.group(2).replace('unbekannt', 'unknown')}."
-               + (f" Before that it ran {m.group(3)} {'h' if m.group(4) == 'h' else 'days'}." if m.group(3) else "")),
+               + (f" Before that it ran {m.group(3)} {'h' if m.group(4) == 'h' else 'days'}." if m.group(3) else "")
+               + ({"Dashboard": " Restarted from the dashboard.", "Notfallseite": " Restarted from the rescue page."}.get(m.group(6), "") if m.group(6)
+                  else " It was shut down properly." if m.group(5) and "ordnungsgemäß" in m.group(5)
+                  else " It was not shut down – power lost or crashed." if m.group(5) else "")
+               + (" Possible causes (power fluctuations, card errors) are in the log." if m.group(7) else "")),
     (r"^(.+), Seriennummer (.+?), an (.+?)( – noch ohne Rolle, wird nicht benutzt\.)?$",
      lambda m: f"{m.group(1)}, serial number {m.group(2).replace('ohne', 'none')}, on {m.group(3)}"
                + (" – no role yet, not used." if m.group(4) else "")),

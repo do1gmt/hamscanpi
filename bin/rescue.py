@@ -198,7 +198,7 @@ class H(BaseHTTPRequestHandler):
                 return self.redirect(f"{SV.UNITS.get(unit, unit)} wird neu gestartet – Seite lädt in 20 s neu.")
             if u.path == "/reboot":
                 log("WARN", "reboot_requested", ip=self.ip())
-                threading.Thread(target=SV.reboot, daemon=True).start()
+                threading.Thread(target=SV.reboot, kwargs={"via": "Notfallseite"}, daemon=True).start()
                 return self.send(200, f"<!doctype html><meta charset=utf-8><style>{CSS}</style><h1>Der Pi startet neu …</h1>"
                                       "<p>In etwa einer Minute ist er wieder da. Diese Seite lädt dann neu.</p>"
                                       "<script>setTimeout(()=>location.href='/',75000)</script>")

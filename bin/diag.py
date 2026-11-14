@@ -9,6 +9,7 @@ Nur Standardbibliothek – läuft auch aus der Notfall-Seite, wenn der Webserver
    python3 bin/diag.py [datei.tar.gz]
 """
 import io
+import re
 import json
 import os
 import sqlite3
@@ -79,6 +80,16 @@ def io_sample(secs=10):
     return "\n".join(lines) + "\n"
 
 
+def git_info():
+    """Stand der Installation und Herkunft der Updates – Zugangsdaten in der Adresse werden entfernt."""
+    g = ["git", "-C", str(BASE)]
+    url = re.sub(r"//[^/@\s]+@", "//", _run(g + ["remote", "get-url", "origin"]).strip())
+    return "\n".join([f"Ursprung: {url or '?'}",
+                      "Zweig: " + _run(g + ["rev-parse", "--abbrev-ref", "HEAD"]).strip(),
+                      "Stand: " + _run(g + ["log", "-1", "--format=%h %cI %s"]).strip(),
+                      "Geänderte Dateien:", _run(g + ["status", "--short"])[:4000]]) + "\n"
+
+
 def filename():
     return f"hamscanpi-diagnose-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
 
@@ -114,8 +125,9 @@ def write(fileobj, stream=True):
             add(f"journal/{u}.txt", _run(["journalctl", "-u", u, "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-2_000_000:])
         add("systemd/status.txt", _run(["systemctl", "status", "--no-pager", "-l", "hamscanpi-web", "hamscanpi-scheduler",
                                          "hamscanpi-rescue"]))
+        add("git.txt", git_info())                                                    # woher kommen Updates?
         for name in ("notices.json", "health_state.json", "live_state.json", "sticks.json", "pskreporter_state.json",
-                     "runtime_status.json", "sat_stats.json"):
+                     "runtime_status.json", "sat_stats.json", "update_check.json"):
             p = BASE / "data" / name
             if p.exists():
                 add(f"data/{name}", p.read_bytes())

@@ -817,6 +817,53 @@ def list_hits(params):
     return out
 
 
+_KIND = {"fm": "FM-Kanal (Sprache, Daten)", "linear": "Linear-Transponder (SSB/CW)", "probe": "Prüfsatellit (nur Pegel)"}
+
+
+def hit_sat_info(pid):
+    """Angaben zum Satelliten eines Treffers für die Trefferkarte: Kanal, Überflug, Lage beim Treffer – berechnet
+    beim Aufklappen (nicht für die ganze Liste) aus den gespeicherten Bahndaten."""
+    import satellites as SAT
+    import publish as PUB
+    db = db_connect()
+    r = db.execute("""SELECT p.rf_hz, p.segment_id, p.recording_path, s.band, s.time FROM peak p JOIN scan s ON s.id = p.scan_id
+                      WHERE p.id = ?""", (int(pid),)).fetchone()
+    db.close()
+    if not r or r["band"] != "Satelliten":
+        return {"sections": []}
+    sat = next((x for x in SAT.SATELLITES if x["id"] == r["segment_id"]), None)
+    if not sat:
+        return {"sections": [{"title": "Satellit", "rows": [["Kanal", r["segment_id"] or "?"],
+                                                            ["Hinweis", "nicht mehr in der Satellitenliste"]]}]}
+    ch = [["Kanal", sat.get("label")], ["Art", _KIND.get(sat.get("kind"), sat.get("kind"))],
+          ["Frequenz (Soll)", f"{sat['center_hz'] / 1e6:.4f} MHz"],
+          ["Hinweis", sat.get("note")]]
+    try:
+        t0 = __import__("calendar").timegm(time.strptime(r["time"][:19], "%Y-%m-%dT%H:%M:%S"))
+    except (TypeError, ValueError):
+        t0 = time.time()
+    t = PUB._t_from_stem(Path(r["recording_path"] or "").stem, t0)
+    secs = []
+    try:
+        lat, lon = SAT.locator_to_latlon(load_settings().get("my_locator", ""))
+        tles, _ = SAT.load_tles(fetch=False)
+        tr = SAT.Tracker(tles[sat["norad"]], lat, lon)
+        ep = (tr.sat.jdsatepoch + tr.sat.jdsatepochF - 2440587.5) * 86400.0
+        if abs(t - ep) > 30 * 86400:
+            raise ValueError("Bahndaten passen nicht zum Tag des Treffers")
+        rows, geo = PUB.sat_rows(tr, sat, float(sat["center_hz"]), t, at="Treffer")
+        head = [x for x in rows if x[0] in ("Satellit", "NORAD-Nummer")]
+        ch = head + ch
+        rows = [x for x in rows if x[0] not in ("Satellit", "NORAD-Nummer", "Frequenz (Soll)")]
+        if r["rf_hz"] and abs(float(r["rf_hz"]) - sat["center_hz"]) > 1:
+            rows.insert(0, ["Treffer bei", f"{float(r['rf_hz']) / 1e6:.4f} MHz"])
+        secs.append({"title": "Überflug", "rows": rows})
+    except Exception as e:
+        ch.append(["Überflug", f"nicht berechenbar ({e})" if isinstance(e, ValueError) else "keine Bahndaten"])
+        ch.insert(0, ["Satellit", PUB._sat_name(sat)])
+    return {"sections": [{"title": "Satellit", "rows": [x for x in ch if x[1]]}] + secs}
+
+
 def _run_end(db, r):
     """Ende eines Laufs; abgebrochene Läufe ohne Ende reichen nur bis zum Start des nächsten Laufs
     (sonst bekam ein abgebrochener Lauf alle späteren Treffer zugeschlagen)."""
@@ -2300,6 +2347,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(load_settings())
             if path == "/api/bandplan":
                 return self.send_json({"bands": bandplan(), "modes": MODE_LABELS})
+            if path == "/api/hit/sat":
+                return self.send_json(hit_sat_info(qs.get("peak_id", 0)))
             if path == "/api/hits":
                 lf, lt, lr = last_run_window()
                 return self.send_json({"hits": list_hits(qs), "server_time": now_iso(),
@@ -2382,7 +2431,7 @@ class Handler(BaseHTTPRequestHandler):
                 cur = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "?"
                 import health as _H
                 return self.send_json({"version": cur, "latest": up.get("latest"), "checked": up.get("checked"),
-                                       "check_error": up.get("error"), "check_days": _H.update_days(read_json(SETTINGS, {})),
+                                       "check_error": up.get("error"), "fail_since": up.get("fail_since"), "check_days": _H.update_days(read_json(SETTINGS, {})),
                                        "newer": bool(up.get("latest") and HK._vtuple(up["latest"]) > HK._vtuple(cur)),
                                        "running": running in ("activating", "active"),
                                        "state": running, "log": tail, "git": (BASE / ".git").exists(),

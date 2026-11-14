@@ -9,8 +9,10 @@ erlaubt (und sonst nichts):
 „--no-block“: systemd übernimmt den Auftrag sofort – auch wenn der Webserver sich damit selbst neu startet.
 """
 import shutil
+import json
 import subprocess
 import time
+from pathlib import Path
 
 UNITS = {"hamscanpi-web": "Webserver", "hamscanpi-scheduler": "Zeitplaner", "hamscanpi-rescue": "Notfall-Seite",
          "hamscanpi-mdns": "Name im Netz"}
@@ -75,9 +77,14 @@ def restart(unit, log=None):
     return True
 
 
-def reboot(log=None):
+def reboot(log=None, via="Dashboard"):
     if log:
         log("WARN", "services", "reboot_requested")
+    try:                                             # nach dem Start: „Neustart aus dem Dashboard“ statt Rätselraten
+        p = Path(__file__).resolve().parent.parent / "data" / "planned_reboot.json"
+        p.write_text(json.dumps({"t": time.time(), "via": via}), encoding="utf-8")
+    except OSError:
+        pass
     time.sleep(0.5)                                  # damit die Antwort noch beim Browser ankommt
     r = subprocess.run(["sudo", "-n", SYSTEMCTL, "reboot"], capture_output=True, text=True, timeout=10,
                        start_new_session=True)

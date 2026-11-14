@@ -49,35 +49,67 @@ def _vtuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) or (0,)
 
 
+def _latest_via_git():
+    """Höchste Versionsmarke vX.Y.Z am Ursprung – derselbe Weg, den das Update selbst nimmt (falls die Rohdatei
+    von GitHub nicht erreichbar ist, z. B. weil ein Werbefilter raw.githubusercontent.com sperrt)."""
+    r = subprocess.run(["git", "-C", str(BASE), "ls-remote", "--tags", "--refs", "origin"], capture_output=True, text=True,
+                       timeout=25, env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"})
+    tags = re.findall(r"refs/tags/v(\d+\.\d+\.\d+)\s*$", r.stdout, re.M)
+    if r.returncode != 0 or not tags:
+        err = (r.stderr or "").strip().splitlines()
+        raise RuntimeError(err[-1][:120] if err else "keine Versionen")
+    return max(tags, key=_vtuple)
+
+
 def update_check(force=False, max_age=86400, cached_only=False):
     """Neueste Version auf GitHub. Abgefragt wird höchstens alle max_age Sekunden (force: sofort; cached_only:
     nie, nur den letzten Stand lesen – die regelmäßige Prüfung macht der Zeitplaner nach der Einstellung).
-    Rückgabe dict(latest, checked, error, url) oder {}."""
+    Ging die letzte Prüfung schief, wird stündlich neu versucht; eine Prüfzeit in der Zukunft (Uhr ging vor) zählt
+    nicht. Erst die Rohdatei VERSION, sonst die Versionsmarken per git. Bei einem Fehler bleibt die zuletzt bekannte
+    Version stehen, dazu error und fail_since. Rückgabe dict(latest, checked, ok_at, error, fail_since, via, url) oder {}."""
     try:
         c = json.loads(UPDATE_CACHE.read_text(encoding="utf-8"))
     except Exception:
         c = {}
-    if cached_only or (not force and time.time() - c.get("checked", 0) < max_age):
+    age = time.time() - c.get("checked", 0)
+    if age < 0:
+        age = max_age
+    if cached_only or (not force and age < (min(max_age, 3600) if c.get("error") else max_age)):
         return c
     url = None
     try:
         r = subprocess.run(["git", "-C", str(BASE), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=3)
-        m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", r.stdout)
+        m = re.search(r"github\.com[:/]([^/]+)/([^/.\s]+)", r.stdout)
         if m:
             url = f"https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}/main/VERSION"
     except Exception:
         pass
     url = url or "https://raw.githubusercontent.com/do1gmt/hamscanpi/main/VERSION"
-    c = {"checked": time.time(), "url": url}
+    now = time.time()
+    n = {"checked": now, "url": url}
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "HamScanPi update check"})
         with urllib.request.urlopen(req, timeout=10) as r:
-            c["latest"] = r.read(64).decode("ascii", "replace").strip()
+            v = r.read(64).decode("ascii", "replace").strip()
+        if not re.fullmatch(r"\d+\.\d+\.\d+", v):
+            raise ValueError("unerwartete Antwort")
+        n.update(latest=v, via="raw")
     except Exception as e:
-        c["error"] = f"{type(e).__name__}"
+        e1 = f"{type(e).__name__}: {e}"[:160]
+        try:
+            n.update(latest=_latest_via_git(), via="git")
+        except Exception as e2:
+            n.update(error=f"{e1} · git: {e2}"[:300], latest=c.get("latest"), fail_since=c.get("fail_since") or now)
+    if not n.get("error"):
+        n["ok_at"] = now
+    elif c.get("ok_at"):
+        n["ok_at"] = c["ok_at"]
+    n = {k: v for k, v in n.items() if v is not None}
     UPDATE_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    UPDATE_CACHE.write_text(json.dumps(c), encoding="utf-8")
-    return c
+    tmp = UPDATE_CACHE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(n), encoding="utf-8")
+    os.replace(tmp, UPDATE_CACHE)
+    return n
 
 
 def _dir_size(path):

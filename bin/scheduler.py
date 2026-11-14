@@ -601,6 +601,24 @@ try:
     _sdn.notify("READY=1")
 except Exception:
     _sdn = None
+
+
+def _stopped(signum, frame):
+    """Sauber beendet (Herunterfahren, Neustart, Update): vermerken – nach dem nächsten Start unterscheidet die
+    Neustart-Meldung so zwischen „heruntergefahren“ und „Strom weg oder abgestürzt“."""
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        (BASE / "data" / "clean_stop.json").write_text(json.dumps({"t": time.time(), "boot": boot}))
+    except OSError:
+        pass
+    sys.exit(0)
+
+
+try:
+    import signal as _signal
+    _signal.signal(_signal.SIGTERM, _stopped)
+except Exception:
+    pass
 while True:
     if _sdn:
         _sdn.notify("WATCHDOG=1")

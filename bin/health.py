@@ -60,6 +60,27 @@ def _run(cmd, timeout=10):
 
 
 # ---------------------------------------------------------------- Neustart
+def reboot_cause(prev_boot, last_alive, data=None):
+    """Warum lief der Pi neu an? („planned“, via) aus dem Dashboard/der Notfallseite, („clean“, None) sauber
+    heruntergefahren (Befehl, Update), („unclean“, None) ohne Herunterfahren – Strom weg oder Absturz, (None, None)
+    unbekannt (erster Start mit dieser Version)."""
+    data = data or BASE / "data"
+    try:
+        pr = json.loads((data / "planned_reboot.json").read_text())
+        (data / "planned_reboot.json").unlink(missing_ok=True)
+        if not last_alive or pr.get("t", 0) >= last_alive - 900:
+            return "planned", pr.get("via") or "Dashboard"
+    except (OSError, ValueError):
+        pass
+    try:
+        cs = json.loads((data / "clean_stop.json").read_text())
+    except (OSError, ValueError):
+        return None, None
+    if cs.get("boot") == prev_boot and (not last_alive or cs.get("t", 0) >= last_alive - 180):
+        return "clean", None
+    return "unclean", None
+
+
 def check_reboot(st):
     try:
         boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
@@ -68,15 +89,23 @@ def check_reboot(st):
         return
     prev = st.get("boot_id")
     if prev and prev != boot:
+        import timefmt as TF
         last = st.get("alive")
         dur = ""
         if last and st.get("boot_time"):
             h = (last - st["boot_time"]) / 3600
             dur = f" Vorher lief er {h:.1f} h." if h < 72 else f" Vorher lief er {h / 24:.1f} Tage."
-        NT.event("reboot", "info", "system", "System neu gestartet",
+        cause, via = reboot_cause(prev, last)
+        if cause == "planned":
+            why = f" Neustart aus {'der Notfallseite' if via == 'Notfallseite' else 'dem Dashboard'}."
+        else:
+            why = {"clean": " Er wurde ordnungsgemäß heruntergefahren.",
+                   "unclean": " Er wurde nicht heruntergefahren – Strom weg oder abgestürzt."}.get(cause, "")
+        # nur der Hinweis (keine Anleitung): mögliche Ursachen wie Stromschwankungen oder Kartenfehler stehen im Protokoll
+        log_hint = "" if cause == "planned" else " Mögliche Ursachen (Stromschwankungen, Kartenfehler) stehen im Protokoll."
+        NT.event("reboot", "info", "system", "System neu gestartet" + (" (geplant)" if cause == "planned" else ""),
                  f"Der Pi wurde neu gestartet (vor {up / 60:.0f} min), zuletzt erreichbar "
-                 f"{__import__('timefmt').fmt(last) if last else 'unbekannt'}.{dur}",
-                 fix="Ohne Absicht neu gestartet? Netzteil und Unterspannung prüfen (System → Zustand).")
+                 f"{TF.fmt(last) if last else 'unbekannt'}.{dur}{why}{log_hint}")
     st["boot_id"] = boot
     st["boot_time"] = time.time() - up
     st["alive"] = time.time()
@@ -535,16 +564,32 @@ def update_days(settings=None):
     return d if d in UPDATE_DAYS else 1
 
 
+_upd = {"th": None}
+
+
 def check_update(st):
     """Alle N Tage (Einstellung im System-Reiter) bei GitHub nachsehen; gibt es eine neuere Version, steht ein Hinweis
-    da (und je nach Benachrichtigungen eine Mail/Push „Neue Version verfügbar“) – bis sie eingespielt ist."""
+    da (und je nach Benachrichtigungen eine Mail/Push „Neue Version verfügbar“) – bis sie eingespielt ist.
+    Die Abfrage läuft in einem eigenen Faden (bis ~35 s ohne Netz – die Hauptschleife darf keinen Überflug verpassen);
+    entschieden wird nach dem zuletzt gespeicherten Stand. Klappt die Prüfung seit 3 Tagen nicht, steht ein Hinweis da:
+    sonst bliebe ein Pi still auf einer alten Version (so geschehen)."""
     days = update_days()
     try:
         import housekeeping as HK
         cur = (BASE / "VERSION").read_text().strip()
-        c = HK.update_check(cached_only=days == 0, max_age=max(1, days) * 86400)
     except Exception:
         return
+    if days > 0 and not (_upd["th"] and _upd["th"].is_alive()):
+        import threading
+
+        def run():
+            try:
+                HK.update_check(max_age=days * 86400)
+            except Exception:
+                pass
+        _upd["th"] = threading.Thread(target=run, name="update-check", daemon=True)
+        _upd["th"].start()
+    c = HK.update_check(cached_only=True)
     latest = c.get("latest")
     if latest and HK._vtuple(latest) > HK._vtuple(cur):
         if st.get("update_notified") != latest:                 # neue Version seit dem letzten Hinweis: neu melden
@@ -554,8 +599,19 @@ def check_update(st):
                   f"Installiert ist {cur}. Die Änderungen stehen im CHANGELOG auf GitHub.",
                   fix="System → Version · Update → „Jetzt aktualisieren“ (wartet, bis kein Scan und kein Überflug läuft)",
                   key="update_available")
-    else:
+    elif latest:
         NT.clear("update_available")
+    fs = c.get("fail_since")
+    if days > 0 and c.get("error") and fs and time.time() - fs > 3 * 86400:
+        import timefmt as TF
+        ok = c.get("ok_at")
+        NT.raise_("update_check_failed", "warn", "software", "Prüfung auf neue Versionen klappt nicht",
+                  f"Seit {TF.fmt(fs)} erreicht der Pi GitHub nicht ({c['error'][:160]}). "
+                  + (f"Zuletzt geklappt: {TF.fmt(ok)}. " if ok else "") + f"Installiert ist {cur} – neuere Versionen kämen so nie an.",
+                  fix="Internet und Uhrzeit des Pi prüfen; System → Version · Update → „Auf neue Version prüfen“. Klappt es weiter nicht, "
+                      "auf dem Pi von Hand aktualisieren:", cmd=f"cd {BASE} && bin/update.sh", key="update_check_failed")
+    else:
+        NT.clear("update_check_failed")
 
 
 def check_wifi(st):

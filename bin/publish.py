@@ -343,8 +343,9 @@ def _sat_name(sat):
     return sat.get("name") if not obj or obj == sat.get("name") else f"{sat.get('name')} ({obj})"
 
 
-def sat_rows(tr, sat, f0, t):
-    """Satellit und Überflug zum Zeitpunkt t (automatisch nach dem Überflug und beim Nachreichen gleich)."""
+def sat_rows(tr, sat, f0, t, at="Bild"):
+    """Satellit und Überflug zum Zeitpunkt t (automatisch nach dem Überflug, beim Nachreichen und in der
+    Trefferkarte gleich). at: worauf sich „beim …“ bezieht (Bild oder Treffer)."""
     import satellites as SAT
     el, az, rng, rr = tr.look(t)
     dop = tr.doppler_hz(f0, t)
@@ -359,13 +360,14 @@ def sat_rows(tr, sat, f0, t):
             ["NORAD-Nummer", str(sat["norad"]) if str(sat["norad"]).isdigit() else None],
             ["Frequenz (Soll)", f"{f0 / 1e6:.4f} MHz"],
             ["Empfangen auf", f"{(f0 + dop) / 1e6:.4f} MHz"],
-            ["Doppler beim Bild", f"{dop / 1e3:+.2f} kHz"],
-            ["Aufgang", f"{utc(aos[0], False)} · {d(aos[2])}"],
-            ["Höchster Punkt", f"{utc(top[0], False)} · {top[1]:.0f}° Elevation · {d(top[2])}"],
-            ["Untergang", f"{utc(los[0], False)} · {d(los[2])}"],
-            ["Beim Bild: Elevation", f"{el:.1f}°"], ["Beim Bild: Richtung", d(az)],
-            ["Beim Bild: Entfernung", f"{rng:,.0f} km".replace(",", ".")],
-            ["Beim Bild: Bewegung", f"{'nähert sich' if rr < 0 else 'entfernt sich'} mit {abs(rr):.2f} km/s"],
+            [f"Doppler beim {at}", f"{dop / 1e3:+.2f} kHz"],
+            *([["Aufgang", f"{utc(aos[0], False)} · {d(aos[2])}"],
+               ["Höchster Punkt", f"{utc(top[0], False)} · {top[1]:.0f}° Elevation · {d(top[2])}"],
+               ["Untergang", f"{utc(los[0], False)} · {d(los[2])}"]] if top[1] >= 0 else
+              [["Überflug", "keiner zu dieser Zeit – Satellit unter dem Horizont (Bahndaten prüfen)"]]),
+            [f"Beim {at}: Elevation", f"{el:.1f}°"], [f"Beim {at}: Richtung", d(az)],
+            [f"Beim {at}: Entfernung", f"{rng:,.0f} km".replace(",", ".")],
+            [f"Beim {at}: Bewegung", f"{'nähert sich' if rr < 0 else 'entfernt sich'} mit {abs(rr):.2f} km/s"],
             ["Alter der Bahndaten", tle_age]]
     return [r for r in rows if r[1]], {"max_el": round(top[1], 1), "el": round(el, 1)}
 

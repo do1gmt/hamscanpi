@@ -111,10 +111,24 @@ select, input[type=search], input[type=text], input[type=number], input[type=pas
 .result-count { color: var(--muted); font-size: .85rem; margin-top: .5rem; }
 
 /* Treffer */
-.hits { display: grid; gap: .6rem; }
-.hit { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--radius); }
+.hits { display: grid; gap: .75rem; }
+/* jede Karte klar für sich: Schatten, Farbstreifen nach Art, Tagesüberschriften dazwischen */
+.hit { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--line); border-radius: var(--radius);
+       box-shadow: 0 1px 4px rgba(0,0,0,.16); }
+.hit[data-kind="sat"] { border-left-color: var(--violet); }
+.hit[data-kind="digital"] { border-left-color: var(--accent); }
+.hit[data-kind="voice"] { border-left-color: var(--green); }
 .hit.is-new { border-left-color: var(--amber); }
 .hit.is-protected { border-left-color: var(--teal); }
+.hit.open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 6px 18px rgba(0,0,0,.22); }
+.hit.open .hit-head { background: var(--panel-2); border-radius: var(--radius) var(--radius) 0 0; }
+.hits-day { display: flex; align-items: baseline; gap: .6rem; margin: .9rem 0 -.15rem; padding: 0 .15rem .3rem;
+            border-bottom: 2px solid var(--line); font-weight: 700; }
+.hits-day:first-child { margin-top: 0; }
+.hits-day small { color: var(--muted); font-weight: 400; font-size: .8rem; }
+.hit-body .kv-sec { margin-top: .8rem; padding-top: .6rem; border-top: 1px solid var(--line); }
+.hit-body .kv-sec h4 { margin: 0 0 .4rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--violet); }
+@media (max-width: 560px) { .hit-body .kv { grid-template-columns: minmax(0, 42%) minmax(0, 1fr); font-size: .85rem; } }
 .hit-head { display: flex; align-items: center; gap: .6rem; padding: .7rem .8rem; cursor: pointer; }
 .hit-freq { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; }
 .hit-freq small { color: var(--muted); font-weight: 400; font-size: .75rem; }

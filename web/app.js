@@ -714,6 +714,7 @@
     if (filter.last) qs.set('last', '1');
     const d = await api('/api/hits?' + qs);
     const root = $('hits');
+    root.querySelectorAll('.hits-day').forEach(x => x.remove());      // Tagesüberschriften neu setzen (s. u.)
     const seen = new Set();
     let anchor = null;
     for (const h of d.hits) {
@@ -725,6 +726,19 @@
       anchor = el;
     }
     for (const [id, el] of cards) if (!seen.has(id)) { el.remove(); cards.delete(id); open.delete(id); }
+    // nach Zeit sortiert: Überschrift je Tag (Heute, Gestern, Fr 13.11.2026) – trennt die Liste in Abschnitte
+    if ((filter.sort || 'time') === 'time' && d.hits.length > 1 && !filter.id) {
+      const key = t => { const p = tparts(toDate(t)); return `${p.Y}-${p.M}-${p.D}`; };
+      const n = {}; d.hits.forEach(h => { const k = key(h.time); n[k] = (n[k] || 0) + 1; });
+      const today = key(new Date()), yest = key(new Date(Date.now() - 864e5));
+      let last = null;
+      for (const h of d.hits) {
+        const k = key(h.time); if (k === last) continue; last = k;
+        const div = document.createElement('div'); div.className = 'hits-day';
+        div.innerHTML = `<span>${k === today ? (EN ? 'Today' : 'Heute') : k === yest ? (EN ? 'Yesterday' : 'Gestern') : tday(h.time) + ' ' + tdate(h.time)}</span><small>${n[k]} ${EN ? (n[k] === 1 ? 'hit' : 'hits') : 'Treffer'}</small>`;
+        root.insertBefore(div, cards.get(h.id));
+      }
+    }
     $('hitCount').textContent = `${d.hits.length} Treffer${d.hits.length >= 400 ? ' (erste 400)' : ''}`;
     if (filter.id) {                                  // nur ein Treffer (aus der Stationsübersicht): Rückweg anbieten
       $('hitCount').innerHTML = `Treffer #${filter.id} <button type="button" class="btn btn-small" id="hitIdClear">alle Treffer zeigen</button>`;
@@ -764,8 +778,12 @@
     updateCard(el, h);
     return el;
   }
+  const DIGITAL = ['ft8', 'ft4', 'wspr', 'cw', 'rtty', 'aprs', 'pocsag', 'data', 'digital', 'sstv', 'dv', 'navtex', 'wefax', 'apt', 'lrpt', 'packet'];
+  const VOICE = ['voice', 'relais', 'fm', 'am', 'wfm', 'ssb'];
   function updateCard(el, h) {
     el.__hit = h;
+    // Farbstreifen links nach Art: Satellit, Digitalbetrieb, Sprache (neu/geschützt haben Vorrang)
+    el.dataset.kind = h.band === 'Satelliten' ? 'sat' : DIGITAL.includes(h.mode) ? 'digital' : VOICE.includes(h.mode) ? 'voice' : 'other';
     el.classList.toggle('is-new', h.is_new);
     el.classList.toggle('is-protected', h.protected);
     el.querySelector('.hit-freq').innerHTML = `${fmtMHz(h.rf_hz)} <small>MHz</small>`;
@@ -782,6 +800,12 @@
 
   function player(title, src, extra = '') {
     return `<div class="player"><div class="player-title"><span>${title}</span>${extra}</div><audio controls preload="none" src="${src}"></audio></div>`;
+  }
+  // Satellit in der Trefferkarte: Kanal, Überflug, Lage beim Treffer (beim Aufklappen vom Pi berechnet)
+  const SATINFO = new Map();
+  function satInfoHtml(d) {
+    return (d.sections || []).map(sec => `<section class="kv-sec"><h4>${esc(sec.title)}</h4><dl class="kv">${sec.rows.map(r =>
+      `<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl></section>`).join('');
   }
   // SSTV-Bild auf die eigene Webseite: Zustand aus Warteschlange/Protokoll, Knopf zum Nachreichen
   function pubCell(p) {
@@ -856,6 +880,7 @@
       if (f.lsb) html += player('LSB (fertige Datei)', f.lsb);
     }
     if (h.decodes.length) html += `<div class="px">${renderDecodes(h)}</div>`;
+    if (sat) html += `<div class="sat-info px">${SATINFO.has(h.id) ? satInfoHtml(SATINFO.get(h.id)) : '<p class="hint">Angaben zum Satelliten werden geladen …</p>'}</div>`;
     else if (['ft8', 'ft4', 'cw', 'rtty', 'digital', 'wspr', 'aprs', 'pocsag'].includes(h.mode)) html += `<p class="hint px">Noch nichts dekodiert${h.mode === 'wspr' ? ' – für WSPR gibt es keinen Dekoder auf dem Pi' : ' (läuft nach dem Scan, oder das Signal war zu kurz/zu schwach)'}.</p>`;
     html += `<div class="note-row"><input type="text" class="note" placeholder="Notiz / Rufzeichen" value="${esc(h.note)}" maxlength="200"><button type="button" class="btn btn-small" data-act="note">Speichern</button></div>`;
     html += `<div class="hit-actions">
@@ -865,7 +890,11 @@
       ${f.usb ? `<a class="btn btn-small" href="${f.usb}" download>↓ USB</a>` : ''}${f.lsb ? `<a class="btn btn-small" href="${f.lsb}" download>↓ LSB</a>` : ''}
       <button type="button" class="btn btn-small btn-danger" data-act="delete">Löschen</button><button type="button" class="info-btn" data-info="Jetzt live hören: stimmt den Reiter Live auf diese Frequenz ab. Behalten: schützt den Treffer vor dem automatischen Löschen. I/Q-Rohdaten: die Originalaufnahme für SDR-Software wie SDR++, SDR# oder GQRX – dort kannst du selbst demodulieren. USB/LSB: fertig demodulierte Dateien aus dem Scan.">ⓘ</button></div>`;
     body.innerHTML = html;
-
+    if (sat && !SATINFO.has(h.id)) {
+      api('/api/hit/sat?peak_id=' + h.id).then(d => {
+        SATINFO.set(h.id, d); const box = body.querySelector('.sat-info'); if (box) box.innerHTML = satInfoHtml(d);
+      }).catch(() => { const box = body.querySelector('.sat-info'); if (box) box.innerHTML = ''; });
+    }
     const ssb = body.querySelector('.player-ssb');
     if (ssb) {
       const audio = ssb.querySelector('audio');
@@ -2277,7 +2306,8 @@
     const newer = !!d.newer;
     $('updVer').textContent = d.version || '–';
     $('updNew').textContent = newer ? (EN ? `· new: ${d.latest}` : `· neu: ${d.latest}`) : (d.latest ? (EN ? '· up to date' : '· aktuell') : '');
-    const upToDate = !!d.latest && !newer;                  // neueste Version ist schon da: Knopf sperren
+    // neueste Version ist schon da: Knopf sperren – nicht, wenn die Prüfung gerade schiefging (Stand dann unsicher)
+    const upToDate = !!d.latest && !newer && !d.check_error;
     $('updRun').disabled = d.running || !d.unit || upToDate;
     $('updRun').textContent = d.running ? (EN ? 'Update running …' : 'Update läuft …') : newer ? (EN ? `Update now to ${d.latest}` : `Jetzt aktualisieren auf ${d.latest}`)
       : upToDate ? (EN ? 'Up to date' : 'Aktuell') : (EN ? 'Update now' : 'Jetzt aktualisieren');
@@ -2285,12 +2315,14 @@
     $('updChecked').textContent = when ? (EN ? `Last checked: ${when}` : `Zuletzt geprüft: ${when}`) + (d.check_error ? (EN ? ` – failed (${d.check_error})` : ` – fehlgeschlagen (${d.check_error})`) : '')
       : (EN ? 'Not checked yet.' : 'Noch nicht geprüft.');
     if (!document.activeElement || document.activeElement.id !== 'updDays') $('updDays').value = String(d.check_days ?? 1);
-    return d;
-    if (!d.unit) $('updHint').textContent = EN ? 'Run bin/update.sh once by SSH – afterwards updates work from here.' : 'Einmal per SSH bin/update.sh ausführen – danach geht das Update hier.';
+    const hint = $('updHint'); if (hint.dataset.base == null) hint.dataset.base = hint.textContent;
+    hint.textContent = !d.unit ? (EN ? 'Run bin/update.sh once by SSH – afterwards updates work from here.' : 'Einmal per SSH bin/update.sh ausführen – danach geht das Update hier.')
+      : d.check_error && d.fail_since ? (EN ? `GitHub has not been reachable since ${tfmt(d.fail_since, { date: true })} – updating is still possible, it fetches by git.` : `GitHub ist seit ${tfmt(d.fail_since, { date: true })} nicht erreichbar – aktualisieren geht trotzdem, es holt per git.`) : hint.dataset.base;
     $('updLog').hidden = !d.log; $('updLog').textContent = d.log || '';
     $('updLog').scrollTop = $('updLog').scrollHeight;
     clearTimeout(updTimer);
     if (d.running) updTimer = setTimeout(() => loadUpdate(), 3000);
+    return d;
   }
   $('updRun').addEventListener('click', async () => {
     if (!confirm(EN ? 'Update now? The dashboard restarts afterwards.' : 'Jetzt aktualisieren? Das Dashboard startet danach neu.')) return;

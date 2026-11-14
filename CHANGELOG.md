@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.01 – 2026-11-14
+
+- **Hit cards clearly separated:** day headings in the list (Today, Yesterday, Fri 13.11.2026 with the number of
+  hits) when sorted by time, a coloured stripe by kind (satellite violet, digital blue, voice green; new and kept
+  still take precedence), shadow per card, the open card framed and its head highlighted.
+- **Satellite details in the hit card** (computed by the Pi when the card is opened, `GET /api/hit/sat`): satellite,
+  NORAD number, channel, kind (FM/linear/probe), nominal frequency, note; pass with AOS, TCA and LOS (time,
+  direction, elevation), Doppler, elevation/direction/range/motion at the hit and age of the orbital data. Shares
+  the rows with the website upload (`publish.sat_rows`, now also says when there was no pass at that time).
+- **Reboot message without "What to do":** says whether the restart was planned (dashboard or rescue page), a
+  proper shutdown, or not shut down (power lost or crash – the scheduler now notes a clean stop in
+  `data/clean_stop.json`); for unplanned restarts only the hint that possible causes are in the log.
+- **Update check no longer fails silently** (one Pi stayed on 1.7.91 for days): if GitHub's raw file is not
+  reachable the version tags are read via git (the same way the update fetches); after a failure it retries hourly
+  instead of daily; a check time in the future (clock ahead) no longer blocks checking; the last known version is
+  kept; after 3 days without success a notice says so (with `bin/update.sh` as way out). The check runs in its own
+  thread so a slow network never delays a pass. "Update now" is no longer locked while the check fails.
+- **Fix:** the update card never showed the update log, the progress while running or the SSH hint (a `return`
+  came too early).
+- Diagnose package: `data/update_check.json` and `git.txt` (origin without credentials, branch, commit, changed
+  files). Self-test section 61.
+
 ## 1.8.00 – 2026-11-14
 
 - **SSTV image to the website by hand:** button *↑ Auf Webseite* in every SSTV hit card – also when automatic
