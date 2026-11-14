@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.97 – 2026-11-14
+
+- **SSTV images on your own website (WordPress):** every SSTV image (satellite, HF, Live) with ≥ 60 % of the
+  lines goes to a WordPress site with all details – satellite and pass (AOS/TCA/LOS with direction, elevation,
+  distance and Doppler at the image, frequency, TLE age), reception (signal, receiver, gain, ppm, antenna),
+  station (call, locator, station name) and the Pi during reception (temperature, load, memory, undervoltage);
+  all times UTC. Settings → Website: address, user, application password (never shown, not in backups without
+  credentials), draft or publish immediately, minimum completeness; "Check connection", "Send test image",
+  recent uploads with links. Queue with retry when offline (up to 1 h apart, given up after 14 days), Live
+  images wait until they stopped growing for 90 s, fixed id per image (a retry never creates a duplicate).
+  Upload in its own thread of the scheduler. Never sent: IP/MAC addresses, Wi-Fi, credentials.
+- **WordPress plugin "HamScanPi SSTV-Galerie"** (`share/wordpress/`, download in the dashboard): own content type
+  with drafts to approve, sources per satellite, info box in the editor; shortcode `[sstv_galerie]` – grouped
+  by day (UTC), filter per source, statistics, lazy loading, "load more"; lightbox with cross-fade, arrow
+  keys, swipe, info panel, deep link `#sstv-ID`. Adaptable: settings page (colours, corners, thumbnail size,
+  fade time, own CSS, plugin CSS off), CSS variables, template override in the theme, filters. `docs/wordpress.md`.
+- Self-test section 58 (fake WordPress), the plugin was tested against a real WordPress.
+
 ## 1.7.96 – 2026-11-14
 
 - Fix: opening the dashboard showed a red pop-up "Scan failed …" for a scan that failed hours ago (since 1.7.95

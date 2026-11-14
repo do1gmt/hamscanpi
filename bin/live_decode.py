@@ -552,6 +552,20 @@ class LiveDecoders:
             except Exception as e:
                 self.note = f"Wetterfax: {type(e).__name__}: {e}"
 
+    def _publish(self, png, im, start):
+        """Live-SSTV-Bild vormerken – es wächst noch: erst hochladen, wenn es 90 s unverändert ist."""
+        try:
+            import publish as PUB
+            if not PUB.cfg().get("enabled"):
+                return
+            rows = [["Frequenz", f"{self.freq_hz / 1e6:.4f} MHz"], ["Betriebsart", str(self.mode).upper()],
+                    ["Empfang", "Live (im Dashboard eingestellt)"], ["Antenne", self.antenna]]
+            meta = PUB.build(f"Live {self.freq_hz / 1e6:.3f} MHz", start, im, [{"title": "Empfang", "rows": [r for r in rows if r[1]]}],
+                             {"kind": "live", "freq_hz": int(self.freq_hz)})
+            PUB.enqueue(png, meta, settle_s=90)
+        except Exception:
+            pass
+
     def _sstv_run(self, a, t):
         try:
             band = a[-RATE * 15:]
@@ -572,6 +586,7 @@ class LiveDecoders:
             name = self._sstv_img[1]
             REPORTS.mkdir(parents=True, exist_ok=True)
             SD.save_png(im["image"], REPORTS / name)
+            self._publish(REPORTS / name, im, start)
             text, img = f"{im['mode']} – {round(im['complete'] * 100)} % der Zeilen", f"/files/{name}?v={int(t)}"
             ev = None
             with self.lock:

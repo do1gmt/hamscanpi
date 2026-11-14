@@ -2955,6 +2955,44 @@
   });
   loadAuth();
 
+  // ---------- Webseite: SSTV-Bilder hochladen (bin/publish.py, WordPress-Plugin) ----------
+  async function loadPublish() {
+    let d; try { d = await api('/api/publish'); } catch (e) { return; }
+    const c = d.cfg || {};
+    if (!document.activeElement.closest?.('#panel-publish')) {
+      $('pubOn').checked = !!c.enabled; $('pubUrl').value = c.url || ''; $('pubUser').value = c.user || '';
+      $('pubStatus').value = c.status || 'draft'; $('pubMin').value = c.min_complete ?? 60;
+      $('pubPw').placeholder = c.has_password ? '•••• gespeichert – leer lassen = unverändert' : 'xxxx xxxx xxxx xxxx xxxx xxxx';
+    }
+    $('pubSum').textContent = c.enabled ? (c.status === 'publish' ? '· an, sofort öffentlich' : '· an, als Entwurf') : '· aus';
+    const tm = t => new Date(t * 1000).toLocaleString(I18N.locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const q = (d.queue || []).map(e => `<div>⏳ ${esc(e.source || e.key)} – ${e.error ? 'neuer Versuch in ' + Math.ceil(e.waiting_s / 60) + ' min (' + esc(e.error) + ')' : e.waiting_s ? 'wartet noch ' + e.waiting_s + ' s (Bild wächst)' : 'geht gleich raus'}</div>`);
+    const l = (d.log || []).map(e => `<div>${e.state === 'Entwurf' || e.state === 'veröffentlicht' ? '✓' : '·'} ${tm(e.t)} ${esc(e.sat || e.key)} – ${esc(e.state)}${e.link ? ` · <a href="${esc(e.link)}" target="_blank" rel="noopener">ansehen</a>` : ''}${e.edit ? ` · <a href="${esc(e.edit)}" target="_blank" rel="noopener">freigeben</a>` : ''}${e.error ? ' (' + esc(e.error) + ')' : ''}</div>`);
+    $('pubLog').innerHTML = q.concat(l).join('') || 'Noch nichts hochgeladen.';
+  }
+  async function savePublish() {
+    const body = { enabled: $('pubOn').checked, url: $('pubUrl').value.trim(), user: $('pubUser').value.trim(),
+                   status: $('pubStatus').value, min_complete: Number($('pubMin').value || 60) };
+    if ($('pubPw').value.trim()) body.app_password = $('pubPw').value.trim();
+    try { await post('/api/publish', body); $('pubPw').value = ''; note($('pubNote'), '✓ gespeichert'); loadPublish(); }
+    catch (e) { note($('pubNote'), 'Fehler: ' + e.message, true); }
+  }
+  autoSave($('panel-publish'), savePublish, el => !el.closest('#pubOn, #pubUrl, #pubUser, #pubPw, #pubStatus, #pubMin'));
+  $('pubPing').addEventListener('click', async () => {
+    note($('pubNote'), 'frage die Seite …');
+    try { const d = await post('/api/publish/test', { what: 'ping' }); const r = d.result || {};
+          note($('pubNote'), `✓ Verbunden mit ${r.site || 'der Seite'} als ${r.user || '?'} – Plugin ${r.version || '?'}${r.can_publish ? '' : ' (darf nur Entwürfe anlegen)'}`); }
+    catch (e) { note($('pubNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('pubTest').addEventListener('click', async () => {
+    note($('pubNote'), 'sende Testbild …');
+    try { const d = await post('/api/publish/test', { what: 'image' }); const r = d.result || {};
+          note($('pubNote'), '✓ Testbild als Entwurf angelegt – in WordPress unter „SSTV-Bilder“ zu sehen'); loadPublish();
+          if (r.edit) $('pubLog').insertAdjacentHTML('afterbegin', `<div>✓ Testbild · <a href="${esc(r.edit)}" target="_blank" rel="noopener">in WordPress öffnen</a></div>`); }
+    catch (e) { note($('pubNote'), 'Fehler: ' + e.message, true); }
+  });
+  loadPublish(); setInterval(() => { if ($('panel-publish').offsetParent !== null && !document.hidden) loadPublish(); }, 30000);
+
   // ---------- Sprache ----------
   // Land / Bandplan (IARU-Region): Bänder, Relais, APRS, Jedermannfunk nach dem Bandplan des Landes
   function renderCountry() {

@@ -1,0 +1,54 @@
+# SSTV-Bilder auf die eigene Webseite (WordPress)
+
+HamScanPi lädt jedes SSTV-Bild – vom Satelliten, von Kurzwelle oder aus Live – mit allen Angaben auf eine
+WordPress-Seite. Dort zeigt das Plugin **HamScanPi SSTV-Galerie** die Bilder nach Tag gruppiert, mit Filter je
+Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überblenden, Infotafel).
+
+## Einrichten
+
+1. **Plugin holen:** Dashboard → Einstellungen → Webseite → „herunterladen“ (`hamscanpi-sstv-galerie.zip`).
+2. **In WordPress:** Plugins → Installieren → Plugin hochladen → ZIP wählen → aktivieren.
+3. **Anwendungspasswort:** WordPress → Benutzer → Profil → *Anwendungspasswörter* → Name „HamScanPi“ →
+   „Neues Anwendungspasswort hinzufügen“. Das Passwort wird nur einmal angezeigt – gleich kopieren.
+   Es lässt sich dort jederzeit widerrufen; das eigentliche WordPress-Passwort braucht der Pi nicht.
+4. **In HamScanPi:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
+   „SSTV-Bilder hochladen“ an → „Verbindung prüfen“ → „Testbild senden“.
+5. **Galerie-Seite:** in WordPress eine Seite anlegen (z. B. unter „Satelliten“) mit dem Kurzcode
+   `[sstv_galerie]`. Möglich: `[sstv_galerie quelle="iss-zarya" pro_seite="48" statistik="nein"]`.
+6. **Freigeben:** Neue Bilder kommen zunächst als Entwurf (Menü *SSTV-Bilder*). Das Bild prüfen,
+   „Veröffentlichen“ – oder in der Liste mehrere auf einmal. Läuft alles, in HamScanPi „sofort veröffentlichen“
+   wählen.
+
+## Was übertragen wird
+
+| Abschnitt | Inhalt |
+|---|---|
+| Bild | SSTV-Modus, Anteil der Zeilen, Empfangszeit (UTC) |
+| Satellit und Überflug | Name, NORAD-Nummer, Soll- und Empfangsfrequenz, Doppler, Aufgang/höchster Punkt/Untergang (Zeit UTC, Richtung, Elevation), beim Bild Elevation, Richtung, Entfernung, Bewegung, Alter der Bahndaten |
+| Empfang | Signal beim Bild, Spitze und 90-%-Wert im Überflug, Zeit über 6 dB, Bilddauer, Aufnahmezeit, Empfänger, Verstärkung, ppm, Abstimmung und Abtastrate, Antenne |
+| Station | Rufzeichen, Locator, Stationsname (welcher Pi gemeldet hat), HamScanPi-Version |
+| Raspberry Pi beim Empfang | Modell, System, CPU-Temperatur, Last, freier Speicher, Unterspannung, Laufzeit |
+
+Kurzwelle und Live bringen statt der Satellitenangaben Band, Frequenz, Seitenband und Pegel mit.
+**Nie übertragen:** IP- und MAC-Adressen, WLAN, Zugangsdaten. Station und Pi-Werte lassen sich in WordPress
+unter Einstellungen → SSTV-Galerie ausblenden.
+
+Bilder unter der eingestellten Vollständigkeit (Vorgabe 60 % der Zeilen) bleiben auf dem Pi. Ohne Internet
+merkt sich der Pi die Bilder und schickt sie später (Wartezeit bis 1 h, nach 14 Tagen aufgegeben). Ein
+Live-Bild geht erst, wenn es 90 s nicht mehr gewachsen ist. Jedes Bild hat eine feste Kennung – ein
+wiederholter Versuch legt in WordPress kein zweites an.
+
+## Aussehen anpassen
+
+- **Einstellungen → SSTV-Galerie:** Akzentfarbe, Kartenhintergrund, Schriftfarben, Ecken, Größe der
+  Vorschaubilder, Überblenddauer, Bilder je Seite, eigenes CSS; Plugin-CSS ganz aus (dann gestaltet das Theme).
+- **CSS-Variablen** im Theme: `.hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-text: …; --hsp-muted: …;
+  --hsp-radius: …; --hsp-thumb: …; --hsp-gap: …; --hsp-fade: …; --hsp-font: …; }`, Lightbox: `.hsp-lb { --hsp-lb-bg: …; }`.
+  Leere Farben übernehmen Schrift und Hintergrund des Themes.
+- **Vorlage:** `templates/galerie.php` ins Theme kopieren nach `<theme>/hamscanpi-sstv/galerie.php`.
+- **Filter:** `hsp_sstv_item` (Daten eines Bildes vor der Ausgabe), `hsp_sstv_insert_status` (Status beim Empfang).
+
+## Schnittstelle
+
+`/wp-json/hsp-sstv/v1/ping` (GET, angemeldet), `/images` (POST multipart: `image`, `meta` JSON, `uid`, `status`;
+angemeldet, Recht „Dateien hochladen“), `/gallery?page=&per_page=&quelle=` (GET, öffentlich, nur veröffentlichte).

@@ -1927,5 +1927,67 @@ assert M.net_details() is M.net_details()                  # 30 s zwischengespei
 PY
 grep -q '"/favicon.ico"' "$SRC/bin/webapp.py" && [ -s "$SRC/web/favicon.ico" ] && ok "favicon.ico vorhanden" || bad "favicon.ico"
 
+echo "== 58 SSTV-Bilder auf die Webseite (WordPress-Plugin)"
+(cd bin && python3 - <<'PY') && ok "Warteschlange: Anmeldung, feste Kennung, Entwurf, Mindest-Vollständigkeit, wachsendes Live-Bild, ohne Netz später, Passwort nie sichtbar" || bad "Webseite"
+import base64, json, tempfile, threading, time, http.server
+from pathlib import Path
+import publish as P, backup as BK
+d = Path(tempfile.mkdtemp()); P.QUEUE = d / "q.json"; P.LOG = d / "l.json"
+got, state = [], {"down": False}
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _ok(self):
+        return self.headers.get("Authorization") == "Basic " + base64.b64encode(b"tom:abcd efgh").decode()
+    def do_GET(self):
+        if not self._ok(): self.send_response(401); self.end_headers(); return
+        b = json.dumps({"ok": True, "version": "1.0.0", "user": "tom", "can_publish": True}).encode()
+        self.send_response(200); self.end_headers(); self.wfile.write(b)
+    def do_POST(self):
+        n = int(self.headers["Content-Length"]); body = self.rfile.read(n)
+        if not self._ok(): self.send_response(401); self.end_headers(); return
+        assert self.path == "/wp-json/hsp-sstv/v1/images" and b"\x89PNG" in body and b'name="uid"' in body
+        meta = json.loads(body.split(b'name="meta"\r\n\r\n')[1].split(b"\r\n--")[0])
+        st = body.split(b'name="status"\r\n\r\n')[1].split(b"\r\n")[0].decode()
+        got.append((meta, st))
+        b = json.dumps({"ok": True, "id": len(got), "status": st, "edit": "http://x/edit"}).encode()
+        self.send_response(200); self.end_headers(); self.wfile.write(b)
+srv = http.server.HTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+url = f"http://127.0.0.1:{srv.server_port}"
+c = {"enabled": True, "url": url, "user": "tom", "app_password": "abcd efgh", "status": "draft", "min_complete": 60}
+P.cfg = lambda settings=None: dict(c)
+assert P.ping()["user"] == "tom"
+png = d / "a_sstv.png"; P.test_image(png)
+good = P.build("ISS", time.time(), {"mode": "PD120", "complete": 0.93}, [{"title": "Satellit und Überflug", "rows": [["Satellit", "ISS"]]}], {"kind": "satellite"})
+bad_ = P.build("ISS", time.time(), {"mode": "PD120", "complete": 0.41}, [], {})
+assert [s["title"] for s in good["sections"]][:2] == ["Bild", "Satellit und Überflug"] and good["sections"][-1]["title"].startswith("Raspberry Pi")
+assert "UTC" in good["sections"][0]["rows"][2][1]
+u1 = P.enqueue(png, good); P.enqueue(png, bad_, key="kaputt")
+u1b = P.enqueue(png, good)                                   # gleiche Kennung: kein zweiter Eintrag
+assert u1 == u1b and len(P.queue()) == 2
+P.enqueue(png, good, key="live-1", settle_s=90)              # wächst noch
+assert P.tick() == 1 and got[-1][1] == "draft" and got[-1][0]["summary"]["source"] == "ISS"
+assert [e["key"] for e in P.queue()] == ["live-1"]
+assert any(e["state"] == "zu unvollständig" for e in P.read_log())
+assert P.tick(now=time.time() + 100) == 1                    # Live-Bild nach 90 s unverändert
+# ohne Netz: liegen lassen, später nachschicken
+srv.shutdown(); srv.server_close()
+P.enqueue(png, good, key="spaeter")
+assert P.tick() == 0 and P.queue()[0]["tries"] == 1 and "nicht erreichbar" in P.queue()[0]["error"]
+# Passwort: nie im Dashboard, nicht in Sicherungen ohne Zugangsdaten
+assert "app_password" not in P.public_cfg({"publish": c}) and P.public_cfg({"publish": c})["has_password"]
+try:
+    P.validate(dict(c, url="http://do1gmt.de")); raise AssertionError("http ins Internet erlaubt")
+except ValueError:
+    pass
+assert P.validate(dict(c, url="do1gmt.de"))["url"] == "https://do1gmt.de"
+cf = Path("../config/web_settings.json"); s = json.loads(cf.read_text()); s["publish"] = c; cf.write_text(json.dumps(s))
+arc = dict(BK._config_files(False))["config/web_settings.json"]
+assert b"abcd efgh" not in arc and b"app_password" not in arc
+PY
+phpok() { command -v php >/dev/null || return 0; php -l "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" >/dev/null 2>&1; }
+phpok && node -e "new Function(require('fs').readFileSync('$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js','utf8'))" \
+  && grep -q "Plugin Name: *HamScanPi SSTV-Galerie" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
+  && ok "WordPress-Plugin: PHP und Skript fehlerfrei" || bad "WordPress-Plugin"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

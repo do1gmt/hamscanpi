@@ -73,6 +73,27 @@ def sstv_activity(i, q, rate, conjugate, shift_hz, side):
     return float(10 * np.log10(np.mean(P[inband]) / (np.median(P[noise]) + 1e-20) + 1e-12))
 
 
+def _publish(png, img, band, seg, dial, side, rf, lvl, dev, cfg, t_img):
+    """Kurzwellen-SSTV-Bild mit Angaben zum Hochladen vormerken (Einstellungen → Webseite)."""
+    try:
+        import publish as PUB
+        if not PUB.cfg().get("enabled"):
+            return
+        kind = {"PmsdrDevice": "PMSDR (Kurzwelle)", "RtlHfDevice": "RTL-SDR (Direktabtastung)"}.get(type(dev).__name__,
+                                                                                                     type(dev).__name__)
+        ant = (cfg.get("antennas") or {}).get("pmsdr" if "PMSDR" in kind else "rtlsdr")
+        rows = [["Band", band.get("name")], ["Einstellung", f"{dial / 1e6:.4f} MHz {side}"],
+                ["Bildmitte (1900 Hz)", f"{rf / 1e6:.4f} MHz"], ["Pegel beim Erkennen", f"{lvl:.1f} dB"],
+                ["Empfänger", kind], ["Abtastrate", f"{getattr(dev, 'rate', 0) / 1000:.0f} kS/s"],
+                ["Frequenzkorrektur", f"{float(cfg.get('frequency_correction_ppm', 0.0)):g} ppm"], ["Antenne", ant]]
+        meta = PUB.build(f"Kurzwelle {band.get('name')}", t_img, img,
+                         [{"title": "Empfang", "rows": [r for r in rows if r[1]]}],
+                         {"kind": "hf", "band": band.get("name"), "freq_hz": round(rf)})
+        PUB.enqueue(png, meta)
+    except Exception:
+        pass
+
+
 def watch_sstv(dev, band, seg, cfg, log=print):
     """Eine SSTV-Frequenz prüfen; bei Aktivität lange aufnehmen und dekodieren. Rückgabe Trefferliste."""
     import sstv_decode as SD
@@ -127,6 +148,8 @@ def watch_sstv(dev, band, seg, cfg, log=print):
         (REPORTS / f"{path.stem}_decode.json").write_text(json.dumps(data, ensure_ascii=False, indent=2),
                                                           encoding="utf-8")
         log(f"   SSTV: Bild {img['mode']} ({detail})")
+        _publish(REPORTS / f"{path.stem}_sstv.png", img, band, seg, dial, side, rf, lvl, dev, cfg,
+                 t_start - probe_s + img["start_s"])
         hits.append({"rf_hz": float(rf), "offset_hz": float(rf - center * (1.0 + ppm * 1e-6)),
                      "level_db": lvl, "snr_db": lvl, "recording_path": str(path),
                      "rec_center_hz": float(center), "segment_id": seg.get("id"), "mode": "sstv",

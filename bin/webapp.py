@@ -2437,6 +2437,31 @@ class Handler(BaseHTTPRequestHandler):
                                        "auto": BK.auto_cfg(read_json(SETTINGS, {})), "auto_state": BK.auto_state(),
                                        "candidates": BK.candidates(),
                                        "free_gb": round(__import__("shutil").disk_usage(str(BASE)).free / 1e9, 1)})
+            if path == "/api/publish/plugin.zip":
+                # WordPress-Plugin aus share/wordpress als ZIP (in WordPress: Plugins → Installieren → Plugin hochladen)
+                import io as _io, zipfile as _zf
+                src = BASE / "share" / "wordpress" / "hamscanpi-sstv-galerie"
+                buf = _io.BytesIO()
+                with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as z:
+                    for f in sorted(src.rglob("*")):
+                        if f.is_file():
+                            z.write(f, "hamscanpi-sstv-galerie/" + str(f.relative_to(src)))
+                data_ = buf.getvalue()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", 'attachment; filename="hamscanpi-sstv-galerie.zip"')
+                self.send_header("Content-Length", str(len(data_)))
+                self.end_headers()
+                self.wfile.write(data_)
+                return
+            if path == "/api/publish":
+                import publish as PUB
+                now = time.time()
+                q = [{"key": e["key"], "source": ((e.get("meta") or {}).get("summary") or {}).get("source"),
+                      "added": e["added"], "tries": e.get("tries", 0), "error": e.get("error"),
+                      "waiting_s": max(0, round(max(e.get("ready", 0), e.get("next", 0)) - now))} for e in PUB.queue()]
+                return self.send_json({"cfg": PUB.public_cfg(read_json(SETTINGS, {})), "queue": q,
+                                       "log": PUB.read_log()[-15:][::-1]})
             if path == "/api/storage":
                 import storage as STO
                 return self.send_json(STO.status(read_json(SETTINGS, {})))
@@ -2986,6 +3011,36 @@ class Handler(BaseHTTPRequestHandler):
                     res = BK.run_auto(c, log=lambda m: APPLOG.log("INFO", "backup", "backup_now", detail=m))
                 APPLOG.log("INFO", "webapp", "auto_backup_set", **{k: c[k] for k in ("enabled", "interval", "hour", "dir", "scope", "keep")})
                 return self.send_json({"ok": True, "auto": c, "auto_state": BK.auto_state(), "result": res})
+            if path == "/api/publish":
+                # Webseite (SSTV-Bilder): Anwendungspasswort nur bei echter Eingabe ändern, nie zurückgeben
+                import publish as PUB
+                st = read_json(SETTINGS, {})
+                c = PUB.cfg(st)
+                for k in ("enabled", "url", "user", "status", "min_complete"):
+                    if k in data:
+                        c[k] = data[k]
+                pw = str(data.get("app_password") or "").strip()
+                if pw and set(pw) != {"•"}:
+                    c["app_password"] = pw.replace(" ", "") if len(pw.replace(" ", "")) == 24 else pw
+                if data.get("forget_password"):
+                    c["app_password"] = ""
+                st["publish"] = PUB.validate(c)
+                write_json(SETTINGS, st)
+                APPLOG.log("INFO", "webapp", "publish_set", enabled=c["enabled"], url=c["url"], status=c["status"])
+                return self.send_json({"ok": True, "cfg": PUB.public_cfg(st)})
+            if path == "/api/publish/test":
+                import publish as PUB
+                c = PUB.cfg()
+                if data.get("what") == "image":
+                    png = BASE / "data" / "publish_test.png"
+                    PUB.test_image(png)
+                    meta = PUB.build("Testbild", time.time(), {"mode": "Test", "complete": 1.0},
+                                     [{"title": "Hinweis", "rows": [["Was ist das?", "Testbild aus HamScanPi – darf gelöscht werden"]]}],
+                                     {"kind": "test"})
+                    r = PUB.upload(c, png, meta, f"test-{int(time.time())}", "draft")
+                    png.unlink(missing_ok=True)
+                    return self.send_json({"ok": True, "result": r})
+                return self.send_json({"ok": True, "result": PUB.ping(c)})
             if path in ("/api/storage/usb", "/api/storage/nas", "/api/storage/eject", "/api/storage/nas/forget"):
                 # Sicherungsziel wählen: USB-Datenträger (UUID) oder Netzwerkfreigabe; Passwort nur an den Root-Helfer
                 import storage as STO

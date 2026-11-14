@@ -304,6 +304,28 @@ def health_tick():
         health.run_all()
     except Exception as e:
         applog("WARN", "scheduler", "health_failed", error=f"{type(e).__name__}: {e}")
+    publish_tick()
+
+
+_pub = {"th": None}
+
+
+def publish_tick():
+    """SSTV-Bilder auf die Webseite (bin/publish.py) – in einem eigenen Faden: ein langsamer Upload darf die
+    Hauptschleife (Überflüge, Wächter) nie aufhalten."""
+    th = _pub["th"]
+    if th is not None and th.is_alive():
+        return
+    import threading
+
+    def run():
+        try:
+            import publish
+            publish.tick(log=applog)
+        except Exception as e:
+            applog("WARN", "scheduler", "publish_failed", error=f"{type(e).__name__}: {e}")
+    _pub["th"] = threading.Thread(target=run, name="publish", daemon=True)
+    _pub["th"].start()
 
 
 WATCHDOG_S = 600              # Überflug-Prozess so lange nach dem geplanten Ende noch da -> beenden

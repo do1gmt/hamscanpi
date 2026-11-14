@@ -73,6 +73,8 @@ def _config_files(secrets):
             for k in SECRET_KEYS:
                 n.pop(k, None)
             d["notify"] = n
+            if isinstance(d.get("publish"), dict):          # Anwendungspasswort der Webseite
+                d["publish"].pop("app_password", None)
             out.append((f"config/{p.name}", json.dumps(d, indent=2, ensure_ascii=False).encode("utf-8")))
             continue
         out.append((f"config/{p.name}", p))

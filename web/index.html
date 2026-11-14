@@ -732,6 +732,22 @@
           <p class="hint">Das Passwort liegt im Klartext in config/web_settings.json auf dem Pi – ein eigenes Mailkonto oder App-Passwort verwenden.</p>
         </form>
       </section>
+      <section class="panel" id="panel-publish">
+        <h2>Webseite <small class="muted" id="pubSum"></small></h2>
+        <p class="hint">Jedes SSTV-Bild (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Pi auf die eigene WordPress-Seite. Dort braucht es das Plugin <b>HamScanPi SSTV-Galerie</b> (<a href="/api/publish/plugin.zip" id="pubZip" download>herunterladen</a>) und ein Anwendungspasswort (WordPress → Benutzer → Profil → Anwendungspasswörter).</p>
+        <label class="check"><input type="checkbox" id="pubOn"> SSTV-Bilder hochladen</label>
+        <div class="filter-grid">
+          <label class="field"><span>Adresse der Seite</span><input id="pubUrl" type="text" inputmode="url" placeholder="https://do1gmt.de" autocomplete="off"></label>
+          <label class="field"><span>WordPress-Benutzer</span><input id="pubUser" type="text" autocomplete="off"></label>
+          <label class="field" title="Leer lassen = gespeichertes Passwort weiterverwenden. Wird nie angezeigt, steht nicht in Sicherungen ohne Zugangsdaten."><span>Anwendungspasswort</span><input id="pubPw" type="password" autocomplete="new-password" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"></label>
+          <label class="field"><span>Neue Bilder</span><select id="pubStatus"><option value="draft">als Entwurf (ich gebe frei)</option><option value="publish">sofort veröffentlichen</option></select></label>
+          <label class="field" title="Bilder mit weniger Zeilen sind meist zu kaputt"><span>mindestens (% der Zeilen)</span><input id="pubMin" type="number" min="0" max="100" step="5" inputmode="numeric"></label>
+        </div>
+        <div class="actions"><button type="button" class="btn" id="pubPing">Verbindung prüfen</button><button type="button" class="btn" id="pubTest">Testbild senden</button></div>
+        <div class="save-note" id="pubNote" aria-live="polite"></div>
+        <h3>Zuletzt</h3>
+        <div id="pubLog" class="hint">–</div>
+      </section>
     </div>
   </div>
 </section>

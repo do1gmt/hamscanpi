@@ -24,6 +24,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -257,6 +258,7 @@ class Source:
         import sticks as STK
         sp = STK.rtl_params(rtl)                    # Haupt-Stick (Seriennummer), eigener ppm/Verstärkung
         self.dev, self.node = sp["d"], sp.get("node")
+        self.stick, self.ppm = sp.get("label"), sp.get("ppm")
         # Antenne laut System → Geräte (sonst config antennas.rtlsdr) – HamScanPi kann die Stellung eines
         # Antennenumschalters nicht selbst sehen, steht aber so bei jeder Aufnahme dabei
         self.antenna = sp.get("antenna") or (cfg.get("antennas") or {}).get("rtlsdr") or None
@@ -634,7 +636,11 @@ class Channel:
                 snr_img = float(10 * np.log10(np.mean(seg_pw) + 1e-12)) if len(seg_pw) else 0.0
                 self.hits.append({"rf_hz": self.f0, "path": str(p), "mode": "sstv", "sideband": None, "snr_db": snr_img,
                                   "audio": "ton", "note": f"SSTV {img['mode']} ({sat['name']}), "
-                                                          f"{img['complete']*100:.0f} % der Zeilen"})
+                                                          f"{img['complete']*100:.0f} % der Zeilen",
+                                  "sstv": {"png": str(REPORTS / f"{stem}_{k}_sstv.png"), "mode": img["mode"],
+                                           "complete": float(img["complete"]), "headless": bool(img.get("headless")),
+                                           "offset_hz": int(img.get("offset_hz") or 0), "t": t0 + img["start_s"],
+                                           "dur_s": T * img["complete"], "snr_db": snr_img}})
                 print(f"   SSTV {img['mode']}: Bild gespeichert ({img['complete']*100:.0f} % der Zeilen)")
         else:
             del audio
@@ -948,6 +954,90 @@ def detach():
         pass
 
 
+COMPASS = ("N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
+
+
+def _dir(az):
+    return f"{az:.0f}° ({COMPASS[int((az % 360) / 22.5 + 0.5) % 16]})"
+
+
+def pass_geometry(tr, t):
+    """Überflug um t: Aufgang, höchster Punkt, Untergang (je Zeit, Azimut/Elevation) – in 15-s-Schritten."""
+    pts = []
+    for k in range(-100, 101):
+        tt = t + k * 15
+        try:
+            el, az = tr.look(tt)[:2]
+        except Exception:
+            continue
+        pts.append((tt, el, az))
+    i0 = min(range(len(pts)), key=lambda i: abs(pts[i][0] - t))
+    a = i0
+    while a > 0 and pts[a - 1][1] >= 0:
+        a -= 1
+    b = i0
+    while b < len(pts) - 1 and pts[b + 1][1] >= 0:
+        b += 1
+    top = max(pts[a:b + 1], key=lambda p: p[1])
+    return pts[a], top, pts[b]
+
+
+def publish_sstv(ch, hits, tr, src, t0, until, tune):
+    """SSTV-Bilder dieses Kanals mit allen Angaben zum Hochladen vormerken (Einstellungen → Webseite)."""
+    try:
+        import publish as PUB
+        if not PUB.cfg().get("enabled"):
+            return
+        sat = ch.sat
+        st = getattr(ch, "stats", None) or {}
+        for h in hits:
+            s = h.get("sstv")
+            if not s or not Path(s["png"]).exists():
+                continue
+            t = s["t"]
+            el, az, rng, rr = tr.look(t)
+            dop = tr.doppler_hz(ch.f0, t)
+            aos, top, los = pass_geometry(tr, t)
+            try:
+                ep = (tr.sat.jdsatepoch + tr.sat.jdsatepochF - 2440587.5) * 86400.0
+                tle_age = f"{(time.time() - ep) / 86400:.1f} Tage"
+            except Exception:
+                tle_age = None
+            sat_rows = [["Satellit", f"{sat.get('name')} ({SAT.OBJECTS.get(sat['norad'], '')})".replace(" ()", "")],
+                        ["NORAD-Nummer", str(sat["norad"]) if str(sat["norad"]).isdigit() else None],
+                        ["Frequenz (Soll)", f"{ch.f0 / 1e6:.4f} MHz"],
+                        ["Empfangen auf", f"{(ch.f0 + dop) / 1e6:.4f} MHz"],
+                        ["Doppler beim Bild", f"{dop / 1e3:+.2f} kHz"],
+                        ["Aufgang", f"{PUB.utc(aos[0])[11:]} · {_dir(aos[2])}"],
+                        ["Höchster Punkt", f"{PUB.utc(top[0])[11:]} · {top[1]:.0f}° Elevation · {_dir(top[2])}"],
+                        ["Untergang", f"{PUB.utc(los[0])[11:]} · {_dir(los[2])}"],
+                        ["Beim Bild: Elevation", f"{el:.1f}°"], ["Beim Bild: Richtung", _dir(az)],
+                        ["Beim Bild: Entfernung", f"{rng:,.0f} km".replace(",", ".")],
+                        ["Beim Bild: Bewegung", f"{'nähert sich' if rr < 0 else 'entfernt sich'} mit {abs(rr):.2f} km/s"],
+                        ["Alter der Bahndaten", tle_age]]
+            rx_rows = [["Signal beim Bild", f"{s['snr_db']:.1f} dB über dem Rauschen"],
+                       ["Signal Spitze im Überflug", f"{st.get('max_db')} dB" if st.get("max_db") is not None else None],
+                       ["Signal 90-%-Wert", f"{st.get('p90_db')} dB" if st.get("p90_db") is not None else None],
+                       ["Über 6 dB", f"{st.get('above6_s')} s" if st.get("above6_s") is not None else None],
+                       ["Bilddauer", f"{s['dur_s']:.0f} s"],
+                       ["Aufnahme", f"{PUB.utc(t0)[11:]} – {PUB.utc(until)[11:]}"],
+                       ["Empfänger", getattr(src, "stick", None) or "RTL-SDR"],
+                       ["Verstärkung", f"{float(src.gain):g} dB" if getattr(src, "gain", None) else "automatisch"],
+                       ["Frequenzkorrektur", f"{src.ppm} ppm" if getattr(src, "ppm", None) is not None else None],
+                       ["Abstimmung / Abtastrate", f"{tune / 1e6:.4f} MHz · {src.rate / 1000:.0f} kS/s"],
+                       ["Antenne", getattr(src, "antenna", None)],
+                       ["Doppler-Korrektur", "laufend nach Bahndaten (SGP4)"]]
+            sec = [{"title": "Satellit und Überflug", "rows": [r for r in sat_rows if r[1]]},
+                   {"title": "Empfang", "rows": [r for r in rx_rows if r[1]]}]
+            obj = SAT.OBJECTS.get(sat["norad"]) or sat.get("name") or sat["id"]     # Galerie: nach Satellit gruppiert
+            meta = PUB.build(obj, t, s, sec,
+                             {"kind": "satellite", "norad": str(sat["norad"]), "freq_hz": round(ch.f0),
+                              "max_el": round(top[1], 1), "el": round(el, 1), "snr_db": round(s["snr_db"], 1)})
+            PUB.enqueue(s["png"], meta, key=f"{socket.gethostname()}-{Path(s['png']).name}")
+    except Exception as e:
+        applog("WARN", "satellite", "publish_prepare_failed", error=f"{type(e).__name__}: {e}")
+
+
 def main():
     global START_ISO
     ap = argparse.ArgumentParser()
@@ -1082,6 +1172,8 @@ def main():
         for ch in channels:
             hits = ch.evaluate(t0)
             n = db_save(ch.sat, hits, getattr(src, "antenna", None))
+            if not a.test:
+                publish_sstv(ch, hits, trackers[ch.sat["norad"]], src, t0, until, tune)
             per_ch[ch.sat["id"]] = n
             track = np.array(ch.snr_track)
             sig[ch.sat["id"]] = dict(getattr(ch, "stats", None) or signal_stats(
