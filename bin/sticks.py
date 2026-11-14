@@ -202,10 +202,10 @@ def _announce(r):
     if r.get("auto"):
         return                                               # erster Stick der Installation: kein Aufheben machen
     if r["kind"] == "other":
-        title, text = f"SDR erkannt: {label}", (f"{label} (Seriennummer {sn}) steckt am Pi. HamScanPi unterstützt "
+        title, text = f"SDR erkannt: {label}", (f"{label} (Seriennummer {sn}) steckt am Pi. Hesperos DX unterstützt "
                                                 "dieses Gerät nicht und benutzt es nicht.")
     else:
-        title, text = f"Neuer SDR-Stick: {label}", (f"{label} (Seriennummer {sn}) steckt am Pi. HamScanPi benutzt ihn "
+        title, text = f"Neuer SDR-Stick: {label}", (f"{label} (Seriennummer {sn}) steckt am Pi. Hesperos DX benutzt ihn "
                                                     "erst, wenn du unter System → Geräte festlegst, was er sein soll "
                                                     "(Haupt-Stick, Reserve oder ignorieren).")
 
@@ -231,7 +231,7 @@ def update(key, **fields):
             if role not in ROLES:
                 raise ValueError("unbekannte Rolle")
             if role == "main" and r["kind"] != "rtl":
-                raise ValueError("Dieses Gerät unterstützt HamScanPi nicht")
+                raise ValueError("Dieses Gerät unterstützt Hesperos DX nicht")
             if role == "main":
                 for o in reg["sticks"].values():
                     if o is not r and o.get("role") == "main":

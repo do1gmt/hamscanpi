@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """FT8/FT4-Dekodierungen im Netzwerk bereitstellen – wie WSJT-X, damit OpenHamClock, GridTracker, JTAlert & Co.
-die von HamScanPi empfangenen Stationen anzeigen.
+die von Hesperos DX empfangenen Stationen anzeigen.
 
 Protokoll: WSJT-X „UDP Server“ (NetworkMessage.hpp, Schema 2): Qt-QDataStream, big-endian.
   Kopf      magic 0xADBCCBDA, schema 2, Typ, Id (utf8)
@@ -62,7 +62,7 @@ def status(ident, dial_hz, mode, de_call="", de_grid="", decoding=True):
     return (_head(1, ident) + struct.pack(">Q", int(dial_hz)) + _utf8(mode) + _utf8("") + _utf8("") + _utf8(mode)
             + _bool(False) + _bool(False) + _bool(decoding) + _u32(0) + _u32(0) + _utf8(de_call) + _utf8(de_grid)
             + _utf8("") + _bool(False) + _utf8("") + _bool(False) + struct.pack(">B", 0) + _u32(0)
-            + _u32(15 if mode == "FT8" else 7) + _utf8("HamScanPi") + _utf8(""))
+            + _u32(15 if mode == "FT8" else 7) + _utf8("Hesperos DX") + _utf8(""))
 
 
 def decode(ident, t_utc, snr, dt, df_hz, mode, text, new=True):
@@ -93,7 +93,7 @@ def cfg():
     c = dict(s.get("wsjtx_udp") or {})
     c.setdefault("enabled", False)
     c.setdefault("targets", "")
-    if not str(c.get("ident") or "").strip() or c.get("ident") == "HamScanPi":
+    if not str(c.get("ident") or "").strip() or c.get("ident") in ("Hesperos DX", "HamScanPi"):
         import station as STN                          # Vorgabe: Name dieser Station (zwei Pis unterscheidbar)
         c["ident"] = STN.name(s)
     c["my_call"], c["my_locator"] = s.get("my_call", ""), s.get("my_locator", "")
@@ -280,7 +280,7 @@ def flush(timeout=3.0):
     time.sleep(0.1)
 
 
-def test(targets_text, ident="HamScanPi"):
+def test(targets_text, ident="Hesperos DX"):
     """„Testpaket senden“: Heartbeat, Status und eine Dekodierung direkt (ohne Warteschlange) – Ergebnis je Ziel."""
     out = []
     s = Sender.__new__(Sender)

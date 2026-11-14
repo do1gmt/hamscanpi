@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name:       HamScanPi SSTV-Galerie
- * Description:       Empfängt SSTV-Bilder von HamScanPi (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.4.0
+ * Plugin Name:       Hesperos DX SSTV-Galerie
+ * Description:       Empfängt SSTV-Bilder von Hesperos DX · Ham Radio Watch (früher HamScanPi) (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
+ * Version:           1.4.1
  * Requires at least: 5.6
  * Requires PHP:      7.4
- * Author:            HamScanPi
+ * Author:            Hesperos DX
  * License:           GPL-3.0-or-later
  * Text Domain:       hsp-sstv
  *
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.4.0');
+define('HSP_SSTV_VERSION', '1.4.1');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -34,7 +34,7 @@ define('HSP_SSTV_NS', 'hsp-sstv/v1');
 function hsp_sstv_defaults()
 {
     return array(
-        'status_mode' => 'pi',        // pi = wie HamScanPi es schickt | draft = immer Entwurf | publish = immer sofort
+        'status_mode' => 'pi',        // pi = wie Hesperos DX es schickt | draft = immer Entwurf | publish = immer sofort
         'max_mb'      => 8,
         'per_page'    => 48,
         'accent'      => '',          // leer = vom Theme (--green / --accent), sonst Vorgabe des Plugins
@@ -49,9 +49,10 @@ function hsp_sstv_defaults()
         'custom_css'  => '',
         'show_station'=> 1,
         'show_pi'     => 1,
+        'credit'      => 1,           // Zeile „Empfangen mit Hesperos DX · Ham Radio Watch“ unter der Galerie
         'order'       => 'desc',      // desc = neueste zuerst | asc = älteste zuerst
         'group'       => 'day',       // day | source | pass (Überflug) | none
-        'date_zone'   => 'station',   // station = wie in HamScanPi eingestellt | utc | site = Zeitzone dieser WordPress-Seite
+        'date_zone'   => 'station',   // station = wie in Hesperos DX eingestellt | utc | site = Zeitzone dieser WordPress-Seite
         'chips'       => 'count',     // Filterknöpfe je Quelle: count = nach Anzahl | alpha = alphabetisch | off = keine
         'manual_status' => 'same',    // von Hand nachgereichte Bilder: same = wie automatische | draft = immer Entwurf
     );
@@ -138,7 +139,7 @@ add_action('init', function () {
     ));
 });
 
-/* ------------------------------------------------------------------ Schnittstelle für HamScanPi */
+/* ------------------------------------------------------------------ Schnittstelle für Hesperos DX */
 
 add_action('rest_api_init', function () {
     register_rest_route(HSP_SSTV_NS, '/ping', array(
@@ -212,7 +213,7 @@ function hsp_sstv_clean_meta($m)
     return $out;
 }
 
-/** Zeitzone, in der HamScanPi die Zeiten anzeigt (UTC oder Ortszeit des Pi) – die Galerie folgt ihr. */
+/** Zeitzone, in der Hesperos DX die Zeiten anzeigt (UTC oder Ortszeit des Pi) – die Galerie folgt ihr. */
 function hsp_sstv_zone($sum)
 {
     $mode = hsp_sstv_opts()['date_zone'];
@@ -237,7 +238,7 @@ function hsp_sstv_local($t, $sum)
     return $d;
 }
 
-/** Kennung der Zeitzone wie in HamScanPi: deutsch MEZ/MESZ, sonst CET/CEST usw. */
+/** Kennung der Zeitzone wie in Hesperos DX: deutsch MEZ/MESZ, sonst CET/CEST usw. */
 function hsp_sstv_tzlabel($lbl)
 {
     if ($lbl === 'Z' || $lbl === '+00:00' || $lbl === 'GMT') {
@@ -407,7 +408,7 @@ function hsp_sstv_item($id)
         'id'       => $id,
         't'        => $t,
         'time_utc' => gmdate('Y-m-d H:i:s', $t),
-        'day'      => $lt->format('Y-m-d'),          // Tag und Uhrzeit in der Zeit, die HamScanPi eingestellt hat
+        'day'      => $lt->format('Y-m-d'),          // Tag und Uhrzeit in der Zeit, die Hesperos DX eingestellt hat
         'time'     => $lt->format('H:i:s'),
         'tz'       => hsp_sstv_tzlabel($lbl),
         'featured' => (bool) get_post_meta($id, '_hsp_featured', true),
@@ -494,7 +495,7 @@ function hsp_sstv_assets()
 add_shortcode('sstv_galerie', function ($atts) {
     $o = hsp_sstv_opts();
     $a = shortcode_atts(array('quelle' => '', 'station' => '', 'pro_seite' => $o['per_page'], 'statistik' => 'ja'), $atts, 'sstv_galerie');
-    // Seite für Links aus HamScanPi: die Galerie ohne Filter (eine Seite nur mit ISS oder nur einem Pi zeigte nicht jedes Bild);
+    // Seite für Links aus Hesperos DX: die Galerie ohne Filter (eine Seite nur mit ISS oder nur einem Pi zeigte nicht jedes Bild);
     // eine gefilterte Seite nur, solange es noch keine gültige gibt
     $cur = (int) get_option('hsp_sstv_page');
     $unfiltered = $a['quelle'] === '' && $a['station'] === '';
@@ -509,6 +510,7 @@ add_shortcode('sstv_galerie', function ($atts) {
         'quelle'    => sanitize_title($a['quelle']),
         'station'   => sanitize_text_field($a['station']),
         'statistik' => $a['statistik'] !== 'nein',
+        'credit'    => (bool) $o['credit'],
     );
     $tpl = locate_template('hamscanpi-sstv/galerie.php');
     ob_start();
@@ -563,7 +565,7 @@ add_action('manage_hsp_sstv_posts_custom_column', function ($col, $id) {
 add_action('add_meta_boxes_hsp_sstv', function () {
     remove_meta_box('tagsdiv-hsp_sat', 'hsp_sstv', 'side');      // Quelle: eigenes Feld (genau eine je Bild)
     add_meta_box('hsp_sstv_sort', 'Einordnung in der Galerie', 'hsp_sstv_sort_box', 'hsp_sstv', 'side', 'high');
-    add_meta_box('hsp_sstv_info', 'Angaben von HamScanPi', function ($post) {
+    add_meta_box('hsp_sstv_info', 'Angaben von Hesperos DX', function ($post) {
         $m = json_decode((string) get_post_meta($post->ID, '_hsp_meta', true), true);
         if (!is_array($m) || empty($m['sections'])) {
             echo '<p>Keine Angaben.</p>';
@@ -619,13 +621,13 @@ add_action('admin_post_hsp_sstv_pi_user', function () {
     $host = wp_parse_url(home_url(), PHP_URL_HOST);
     $uid = wp_insert_user(array('user_login' => $login, 'user_pass' => wp_generate_password(32, true, true),
                                 'user_email' => $login . '@hamscanpi.invalid', 'display_name' => $login,
-                                'role' => 'hsp_sstv_melder', 'description' => 'HamScanPi – sendet SSTV-Bilder (' . $host . ')'));
+                                'role' => 'hsp_sstv_melder', 'description' => 'Hesperos DX – sendet SSTV-Bilder (' . $host . ')'));
     if (is_wp_error($uid)) {
         set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('err' => $uid->get_error_message()), 300);
         wp_safe_redirect($back);
         exit;
     }
-    $pw = class_exists('WP_Application_Passwords') ? WP_Application_Passwords::create_new_application_password($uid, array('name' => 'HamScanPi')) : null;
+    $pw = class_exists('WP_Application_Passwords') ? WP_Application_Passwords::create_new_application_password($uid, array('name' => 'Hesperos DX')) : null;
     if (!$pw || is_wp_error($pw)) {
         set_transient('hsp_sstv_pi_msg_' . get_current_user_id(), array('err' => 'Benutzer angelegt, aber kein Anwendungspasswort möglich (WordPress-Seite ohne https?) – unter Benutzer → ' . $login . ' von Hand erzeugen.'), 300);
     } else {
@@ -721,7 +723,7 @@ add_action('admin_init', function () {
             $v = isset($in[$k]) ? trim((string) $in[$k]) : '';
             $o[$k] = preg_match('/^#[0-9a-fA-F]{3,8}$/', $v) ? $v : '';
         }
-        foreach (array('load_css', 'show_station', 'show_pi') as $k) {
+        foreach (array('load_css', 'show_station', 'show_pi', 'credit') as $k) {
             $o[$k] = empty($in[$k]) ? 0 : 1;
         }
         $o['custom_css'] = isset($in['custom_css']) ? wp_strip_all_tags((string) $in['custom_css']) : '';
@@ -745,20 +747,20 @@ function hsp_sstv_settings_page()
     <div class="wrap">
         <h1>SSTV-Galerie</h1>
         <p>Auf einer Seite den Kurzcode <code>[sstv_galerie]</code> einfügen. Möglich: <code>quelle="iss"</code> (nur eine Quelle),
-           <code>station="HamScanPi-AFGN"</code> (nur Bilder dieses Pi),
-           <code>pro_seite="48"</code>, <code>statistik="nein"</code>. Neue Bilder von HamScanPi erscheinen unter <a href="<?php echo esc_url(admin_url('edit.php?post_type=hsp_sstv')); ?>">SSTV-Bilder</a>.</p>
+           <code>station="Hesperos-AFGN"</code> (nur Bilder dieses Pi),
+           <code>pro_seite="48"</code>, <code>statistik="nein"</code>. Neue Bilder von Hesperos DX erscheinen unter <a href="<?php echo esc_url(admin_url('edit.php?post_type=hsp_sstv')); ?>">SSTV-Bilder</a>.</p>
         <form method="post" action="options.php">
             <?php settings_fields('hsp_sstv'); ?>
             <table class="form-table" role="presentation">
                 <tr><th>Neue Bilder</th><td><select name="<?php echo esc_attr($f('status_mode')); ?>">
-                    <option value="pi" <?php selected($o['status_mode'], 'pi'); ?>>wie in HamScanPi eingestellt</option>
+                    <option value="pi" <?php selected($o['status_mode'], 'pi'); ?>>wie in Hesperos DX eingestellt</option>
                     <option value="draft" <?php selected($o['status_mode'], 'draft'); ?>>immer als Entwurf (ich gebe frei)</option>
                     <option value="publish" <?php selected($o['status_mode'], 'publish'); ?>>immer sofort veröffentlichen</option>
                 </select></td></tr>
                 <tr><th>Von Hand nachgereicht</th><td><select name="<?php echo esc_attr($f('manual_status')); ?>">
                     <option value="same" <?php selected($o['manual_status'], 'same'); ?>>wie automatisch empfangene</option>
                     <option value="draft" <?php selected($o['manual_status'], 'draft'); ?>>immer als Entwurf (ich gebe frei)</option>
-                </select><p class="description">Bilder, die in HamScanPi über „Auf Webseite“ in der Trefferkarte geschickt werden.</p></td></tr>
+                </select><p class="description">Bilder, die in Hesperos DX über „Auf Webseite“ in der Trefferkarte geschickt werden.</p></td></tr>
             </table>
             <h2>Anordnung</h2>
             <table class="form-table" role="presentation">
@@ -771,7 +773,7 @@ function hsp_sstv_settings_page()
                     <option value="pass" <?php selected($o['group'], 'pass'); ?>>nach Überflug (Bilder einer Quelle mit weniger als 20 min Abstand)</option>
                     <option value="none" <?php selected($o['group'], 'none'); ?>>nicht gruppieren</option></select></td></tr>
                 <tr><th>Datum und Uhrzeit in</th><td><select name="<?php echo esc_attr($f('date_zone')); ?>">
-                    <option value="station" <?php selected($o['date_zone'], 'station'); ?>>wie in HamScanPi eingestellt (UTC oder Ortszeit der Station)</option>
+                    <option value="station" <?php selected($o['date_zone'], 'station'); ?>>wie in Hesperos DX eingestellt (UTC oder Ortszeit der Station)</option>
                     <option value="utc" <?php selected($o['date_zone'], 'utc'); ?>>immer UTC</option>
                     <option value="site" <?php selected($o['date_zone'], 'site'); ?>>Zeitzone dieser Seite (<?php echo esc_html(wp_timezone_string()); ?>)</option></select>
                     <p class="description">Jede Uhrzeit trägt ihre Kennung (UTC, MEZ, MESZ …).</p></td></tr>
@@ -796,7 +798,8 @@ function hsp_sstv_settings_page()
                 <tr><th>Größte Bilddatei (MB)</th><td><input type="number" name="<?php echo esc_attr($f('max_mb')); ?>" value="<?php echo (int) $o['max_mb']; ?>" min="1" max="50"></td></tr>
                 <tr><th>Angaben zeigen</th><td>
                     <label><input type="checkbox" name="<?php echo esc_attr($f('show_station')); ?>" value="1" <?php checked($o['show_station']); ?>> Station (Rufzeichen, Locator)</label><br>
-                    <label><input type="checkbox" name="<?php echo esc_attr($f('show_pi')); ?>" value="1" <?php checked($o['show_pi']); ?>> Raspberry Pi beim Empfang</label></td></tr>
+                    <label><input type="checkbox" name="<?php echo esc_attr($f('show_pi')); ?>" value="1" <?php checked($o['show_pi']); ?>> Raspberry Pi beim Empfang</label><br>
+                    <label><input type="checkbox" name="<?php echo esc_attr($f('credit')); ?>" value="1" <?php checked($o['credit']); ?>> Zeile „Empfangen mit Hesperos DX · Ham Radio Watch“ unter der Galerie</label></td></tr>
                 <tr><th>Plugin-CSS</th><td><label><input type="checkbox" name="<?php echo esc_attr($f('load_css')); ?>" value="1" <?php checked($o['load_css']); ?>> laden (aus = das Theme gestaltet alles selbst)</label></td></tr>
                 <tr><th>Eigenes CSS</th><td><textarea name="<?php echo esc_attr($f('custom_css')); ?>" rows="6" cols="70" class="code"><?php echo esc_textarea($o['custom_css']); ?></textarea>
                     <p class="description">Z. B. <code>.hsp-galerie { --hsp-accent: #b22; --hsp-gap: 1.2rem; }</code> – alle Variablen stehen oben in assets/galerie.css. Die Vorlage lässt sich ins Theme kopieren: <code>&lt;theme&gt;/hamscanpi-sstv/galerie.php</code>.</p></td></tr>
@@ -807,11 +810,11 @@ function hsp_sstv_settings_page()
         <h2 id="pis">Zugang für die Pis</h2>
         <p>Am besten bekommt jeder Pi einen eigenen Benutzer mit der Rolle <b>SSTV-Melder</b>: der darf nur Bilder einsenden –
            keine Beiträge, Seiten oder Einstellungen. In der Liste der SSTV-Bilder und im Protokoll steht dann, von welchem Pi
-           (Stationsname aus HamScanPi → Einstellungen → Station) und welchem Benutzer ein Bild kam. Einzelnen Zugang sperren:
+           (Stationsname aus Hesperos DX → Einstellungen → Station) und welchem Benutzer ein Bild kam. Einzelnen Zugang sperren:
            unter Benutzer das Anwendungspasswort widerrufen.</p>
         <?php $m = get_transient('hsp_sstv_pi_msg_' . get_current_user_id()); delete_transient('hsp_sstv_pi_msg_' . get_current_user_id()); ?>
         <?php if (!empty($m['pw'])) : ?>
-            <div class="notice notice-success"><p><b>Benutzer <?php echo esc_html($m['login']); ?> angelegt.</b> In HamScanPi unter
+            <div class="notice notice-success"><p><b>Benutzer <?php echo esc_html($m['login']); ?> angelegt.</b> In Hesperos DX unter
             Einstellungen → Webseite eintragen – das Passwort erscheint nur jetzt:</p>
             <p>Benutzer: <code><?php echo esc_html($m['login']); ?></code> · Anwendungspasswort: <code style="font-size:1.1em"><?php echo esc_html($m['pw']); ?></code></p></div>
         <?php elseif (!empty($m['err'])) : ?>
@@ -840,7 +843,7 @@ function hsp_sstv_settings_page()
             <table class="form-table" role="presentation">
                 <tr><th>Kleine Überschrift</th><td><input type="text" name="eyebrow" value="Satelliten · SSTV · Empfang" class="regular-text"></td></tr>
                 <tr><th>Titel</th><td><input type="text" name="title" value="SSTV-Bilder" class="regular-text"></td></tr>
-                <tr><th>Einleitung</th><td><textarea name="intro" rows="3" cols="70">Bilder, die mein HamScanPi von Satelliten, auf Kurzwelle und im Live-Empfang aufgenommen hat – mit allen Angaben zu Überflug und Empfang. Antippen zum Vergrößern.</textarea></td></tr>
+                <tr><th>Einleitung</th><td><textarea name="intro" rows="3" cols="70">Bilder, die mein Hesperos DX von Satelliten, auf Kurzwelle und im Live-Empfang aufgenommen hat – mit allen Angaben zu Überflug und Empfang. Antippen zum Vergrößern.</textarea></td></tr>
                 <tr><th>Seitenvorlage</th><td><select name="template"><option value="">Standard</option>
                     <?php foreach (wp_get_theme()->get_page_templates() as $file => $name) : ?>
                         <option value="<?php echo esc_attr($file); ?>" <?php selected(stripos($name, 'editier') !== false || stripos($file, 'editable') !== false); ?>><?php echo esc_html($name); ?></option>

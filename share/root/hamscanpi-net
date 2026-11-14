@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – Netzwerk-Handgriffe, die Root-Rechte brauchen. Wird von bin/setup_system.sh nach
+# Hesperos DX – Netzwerk-Handgriffe, die Root-Rechte brauchen. Wird von bin/setup_system.sh nach
 # /usr/local/sbin/hamscanpi-net kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel erlaubt
 # genau diese Datei. Jeder Befehl prüft seine Eingaben selbst.
 #
@@ -11,7 +11,7 @@
 #   hamscanpi-net list                     bekannte WLAN-Verbindungen: NAME<TAB>SSID<TAB>PRIORITÄT<TAB>AKTIV
 #   hamscanpi-net scan <iface>             sichtbare WLANs: SSID<TAB>SIGNAL(%)<TAB>SICHERHEIT
 #   hamscanpi-net add <ssid> <priorität>   Ausweich-WLAN anlegen (Passwort auf stdin, leer = offenes Netz)
-#   hamscanpi-net remove <verbindung>      Ausweich-WLAN löschen (nur von HamScanPi angelegte: Name „hsp-…“)
+#   hamscanpi-net remove <verbindung>      Ausweich-WLAN löschen (nur von Hesperos DX angelegte: Name „hsp-…“)
 #   hamscanpi-net hostname <name>          Rechnernamen setzen (a–z, 0–9, Bindestrich), /etc/hosts nachziehen
 set -u
 NMCLI="$(command -v nmcli || echo /usr/bin/nmcli)"
@@ -76,7 +76,7 @@ case "${1:-}" in
     ;;
   remove)
     valid_con "${2:-}"
-    [[ "$2" == hsp-* ]] || die "nur von HamScanPi angelegte WLANs lassen sich hier löschen"
+    [[ "$2" == hsp-* ]] || die "nur von Hesperos DX angelegte WLANs lassen sich hier löschen"
     "$NMCLI" connection delete id "$2"
     ;;
   hostname)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – Umzug einer bestehenden PMSDR-Scanner-Installation (~/pmsdr-scanner -> ~/hamscanpi)
+# Hesperos DX – Umzug einer bestehenden PMSDR-Scanner-Installation (~/pmsdr-scanner -> ~/hamscanpi)
 # und Vorbereitung des GitHub-Repositorys. Aufruf als normaler Benutzer:  bash hamscanpi-migrate.sh
 #
 #  1. alte Dienste (webapp.py/scheduler.py) anhalten und abmelden – pmsdr-control bleibt unberührt
@@ -171,7 +171,7 @@ bold "4/5 Dienste"
 PORT=8080
 sudo tee /etc/systemd/system/hamscanpi-web.service >/dev/null <<UNIT
 [Unit]
-Description=HamScanPi web dashboard
+Description=Hesperos DX web dashboard
 After=network.target
 
 [Service]
@@ -191,7 +191,7 @@ WantedBy=multi-user.target
 UNIT
 sudo tee /etc/systemd/system/hamscanpi-scheduler.service >/dev/null <<UNIT
 [Unit]
-Description=HamScanPi scheduler (scans and satellite passes)
+Description=Hesperos DX scheduler (scans and satellite passes)
 After=network.target
 
 [Service]
@@ -213,7 +213,7 @@ WantedBy=multi-user.target
 UNIT
 sudo tee /etc/systemd/system/hamscanpi-rescue.service >/dev/null <<UNIT
 [Unit]
-Description=HamScanPi rescue page (restart services, reboot, diagnostics)
+Description=Hesperos DX rescue page (restart services, reboot, diagnostics)
 After=network.target
 
 [Service]
@@ -229,7 +229,7 @@ WantedBy=multi-user.target
 UNIT
 sudo tee /etc/systemd/system/hamscanpi-mdns.service >/dev/null <<UNIT
 [Unit]
-Description=HamScanPi name in the network (hamscanpi.local)
+Description=Hesperos DX name in the network (hamscanpi.local)
 After=network-online.target avahi-daemon.service
 Wants=avahi-daemon.service
 
@@ -247,7 +247,7 @@ UNIT
 # sudo-Regel: genau diese Befehle ohne Passwort (Dienste neu starten, Pi neu starten) – vorher geprüft
 SYSTEMCTL_BIN="$(command -v systemctl || echo /usr/bin/systemctl)"
 SUDOERS_TMP="$(mktemp)"
-printf '# HamScanPi: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s reboot\n' \
+printf '# Hesperos DX: Dienste und Pi neu starten (Dashboard und Notfall-Seite) - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s reboot\n' \
     "$(id -un)" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" "$SYSTEMCTL_BIN" > "$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/hamscanpi
@@ -324,7 +324,7 @@ fi
 if git diff --cached --quiet; then
     ok "nichts Neues festzuschreiben"
 else
-    git commit -q -m "${HSP_MSG:-HamScanPi $(date +%Y-%m-%d)}"
+    git commit -q -m "${HSP_MSG:-Hesperos DX $(date +%Y-%m-%d)}"
     ok "Stand festgeschrieben: $(git ls-files | wc -l) Dateien, keine persönlichen Daten"
 fi
 if git remote get-url origin >/dev/null 2>&1; then
@@ -333,15 +333,15 @@ if git remote get-url origin >/dev/null 2>&1; then
         # Version als Release: Tag v<VERSION> und, falls gh angemeldet ist, ein GitHub-Release
         V="$(cat VERSION 2>/dev/null || true)"
         if [ -n "$V" ] && ! git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
-            git tag -a "v$V" -m "HamScanPi $V"
+            git tag -a "v$V" -m "Hesperos DX $V"
             if git push -q origin "v$V" 2>/dev/null; then
                 ok "Version v$V markiert"
                 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
                     awk -v v="$V" '$0 ~ "^## "v {f=1; next} /^## / && f {exit} f' CHANGELOG.md > "$TMP/notes.md" 2>/dev/null || true
-                    if gh release create "v$V" --title "HamScanPi $V" --notes-file "$TMP/notes.md" >/dev/null 2>&1; then
-                        ok "GitHub-Release HamScanPi $V angelegt"
+                    if gh release create "v$V" --title "Hesperos DX $V" --notes-file "$TMP/notes.md" >/dev/null 2>&1; then
+                        ok "GitHub-Release Hesperos DX $V angelegt"
                     else
-                        warn "Release nicht angelegt – später: gh release create v$V --title \"HamScanPi $V\" --notes-file CHANGELOG.md"
+                        warn "Release nicht angelegt – später: gh release create v$V --title \"Hesperos DX $V\" --notes-file CHANGELOG.md"
                     fi
                 fi
             fi

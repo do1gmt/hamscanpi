@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-TMC-Daten für HamScanPi aus den Originaldateien der BASt erzeugen.
+TMC-Daten für Hesperos DX aus den Originaldateien der BASt erzeugen.
 
 Quelle: Bundesanstalt für Straßenwesen (BASt), „Location Code List“ LCL 22.0 (Deutschland, LTN 1)
 und „Event Code List“ ECL 4.01 (deutsch), Lizenz CC BY 4.0
 (https://creativecommons.org/licenses/by/4.0/). Die Daten wurden in ein kompaktes JSON-Format
-umgewandelt und auf die für HamScanPi nötigen Felder gekürzt (Punkte, Straßen, Abschnitte, Gebiete,
+umgewandelt und auf die für Hesperos DX nötigen Felder gekürzt (Punkte, Straßen, Abschnitte, Gebiete,
 Ereignis- und Zusatztexte); inhaltlich nicht verändert.
 
   python3 devtools/build_tmc_data.py <entpackter Ordner LCL22_deutsch>

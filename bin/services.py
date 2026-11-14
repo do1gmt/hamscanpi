@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dienste von HamScanPi anzeigen und neu starten, den Pi neu starten – für das Dashboard (System → Dienste)
+"""Dienste von Hesperos DX anzeigen und neu starten, den Pi neu starten – für das Dashboard (System → Dienste)
 und die Notfall-Seite (bin/rescue.py, eigener Dienst auf Port 8081).
 
 Neu starten braucht root: das Update legt /etc/sudoers.d/hamscanpi an, das genau diese Befehle ohne Passwort
@@ -55,7 +55,7 @@ def status():
 
 
 def sudo_ok():
-    """Darf HamScanPi die Befehle ausführen (sudo-Regel vorhanden)?"""
+    """Darf Hesperos DX die Befehle ausführen (sudo-Regel vorhanden)?"""
     try:
         r = subprocess.run(["sudo", "-n", "-l", SYSTEMCTL, "--no-block", "restart", "hamscanpi-web"],
                            capture_output=True, text=True, timeout=3)

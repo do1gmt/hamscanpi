@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0f1620">
-<title>HamScanPi – Anmeldung</title>
+<title>Hesperos DX – Anmeldung</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/theme.js"></script>
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -16,6 +16,7 @@
   .login { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: .8rem; }
   .login-head { display: flex; align-items: center; gap: .6rem; font-size: 1.3rem; }
   .login-head img { width: 44px; height: 44px; }
+  .login-tag { margin: .2rem 0 0 3.4rem; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
   .login .btn { width: 100%; }
   .login .err { color: var(--red); min-height: 1.2em; font-size: .9rem; }
 </style>
@@ -23,7 +24,7 @@
 <body>
 <div class="login-wrap">
   <form class="panel login" id="loginForm">
-    <div class="login-head"><img src="/static/icon.svg" alt=""><span class="brand"><span class="brand-name">HamScan<em>Pi</em></span></span></div>
+    <div class="login-head"><img src="/static/icon.svg" alt=""><span class="brand"><span class="brand-name">Hesperos <em>DX</em></span></span></div><p class="login-tag">Ham Radio Watch</p>
     <label class="field"><span>Passwort</span>
       <input id="pw" type="password" autocomplete="current-password" autofocus required>
     </label>

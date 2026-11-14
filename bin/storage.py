@@ -269,7 +269,7 @@ def roots():
 
 
 def list_backups():
-    """Sicherungen auf den eingehängten Zielen – auch die anderer HamScanPis (z. B. beim Umzug auf einen neuen Pi)."""
+    """Sicherungen auf den eingehängten Zielen – auch die anderer Hesperos-DX-Stationen (z. B. beim Umzug auf einen neuen Pi)."""
     out = []
     for mp in roots():
         for d in [mp, mp / SUB] + sorted((mp / SUB).glob("*/")) if (mp / SUB).is_dir() else [mp]:

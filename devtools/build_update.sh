@@ -6,7 +6,7 @@
 # legt einen Git-Commit mit Tag v<VERSION> an und lädt ihn nach GitHub, sofern eingerichtet).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-MSG="${1:-HamScanPi $(cat VERSION)}"
+MSG="${1:-Hesperos DX $(cat VERSION)}"
 OUT="${OUT:-$PWD/hamscanpi-update.sh}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true

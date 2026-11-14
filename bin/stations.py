@@ -441,7 +441,7 @@ def _f(name, value):
 def adif(rows, my_call="", my_grid=""):
     """rows: dicts aus heard. SWL-Log: jede gehörte Aussendung ein Eintrag."""
     from datetime import datetime, timezone
-    head = ("HamScanPi SWL log\n" + _f("ADIF_VER", "3.1.4") + _f("PROGRAMID", "HamScanPi")
+    head = ("Hesperos DX SWL log\n" + _f("ADIF_VER", "3.1.4") + _f("PROGRAMID", "HesperosDX")
             + _f("CREATED_TIMESTAMP", datetime.now(timezone.utc).strftime("%Y%m%d %H%M%S")) + "<EOH>\n")
     out = [head]
     for r in rows:
@@ -451,7 +451,7 @@ def adif(rows, my_call="", my_grid=""):
                + _f("FREQ", f"{float(r['freq_hz'] or 0) / 1e6:.6f}") + _f("GRIDSQUARE", r["grid"] or "")
                + (_f("RST_RCVD", f"{int(round(r['snr'])):+d}") if r["snr"] is not None else "")
                + _f("STATION_CALLSIGN", my_call) + _f("MY_GRIDSQUARE", my_grid) + _f("SWL", "Y")
-               + _f("COMMENT", "SWL HamScanPi") + "<EOR>\n")
+               + _f("COMMENT", "SWL Hesperos DX") + "<EOR>\n")
         out.append(rec)
     return "".join(out)
 

@@ -1,12 +1,12 @@
 # PMSDR (shortwave)
 
 The PMSDR is a shortwave receiver by IW3AUT. It delivers I/Q audio through a USB sound card and is
-tuned through its USB control board. HamScanPi does not talk to the control board directly – it
+tuned through its USB control board. Hesperos DX does not talk to the control board directly – it
 sends tuning commands to a **control program** through a FIFO.
 
 ## Control program
 
-HamScanPi uses the Linux command-line program **`pmsdr`** (version 0.26, GPL-3, by IW3AUT and IW0HDV).
+Hesperos DX uses the Linux command-line program **`pmsdr`** (version 0.26, GPL-3, by IW3AUT and IW0HDV).
 **You do not have to build it yourself:** the source archive is bundled in `share/pmsdr/`, and the
 installer (and every update) builds and installs it as `/usr/local/bin/pmsdr` if it is missing – after
 checking its SHA-256 sum (`7131124daf136e0b16a10efc50200da484b8078c0faac53d01a96e75a5fca947`) and applying
@@ -40,11 +40,11 @@ RestartSec=2
 WantedBy=multi-user.target
 ```
 
-## What HamScanPi expects
+## What Hesperos DX expects
 
 | Setting in `config/scanner.json` | Meaning | Default |
 |---|---|---|
-| `fifo` | FIFO the control program reads; HamScanPi writes `f <frequency in Hz>\n` | `/tmp/PMSDRcommands` |
+| `fifo` | FIFO the control program reads; Hesperos DX writes `f <frequency in Hz>\n` | `/tmp/PMSDRcommands` |
 | `alsa_name` | part of the sound card name in `arecord -l` | `Aureon` |
 | `alsa_device` | ALSA device number on that card | `0` |
 | `sample_rate` | I/Q sample rate | `48000` |

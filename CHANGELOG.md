@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.07 – 2026-11-15
+
+- **New name: Hesperos DX · Ham Radio Watch** (formerly HamScanPi). Hesperos, the evening star, rises when the
+  night and the passes begin; DX and "Ham Radio Watch" say worldwide what it is. Changed everywhere it is seen:
+  dashboard header (with the subtitle, hidden on phones), browser tab, login and rescue page, notices, mail and
+  push, diagnostics, the data sent to the website, PSK Reporter software name, WSJT-X id, ADIF program id, setup
+  and update messages, README and docs.
+- **Kept on purpose (nothing breaks on installed Pis):** GitHub repository `do1gmt/hamscanpi`, folder
+  `~/hamscanpi`, services `hamscanpi-*`, address `hamscanpi.local`, backup folder `HamScanPi-Sicherungen` and
+  the backup format id (older versions can still restore new backups), plugin folder `hamscanpi-sstv-galerie`
+  and its REST namespace. A station name left at the old default "HamScanPi" counts as the default, as does the
+  old WSJT-X id; the default host name stays `hamscanpi`.
+- **WordPress plugin 1.4.1:** now "Hesperos DX SSTV-Galerie" (replaces the old plugin in place); optional line
+  "Empfangen mit Hesperos DX · Ham Radio Watch" below the gallery.
+
 ## 1.8.06 – 2026-11-15
 
 - **Readable error messages** by mail/Telegram/ntfy (`bin/errtext.py`): what happened, whether HamScanPi handles it

@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – Sicherungsziele einhängen (USB-Stick/-Festplatte, Netzwerkfreigabe). Wird von bin/setup_system.sh
+# Hesperos DX – Sicherungsziele einhängen (USB-Stick/-Festplatte, Netzwerkfreigabe). Wird von bin/setup_system.sh
 # nach /usr/local/sbin/hamscanpi-store kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel
 # erlaubt genau diese Datei. Eingehängt wird nur an zwei feste Stellen, jede Eingabe wird geprüft.
 #

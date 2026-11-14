@@ -10,5 +10,5 @@ Used by `bin/tmc.py` to turn TMC traffic messages from RDS into plain text.
 Both are © Bundesanstalt für Straßenwesen (BASt), licensed under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/),
 published at https://www.bast.de. The original files were converted to compact JSON and reduced to the
-fields HamScanPi needs (`devtools/build_tmc_data.py`); the content was not changed. BASt notes that the
+fields Hesperos DX needs (`devtools/build_tmc_data.py`); the content was not changed. BASt notes that the
 LCL is no longer maintained since 2022 and gives no warranty for correctness or completeness.

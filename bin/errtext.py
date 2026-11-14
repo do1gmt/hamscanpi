@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fehler aus dem Protokoll als lesbare Meldung (Mail, Telegram, ntfy) – statt „scheduler / loop_exception“ und
-eines rohen Datensatzes: was passiert ist, ob HamScanPi es selbst behebt, und nur wenn nötig, was zu tun ist.
+eines rohen Datensatzes: was passiert ist, ob Hesperos DX es selbst behebt, und nur wenn nötig, was zu tun ist.
 
 text(component, event, data, en=False) -> (Titel, Text). Unbekannte Ereignisse: allgemeiner Satz und die Angaben als
 „Name: Wert“-Zeilen (lange Felder wie Programmausgaben bleiben im Protokoll). Der Fachname steht klein am Ende –

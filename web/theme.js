@@ -1,4 +1,4 @@
-/* HamScanPi – Design (hell/dunkel/…) je Browser. Wird im <head> geladen, damit die Seite gleich richtig erscheint.
+/* Hesperos DX – Design (hell/dunkel/…) je Browser. Wird im <head> geladen, damit die Seite gleich richtig erscheint.
  * auto = wie das Gerät (hell oder dunkel), light, dark, contrast (hoher Kontrast), night (rot, für die Nacht). */
 (function () {
   var LIST = [['auto', 'Automatisch'], ['dark', 'Dunkel'], ['light', 'Hell'], ['ocean', 'Ozean'], ['forest', 'Wald'], ['tube', 'Röhre'],

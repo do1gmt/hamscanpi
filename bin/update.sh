@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi aktualisieren (Installation aus GitHub):
+# Hesperos DX aktualisieren (Installation aus GitHub):
 #   bin/update.sh            von Hand (SSH): wartet auf ein freies Fenster, holt den neuen Stand (git pull),
 #                            richtet das System ein (bin/setup_system.sh) und startet die Dienste neu
 #   bin/update.sh --now      ohne auf ein freies Fenster zu warten
@@ -36,7 +36,7 @@ LNG="$(python3 -c "import json;print(json.load(open('config/web_settings.json'))
 t() { if [ "$LNG" = de ]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
 applog() { asuser python3 bin/applog.py "$@" >/dev/null 2>&1 || true; }
 
-echo "== $(date '+%Y-%m-%d %H:%M:%S') HamScanPi update"
+echo "== $(date '+%Y-%m-%d %H:%M:%S') Hesperos DX update"
 [ -d .git ] || { echo "$(t "Kein Git-Repository in $DIR – bitte mit git clone installieren." "No git repository in $DIR – please install with git clone.")"; exit 1; }
 OLD="$(cat VERSION 2>/dev/null || echo ?)"
 # Dateirechte (chmod +x bei der Einrichtung) sind keine lokalen Änderungen – sonst blockierten sie jedes Update
@@ -102,4 +102,4 @@ notices.event("update", "info", "software", f"Update eingespielt: {sys.argv[1]}"
 PY
 fi
 applog INFO update update_done old="$OLD" new="$NEW"
-echo "== $(t "fertig" "done"): HamScanPi $OLD → $NEW. $(t "Im Browser einmal neu laden (Strg+F5)." "Reload the page in the browser once (Ctrl+F5).")"
+echo "== $(t "fertig" "done"): Hesperos DX $OLD → $NEW. $(t "Im Browser einmal neu laden (Strg+F5)." "Reload the page in the browser once (Ctrl+F5).")"

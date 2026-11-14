@@ -1578,7 +1578,7 @@ def main():
     _DV.heartbeat()
     base_cfg = load_config()
     cfg = base_cfg
-    print("HamScanPi Scanner")
+    print("Hesperos DX Scanner")
     print("-------------")
 
     devices = {}

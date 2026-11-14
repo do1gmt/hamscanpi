@@ -57,9 +57,9 @@ def templates():
 
 def software():
     try:
-        return "HamScanPi " + (BASE / "VERSION").read_text().strip()
+        return "Hesperos DX " + (BASE / "VERSION").read_text().strip()
     except OSError:
-        return "HamScanPi"
+        return "Hesperos DX"
 
 
 def rx_record(call, locator, antenna=""):

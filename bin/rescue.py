@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Notfall-Seite von HamScanPi – ein eigener, winziger Dienst (Standard: Port 8081), der weiterläuft, wenn der
+"""Notfall-Seite von Hesperos DX – ein eigener, winziger Dienst (Standard: Port 8081), der weiterläuft, wenn der
 Webserver hängt. Zeigt Zustand der Dienste, Speicher und die letzten Protokollzeilen und kann Webserver und
 Zeitplaner neu starten, den Pi neu starten und ein Diagnose-Paket herunterladen.
 
@@ -104,8 +104,8 @@ def page(msg=""):
     sudo = "" if st["sudo"] else ("<div class='note bad'>Neu starten ist noch nicht freigegeben (sudo-Regel fehlt). "
                                    "Update erneut einspielen.</div>")
     return f"""<!doctype html><html lang=de><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<meta http-equiv=refresh content=20><title>HamScanPi – Notfall</title><style>{CSS}</style>
-<h1>HamScanPi – Notfall-Seite</h1>
+<meta http-equiv=refresh content=20><title>Hesperos DX – Notfall</title><style>{CSS}</style>
+<h1>Hesperos DX – Notfall-Seite</h1>
 <p class=muted>Läuft unabhängig vom Dashboard. <a href="http://{host}:8080/" id=dash>Zum Dashboard</a></p>
 {f"<div class=note>{html.escape(msg)}</div>" if msg else ""}{sudo}
 <h2>Dienste</h2><table><tr><th>Dienst</th><th>Zustand</th><th>Speicher</th><th>Neustarts</th><th></th></tr>{rows}</table>
@@ -119,13 +119,13 @@ Swap belegt {m.get('SwapTotal', 0) - m.get('SwapFree', 0)} MB · Last {' '.join(
 
 
 LOGIN = """<!doctype html><html lang=de><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>HamScanPi – Notfall</title><style>{css}</style><h1>HamScanPi – Notfall-Seite</h1>{msg}
+<title>Hesperos DX – Notfall</title><style>{css}</style><h1>Hesperos DX – Notfall-Seite</h1>{msg}
 <form method=post action='/login'><p>Passwort des Dashboards: <input type=password name=password autofocus>
 <button>Anmelden</button></p></form></html>"""
 
 
 class H(BaseHTTPRequestHandler):
-    server_version = "HamScanPi-Rescue"
+    server_version = "HesperosDX-Rescue"
 
     def log_message(self, fmt, *args):
         pass

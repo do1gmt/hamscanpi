@@ -4,7 +4,7 @@
 # Aufbau: devtools/publish_head.sh + base64(tar.gz des Repositorys ohne .git und ohne persönliche/Laufzeitdaten).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-MSG="${1:-HamScanPi $(cat VERSION)}"
+MSG="${1:-Hesperos DX $(cat VERSION)}"
 OUT="${OUT:-$PWD/hamscanpi-publish.sh}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true

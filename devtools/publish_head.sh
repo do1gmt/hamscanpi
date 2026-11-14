@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – neue Version auf GitHub veröffentlichen. Läuft auf einem PC mit git und GitHub-Zugang (SSH-Schlüssel),
+# Hesperos DX – neue Version auf GitHub veröffentlichen. Läuft auf einem PC mit git und GitHub-Zugang (SSH-Schlüssel),
 # nicht auf dem Pi. Die Pis holen sich die Version dann selbst (Dashboard: „Jetzt aktualisieren“ oder bin/update.sh).
 #
 #   bash hamscanpi-publish.sh
@@ -20,7 +20,7 @@ command -v git >/dev/null || die "git fehlt: sudo apt install git"
 sed -n '/^__PAYLOAD__$/,$p' "$0" | tail -n +2 | base64 -d > "$TMP/p.tgz"
 mkdir -p "$TMP/new" && tar xzf "$TMP/p.tgz" -C "$TMP/new"
 V="$(cat "$TMP/new/VERSION")"
-bold "HamScanPi $V veröffentlichen"
+bold "Hesperos DX $V veröffentlichen"
 echo "  $HSP_MSG"
 
 bold "1/4 Arbeitskopie"
@@ -65,7 +65,7 @@ bold "3/4 Festschreiben"
 awk -v v="$V" '$0 ~ "^## "v" " {f=1; next} /^## / && f {exit} f' CHANGELOG.md > "$TMP/body.txt" 2>/dev/null || true
 { printf '%s\n' "$HSP_MSG"; [ -s "$TMP/body.txt" ] && { echo; sed '/./,$!d' "$TMP/body.txt"; }; } > "$TMP/msg.txt"
 git commit -q -F "$TMP/msg.txt"
-git tag -a "v$V" -m "HamScanPi $V"
+git tag -a "v$V" -m "Hesperos DX $V"
 ok "$OLDV → $V"
 
 bold "4/4 Hochladen"
@@ -89,9 +89,9 @@ else
         gh release view "$tg" --repo "$GHREPO" >/dev/null 2>&1 && continue
         vv="${tg#v}"
         git show "$tg:CHANGELOG.md" 2>/dev/null | awk -v v="$vv" '$0 ~ "^## "v" " {f=1; next} /^## / && f {exit} f' > "$TMP/notes.md"
-        [ -s "$TMP/notes.md" ] || echo "HamScanPi $vv" > "$TMP/notes.md"
-        if ERR="$(gh release create "$tg" --repo "$GHREPO" --title "HamScanPi $vv" --notes-file "$TMP/notes.md" 2>&1 >/dev/null)"; then
-            ok "GitHub-Release HamScanPi $vv"; made=1
+        [ -s "$TMP/notes.md" ] || echo "Hesperos DX $vv" > "$TMP/notes.md"
+        if ERR="$(gh release create "$tg" --repo "$GHREPO" --title "Hesperos DX $vv" --notes-file "$TMP/notes.md" 2>&1 >/dev/null)"; then
+            ok "GitHub-Release Hesperos DX $vv"; made=1
         else
             warn "Release $tg nicht angelegt: $(echo "$ERR" | tail -1)"
         fi

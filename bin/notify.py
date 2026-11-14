@@ -89,7 +89,7 @@ def notify_error(component, event, data):
         return
     if _throttled("error", float(c.get("throttle_min", 30))):
         return
-    # lesbar: was ist passiert, behebt HamScanPi es selbst, was ist zu tun (bin/errtext.py) – statt Rohdaten
+    # lesbar: was ist passiert, behebt Hesperos DX es selbst, was ist zu tun (bin/errtext.py) – statt Rohdaten
     import errtext as ET
     title, body = ET.text(component, event, data, en=_is_en())
     send_all("⚠ " + title, body + "\n", c, priority="high")
@@ -325,7 +325,7 @@ def log_text(levels, hours=24):
     since = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours)).isoformat(timespec="seconds")
     want = {x.upper() for x in levels}
     recs = [x for x in read(limit=20000, level="DEBUG", since=since) if x.get("level") in want]
-    out = [f"HamScanPi – Protokoll der letzten {hours} h ({', '.join(sorted(want))}), {len(recs)} Einträge", ""]
+    out = [f"Hesperos DX – Protokoll der letzten {hours} h ({', '.join(sorted(want))}), {len(recs)} Einträge", ""]
     for x in reversed(recs):
         d = x.get("data") or {}
         out.append(f"{x['ts']}  {x['level']:<5} {x['component']:<10} {x['event']}"
@@ -341,7 +341,7 @@ def send_document(subject, filename, content, c=None):
     sent = False
     if c.get("enabled"):
         msg = EmailMessage()
-        msg["Subject"] = "[HamScanPi] " + subject
+        msg["Subject"] = "[Hesperos DX] " + subject
         msg["From"] = c.get("mail_from") or c.get("smtp_user") or "pmsdr@localhost"
         msg["To"] = c["mail_to"]
         msg["Date"] = formatdate(localtime=True)
@@ -464,5 +464,5 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "scan_done":
         notify_scan_done(sys.argv[2])
     elif len(sys.argv) >= 2 and sys.argv[1] == "test":
-        send_mail("Testnachricht", "Der Mailversand von HamScanPi funktioniert.\n")
+        send_mail("Testnachricht", "Der Mailversand von Hesperos DX funktioniert.\n")
         print("gesendet")

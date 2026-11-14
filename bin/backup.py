@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sicherung und Wiederherstellung von HamScanPi – Einstellungen, Datenbestände, Aufnahmen.
+"""Sicherung und Wiederherstellung von Hesperos DX – Einstellungen, Datenbestände, Aufnahmen.
 
 Umfang
   settings  config/ (ohne Vorlagen), Geräteregister, Satelliten-Statistik und -Ergebnisse, kleine Zustände
@@ -170,9 +170,9 @@ def info(path):
             man = json.loads(m.read().decode("utf-8")) if m else None
             names = tar.getnames()
     except (tarfile.TarError, KeyError, OSError, json.JSONDecodeError) as e:
-        raise ValueError(f"keine HamScanPi-Sicherung ({type(e).__name__})")
-    if not man or man.get("app") != "HamScanPi":
-        raise ValueError("keine HamScanPi-Sicherung (Inhaltsliste fehlt)")
+        raise ValueError(f"keine Hesperos-Sicherung ({type(e).__name__})")
+    if not man or man.get("app") not in ("HamScanPi", "Hesperos DX"):
+        raise ValueError("keine Hesperos-Sicherung (Inhaltsliste fehlt)")
     man["size"] = Path(path).stat().st_size
     man["has_db"] = any(n in ("data/scanner.db", "data/sysmon.db") for n in names)
     man["has_recordings"] = any(n.startswith(("recordings/", "reports/")) for n in names)
@@ -335,7 +335,7 @@ def check_dir(d, target=None):
         return f"Zielordner {d} ist nicht beschreibbar"
     try:
         if os.stat(p).st_dev == os.stat(BASE).st_dev:
-            return f"{d} liegt auf demselben Laufwerk wie HamScanPi – eine Sicherung dort hilft bei einem Kartenausfall nicht"
+            return f"{d} liegt auf demselben Laufwerk wie Hesperos DX – eine Sicherung dort hilft bei einem Kartenausfall nicht"
     except OSError:
         pass
     return None
@@ -419,7 +419,7 @@ def auto_tick(log=None):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="HamScanPi sichern und wiederherstellen")
+    ap = argparse.ArgumentParser(description="Hesperos DX sichern und wiederherstellen")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("create", help="Sicherung erstellen")
     c.add_argument("--scope", choices=SCOPES, default="data")

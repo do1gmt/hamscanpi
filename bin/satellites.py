@@ -43,7 +43,7 @@ PRE_ROLL_S = 15             # Aufnahme beginnt vor dem Aufgang
 MIN_PART_S = 120            # kürzere Reste eines Überflugs lohnen nicht
 MAX_CHANNELS = 3            # Kanäle je Aufnahme – mehr schafft ein Raspberry Pi nicht sicher in Echtzeit
 
-USER_AGENT = "HamScanPi/1.0 (+https://github.com/do1gmt/hamscanpi; amateur radio satellite tracker)"
+USER_AGENT = "HesperosDX/1.0 (+https://github.com/do1gmt/hamscanpi; amateur radio satellite tracker)"
 
 # Objekte (NORAD -> Name). Nur Satelliten mit Downlink im Bereich des RTL-SDR.
 OBJECTS = {
@@ -574,7 +574,7 @@ def duty(sat):
 
 
 def channel_chance(cid, stats=None):
-    """Aussicht auf ein Signal: Erfahrungswert, nach und nach ersetzt durch das, was HamScanPi auf diesem Kanal
+    """Aussicht auf ein Signal: Erfahrungswert, nach und nach ersetzt durch das, was Hesperos DX auf diesem Kanal
     tatsächlich gehört hat (letzte 30 Tage; vier „gedachte“ Überflüge mit dem Erfahrungswert als Ausgangspunkt)."""
     d = duty(BY_ID[cid])
     st = (stats if stats is not None else read_stats()).get("channels", {}).get(cid) or []

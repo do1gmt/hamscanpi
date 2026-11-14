@@ -1,4 +1,4 @@
-/* HamScanPi – Dashboard ohne Seiten-Reload.
+/* Hesperos DX – Dashboard ohne Seiten-Reload.
    Alles kommt per JSON-API, Karten werden im DOM aktualisiert statt neu gebaut,
    laufende Audio-Wiedergabe und offene Details bleiben erhalten. */
 (() => {
@@ -199,7 +199,7 @@
     loadEstimate();
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
-    if (document.activeElement !== $('stationName')) $('stationName').value = settings.station_name && settings.station_name !== 'HamScanPi' ? settings.station_name : '';
+    if (document.activeElement !== $('stationName')) $('stationName').value = settings.station_name && !['Hesperos DX', 'HamScanPi'].includes(settings.station_name) ? settings.station_name : '';
     $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${settings.station_hostname || 'hamscanpi'}.local:${location.port || 80}`;
     $('pskOn').checked = !!settings.pskreporter;
     renderSchedules();
@@ -275,9 +275,9 @@
 
   function showVersion() {
     if (!settings || !settings.version) return;
-    const own = settings.station_name && settings.station_name !== 'HamScanPi' ? settings.station_name : '';
+    const own = settings.station_name && !['Hesperos DX', 'HamScanPi'].includes(settings.station_name) ? settings.station_name : '';
     $('appVer').textContent = 'v' + settings.version + (own ? ' · ' + own : '');
-    $('appVer').title = 'HamScanPi ' + settings.version + (own ? ' – ' + own : '');
+    $('appVer').title = 'Hesperos DX ' + settings.version + (own ? ' – ' + own : '');
   }
   function renderDeviceSwitch() {
     showVersion();
@@ -336,7 +336,7 @@
       const d = await post('/api/settings', { station_name: $('stationName').value });
       Object.assign(settings, d.settings);
       $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${d.settings.station_hostname}.local:${location.port || 80}`;
-      document.title = d.settings.station_name;
+      document.title = ['Hesperos DX', 'HamScanPi'].includes(d.settings.station_name) ? 'Hesperos DX · Ham Radio Watch' : d.settings.station_name + ' · Hesperos DX';
       showVersion();
       if (d.settings.hostname_error) note($('stationNote'), (EN ? 'Name saved, host name not changed: ' : 'Name gespeichert, Rechnername nicht geändert: ') + d.settings.hostname_error, true);
       else note($('stationNote'), (EN ? '✓ saved – in the network now: ' : '✓ gespeichert – im Netz jetzt: ') + d.settings.station_hostname + '.local');
@@ -2457,8 +2457,8 @@
     if (!d.pending) return;
     const since = d.since ? tfmt(d.since, { date: true }) : '';
     $('locText').textContent = EN
-      ? `Since ${since} HamScanPi has been in a different network (${d.ip}${d.old_ip ? ` instead of ${d.old_ip}` : ''}). Was the Pi moved? Is the locator ${d.locator || '(none)'} still right?`
-      : `HamScanPi hängt seit ${since} in einem anderen Netz (${d.ip}${d.old_ip ? ` statt ${d.old_ip}` : ''}). Wurde der Pi woanders hingestellt? Stimmt der Locator ${d.locator || '(keiner)'} noch?`;
+      ? `Since ${since} Hesperos DX has been in a different network (${d.ip}${d.old_ip ? ` instead of ${d.old_ip}` : ''}). Was the Pi moved? Is the locator ${d.locator || '(none)'} still right?`
+      : `Hesperos DX hängt seit ${since} in einem anderen Netz (${d.ip}${d.old_ip ? ` statt ${d.old_ip}` : ''}). Wurde der Pi woanders hingestellt? Stimmt der Locator ${d.locator || '(keiner)'} noch?`;
     $('locInput').value = d.locator || ''; $('locNote').textContent = '';
     $('locCheck').hidden = false; $('locInput').focus();
   }
@@ -2577,7 +2577,7 @@
     let d; try { d = await api('/api/wsjtx-udp'); } catch (e) { return; }
     const c = d.config || {}, st = d.state || {};
     if (!document.activeElement || !document.activeElement.closest('#wxBox')) {
-      $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || settings.station_name || 'HamScanPi';
+      $('wxOn').checked = !!c.enabled; $('wxTargets').value = c.targets || ''; $('wxIdent').value = c.ident || settings.station_name || 'Hesperos DX';
     }
     $('wxSum').textContent = c.enabled ? `· an ${c.targets}` : '· aus';
     const ago = t => t ? tfmt(t, { date: false, sec: true }) : '–';
@@ -2809,7 +2809,7 @@
     }
     $('sysNowNote').innerHTML = warn.map(w => `<span>${esc(w)}</span>`).join(' ');
     $('sysNowNote').classList.toggle('warn-text', warn.length > 0);
-    // HamScanPi
+    // Hesperos DX
     let hw = (lastStatus && lastStatus.hardware) || null;
     if (!hw) { try { hw = (await api('/api/status')).hardware || null; } catch (e) { /* kommt mit der nächsten Anzeige */ } }
     const at = [];
@@ -2824,7 +2824,7 @@
     const procs = s.procs || [];
     const ownSum = procs.reduce((a, p) => a + p.rss_mb, 0);
     $('sysProcs').innerHTML = procs.map(p => `<tr><td>${p.label ? esc(p.label) + ' <small class="muted no-i18n">' + esc(p.name) + '</small>' : '<span class="no-i18n">' + esc(p.name) + '</span>'}</td><td class="num ${lvl(p.rss_mb, 250, 450)}">${p.rss_mb.toFixed(0)} MB</td><td class="num">${p.cpu == null ? '–' : p.cpu.toFixed(1) + ' %'}</td></tr>`).join('')
-      + `<tr class="muted"><td>HamScanPi zusammen</td><td class="num">${ownSum.toFixed(0)} MB</td><td></td></tr><tr class="muted"><td>übrige Prozesse</td><td class="num">${s.other_rss_mb} MB</td><td></td></tr>`;
+      + `<tr class="muted"><td>Hesperos DX zusammen</td><td class="num">${ownSum.toFixed(0)} MB</td><td></td></tr><tr class="muted"><td>übrige Prozesse</td><td class="num">${s.other_rss_mb} MB</td><td></td></tr>`;
     // Pi
     const pi = s.pi || {}, n = s.net || {};
     // Adresse zum Anklicken (für alle, die die schöne .local-Adresse übersehen haben), Netz-Einzelheiten mit MAC
@@ -2859,7 +2859,7 @@
     sticksData = d;
     const list = d.sticks || [];
     $('sticksNew').hidden = !d.pending;
-    $('sticksNew').textContent = d.pending ? 'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt HamScanPi ihn nicht.' : '';
+    $('sticksNew').textContent = d.pending ? 'Neuer Stick erkannt – bitte festlegen, was er sein soll. Bis dahin benutzt Hesperos DX ihn nicht.' : '';
     if (!list.length) { $('sticksList').innerHTML = '<div class="muted">Kein SDR-Stick angesteckt.</div>'; return; }
     $('sticksList').innerHTML = list.map(r => {
       const role = r.role || '';
@@ -2871,14 +2871,14 @@
       const capTxt = cp ? `${fmtR(cp.hf_ok ? cp.min_hz : Math.max(cp.min_hz, 24e6))} – ${fmtR(cp.max_hz)}${cp.hf_ok ? ' · Kurzwelle per Direktabtastung' : cp.hf ? ' · Kurzwelle möglich, aber: ' + esc(cp.hf_why) : ''}` : null;
       const info = [`Seriennummer <span class="no-i18n">${esc(r.serial || '–')}</span>`, r.kind === 'rtl' ? `Tuner <span class="no-i18n">${esc(r.tuner || '?')}</span>` : null, capTxt].filter(Boolean).join(' · ');
       const warn = [];
-      if (r.duplicate) warn.push('Dieser Stick lässt sich nicht sicher über seine Seriennummer ansprechen (gleiche Nummer wie ein anderer Stick, oder eine Nummer wie 00000001, die rtl_sdr als Gerätenummer liest). HamScanPi nimmt dann die USB-Reihenfolge – die kann sich ändern. Eigene Seriennummer schreiben (dafür die anderen Sticks abziehen).');
+      if (r.duplicate) warn.push('Dieser Stick lässt sich nicht sicher über seine Seriennummer ansprechen (gleiche Nummer wie ein anderer Stick, oder eine Nummer wie 00000001, die rtl_sdr als Gerätenummer liest). Hesperos DX nimmt dann die USB-Reihenfolge – die kann sich ändern. Eigene Seriennummer schreiben (dafür die anderen Sticks abziehen).');
       else if (r.generic && r.present && d.rtl_present > 1) warn.push('Seriennummer ab Werk (bei vielen Sticks gleich). Solange nur ein solcher Stick steckt, kein Problem – sonst eigene Nummer schreiben.');
       if (r.v4) warn.push('RTL-SDR Blog V4 (Tuner R828D): braucht den rtl-sdr-Treiber von rtl-sdr.com, sonst stimmt er falsch ab.');
       if (r.note) warn.push(r.note + ' – dieser Eintrag kann vergessen werden.');
       let body = '';
       if (r.kind === 'rtl') {
         body = `<div class="stick-form" data-key="${esc(r.key)}" data-role="${esc(role)}">
-          <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = springt ein, wenn der Haupt-Stick fehlt (nur wenn genau eine Reserve steckt), sonst unbenutzt. Ignoriert = HamScanPi fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
+          <label class="field" title="Rolle: Haupt-Stick = wird für Scan, Satelliten und Live benutzt. Reserve = springt ein, wenn der Haupt-Stick fehlt (nur wenn genau eine Reserve steckt), sonst unbenutzt. Ignoriert = Hesperos DX fasst ihn nie an."><span>Rolle</span><select data-f="role">${['', 'main', 'spare', 'ignore'].map(v => `<option value="${v}"${v === role ? ' selected' : ''}>${v === '' ? '– festlegen –' : ROLE_TEXT[v]}</option>`).join('')}</select></label>
           <label class="field" title="Frequenzkorrektur des Sticks in ppm (Quarzfehler). Leer = Wert aus dem Bandplan. Sticks mit TCXO wie der NESDR SMArt brauchen meist 0."><span>ppm</span><input data-f="ppm" type="number" step="1" min="-200" max="200" placeholder="–" value="${r.ppm ?? ''}"></label>
           <label class="field" title="Verstärkung in dB für Scan und Live. Leer = Wert aus dem Bandplan. Zu hoch übersteuert bei starken Ortssendern, zu niedrig verliert schwache Signale. Für Satelliten gibt es eine eigene Einstellung."><span>Verstärkung (dB)</span><input data-f="gain" type="number" step="0.1" min="0" max="60" placeholder="–" value="${r.gain ?? ''}"></label>
           <label class="field" title="Kann dieser Stick Kurzwelle (Direktabtastung)? „automatisch“ richtet sich nach der Modellbezeichnung im Stick – die stimmt nicht immer (ältere Modelle melden sich als neuere, Billigsticks tragen irgendeinen Namen). „nein“: nur 24 MHz – 1,7 GHz, Kurzwelle bleibt der PMSDR."><span>Kurzwelle</span><select data-f="hf_mode">${[['auto', EN ? 'automatic (model)' : 'automatisch (Modell)'], ['on', EN ? 'yes' : 'ja'], ['off', EN ? 'no' : 'nein']].map(([v, l]) => `<option value="${v}"${(r.hf_mode || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -2894,7 +2894,7 @@
       } else if (!r.present) {
         body = `<div class="stick-actions" data-key="${esc(r.key)}"><button class="btn btn-danger" data-a="forget">Vergessen</button></div>`;
       } else {
-        body = '<p class="hint">Erkannt, aber HamScanPi kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.</p>';
+        body = '<p class="hint">Erkannt, aber Hesperos DX kann mit diesem Gerät nicht empfangen. Es wird nicht benutzt.</p>';
       }
       const absentBadge = !r.present && r.kind === 'rtl' ? ` <span class="badge b-absent">${EN ? 'NOT PLUGGED IN' : 'STECKT NICHT'}</span>` : '';
       return `<div class="stick-card${r.present ? '' : ' absent'}${role === '' && r.kind === 'rtl' && r.present ? ' pending' : ''}">

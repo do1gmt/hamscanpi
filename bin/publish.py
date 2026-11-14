@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SSTV-Bilder auf die eigene Webseite hochladen (WordPress mit dem Plugin „HamScanPi SSTV-Galerie“,
+"""SSTV-Bilder auf die eigene Webseite hochladen (WordPress mit dem Plugin „Hesperos DX SSTV-Galerie“,
 liegt bei unter share/wordpress/).
 
 Einstellungen → Webseite: Adresse, WordPress-Benutzer, Anwendungspasswort (WordPress → Benutzer → Profil →
@@ -38,7 +38,7 @@ LOG = BASE / "data" / "publish_log.json"
 ROUTE = "/wp-json/hsp-sstv/v1"
 MAX_AGE_S = 14 * 86400
 PER_TICK = 4
-UA = "HamScanPi-publish"
+UA = "HesperosDX-publish"
 
 
 # ------------------------------------------------------------------ Einstellungen
@@ -163,7 +163,7 @@ def _request(c, path, data=None, headers=None, timeout=60):
         except Exception:
             msg = None
         hint = {401: "Benutzer oder Anwendungspasswort falsch", 403: "dieser Benutzer darf keine Dateien hochladen",
-                404: "Plugin „HamScanPi SSTV-Galerie“ nicht gefunden – installiert und aktiviert?"}.get(e.code)
+                404: "Plugin „Hesperos DX SSTV-Galerie“ (früher „HamScanPi SSTV-Galerie“) nicht gefunden – installiert und aktiviert?"}.get(e.code)
         raise RuntimeError(f"HTTP {e.code}: {hint or msg or e.reason}")
     except urllib.error.URLError as e:
         raise ConnectionError(f"Webseite nicht erreichbar ({e.reason})")
@@ -277,14 +277,14 @@ def station_section():
         import station as STN
         name = STN.name(s)
     except Exception:
-        name = "HamScanPi"
+        name = "Hesperos DX"
     try:
         ver = (BASE / "VERSION").read_text().strip()
     except OSError:
         ver = "?"
     return {"call": s.get("my_call") or "", "locator": s.get("my_locator") or "", "name": name, "version": ver}, \
         {"title": "Station", "rows": [["Rufzeichen", s.get("my_call") or "–"], ["Locator", s.get("my_locator") or "–"],
-                                      ["Gemeldet von", name], ["Software", f"HamScanPi {ver}"]]}
+                                      ["Gemeldet von", name], ["Software", f"Hesperos DX {ver}"]]}
 
 
 def pi_section():
@@ -463,7 +463,7 @@ def test_image(path):
     cols = [(255, 255, 255), (255, 255, 0), (0, 255, 255), (0, 255, 0), (255, 0, 255), (255, 0, 0), (0, 0, 255), (0, 0, 0)]
     for i, col in enumerate(cols):
         d.rectangle([i * 40, 0, i * 40 + 39, 150], fill=col)
-    d.text((12, 170), "HamScanPi – Testbild", fill=(255, 255, 255))
+    d.text((12, 170), "Hesperos DX – Testbild", fill=(255, 255, 255))
     d.text((12, 195), time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()), fill=(200, 210, 220))
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     im.save(path, "PNG")

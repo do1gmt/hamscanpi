@@ -1,4 +1,4 @@
-/* HamScanPi – mobil zuerst, dunkel, ruhige Kontraste */
+/* Hesperos DX – mobil zuerst, dunkel, ruhige Kontraste */
 :root {
   --bg: #0f1620;
   --panel: #182230;
@@ -663,6 +663,9 @@ input[type=time] { color-scheme: dark; min-width: 7.5rem; }
 .loc-box { width: min(560px, 100%); } .loc-box h2 { margin-top: 0; } .loc-box input { text-transform: uppercase; font-family: var(--mono, monospace); }
 .update-log { max-height: 260px; overflow: auto; font-size: .78rem; background: var(--panel-2); padding: .5rem .7rem; border-radius: 6px; white-space: pre-wrap; }
 .stick-sn { font-family: var(--mono, monospace); font-size: .85rem; padding: .05rem .4rem; border: 1px solid var(--line); border-radius: 4px; margin-left: .3rem; }
+/* Unterzeile „Ham Radio Watch“ – weltweit verständlich: Amateurfunk; am Handy aus Platzgründen ausgeblendet */
+.brand-tag { font-size: .72rem; color: var(--muted); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; margin-left: .1rem; }
+@media (max-width: 640px) { .brand-tag { display: none; } }
 .brand-ver { margin-left: .45rem; font-size: .72rem; color: var(--muted); font-weight: 400; letter-spacing: .02em; }
 .stick-sn { white-space: nowrap; display: inline-block; }
 /* Handy: Sprungleiste zu den Karten eines Reiters, Knopf „nach oben“ */

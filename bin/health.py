@@ -147,13 +147,13 @@ def check_sticks(st):
                           f"Seriennummer {reg.get('serial') or 'ohne'}" + (" – das war der Haupt-Stick." if reg.get("role") == "main" else ""))
             gone[k] = {"t": time.time(), "id": ev["id"]}
     st["sticks_present"] = sorted(now_present)
-    # Zugriffsrechte: darf HamScanPi die angesteckten Sticks öffnen? (sonst „usb_open error -3“)
+    # Zugriffsrechte: darf Hesperos DX die angesteckten Sticks öffnen? (sonst „usb_open error -3“)
     denied = [r for r in now_present.values() if r.get("node") and os.path.exists(r["node"])
               and not os.access(r["node"], os.R_OK | os.W_OK)]
     if denied:
         NT.raise_("stick_access", "error", "hardware", "Keine Zugriffsrechte auf den Stick",
                   ", ".join(f"{r['label']} ({r.get('serial') or 'ohne Seriennummer'}, {r['node']})" for r in denied)
-                  + " – HamScanPi darf ihn nicht öffnen, Scans und Live schlagen fehl („usb_open error -3“).",
+                  + " – Hesperos DX darf ihn nicht öffnen, Scans und Live schlagen fehl („usb_open error -3“).",
                   fix="Die udev-Regel fehlt: im Dashboard unter System „Jetzt aktualisieren“ bzw. per SSH bin/update.sh "
                       "ausführen, danach den Stick einmal ab- und wieder anstecken.",
                   cmd="cd ~/hamscanpi && bin/update.sh")
@@ -184,7 +184,7 @@ def check_sticks(st):
         NT.clear("stick_main_missing")
     if main and main.get("present") and main.get("generic"):
         NT.raise_("stick_generic_serial", "info", "hardware", "Stick mit Allerwelts-Seriennummer",
-                  f"{main['label']} hat die Seriennummer {main.get('serial')}. Mit einem zweiten Stick kann HamScanPi "
+                  f"{main['label']} hat die Seriennummer {main.get('serial')}. Mit einem zweiten Stick kann Hesperos DX "
                   "die beiden nicht sicher auseinanderhalten.",
                   fix="Unter System → Geräte „Seriennummer schreiben“ (vorher andere Sticks abziehen).", notify=False)
     else:

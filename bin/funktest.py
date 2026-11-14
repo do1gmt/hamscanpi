@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Handfunken- und Empfangstest: die nächsten gut hörbaren FM-Satelliten-Überflüge und, für einen davon,
 eine Minutentabelle mit Richtung, Höhe und der Frequenz, die an der Handfunke einzustellen ist
-(Doppler auf 5-kHz-Raster gerundet). Rechnet mit den Bahndaten und dem Locator von HamScanPi.
+(Doppler auf 5-kHz-Raster gerundet). Rechnet mit den Bahndaten und dem Locator von Hesperos DX.
 
    python3 ~/hamscanpi/bin/funktest.py            Überflüge der nächsten 24 h (ab 20°)
    python3 ~/hamscanpi/bin/funktest.py 3          Minutentabelle für Überflug Nr. 3

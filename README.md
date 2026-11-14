@@ -1,14 +1,15 @@
-<img src="web/icon.svg" width="96" alt="HamScanPi icon" align="right">
+<img src="web/icon.svg" width="96" alt="Hesperos DX icon" align="right">
 
-# HamScanPi
+# Hesperos DX · Ham Radio Watch
 
-*Hams can Pi.*
+*Formerly HamScanPi.* Hesperos is the evening star – it rises when the night and the passes begin, and keeps
+watch over the sky. DX: listening far and wide, worldwide.
 
 [![selftest](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml/badge.svg)](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml)
 
 **An unattended band scanner and satellite recorder for radio amateurs, running on a Raspberry Pi.**
 
-HamScanPi scans the amateur bands on its own, records what it hears, decodes what it can and shows
+Hesperos DX scans the amateur bands on its own, records what it hears, decodes what it can and shows
 everything in a web dashboard you open on your phone or PC. When an amateur satellite passes overhead
 it interrupts the scan, follows the Doppler shift and records the pass – including SSTV images from
 the ISS and from CubeSats.
@@ -130,7 +131,7 @@ point on the map) shows everything collected for one callsign: receptions, first
 locator sent with count, period and an example message, bands and modes, and every single reception with message,
 antenna and a link to the hit.
 
-**Memory:** HamScanPi runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
+**Memory:** Hesperos DX runs on a Pi 4 with 1 GB RAM. Recordings are analysed piece by piece (mixed to the hit
 frequency and reduced to 12 kHz while reading, in single precision), so even 120 s shortwave recordings need
 only a few dozen MB. If a recording still cannot be analysed, it is skipped and logged instead of filling the
 memory.
@@ -153,7 +154,7 @@ PNG) and **weather RTTY** with 450/850 Hz shift (DWD 50 Bd). In "automatic" the 
 (NAVTEX, DWD fax/RTTY, Northwood fax). Tune in USB, the dial about 1.9 kHz (fax) or 1.5 kHz below the listed
 frequency.
 
-**Shortwave broadcast schedule (EiBi):** in Live, below the frequency, HamScanPi shows what the
+**Shortwave broadcast schedule (EiBi):** in Live, below the frequency, Hesperos DX shows what the
 [EiBi](http://www.eibispace.de/) schedule (Eike Bierwirth, free to use) lists **on air right now** on that
 frequency (±5 kHz): station, language, target area, transmitter site with distance, until when – the most likely
 one first (exact frequency, target area Europe, nearest transmitter), others below. The card **"Shortwave – on air
@@ -166,7 +167,7 @@ files can also be uploaded by hand (Live → "Manage list").
 
 **Share decodes on the network (WSJT-X protocol):** under *Settings → Station → Share on the network* every FT8/FT4
 decode (scan and Live) is sent as UDP packets in the WSJT-X "UDP Server" format (heartbeat, status with dial
-frequency, decode) – **OpenHamClock**, GridTracker, JTAlert and other programs show the stations HamScanPi hears.
+frequency, decode) – **OpenHamClock**, GridTracker, JTAlert and other programs show the stations Hesperos DX hears.
 Targets: `host:port`, several separated by commas, port usually 2237; a multicast group such as `224.0.0.1:2237`
 can be heard by several programs at once. For OpenHamClock on another computer set `HOST=0.0.0.0` there (and
 `WSJTX_MULTICAST_ADDRESS` when using multicast). Sending runs in the background: without a network nothing waits,
@@ -175,7 +176,7 @@ are sent afterwards, older ones are dropped (useless for a live display). "Save 
 target right away.
 
 **Which channels of a satellite are recorded:** if not all selected channels fit into one receive window (e.g.
-ISS 2 m and 70 cm), HamScanPi takes the group with the best chance of a signal – priority × chance. The chance
+ISS 2 m and 70 cm), Hesperos DX takes the group with the best chance of a signal – priority × chance. The chance
 starts from experience (Meteor LRPT always on, linear transponder beacons almost always, the ISS APRS digipeater on
 145.825 mostly, FM repeaters only when someone talks, SSTV only during announced events) and is then replaced
 step by step by what was actually heard on that channel in the last 30 days. Fixed carriers on the ground show up
@@ -211,7 +212,7 @@ interrupt a scan. A scan without a sign of life for 10 minutes is ended and repo
 with a "now" button in the pass list), so looking around or choosing satellites does not throw out a running
 scan.
 
-**Wi-Fi that repairs itself:** every minute HamScanPi checks whether the router answers. If not, it helps in
+**Wi-Fi that repairs itself:** every minute Hesperos DX checks whether the router answers. If not, it helps in
 steps – reconnect after 2 min, Wi-Fi off/on after 5 min, restart the network service after 9 min, reload the Wi-Fi
 driver after 14 min, then again every 30 min – and reports how long the Wi-Fi was gone and what brought it back.
 *System → Wi-Fi* lists the known networks and takes **fallback Wi-Fis** (e.g. a phone hotspot): if the main Wi-Fi
@@ -219,9 +220,9 @@ is gone the Pi uses a fallback and switches back when the main Wi-Fi is in range
 system's network service, readable only by root). The system history shows the Wi-Fi signal; a weak signal
 (median below −75 dBm for 15 min) gives a notice. With a network cable the Wi-Fi is left alone.
 
-**Several HamScanPis:** *Settings → Station → Name of this station* (default "HamScanPi") appears in mail (subject
+**Several Hesperos-DX-Stationen:** *Settings → Station → Name of this station* (default "Hesperos DX") appears in mail (subject
 and sender) and push, in the browser tab and header, as the WSJT-X/OpenHamClock id and in the PSK Reporter
-antenna info – and becomes the Pi's host name in the network: "HamScanPi-AFGN" → `http://hamscanpi-afgn.local:8080`.
+antenna info – and becomes the Pi's host name in the network: "Hesperos-AFGN" → `http://hamscanpi-afgn.local:8080`.
 
 **Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
 network it is reachable at the address it gets by DHCP – and as **`http://hamscanpi.local:8080`**: the service
@@ -232,7 +233,7 @@ does not reliably – use the IP address there (it is in the push message). In a
 gateway) the dashboard asks on the next visit, until answered, whether the locator is still right ("Still right" /
 "Save").
 When the IP address or the network changes (judged by the gateway and its hardware address, confirmed by two checks
-a minute apart), HamScanPi shows a notice "New network: <IP>" / "New IP address: <IP>" with the links and sends it
+a minute apart), Hesperos DX shows a notice "New network: <IP>" / "New IP address: <IP>" with the links and sends it
 by mail/push (event "New network / new IP address", on by default; without internet it is sent as soon as there is
 one). In a different network it also asks whether the locator still fits. Note: trusted networks of the access
 protection do not apply in a foreign network (the password is asked), and guest networks with client isolation
@@ -266,7 +267,7 @@ profile is a data file (`bandplans/us.json`, overlay over `config/scanner.json`,
 countries can be added the same way – pull requests welcome.
 
 **Shortwave without a PMSDR:** sticks with direct sampling on the Q branch (Nooelec NESDR SMArt v5, RTL-SDR
-Blog V3) also receive 100 kHz – 28.8 MHz. HamScanPi recognises them (*System → Devices*: "HF via direct
+Blog V3) also receive 100 kHz – 28.8 MHz. Hesperos DX recognises them (*System → Devices*: "HF via direct
 sampling"), switches direct sampling on below 24 MHz (Live and scan; the driver's syntax `-D` / `-D 2` /
 `-E direct2` is detected automatically) and then offers the HF bands for the stick as well – the same voice,
 FT8/FT4, CW/RTTY and SSTV detection as with the PMSDR. There is no gain control in this mode, and an HF antenna
@@ -285,7 +286,7 @@ sudo apt update && sudo apt full-upgrade -y
 sudo apt install -y git
 ```
 
-**2. Get HamScanPi and install it:**
+**2. Get Hesperos DX and install it:**
 ```bash
 git clone https://github.com/do1gmt/hamscanpi.git
 cd hamscanpi
@@ -350,9 +351,9 @@ commits, tags `v<version>` and pushes; nothing personal can get into the reposit
 
 ## SD card or SSD
 
-HamScanPi itself runs the same on both – same paths, same behaviour. The difference is wear, speed and power.
+Hesperos DX itself runs the same on both – same paths, same behaviour. The difference is wear, speed and power.
 
-HamScanPi runs around the clock and writes recordings, its database, the system history and logs.
+Hesperos DX runs around the clock and writes recordings, its database, the system history and logs.
 *System → Status* shows how much was written to the system drive in the last 24 hours (and the daily
 average), whether it is an SD card, USB drive or NVMe SSD, and where the swap lives.
 
@@ -372,7 +373,7 @@ the card (evaluated and deleted afterwards). Since 1.7.95 these files are 16-bit
 the amount – and the level meter and heartbeat files that change every second live in RAM (`/dev/shm`). Many
 passes per day (every satellite enabled) still add up; switch off satellites you do not need under *Settings →
 Satellites*. The diagnostics download (*System → Services*) contains `io.txt`: what was written in 10 seconds,
-per HamScanPi process, and whether `/tmp` lives in RAM or on the card.
+per Hesperos DX process, and whether `/tmp` lives in RAM or on the card.
 
 ### Swap
 
@@ -401,7 +402,7 @@ largest process per minute to find the cause.
 stations, FM stations, interference lines, system history) and the recordings (audio, I/Q, waterfalls,
 images, can be large). The databases are copied consistently even while a scan is writing. *Include
 credentials* (on by default) also stores the mail password and Telegram/ntfy token in plain text – keep the
-file safe. To restore, upload the file in the same card: HamScanPi shows what is in it, restores as soon as
+file safe. To restore, upload the file in the same card: Hesperos DX shows what is in it, restores as soon as
 no scan or pass is running, moves the current settings and data to `restore-previous/<time>/` first, adds
 recordings (never deletes them) and restarts its services.
 
@@ -412,8 +413,8 @@ reboot – it is mounted again within a minute. *Eject* unmounts it cleanly; it 
 unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
 `//host/share` with user and password and mounted at `/mnt/hamscanpi-nas` (SMB 2 or newer, package cifs-utils);
 if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hamscanpi/nas.cred`
-(root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` on the
-target, so several HamScanPis can share one stick or share. Backups found there (also those of another Pi, e.g.
+(root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` (folder name kept from the former name) on the
+target, so several Hesperos-DX-Stationen can share one stick or share. Backups found there (also those of another Pi, e.g.
 when moving to a new one) can be checked and restored directly from the list.
 
 **Automatic backup:** daily or weekly at a chosen hour to the chosen target, keeping the last N files. A folder
@@ -432,12 +433,12 @@ sudo systemctl restart hamscanpi-scheduler hamscanpi-web
 ### Moving to an SSD
 
 Boot the **whole system** from the SSD (Raspberry Pi 4 and 5 can do this directly) rather than putting only
-HamScanPi on it – then logs and everything else live on the SSD too, and the services never start before
+Hesperos DX on it – then logs and everything else live on the SSD too, and the services never start before
 their drive is mounted.
 
 1. Write Raspberry Pi OS to the SSD with the Raspberry Pi Imager (same user name as before, e.g. `gmt`).
 2. Shut the Pi down, remove the SD card, connect the SSD to a blue USB 3 port and boot.
-3. Install HamScanPi as described under *Installation* (`install.sh`).
+3. Install Hesperos DX as described under *Installation* (`install.sh`).
 4. Stop the services and copy your data from the old card (in a USB card reader, here mounted at `/media/$USER/rootfs`):
    ```
    sudo systemctl stop hamscanpi-scheduler hamscanpi-web
@@ -491,7 +492,7 @@ Forgot the password? On the Pi: `python3 bin/auth.py set` (or `python3 bin/auth.
 
 ## Legal
 
-HamScanPi only receives. Which transmissions you may listen to, record and decode depends on the
+Hesperos DX only receives. Which transmissions you may listen to, record and decode depends on the
 law of your country.
 
 ### Restricted bands
@@ -528,3 +529,10 @@ backups, notifications – in a temporary copy; your own installation is not tou
 ## License
 
 GNU General Public License v3.0 – see [LICENSE](LICENSE).
+
+## About the name
+
+Until version 1.8.06 the project was called **HamScanPi**. The technical names stay for now so nothing breaks on
+installed Pis: the GitHub repository `do1gmt/hamscanpi`, the folder `~/hamscanpi`, the services `hamscanpi-*`, the
+address `hamscanpi.local`, the backup folder `HamScanPi-Sicherungen` and the WordPress plugin folder
+`hamscanpi-sstv-galerie`. Station names that were left at the old default "HamScanPi" count as the default.

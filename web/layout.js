@@ -1,4 +1,4 @@
-/* HamScanPi – Karten verschieben und einklappen, je Browser gespeichert (PC und Handy unabhängig).
+/* Hesperos DX – Karten verschieben und einklappen, je Browser gespeichert (PC und Handy unabhängig).
  * Griff ⠿ oben rechts an jeder Karte: ziehen (Maus oder Finger), oder antippen und mit ↑/↓ verschieben.
  * ▾ klappt eine Karte ein. Anordnung zurücksetzen: Einstellungen → Station → Anordnung.
  * Läuft nur im Browser – der Pi merkt davon nichts.

@@ -1,4 +1,4 @@
-/* HamScanPi SSTV-Galerie: lädt die Bilder über die WordPress-Schnittstelle, gruppiert (Tag, Quelle, Überflug
+/* Hesperos DX SSTV-Galerie: lädt die Bilder über die WordPress-Schnittstelle, gruppiert (Tag, Quelle, Überflug
  * oder gar nicht – Einstellungen → SSTV-Galerie), Filter je Quelle, Lightbox mit Überblenden, Pfeiltasten, Wischen
  * und Infotafel. Weitere Bilder kommen beim Herunterscrollen von selbst. Direktlink: …/seite/#sstv-123 */
 (function () {
@@ -7,7 +7,7 @@
   var DAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   function dayLabel(d) { var x = new Date(d + 'T12:00:00Z'); return DAYS[x.getUTCDay()] + ', ' + x.getUTCDate() + '. ' + MONTHS[x.getUTCMonth()] + ' ' + x.getUTCFullYear(); }
-  // Uhrzeit mit Kennung der Zeitzone (UTC oder Ortszeit, wie in HamScanPi eingestellt)
+  // Uhrzeit mit Kennung der Zeitzone (UTC oder Ortszeit, wie in Hesperos DX eingestellt)
   function utc(s, tz) { tz = tz || 'UTC'; return esc(s) + '<abbr class="hsp-utc" title="' + (tz === 'UTC' ? 'koordinierte Weltzeit' : 'Ortszeit') + '">' + esc(tz) + '</abbr>'; }
   function pct(x) { return Math.round((Number(x) || 0) * 100); }
 

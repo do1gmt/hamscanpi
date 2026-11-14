@@ -1,6 +1,6 @@
 {
-  "name": "HamScanPi",
-  "short_name": "HamScanPi",
+  "name": "Hesperos DX",
+  "short_name": "Hesperos DX",
   "description": "Band scanner and satellite recorder for radio amateurs",
   "start_url": "/",
   "display": "standalone",

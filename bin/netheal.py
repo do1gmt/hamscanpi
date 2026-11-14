@@ -232,7 +232,7 @@ def check(st, now=None, nt=None):
                     down_min=round((now - w["down_since"]) / 60))
             nt.raise_("wifi_down", "warn", "system", "WLAN-Verbindung weg",
                       f"Seit {__import__('timefmt').hm(w['down_since'])} keine Verbindung zum Router. "
-                      f"Zuletzt versucht: {text}. HamScanPi versucht es weiter von selbst.", notify=False)
+                      f"Zuletzt versucht: {text}. Hesperos DX versucht es weiter von selbst.", notify=False)
             break
 
 

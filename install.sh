@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – installation on a Raspberry Pi (Raspberry Pi OS / Debian).
+# Hesperos DX – installation on a Raspberry Pi (Raspberry Pi OS / Debian).
 # Run as your normal user from the cloned repository:
 #   ./install.sh                 asks for the language (Deutsch / English), everything else runs on its own
 #   ./install.sh --lang de       without any question;  --port 8090 for another port (rescue page: port + 1)
@@ -24,7 +24,7 @@ command -v apt-get >/dev/null || { echo "Raspberry Pi OS / Debian nötig – nee
 if [ -z "$LNG" ]; then
     case "${LANG:-}" in de*) DEF=1;; *) DEF=2;; esac
     echo
-    echo "  HamScanPi"
+    echo "  Hesperos DX"
     echo "  Sprache / Language:   [1] Deutsch   [2] English"
     read -r -p "  [$DEF] > " a || a=""
     case "${a:-$DEF}" in 1|d|D|de|DE) LNG=de;; *) LNG=en;; esac

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HamScanPi – Webserver und JSON-API.
+Hesperos DX – Webserver und JSON-API.
 
 Alles, was das Dashboard anzeigt, kommt live aus der Datenbank und den
 Dateien in reports/. Es wird kein statischer Report mehr gebaut.
@@ -2311,8 +2311,11 @@ class Handler(BaseHTTPRequestHandler):
                     html = html.replace("<head>", f'<head>\n  <meta name="hsp-lang" content="{ui}">', 1)
                 ver = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else ""
                 import station as STN
-                _sn = STN.name(load_settings())
-                html = html.replace("<title>HamScanPi</title>", f"<title>{_sn.replace('<', '').replace('&', '')}</title>", 1)
+                _st = load_settings()
+                if STN.custom(_st):                      # eigener Stationsname im Browser-Tab, sonst Name + Unterzeile
+                    _sn = STN.name(_st)
+                    html = html.replace("<title>Hesperos DX · Ham Radio Watch</title>",
+                                        f"<title>{_sn.replace('<', '').replace('&', '')} · Hesperos DX</title>", 1)
                 html = html.replace("<head>", f'<head>\n  <meta name="hsp-version" content="{ver}">', 1)
                 data = html.encode("utf-8")
                 self.send_response(200)
@@ -2832,7 +2835,7 @@ class Handler(BaseHTTPRequestHandler):
                 st["wsjtx_udp"] = c
                 write_json(SETTINGS, st)
                 APPLOG.log("INFO", "webapp", "wsjtx_udp_set", enabled=c.get("enabled"), targets=c.get("targets"))
-                res = WX.test(c["targets"], c.get("ident") or "HamScanPi") if data.get("test") and c.get("targets") else None
+                res = WX.test(c["targets"], c.get("ident") or "Hesperos DX") if data.get("test") and c.get("targets") else None
                 return self.send_json({"ok": True, "config": WX.cfg(), "test": res})
             if path == "/api/sat/arm":
                 # „sofort“: Bedenkzeit beenden
@@ -2922,12 +2925,12 @@ class Handler(BaseHTTPRequestHandler):
                 raw = read_json(SETTINGS, {}).get("notify") or {}
                 if not NOTIFY.push_on(raw):
                     raise ValueError("Push ist nicht eingerichtet")
-                NOTIFY.send_push("HamScanPi", "Testnachricht – Push funktioniert. 73!", raw)
+                NOTIFY.send_push("Hesperos DX", "Testnachricht – Push funktioniert. 73!", raw)
                 APPLOG.log("INFO", "notify", "test_push_sent", via=raw.get("push"))
                 return self.send_json({"ok": True})
             if path == "/api/notify-test":
                 raw = read_json(SETTINGS, {}).get("notify") or {}
-                NOTIFY.send_mail("Testnachricht", "Der Mailversand von HamScanPi funktioniert.\n", raw)
+                NOTIFY.send_mail("Testnachricht", "Der Mailversand von Hesperos DX funktioniert.\n", raw)
                 APPLOG.log("INFO", "notify", "test_mail_sent", to=raw.get("mail_to"))
                 return self.send_json({"ok": True})
             if path == "/api/live/start":
@@ -3132,7 +3135,7 @@ class Handler(BaseHTTPRequestHandler):
                     png = BASE / "data" / "publish_test.png"
                     PUB.test_image(png)
                     meta = PUB.build("Testbild", time.time(), {"mode": "Test", "complete": 1.0},
-                                     [{"title": "Hinweis", "rows": [["Was ist das?", "Testbild aus HamScanPi – darf gelöscht werden"]]}],
+                                     [{"title": "Hinweis", "rows": [["Was ist das?", "Testbild aus Hesperos DX – darf gelöscht werden"]]}],
                                      {"kind": "test"})
                     r = PUB.upload(c, png, meta, f"test-{int(time.time())}", "draft")
                     png.unlink(missing_ok=True)
@@ -3266,7 +3269,7 @@ def main():
             time.sleep(86400)
     threading.Thread(target=eibi_loop, daemon=True).start()
     srv = _Server(("0.0.0.0", port), Handler)
-    print(f"HamScanPi Webserver auf Port {port}, Dateien aus {WEB}")
+    print(f"Hesperos DX Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()
 
 

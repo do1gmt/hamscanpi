@@ -1,7 +1,7 @@
 # SSTV-Bilder auf die eigene Webseite (WordPress)
 
-HamScanPi lädt jedes SSTV-Bild – vom Satelliten, von Kurzwelle oder aus Live – mit allen Angaben auf eine
-WordPress-Seite. Dort zeigt das Plugin **HamScanPi SSTV-Galerie** die Bilder nach Tag gruppiert, mit Filter je
+Hesperos DX lädt jedes SSTV-Bild – vom Satelliten, von Kurzwelle oder aus Live – mit allen Angaben auf eine
+WordPress-Seite. Dort zeigt das Plugin **Hesperos DX SSTV-Galerie** die Bilder nach Tag gruppiert, mit Filter je
 Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überblenden, Infotafel).
 
 ## Einrichten
@@ -12,25 +12,25 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
    `pi-afgn`) → „Benutzer mit Anwendungspasswort anlegen“. Der Benutzer bekommt die Rolle **SSTV-Melder**: er darf
    nur Bilder einsenden, keine Beiträge, Seiten oder Einstellungen. Benutzername und Anwendungspasswort erscheinen
    einmal – gleich kopieren. Mehrere Pis: je Pi einen eigenen Benutzer; in der Liste *SSTV-Bilder* steht dann unter
-   „Eingesandt von“, welcher Pi (Stationsname aus HamScanPi → Einstellungen → Station) und welcher Benutzer ein Bild
+   „Eingesandt von“, welcher Pi (Stationsname aus Hesperos DX → Einstellungen → Station) und welcher Benutzer ein Bild
    geschickt hat, und es lässt sich danach filtern. Sperren: unter Benutzer das Anwendungspasswort widerrufen.
    (Von Hand geht es auch: Benutzer → Profil → *Anwendungspasswörter*.)
-4. **In HamScanPi:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
+4. **In Hesperos DX:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
    „SSTV-Bilder hochladen“ an → „Verbindung prüfen“ → „Testbild senden“.
 5. **Galerie-Seite:** WordPress → Einstellungen → SSTV-Galerie → *Galerie-Seite anlegen*. Die Seite bekommt
    denselben Seitenkopf wie die übrigen Seiten des Themes (Bereich `page-hero`: kleine Überschrift, großer Titel,
    Einleitung) und darunter die Galerie; als Seitenvorlage die der übrigen Seiten wählen (beim DO1GMT-Theme
    „DO1GMT Editierbare Theme-Seite“). Danach ins Menü aufnehmen (Design → Menüs), z. B. unter „Satelliten“.
    Von Hand geht es auch: irgendeine Seite mit dem Kurzcode `[sstv_galerie]`; möglich ist
-   `[sstv_galerie quelle="iss-zarya" station="HamScanPi-AFGN" pro_seite="48" statistik="nein"]`
+   `[sstv_galerie quelle="iss-zarya" station="Hesperos-AFGN" pro_seite="48" statistik="nein"]`
    (`station`: nur Bilder dieses Pi).
 6. **Freigeben:** Neue Bilder kommen zunächst als Entwurf (Menü *SSTV-Bilder*). Das Bild prüfen,
-   „Veröffentlichen“ – oder in der Liste mehrere auf einmal. Läuft alles, in HamScanPi „sofort veröffentlichen“
+   „Veröffentlichen“ – oder in der Liste mehrere auf einmal. Läuft alles, in Hesperos DX „sofort veröffentlichen“
    wählen.
 
 ## Was übertragen wird
 
-Alle Zeiten in der Zeit, die in HamScanPi unter Einstellungen → Station → *Zeitangaben* eingestellt ist (UTC oder
+Alle Zeiten in der Zeit, die in Hesperos DX unter Einstellungen → Station → *Zeitangaben* eingestellt ist (UTC oder
 Ortszeit des Pi), jeweils mit Kennung (UTC, MEZ, MESZ …). Die Galerie gruppiert die Tage in derselben Zeit.
 
 | Abschnitt | Inhalt |
@@ -38,7 +38,7 @@ Ortszeit des Pi), jeweils mit Kennung (UTC, MEZ, MESZ …). Die Galerie gruppier
 | Bild | SSTV-Modus, Anteil der Zeilen, Empfangszeit |
 | Satellit und Überflug | Name, NORAD-Nummer, Soll- und Empfangsfrequenz, Doppler, Aufgang/höchster Punkt/Untergang (Zeit, Richtung, Elevation), beim Bild Elevation, Richtung, Entfernung, Bewegung, Alter der Bahndaten |
 | Empfang | Signal beim Bild, Spitze und 90-%-Wert im Überflug, Zeit über 6 dB, Bilddauer, Aufnahmezeit, Empfänger, Verstärkung, ppm, Abstimmung und Abtastrate, Antenne |
-| Station | Rufzeichen, Locator, Stationsname (welcher Pi gemeldet hat), HamScanPi-Version |
+| Station | Rufzeichen, Locator, Stationsname (welcher Pi gemeldet hat), Hesperos-Version |
 | Raspberry Pi beim Empfang | Modell, System, CPU-Temperatur, Last, freier Speicher, Unterspannung, Laufzeit |
 
 Kurzwelle und Live bringen statt der Satellitenangaben Band, Frequenz, Seitenband und Pegel mit.
@@ -71,7 +71,7 @@ Einstellungen → SSTV-Galerie → **Anordnung**:
 - **Reihenfolge:** neueste oder älteste zuerst.
 - **Gruppieren:** nach Tag, nach Quelle (Satellit, Band), nach Überflug (Bilder einer Quelle mit weniger als
   20 min Abstand) oder gar nicht.
-- **Datum und Uhrzeit in:** wie in HamScanPi eingestellt (UTC oder Ortszeit der Station), immer UTC oder die
+- **Datum und Uhrzeit in:** wie in Hesperos DX eingestellt (UTC oder Ortszeit der Station), immer UTC oder die
   Zeitzone der WordPress-Seite – immer mit Kennung.
 - **Filterknöpfe je Quelle:** nach Anzahl, alphabetisch oder ausblenden.
 
@@ -86,7 +86,7 @@ erscheint nur, wenn es wirklich noch Bilder gibt.
 
 - **WordPress:** Einstellungen → SSTV-Galerie → *Protokoll*: die letzten 100 Empfänge mit Zeit (UTC), Ergebnis
   (Entwurf, veröffentlicht, schon vorhanden, abgelehnt mit Grund), Quelle und Benutzer.
-- **HamScanPi:** Einstellungen → Webseite → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
+- **Hesperos DX:** Einstellungen → Webseite → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
   Ereignisse `sstv_uploaded`, `sstv_upload_failed`, `sstv_manual_queued`, `publish_set`.
 
 ## Aussehen anpassen

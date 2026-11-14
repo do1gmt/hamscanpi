@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – Selbsttest ohne Hardware.
+# Hesperos DX – Selbsttest ohne Hardware.
 # Kopiert das Repository in ein temporäres Verzeichnis (die eigene Installation bleibt unberührt) und prüft:
 #   1. Bahnrechnung und Aufnahmeplan mit synthetischen Bahndaten
 #   2. ISS-Überflug 70 cm (Robot 36 auf 437,550 + Relais 437,800) mit Doppler
@@ -763,7 +763,7 @@ sp = [{"call": "DL1ABC", "band": "20m", "mode": "FT8", "snr": -15, "grid": "JO31
       {"call": "DL1ABC", "band": "40m", "mode": "FT8", "snr": -12, "grid": None, "t": 61, "freq_hz": 7075000}]
 dd = PSK.dedupe(sp)
 assert len(dd) == 2 and [x for x in dd if x["band"] == "20m"][0]["snr"] == -8 and [x for x in dd if x["band"] == "20m"][0]["grid"] == "JO31", dd
-assert PSK.software().startswith("HamScanPi")
+assert PSK.software().startswith("Hesperos DX")
 import live as LV
 cls = [c for c in vars(LV).values() if isinstance(c, type) and hasattr(c, "_agc_step")][0]
 o = cls.__new__(cls); o._agc_hold = 0.0
@@ -1012,9 +1012,9 @@ echo "== 34 Netzwerk-Ausgabe im WSJT-X-Protokoll (OpenHamClock)"
 import json, socket, sys, time
 sys.path.insert(0, "../devtools")
 import wsjtx_read as RD, wsjtx_udp as WX
-d = RD.read(WX.decode("HamScanPi", 1793710815.0, -12, 0.3, 1997, "FT8", "CQ DL1ABC JO31"))
+d = RD.read(WX.decode("Hesperos DX", 1793710815.0, -12, 0.3, 1997, "FT8", "CQ DL1ABC JO31"))
 assert d["typ"] == 2 and d["ms"] == 46815000 and d["snr"] == -12 and d["df"] == 1997 and d["mode"] == "~" and d["msg"] == "CQ DL1ABC JO31" and d["rest"] == 0, d
-s = RD.read(WX.status("HamScanPi", 7074000, "FT8", "DO1GMT", "JN59HH"))
+s = RD.read(WX.status("Hesperos DX", 7074000, "FT8", "DO1GMT", "JN59HH"))
 assert s["dial"] == 7074000 and s["decall"] == "DO1GMT" and s["rest"] == 0, s
 assert WX.parse_targets("192.168.178.50, 224.0.0.1:2237; ohc.local:2238") == [("192.168.178.50", 2237), ("224.0.0.1", 2237), ("ohc.local", 2238)]
 try:
@@ -1023,7 +1023,7 @@ except ValueError:
     pass
 rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); rx.bind(("127.0.0.1", 0)); rx.settimeout(5)
 port = rx.getsockname()[1]
-WX.cfg = lambda: {"enabled": True, "targets": f"127.0.0.1:{port}", "ident": "HamScanPi", "my_call": "DO1GMT", "my_locator": "JN59HH"}
+WX.cfg = lambda: {"enabled": True, "targets": f"127.0.0.1:{port}", "ident": "Hesperos DX", "my_call": "DO1GMT", "my_locator": "JN59HH"}
 WX.STATE = __import__("pathlib").Path(__import__("tempfile").mkdtemp()) / "st.json"
 # Netzausfall nachstellen: die ersten Sendeversuche scheitern
 real = WX.Sender._send
@@ -1622,21 +1622,23 @@ bash -n "$SRC/share/root/hamscanpi-net" && ! bash "$SRC/share/root/hamscanpi-net
   && ok "Root-Helfer prüft seine Eingaben (falscher Rechnername, fremde Verbindung)" || bad "Root-Helfer"
 
 echo "== 53 Name dieser Station: Rechnername, Mail, Namensdienst"
-(cd bin && python3 - <<'PY') && ok "„HamScanPi-AFGN“ → hamscanpi-afgn, Betreff [HamScanPi-AFGN], kein zusätzliches hamscanpi.local" || bad "Stationsname"
+(cd bin && python3 - <<'PY') && ok "„Hesperos-AFGN“ → hesperos-afgn, Vorgabe bleibt hamscanpi, Betreff [Hesperos-AFGN], kein zusätzliches hamscanpi.local" || bad "Stationsname"
 import json, tempfile
 from pathlib import Path
 import station as STN
-assert STN.hostname_for("HamScanPi-AFGN") == "hamscanpi-afgn"
+assert STN.hostname_for("Hesperos-AFGN") == "hesperos-afgn" and STN.hostname_for("HamScanPi-AFGN") == "hamscanpi-afgn"
+assert STN.hostname_for("Hesperos DX") == STN.hostname_for("HamScanPi") == STN.hostname_for("") == "hamscanpi"   # Vorgabe: Rechnername bleibt
+assert STN.validate("HamScanPi") == "Hesperos DX" and not STN.custom({"station_name": "HamScanPi"})                  # alte Vorgabe
 assert STN.hostname_for("Funkbude Müller") == "funkbude-mueller"
-assert STN.validate("") == "HamScanPi" and STN.name({}) == "HamScanPi" and not STN.custom({})
+assert STN.validate("") == "Hesperos DX" and STN.name({}) == "Hesperos DX" and not STN.custom({})
 for bad in ("x" * 33, "<script>", "-abc"):
     try:
         STN.validate(bad); raise AssertionError(bad)
     except ValueError:
         pass
-assert STN.custom({"station_name": "HamScanPi-AFGN"})
+assert STN.custom({"station_name": "Hesperos-AFGN"})
 d = Path(tempfile.mkdtemp()); (d / "config").mkdir()
-(d / "config" / "web_settings.json").write_text(json.dumps({"station_name": "HamScanPi-AFGN"}))
+(d / "config" / "web_settings.json").write_text(json.dumps({"station_name": "Hesperos-AFGN"}))
 STN.BASE = d
 import notify as NF
 sent = {}
@@ -1648,7 +1650,7 @@ class FakeSMTP:
     def quit(self): pass
 NF.smtplib.SMTP = FakeSMTP
 NF.send_mail("Test", "x", {"smtp_host": "h", "mail_to": "a@b", "mail_from": "pi@example.org", "smtp_port": 587})
-assert sent["subj"] == "[HamScanPi-AFGN] Test" and sent["from"].startswith("HamScanPi-AFGN"), sent
+assert sent["subj"] == "[Hesperos-AFGN] Test" and sent["from"].startswith("Hesperos-AFGN"), sent
 import mdns_alias as MD
 MD.STATE = d / "m.json"; MD._ip = lambda: "192.168.1.5"
 MD.run(8080, rounds=1, every=0, host="hamscanpi-afgn", custom=True)
@@ -1986,7 +1988,7 @@ assert b"abcd efgh" not in arc and b"app_password" not in arc
 PY
 phpok() { command -v php >/dev/null || return 0; php -l "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" >/dev/null 2>&1; }
 phpok && node -e "new Function(require('fs').readFileSync('$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js','utf8'))" \
-  && grep -q "Plugin Name: *HamScanPi SSTV-Galerie" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
+  && grep -q "Plugin Name: *Hesperos DX SSTV-Galerie" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
   && ok "WordPress-Plugin: PHP und Skript fehlerfrei" || bad "WordPress-Plugin"
 
 echo "== 59 Zeitangaben: UTC oder Ortszeit, überall mit Kennung"

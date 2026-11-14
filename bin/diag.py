@@ -191,7 +191,7 @@ def write(fileobj, stream=True):
             ver = (BASE / "VERSION").read_text().strip()
         except OSError:
             ver = "?"
-        add("info.txt", f"HamScanPi {ver}\nerstellt {time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n\n"
+        add("info.txt", f"Hesperos DX {ver}\nerstellt {time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n\n"
             + _run(["uptime"]) + "\n" + _run(["free", "-m"]) + "\n" + _run(["df", "-h", str(BASE)])
             + "\n" + _run(["swapon", "--show"]) + "\n" + _run(["vcgencmd", "get_throttled"])
             + "\n" + _run(["vcgencmd", "measure_temp"]) + "\n" + _run(["python3", str(BASE / "bin" / "lockinfo.py")]) + "\n" + _run(["journalctl", "--list-boots", "--no-pager"])[-3000:]

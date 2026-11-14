@@ -1,4 +1,4 @@
-/* HamScanPi SSTV-Galerie – alles über Variablen anpassbar (Einstellungen → SSTV-Galerie oder im Theme):
+/* Hesperos DX SSTV-Galerie – alles über Variablen anpassbar (Einstellungen → SSTV-Galerie oder im Theme):
  *   .hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-text: …; --hsp-muted: …; --hsp-line: …; --hsp-radius: …;
  *                  --hsp-shadow: …; --hsp-thumb: 220px; --hsp-gap: .9rem; --hsp-fade: 450ms; --hsp-font: inherit;
  *                  --hsp-max: 1180px; }
@@ -70,6 +70,7 @@
             border: 1px solid var(--hsp-accent); background: transparent; color: inherit; }
 .hsp-more:hover { background: var(--hsp-accent); color: var(--hsp-on-accent); }
 .hsp-wait, .hsp-empty { color: var(--hsp-muted); }
+.hsp-credit { margin: 1.2rem 0 0; text-align: right; font-size: .78rem; color: var(--hsp-muted); letter-spacing: .02em; }
 
 /* Lightbox */
 .hsp-lb { position: fixed; inset: 0; z-index: 99999; background: var(--hsp-lb-bg); color: var(--hsp-lb-text);

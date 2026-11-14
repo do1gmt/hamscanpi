@@ -3,7 +3,7 @@
 Systemwerte für den Reiter „System“ – nur aus /proc und /sys gelesen, ohne Zusatzpakete.
 
   * live():    Prozessor (gesamt, je Kern, Takt), Arbeitsspeicher und Swap, Temperatur, Last,
-               was HamScanPi gerade tut, eigene Prozesse mit RAM/CPU, Netzwerk. Für die 5-s-Anzeige:
+               was Hesperos DX gerade tut, eigene Prozesse mit RAM/CPU, Netzwerk. Für die 5-s-Anzeige:
                startet keine Prozesse (anders als housekeeping.system_status, die bleibt bei 60 s).
   * Sampler:   läuft im Scheduler (Schleife alle 10 s) und schreibt einmal pro Minute eine Zeile nach
                data/sysmon.db: CPU-Mittel und -Spitze, freier Arbeitsspeicher, Swap, Temperatur,
@@ -33,7 +33,7 @@ KEEP_S = 7 * 86400
 ACT = {0: "idle", 1: "scan", 2: "live", 3: "sat"}
 CLK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
-# Hilfsprogramme, die HamScanPi startet (Prozessname = erstes Wort der Befehlszeile)
+# Hilfsprogramme, die Hesperos DX startet (Prozessname = erstes Wort der Befehlszeile)
 HELPERS = {"rtl_sdr", "rtl_fm", "rtl_power", "rtl_tcp", "rtl_433", "arecord", "aplay", "sox", "multimon-ng",
            "jt9", "wsprd", "ffmpeg", "csdr", "satdump", "direwolf", "redsea", "pmsdr-control", "pmsdr_ctl"}
 LABELS = {"webapp.py": "Weboberfläche", "scheduler.py": "Zeitplaner", "scanner.py": "Scan", "run_cycle.sh": "Scan-Ablauf",
@@ -162,7 +162,7 @@ _OTHER_TOP = [None, 0.0]       # größter fremder Prozess beim letzten _proc_li
 
 
 def _proc_list():
-    """{pid: (name, label, rss_mb, jiffies)} für HamScanPi-Prozesse, dazu RSS aller übrigen in MB."""
+    """{pid: (name, label, rss_mb, jiffies)} für Hesperos-Prozesse, dazu RSS aller übrigen in MB."""
     own, other = {}, 0
     _OTHER_TOP[0], _OTHER_TOP[1] = None, 0.0
     base = str(BASE)
@@ -184,7 +184,7 @@ def _proc_list():
         if exe == "flock":                                              # Wrapper, winzig – das Kind zählt
             continue
         # eigenes Skript: ein Argument (ohne Leerzeichen, also kein „bash -c '…'“) ist eine .py/.sh-Datei
-        # im HamScanPi-Verzeichnis, absolut oder relativ zum Arbeitsverzeichnis des Prozesses
+        # im Hesperos-Verzeichnis, absolut oder relativ zum Arbeitsverzeichnis des Prozesses
         script = None
         for a in args[:3]:
             if a.endswith((".py", ".sh")) and not any(c.isspace() for c in a):
@@ -208,7 +208,7 @@ def _proc_list():
 
 
 def top_process():
-    """Größter Prozess gerade (Name, MB) – HamScanPi-Skripte mit Skriptnamen, andere mit Programmnamen."""
+    """Größter Prozess gerade (Name, MB) – Hesperos-Skripte mit Skriptnamen, andere mit Programmnamen."""
     own, _ = _proc_list()
     best = max(own.values(), key=lambda v: v[2], default=None)
     cands = [(best[0], best[2])] if best else []

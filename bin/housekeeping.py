@@ -88,7 +88,7 @@ def update_check(force=False, max_age=86400, cached_only=False):
     now = time.time()
     n = {"checked": now, "url": url}
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "HamScanPi update check"})
+        req = urllib.request.Request(url, headers={"User-Agent": "HesperosDX update check"})
         with urllib.request.urlopen(req, timeout=10) as r:
             v = r.read(64).decode("ascii", "replace").strip()
         if not re.fullmatch(r"\d+\.\d+\.\d+", v):

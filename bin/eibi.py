@@ -80,7 +80,7 @@ def _save_state(st):
 
 
 def _get(url, timeout=25):
-    req = urllib.request.Request(url, headers={"User-Agent": "HamScanPi (EiBi schedule download)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "HesperosDX (EiBi schedule download)"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 

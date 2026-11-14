@@ -1,5 +1,5 @@
 #!/bin/bash
-# HamScanPi – Einrichtung des Systems. EINE Stelle für alles, was am System eingerichtet wird; aufgerufen von
+# Hesperos DX – Einrichtung des Systems. EINE Stelle für alles, was am System eingerichtet wird; aufgerufen von
 # install.sh (Erstinstallation), bin/update.sh (Update per git, auch über den Knopf im Dashboard).
 # Mehrfach aufrufbar: richtet nur ein, was fehlt oder sich geändert hat.
 #
@@ -18,7 +18,7 @@ set -e
 [ "$(id -u)" = 0 ] || { echo "setup_system.sh: bitte mit sudo aufrufen (sudo HSP_USER=\$USER bash bin/setup_system.sh)"; exit 1; }
 DIR="${HSP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 U="${HSP_USER:-${SUDO_USER:-}}"
-[ -n "$U" ] && [ "$U" != root ] || { echo "setup_system.sh: HSP_USER fehlt (der Benutzer, unter dem HamScanPi läuft)"; exit 1; }
+[ -n "$U" ] && [ "$U" != root ] || { echo "setup_system.sh: HSP_USER fehlt (der Benutzer, unter dem Hesperos DX läuft)"; exit 1; }
 UHOME="$(getent passwd "$U" | cut -d: -f6)"
 PORT=8080; LNG=""; INSTALL=0; RESTART=0
 while [ $# -gt 0 ]; do
@@ -79,7 +79,7 @@ fi
 # Zugriffsrechte: ohne diese Regel meldet rtl_sdr „usb_open error -3“ (die Regel des Pakets gibt einem Dienst
 # ohne Anmeldung am Bildschirm je nach Version keinen Zugriff)
 RULE=/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules
-NEWRULE='# HamScanPi: RTL-SDR-Sticks (RTL2832U) für alle Benutzer – rtl_sdr läuft als Dienst ohne Bildschirm-Anmeldung
+NEWRULE='# Hesperos DX: RTL-SDR-Sticks (RTL2832U) für alle Benutzer – rtl_sdr läuft als Dienst ohne Bildschirm-Anmeldung
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE="0666"
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE="0666"'
 if [ "$(cat "$RULE" 2>/dev/null)" != "$NEWRULE" ]; then
@@ -144,13 +144,13 @@ $4
 WantedBy=multi-user.target
 UNIT
 }
-unit hamscanpi-web "HamScanPi web dashboard" "/usr/bin/python3 $DIR/bin/webapp.py $PORT" \
+unit hamscanpi-web "Hesperos DX web dashboard" "/usr/bin/python3 $DIR/bin/webapp.py $PORT" \
 "# Wächter: der Webserver prüft sich alle 30 s selbst; antwortet er 3 min nicht, startet systemd ihn neu
 NotifyAccess=main
 WatchdogSec=180
 # Speichergrenze: ein Ausreißer trifft nur den Webserver (Neustart) statt den ganzen Pi
 MemoryMax=500M"
-unit hamscanpi-scheduler "HamScanPi scheduler (scans and satellite passes)" "/usr/bin/python3 $DIR/bin/scheduler.py" \
+unit hamscanpi-scheduler "Hesperos DX scheduler (scans and satellite passes)" "/usr/bin/python3 $DIR/bin/scheduler.py" \
 "# Wächter: Meldung bei jedem Durchlauf (10 s); hängt die Schleife 5 min, Neustart
 NotifyAccess=main
 WatchdogSec=300
@@ -158,14 +158,14 @@ WatchdogSec=300
 # (meist eine Auswertung), der Zeitplaner selbst läuft weiter
 MemoryMax=750M
 OOMPolicy=continue"
-unit hamscanpi-rescue "HamScanPi rescue page (restart services, reboot, diagnostics)" \
+unit hamscanpi-rescue "Hesperos DX rescue page (restart services, reboot, diagnostics)" \
      "/usr/bin/python3 $DIR/bin/rescue.py $((PORT + 1))" "MemoryMax=120M"
-unit hamscanpi-mdns "HamScanPi name in the network (hamscanpi.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
+unit hamscanpi-mdns "Hesperos DX name in the network (hamscanpi.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
      "MemoryMax=60M"
 # Update (Knopf im Dashboard): läuft als root, holt den neuen Stand als $U und richtet dann das System ein
 cat > /etc/systemd/system/hamscanpi-update.service <<UNIT
 [Unit]
-Description=HamScanPi update from GitHub (git pull, set-up, restart)
+Description=Hesperos DX update from GitHub (git pull, set-up, restart)
 After=network-online.target
 
 [Service]
@@ -180,7 +180,7 @@ ok "$(t "hamscanpi-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), -
 # sudo-Regel: genau diese Befehle ohne Passwort (Knöpfe im Dashboard und auf der Notfall-Seite)
 SC="$(command -v systemctl || echo /usr/bin/systemctl)"
 TMPS="$(mktemp)"
-printf '# HamScanPi: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block restart pmsdr-control, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
+printf '# Hesperos DX: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block restart pmsdr-control, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
     "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
 if visudo -cf "$TMPS" >/dev/null 2>&1; then
     install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hamscanpi
