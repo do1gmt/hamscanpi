@@ -429,6 +429,7 @@
     [/^⚠ Locator fehlt oder ungültig – unter Einstellungen → Station eintragen$/, '⚠ Locator missing or invalid – enter it under Settings → Station'],
     [/^Satellit (.+): Aufnahme (.+) MHz, Elevation (.+)$/, 'Satellite $1: recording $2 MHz, elevation $3'],
     [/^vom Benutzer abgebrochen nach (\d+) s$/, 'stopped by the user after $1 s'],
+    [/^Letzter Scan fehlgeschlagen \(vor ([^)]*)\): /, 'Last scan failed ($1 ago): '],
     [/^Automatischer Scan aus\. Satelliten-Überflüge werden trotzdem aufgenommen – zum Abschalten unter „Bänder & Betriebsarten“ das Band „Satelliten“ ausschalten\. /, 'Automatic scan off. Satellite passes are still recorded – to stop them, switch off the band "Satellites" under "Bands & modes". '],
     [/^✓ Sicherungen gehen auf den USB-Stick ?$/, '✓ Backups go to the USB stick'], [/^✓ Sicherungen gehen auf die Netzwerkfreigabe ?$/, '✓ Backups go to the network share'],
     [/ GB frei · Ordner ?$/, ' GB free · folder'], [/ GB frei$/, ' GB free'],

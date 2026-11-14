@@ -523,8 +523,12 @@
       const end = lw.until ? ' · bis ' + new Date(lw.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' }) : '';
       setPill(lw.paused_for ? `Dauerwache pausiert (${lw.paused_for})` : `Dauerwache ${(lw.freq_hz / 1e6).toFixed(3)} ${String(lw.mode || '').toUpperCase()}${end}`, 'running');
     } else if (s.live_active && !busy) { setPill('Live-Empfang', 'running'); }
+    // ein Fehler von vor über einer Stunde ist Vergangenheit: neutral „Bereit“, der Grund steht klein darunter
+    const stale = s.state === 'error' && s.updated_at && Date.now() - new Date(s.updated_at).getTime() > 3600e3;
+    if (stale) s = Object.assign({}, s, { state: 'idle', message: `Letzter Scan fehlgeschlagen (${fmtRel(s.updated_at)}): ${s.message || ''}` });
     $('scanTitle').textContent = humanState(s);
     $('scanMsg').textContent = s.message || '';
+    $('scanMsg').classList.toggle('muted', !!stale);
     $('progressBar').style.width = (busy ? s.progress : (s.state === 'done' ? 100 : 0)) + '%';
     // Pegelanzeige bleibt immer stehen (kein Ein- und Ausblenden, das Layout springt sonst):
     // ohne Messung leerer Balken, ältere Werte (zwischen Fenstern/Bändern) abgeblendet
@@ -546,7 +550,8 @@
     $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade'
       : pp && nextPast ? `nach Überflug ${pp.name} (${new Date(pp.until * 1000).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit' })})`
       : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
-    if (s.state === 'error' && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
+    // nur bei einem Fehler, der gerade passiert (nicht beim Öffnen der Seite für einen alten Lauf)
+    if (s.state === 'error' && lastState && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
     if (lastState && lastState !== s.state && (s.state === 'done' || s.state === 'error' || s.state === 'cancelled')) { refreshData(); if (s.state === 'done') toast('Scan abgeschlossen – Treffer aktualisiert'); }
     if (busy && s.phase !== 'scan' && lastState === 'running') { /* Zwischenstände während der Auswertung */ }
     lastState = s.state;

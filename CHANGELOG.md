@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.96 – 2026-11-14
+
+- Fix: opening the dashboard showed a red pop-up "Scan failed …" for a scan that failed hours ago (since 1.7.95
+  error pop-ups stay until tapped, so it stuck on every page load). The pop-up now only appears when a scan fails
+  while the page is open. A scan error older than one hour no longer keeps the status red: "Ready", with the
+  reason of the last failed scan in small print below.
+
 ## 1.7.95 – 2026-11-14
 
 - **Cards can be moved and folded** – handle ⠿ top right of every card: drag with mouse or finger (the page
