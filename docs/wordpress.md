@@ -6,7 +6,7 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
 
 ## Einrichten
 
-1. **Plugin holen:** Dashboard → Einstellungen → Webseite → „herunterladen“ (`hamscanpi-sstv-galerie.zip`).
+1. **Plugin holen:** Dashboard → Einstellungen → SSTV-Export → „herunterladen“ (`hamscanpi-sstv-galerie.zip`).
 2. **In WordPress:** Plugins → Installieren → Plugin hochladen → ZIP wählen → aktivieren.
 3. **Zugang für den Pi:** WordPress → Einstellungen → SSTV-Galerie → *Zugang für die Pis* → Namen eingeben (z. B.
    `pi-afgn`) → „Benutzer mit Anwendungspasswort anlegen“. Der Benutzer bekommt die Rolle **SSTV-Melder**: er darf
@@ -15,7 +15,7 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
    „Eingesandt von“, welcher Pi (Stationsname aus Hesperos DX → Einstellungen → Station) und welcher Benutzer ein Bild
    geschickt hat, und es lässt sich danach filtern. Sperren: unter Benutzer das Anwendungspasswort widerrufen.
    (Von Hand geht es auch: Benutzer → Profil → *Anwendungspasswörter*.)
-4. **In Hesperos DX:** Einstellungen → Webseite: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
+4. **In Hesperos DX:** Einstellungen → SSTV-Export: Adresse (`https://…`), WordPress-Benutzer, Anwendungspasswort,
    „SSTV-Bilder hochladen“ an → „Verbindung prüfen“ → „Testbild senden“.
 5. **Galerie-Seite:** WordPress → Einstellungen → SSTV-Galerie → *Galerie-Seite anlegen*. Die Seite bekommt
    denselben Seitenkopf wie die übrigen Seiten des Themes (Bereich `page-hero`: kleine Überschrift, großer Titel,
@@ -86,7 +86,7 @@ erscheint nur, wenn es wirklich noch Bilder gibt.
 
 - **WordPress:** Einstellungen → SSTV-Galerie → *Protokoll*: die letzten 100 Empfänge mit Zeit (UTC), Ergebnis
   (Entwurf, veröffentlicht, schon vorhanden, abgelehnt mit Grund), Quelle und Benutzer.
-- **Hesperos DX:** Einstellungen → Webseite → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
+- **Hesperos DX:** Einstellungen → SSTV-Export → *Zuletzt* (mit Links zum Ansehen und Freigeben), im Protokoll die
   Ereignisse `sstv_uploaded`, `sstv_upload_failed`, `sstv_manual_queued`, `publish_set`.
 
 ## Aussehen anpassen

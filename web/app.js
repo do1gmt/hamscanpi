@@ -626,6 +626,7 @@
     $('nextRun').textContent = s.scan_interval_minutes === 0 ? 'aus' : busy ? 'läuft gerade'
       : pp && nextPast ? `nach Überflug ${pp.name} (${tfmt(pp.until, { date: false })})`
       : (s.next_scan_at ? (nextPast ? 'fällig – startet gleich' : `${fmtTime(s.next_scan_at, false)} · ${fmtRel(s.next_scan_at)}`) : '–');
+    liveBanner(s, busy);
     // nur bei einem Fehler, der gerade passiert (nicht beim Öffnen der Seite für einen alten Lauf)
     if (s.state === 'error' && lastState && lastState !== 'error') { toast('Scan fehlgeschlagen: ' + (s.message || ''), 8000); const tb = document.querySelector('.tabs-main [data-view=logs]'); if (tb && !tb.querySelector('.n')) tb.insertAdjacentHTML('beforeend', '<span class="n">!</span>'); }
     if (lastState && lastState !== s.state && (s.state === 'done' || s.state === 'error' || s.state === 'cancelled')) { refreshData(); if (s.state === 'done') toast('Scan abgeschlossen – Treffer aktualisiert'); }
@@ -642,6 +643,22 @@
     const y = window.scrollY + el.getBoundingClientRect().top - sticky - 10;
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   }
+  // Live belegt den Empfänger: Scans ruhen. Das steht auf jedem Reiter, damit es beim Herumprobieren nicht untergeht.
+  function liveBanner(s, busy) {
+    const lw = s.live_watch, on = !!(s.live_active || lw);
+    $('liveBanner').hidden = !on || busy;
+    if (!on || busy) { $('scanNow').title = ''; return; }
+    const what = lw ? `${EN ? 'Continuous watch' : 'Dauerwache'} ${(lw.freq_hz / 1e6).toFixed(4)} MHz ${String(lw.mode || '').toUpperCase()}${lw.until ? (EN ? ' until ' : ' bis ') + tfmt(lw.until, { date: false }) : ''}${lw.paused_for ? (EN ? ' (paused: ' : ' (pausiert: ') + lw.paused_for + ')' : ''}` : (EN ? 'Live reception running' : 'Live-Empfang läuft');
+    $('liveBannerText').textContent = EN ? `${what} – scans pause until Live is stopped. Satellite passes interrupt briefly.` : `${what} – Scans ruhen, bis Live beendet ist. Satellitenüberflüge unterbrechen kurz.`;
+    $('liveBannerGo').hidden = document.querySelector('.tabs-main button.on')?.dataset.view === 'live';
+    $('scanNow').title = 'Live-Empfang läuft – erst Live beenden';
+    if (s.scan_interval_minutes !== 0) $('nextRun').textContent = 'nach Live-Empfang';
+  }
+  $('liveBannerGo').addEventListener('click', () => showView('live'));
+  $('liveBannerStop').addEventListener('click', async () => {
+    if (!confirm(EN ? 'Stop Live reception (and the continuous watch)? Scans then run to plan again.' : 'Live-Empfang beenden (auch die Dauerwache)? Danach laufen die Scans wieder nach Plan.')) return;
+    await liveStop(); toast('Live beendet – Scans laufen wieder nach Plan'); pollStatus();
+  });
   function setPill(text, cls) { const p = $('statusPill'); p.className = 'status-pill ' + (cls || ''); $('statusPillText').textContent = text; }
   $('scanStop').addEventListener('click', async () => {
     const sat = lastStatus && lastStatus.phase === 'satellite';
@@ -818,7 +835,7 @@
   }
   // SSTV-Bild auf die eigene Webseite: Zustand aus Warteschlange/Protokoll, Knopf zum Nachreichen
   function pubCell(p) {
-    const btn = (t) => `<button type="button" class="btn btn-small" data-act="pub" title="Mit allen Angaben zu Empfang und Station auf die eigene WordPress-Seite (Einstellungen → Webseite). Schon hochgeladene Bilder erscheinen dort nicht doppelt.">${t}</button>`;
+    const btn = (t) => `<button type="button" class="btn btn-small" data-act="pub" title="Mit allen Angaben zu Empfang und Station auf die eigene WordPress-Seite (Einstellungen → SSTV-Export). Schon hochgeladene Bilder erscheinen dort nicht doppelt.">${t}</button>`;
     const s = p && p.state;
     if (s === 'veröffentlicht') return ` <span class="pub-st ok">✓ Auf der Webseite${p.link ? ` · <a href="${esc(p.link)}" target="_blank" rel="noopener">ansehen</a>` : ''}</span>`;
     if (s === 'Entwurf') return ` <span class="pub-st ok">✓ Als Entwurf auf der Webseite${p.edit ? ` · <a href="${esc(p.edit)}" target="_blank" rel="noopener">in WordPress freigeben</a>` : ''}</span>`;
@@ -1058,11 +1075,11 @@
         const rows = d.messages.map(m => {
           const i = interpret(m.text);
           i.calls.forEach((c, k) => { const st = stations.get(c) || { call: c, grid: null, n: 0 }; st.n++; if (k === 0 && i.grid) st.grid = i.grid; stations.set(c, st); });
-          const msg = i.kind === 'undecodable' ? `<span class="muted">— (Typ ${i.unpack})</span>` : `<span class="mono">${esc(m.text)}</span>`;
-          return `<tr><td>${m.snr > 0 ? '+' : ''}${Math.round(m.snr)}</td><td>${m.audio_hz}</td><td>${msg}</td><td${i.kind === 'undecodable' ? ' class="muted"' : ''}>${esc(i.desc)}</td></tr>`;
+          const msg = i.kind === 'undecodable' ? `<span class="muted">— ${esc(i.desc)}</span>` : `<span class="mono">${esc(m.text)}</span>`;
+          return `<tr><td>${m.snr > 0 ? '+' : ''}${Math.round(m.snr)}</td><td>${m.audio_hz}</td><td>${msg}</td></tr>`;
         });
         html += `<div class="decode-block"><div class="decode-title"><b>${d.type}</b> · ${d.messages.length} Nachrichten${d.detail ? ' · ' + esc(d.detail) : ''}</div>
-          <div class="table-wrap"><table class="table"><thead><tr><th>SNR dB</th><th>Hz</th><th>Nachricht</th><th>Bedeutung</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+          <div class="table-wrap"><table class="table"><thead><tr><th>SNR dB</th><th>Hz</th><th>Nachricht</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
         const list = [...stations.values()].sort((a, b) => b.n - a.n).map(st => {
           let extra = st.grid ? ` <span class="muted">${st.grid}` : '';
           if (st.grid && me) { const p = gridToLatLon(st.grid); if (p) { const db = distBearing(me, p); extra += ` · ${db.km} km · ${db.deg}°`; } }
@@ -1145,6 +1162,7 @@
     if (on && st.mode && Date.now() - liveTouched > 2000 && document.activeElement !== $('liveMode') && $('liveMode').value !== st.mode) $('liveMode').value = st.mode;
     const lvl = Math.max(0, Math.min(100, (Number(st.level_db ?? -120) + 60) * 2));
     $('liveLevel').style.width = (on ? lvl : 0) + '%';
+    $('liveLevelVal').textContent = on && st.level_db != null && st.level_db > -119 ? `${Math.round(st.level_db)} dBFS` : '–';
     // mit eigener Demodulation gibt es den echten Abstand zum Rauschen: dann die volle Pegelanzeige
     const hasSnr = on && st.snr_db != null;
     if (hasSnr) {
@@ -1153,7 +1171,7 @@
       $('liveMeter').innerHTML = meterHTML([{ label: st.active_hz ? (st.active_hz / 1e6).toFixed(4) + ' MHz' : '', db: st.snr_db, hist: live.meterHist }]);
     }
     $('liveMeter').hidden = !hasSnr;
-    $('liveSmeter').hidden = hasSnr;
+    $('liveSmeterWrap').hidden = hasSnr;
     $('liveDirectNote').hidden = !(on && st.direct);
     $('liveGainField').hidden = !!(on && st.direct);
     renderRds(on ? st.rds : null);
@@ -1506,6 +1524,9 @@
     const items = d.items.filter(r => showOld || (r.active && !r.acked));
     const tm = x => tfmt(x, { date: true });
     $('noticeSummary').textContent = d.open ? `${d.open} offen` : 'alles in Ordnung';
+    const ackable = d.items.filter(r => r.active && !r.acked).length;   // nichts offen: Knopf ausgegraut
+    $('noticeAckAll').disabled = !ackable;
+    $('noticeAckAll').title = ackable ? '' : 'Nichts zu quittieren';
     const en = I18N.lang === 'en';
     $('noticeList').innerHTML = items.length ? items.map(r => { const T = en && r.en ? r.en : r; return `<div class="notice ${r.level}${r.active ? '' : ' done'}${r.acked ? ' acked' : ''}">
       <div class="notice-head"><span>${NOTICE_ICON[r.level] || ''}</span><b class="${en && r.en ? 'no-i18n' : ''}">${esc(T.title)}</b>

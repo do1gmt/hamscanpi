@@ -46,7 +46,14 @@
       // nur die Plätze der Karten neu belegen – andere Teile des Reiters (Spalten, Sprungleiste) bleiben, wo sie sind.
       // Vorher hängte appendChild die Karten ans Ende: „Hinweise“ rutschte unter die Spalten und ließ sich nicht zurückziehen.
       var marks = cur.map(function (p) { var m = document.createComment('slot'); c.insertBefore(m, p); return m; });
-      marks.forEach(function (m, i) { var p = want[i]; if (p) c.insertBefore(p, m); m.remove(); });
+      var last = null;
+      marks.forEach(function (m, i) { var p = want[i]; if (p) { c.insertBefore(p, m); last = p; } m.remove(); });
+      // Karten, die aus der anderen Spalte hierher gezogen wurden, haben hier noch keinen Platz: dahinter einreihen.
+      // Vorher fielen sie weg und landeten nach dem Neuladen wieder in ihrer alten Spalte.
+      for (var i = marks.length; i < want.length; i++) {
+        if (last) last.after(want[i]); else c.appendChild(want[i]);
+        last = want[i];
+      }
     });
     state.folded.forEach(function (id) { var p = document.getElementById(id); if (p) p.classList.add('folded'); });
   }
@@ -142,6 +149,12 @@
       // Karte wandert nur in Zugrichtung (kein Hin- und Herspringen) – sobald der Finger ein Stück in die Nachbarkarte
       // hineinreicht, auch bei sehr hohen Karten wie „Bänder“
       var r = tgt.getBoundingClientRect(), m = Math.min(r.height / 2, p.getBoundingClientRect().height, 120);
+      if (tgt.parentElement !== p.parentElement) {
+        // in die andere Spalte: rein seitliches Ziehen hat keine Zugrichtung nach oben/unten – vor oder hinter die
+        // Karte unter dem Finger, je nachdem, ob er in ihrer oberen oder unteren Hälfte steht
+        if (y < r.top + r.height / 2) tgt.before(p); else tgt.after(p);
+        return;
+      }
       var above = tgt.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING;   // Ziel steht vor der Karte
       if (above && drag.dir < 0 && y < r.bottom - m) tgt.before(p);
       else if (!above && drag.dir > 0 && y > r.top + m) tgt.after(p);

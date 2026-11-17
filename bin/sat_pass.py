@@ -962,7 +962,7 @@ pass_geometry = SAT.pass_geometry
 
 
 def publish_sstv(ch, hits, tr, src, t0, until, tune):
-    """SSTV-Bilder dieses Kanals mit allen Angaben zum Hochladen vormerken (Einstellungen → Webseite)."""
+    """SSTV-Bilder dieses Kanals mit allen Angaben zum Hochladen vormerken (Einstellungen → SSTV-Export)."""
     try:
         import publish as PUB
         if not PUB.cfg().get("enabled"):

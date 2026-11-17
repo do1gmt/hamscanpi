@@ -2395,5 +2395,42 @@ ren67() {
 }
 ren67 && ok "alte Arbeitskopie übernommen und umgestellt, Pi-Installation bleibt, Pi stellt nur echte hamscanpi-Adressen um" || bad "Umstellung hesperos-dx"
 
+echo "== 68 Testpaket ohne eigenes Rufzeichen, Karten zwischen Spalten, Live-Hinweis, Quittieren, SSTV-Export"
+(cd bin && timeout 30 python3 - "$SRC" <<'PY') && ok "Testpaket Freitext, Spaltenwechsel bleibt, Live-Hinweis überall, „Alle quittieren“ nur bei Offenem, Karte SSTV-Export" || bad "1.8.09-Oberfläche"
+import socket, sys
+from pathlib import Path
+sys.path.insert(0, "../devtools")
+import wsjtx_read as RD, wsjtx_udp as WX
+W = Path(sys.argv[1]) / "web"
+rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); rx.bind(("127.0.0.1", 0)); rx.settimeout(3)
+WX.cfg = lambda: {"enabled": True, "targets": "", "ident": "X", "my_call": "DO1GMT", "my_locator": "JN59HH"}
+r = WX.test(f"127.0.0.1:{rx.getsockname()[1]}", "X")
+assert r and r[0]["ok"], r
+got = [RD.read(rx.recv(4096)) for _ in range(3)]
+dec = [g for g in got if g["typ"] == 2]
+assert dec and dec[0]["msg"] == "HESPEROS TEST" and "DO1GMT" not in dec[0]["msg"] and len(dec[0]["msg"]) <= 13, dec
+html, js, lj = (W / "index.html").read_text(), (W / "app.js").read_text(), (W / "layout.js").read_text()
+assert '<h2>SSTV-Export <small' in html and 'id="wxBox" open' in html and "Ins Netzwerk senden" in html
+assert 'id="liveBanner"' in html and "function liveBanner(s, busy)" in js and "liveBanner(s, busy);" in js
+assert "$('noticeAckAll').disabled = !ackable" in js
+assert "<th>Bedeutung</th>" not in js and 'id="liveLevelVal"' in html
+# Spaltenwechsel: aus der anderen Spalte gezogene Karten bekommen beim Wiederherstellen einen Platz
+assert "for (var i = marks.length; i < want.length; i++)" in lj and "tgt.parentElement !== p.parentElement" in lj
+PY
+if command -v node >/dev/null && node -e "require('jsdom')" 2>/dev/null; then
+    node - "$SRC/web/layout.js" <<'JS' && ok "Anordnung: Karte in die andere Spalte bleibt nach dem Neuladen dort (jsdom)" || bad "Anordnung Spaltenwechsel"
+const { JSDOM } = require('jsdom'); const js = require('fs').readFileSync(process.argv[2], 'utf8');
+const html = '<section class="view" data-view="scan"><div class="two-col"><div class="col"><section class="panel" id="A"><h2>A</h2></section><section class="panel" id="B"><h2>B</h2></section></div><div class="col"><section class="panel" id="C"><h2>C</h2></section><section class="panel" id="X"><h2>X</h2></section></div></div></section>';
+function run(order) {
+  const d = new JSDOM('<body>' + html + '</body>', { runScripts: 'outside-only', url: 'http://x/' });
+  d.window.localStorage.setItem('layout.v1', JSON.stringify({ order, folded: [] }));
+  d.window.eval(js); d.window.document.dispatchEvent(new d.window.Event('DOMContentLoaded'));
+  return [...d.window.document.querySelectorAll('.col')].map(c => [...c.querySelectorAll('.panel')].map(p => p.id).join('')).join('|');
+}
+const a = run({ 'scan-col0': ['B'], 'scan-col1': ['C', 'X', 'A'] }), b = run({ 'scan-col0': ['A', 'B', 'C', 'X'], 'scan-col1': [] });
+if (a !== 'B|CXA' || b !== 'ABCX|') { console.log(a, b); process.exit(1); }
+JS
+fi
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

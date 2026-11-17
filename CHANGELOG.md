@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.09 – 2026-11-17
+
+- **Live is visible on every tab:** while Live reception or the continuous watch runs, a notice under the header
+  says so – scans pause until Live is stopped – with "To Live" and "Stop Live". The scan card shows "Next scan:
+  after Live reception" instead of "due – starts soon".
+- **Live: the level bar has a label and a value** ("Audio level", dBFS; tooltip: it is the loudness of the audio,
+  not the signal strength).
+- **Card layout:** a card dragged into the other column stayed there only until the page was reloaded, then it
+  jumped back (the order was restored with too few places). Dragging sideways alone did nothing either – now the
+  card goes before or after the card under the finger.
+- **"Acknowledge all"** is greyed out when there is nothing to acknowledge.
+- **FT8/FT4 decodes:** the "Meaning" column is gone (message only); unreadable messages keep their reason.
+- **Share on the network (WSJT-X):** the box stays open; the switch is called "Send to the network". The test
+  packet sends the free text `HESPEROS TEST` instead of "CQ <own callsign>" – OpenHamClock took that for your own
+  transmission and removed it after about 2 s.
+- **"Website" card renamed to "SSTV export"** (also in hints and docs). WordPress plugin 1.4.2: only this text in
+  its set-up page – updating it is optional.
+- Docs: new screenshots (scan, live with weather fax, stations and map, log, system, settings, satellite
+  priorities) with the name Hesperos DX; no addresses, network names or chat ids in them.
+
 ## 1.8.08 – 2026-11-17
 
 - **GitHub repository renamed to `do1gmt/hesperos-dx`** (step 1 of the renaming beyond what is seen). GitHub

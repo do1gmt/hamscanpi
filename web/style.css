@@ -42,6 +42,10 @@ a { color: var(--accent); }
 .brand { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
 .brand span { color: var(--muted); font-weight: 500; }
 .status-pill { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; max-width: 55%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.live-banner { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: 1400px; margin: .6rem auto 0; padding: .5rem .8rem; border: 1px solid var(--amber); border-left-width: 4px; border-radius: 8px; background: var(--panel); font-size: .9rem; }
+.live-banner[hidden] { display: none; }
+.live-banner #liveBannerText { flex: 1 1 14rem; }
+.live-banner .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); animation: pulse 1.2s infinite; flex: 0 0 auto; }
 .status-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
 .status-pill.running .dot { background: var(--teal); box-shadow: 0 0 0 4px rgba(45,212,191,.2); animation: pulse 1.2s infinite; }
 .status-pill.error .dot { background: var(--red); }
@@ -214,6 +218,8 @@ summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: c
 .tune-row select { width: auto; }
 .tune-row .field { flex: 1 1 120px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
+.smeter-label { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-top: .6rem; }
+.smeter-label + .smeter { margin-top: .2rem; }
 .smeter { height: 10px; background: var(--panel-2); border-radius: 5px; overflow: hidden; margin-top: .6rem; }
 .smeter-bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--amber) 70%, var(--red)); transition: width .15s; }
 #panel-live.on { border-color: var(--teal); }

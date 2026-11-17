@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Hesperos DX SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von Hesperos DX · Ham Radio Watch (früher HamScanPi) (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.4.1
+ * Version:           1.4.2
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Hesperos DX
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.4.1');
+define('HSP_SSTV_VERSION', '1.4.2');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
@@ -815,7 +815,7 @@ function hsp_sstv_settings_page()
         <?php $m = get_transient('hsp_sstv_pi_msg_' . get_current_user_id()); delete_transient('hsp_sstv_pi_msg_' . get_current_user_id()); ?>
         <?php if (!empty($m['pw'])) : ?>
             <div class="notice notice-success"><p><b>Benutzer <?php echo esc_html($m['login']); ?> angelegt.</b> In Hesperos DX unter
-            Einstellungen → Webseite eintragen – das Passwort erscheint nur jetzt:</p>
+            Einstellungen → SSTV-Export eintragen – das Passwort erscheint nur jetzt:</p>
             <p>Benutzer: <code><?php echo esc_html($m['login']); ?></code> · Anwendungspasswort: <code style="font-size:1.1em"><?php echo esc_html($m['pw']); ?></code></p></div>
         <?php elseif (!empty($m['err'])) : ?>
             <div class="notice notice-error"><p><?php echo esc_html($m['err']); ?></p></div>

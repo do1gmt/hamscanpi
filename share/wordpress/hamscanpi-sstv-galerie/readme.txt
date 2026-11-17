@@ -1,7 +1,7 @@
 === Hesperos DX SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.4.1
+Stable tag: 1.4.2
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
@@ -9,7 +9,7 @@ Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
 == Einrichten ==
 1. Plugins → Installieren → Plugin hochladen → hamscanpi-sstv-galerie.zip → aktivieren.
 2. Benutzer → Profil → Anwendungspasswörter: Name „Hesperos DX“ → Passwort erzeugen (nur einmal sichtbar).
-3. In Hesperos DX: Einstellungen → Webseite: Adresse, Benutzer, Anwendungspasswort → „Verbindung prüfen“, „Testbild senden“.
+3. In Hesperos DX: Einstellungen → SSTV-Export: Adresse, Benutzer, Anwendungspasswort → „Verbindung prüfen“, „Testbild senden“.
 4. Eine Seite anlegen (z. B. unter Satelliten) mit dem Kurzcode [sstv_galerie].
 5. Neue Bilder kommen als Entwurf (SSTV-Bilder im Menü) – prüfen und veröffentlichen. Später in Hesperos DX
    „sofort veröffentlichen“ wählen.
@@ -33,7 +33,7 @@ Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
 
 == Mehrere Pis ==
 Je Pi einen Benutzer mit der Rolle „SSTV-Melder“ anlegen (Einstellungen → SSTV-Galerie → Zugang für die Pis) und in
-Hesperos DX unter Einstellungen → Webseite eintragen. Jedes Bild trägt den Stationsnamen des Pi (Hesperos DX →
+Hesperos DX unter Einstellungen → SSTV-Export eintragen. Jedes Bild trägt den Stationsnamen des Pi (Hesperos DX →
 Einstellungen → Station); die Liste „SSTV-Bilder“ lässt sich danach filtern.
 
 == Datenschutz ==

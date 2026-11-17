@@ -280,6 +280,12 @@ def flush(timeout=3.0):
     time.sleep(0.1)
 
 
+# Freitext (FT8: höchstens 13 Zeichen), kein Rufzeichen: eine Nachricht mit dem eigenen Rufzeichen halten Programme wie
+# OpenHamClock für die eigene Aussendung und blenden sie nach Sekunden wieder aus; ein erfundenes Rufzeichen
+# landete auf deren Karte.
+TEST_TEXT = "HESPEROS TEST"
+
+
 def test(targets_text, ident="Hesperos DX"):
     """„Testpaket senden“: Heartbeat, Status und eine Dekodierung direkt (ohne Warteschlange) – Ergebnis je Ziel."""
     out = []
@@ -290,8 +296,7 @@ def test(targets_text, ident="Hesperos DX"):
         try:
             s._send(tg, heartbeat(ident, _version()))
             s._send(tg, status(ident, 14_074_000, "FT8", c["my_call"], c["my_locator"]))
-            s._send(tg, decode(ident, time.time() // 15 * 15, -10, 0.2, 1500, "FT8",
-                               f"CQ {c['my_call'] or 'TEST'} {(c['my_locator'] or 'JN59')[:4]}"))
+            s._send(tg, decode(ident, time.time() // 15 * 15, -10, 0.2, 1500, "FT8", TEST_TEXT))
             out.append({"target": f"{tg[0]}:{tg[1]}", "ok": True})
         except OSError as e:
             out.append({"target": f"{tg[0]}:{tg[1]}", "ok": False, "error": f"{type(e).__name__}: {e}"})

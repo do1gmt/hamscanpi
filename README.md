@@ -88,22 +88,22 @@ shortwave.
 
 | | |
 |---|---|
-| ![Hits: filters by band, mode and time, hit cards](docs/screenshots/hits.png) | ![Live listening: FM broadcast with RDS and TMC, waterfall, shortwave schedule](docs/screenshots/live.png) |
-| Hits: filters by band, mode and time; every hit with spectrum, audio and decodes | Live listening: FM broadcast with RDS (radio text, alternative frequencies) and TMC traffic messages, level meter and waterfall; next to it what is on air on shortwave right now (EiBi) and the recently heard frequencies |
+| ![Hits: filters by band, mode and time, hit cards](docs/screenshots/hits.png) | ![Live listening: weather fax from DWD on shortwave, waterfall, decodes, shortwave schedule](docs/screenshots/live.png) |
+| Hits: filters by band, mode and time; every hit with spectrum, audio and decodes | Live listening with continuous watch: weather fax from DWD Pinneberg on 7.878 MHz, the chart grows line by line in the decodes; waterfall, EiBi entry for the frequency, recently heard frequencies and what is on air on shortwave right now |
 | ![Readable event log](docs/screenshots/log.png) | ![Phone: satellite passes and live listening (German UI)](docs/screenshots/mobile.png) |
-| Event log with the monitored frequencies of every scan | On the phone (here with the German UI) |
-| ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities and system status](docs/screenshots/satellites.png) |
-| Settings: station (ADIF, PSK Reporter), watchlist, mail and push notifications | Satellite priorities with the last 14 days, system status of the Pi |
+| Event log: levels, components, search, repeats grouped | On the phone (here with the German UI) |
+| ![Settings: station, watchlist, notifications](docs/screenshots/settings.png) | ![Satellite priorities](docs/screenshots/satellites.png) |
+| Settings: station (ADIF, PSK Reporter, WSJT-X UDP), SSTV export to your website, watchlist, mail and push notifications | Satellite priorities: gain, horizon, priority per channel with the last 14 days |
 
 ![System: notices, live values and history, services, version and update](docs/screenshots/system.png)
 System page: notices with what to do, live values and history (CPU, memory, temperature – with scans, passes and
 Live marked), services with restart buttons, version and update from GitHub, PSK Reporter spots.
 
-![Stations: map of locator squares and heard callsigns with distance and bearing](docs/screenshots/stations.png)
-*Stations: map (locator squares, the stronger the brighter) and callsigns heard via APRS/FT8/CW with locator, distance and bearing (ADIF export).*
+![Stations: map of heard callsigns and the list with distance and bearing](docs/screenshots/stations.png)
+*Stations: map (one point per callsign or locator squares) and callsigns heard via FT8/FT4, APRS, CW and RTTY with locator, distance and bearing (ADIF export).*
 
 ![Map of heard stations: locator squares across Europe and beyond](docs/screenshots/map.png)
-*Map of heard stations over one month (FT8 scans on 80–15 m with an HF-360 vertical from JN59): one square per 4-character locator, the stronger the brighter.*
+*Map of heard stations over one month (FT8 scans on 80–15 m with an HF-360 vertical from JN59): one point per callsign, colour = SNR, border = FT8 or APRS; switch to locator squares above the map.*
 
 <img src="docs/screenshots/tmc.png" width="560" alt="Live FM reception with RDS and TMC traffic messages">
 
@@ -172,8 +172,9 @@ Targets: `host:port`, several separated by commas, port usually 2237; a multicas
 can be heard by several programs at once. For OpenHamClock on another computer set `HOST=0.0.0.0` there (and
 `WSJTX_MULTICAST_ADDRESS` when using multicast). Sending runs in the background: without a network nothing waits,
 an unreachable target is logged once (`wsjtx_udp_failed` / `wsjtx_udp_resumed`), decodes of the last 2 minutes
-are sent afterwards, older ones are dropped (useless for a live display). "Save and send test packet" checks a
-target right away.
+are sent afterwards, older ones are dropped (useless for a live display). Switch it on with "Send to the network";
+"Send test packet" checks a target right away – it sends the free text `HESPEROS TEST` (not a CQ with your own
+callsign: OpenHamClock and similar programs take that for your own transmission and hide it again).
 
 **Which channels of a satellite are recorded:** if not all selected channels fit into one receive window (e.g.
 ISS 2 m and 70 cm), Hesperos DX takes the group with the best chance of a signal – priority × chance. The chance
@@ -466,7 +467,7 @@ time) and are shown converted. Times burnt into images (waterfalls) stay UTC and
 Every SSTV image (satellite, HF, Live) can go to your own WordPress site with all details on satellite, pass,
 reception, station and Pi – shown there as a gallery (grouped by day, source or pass, adjustable in WordPress)
 with a lightbox. Older or rejected images can be sent by hand with *↑ Auf Webseite* in the hit card. The WordPress plugin is in
-`share/wordpress/` (download it in *Settings → Website*); set-up, what is sent and how to adapt the look:
+`share/wordpress/` (download it in *Settings → SSTV export*); set-up, what is sent and how to adapt the look:
 [docs/wordpress.md](docs/wordpress.md).
 
 ## Access protection

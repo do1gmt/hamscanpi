@@ -2,7 +2,7 @@
 """SSTV-Bilder auf die eigene Webseite hochladen (WordPress mit dem Plugin „Hesperos DX SSTV-Galerie“,
 liegt bei unter share/wordpress/).
 
-Einstellungen → Webseite: Adresse, WordPress-Benutzer, Anwendungspasswort (WordPress → Benutzer → Profil →
+Einstellungen → SSTV-Export: Adresse, WordPress-Benutzer, Anwendungspasswort (WordPress → Benutzer → Profil →
 Anwendungspasswörter; jederzeit widerrufbar, das eigentliche Passwort braucht der Pi nicht), Entwurf oder sofort
 veröffentlichen, Mindest-Vollständigkeit.
 
@@ -406,7 +406,7 @@ def manual(row, png):
     sideband, recording_path. Rückgabe Kennung (oder ValueError mit Hinweis für das Dashboard)."""
     c = cfg()
     if not (c["url"] and c["user"] and c["app_password"]):
-        raise ValueError("Webseite noch nicht eingerichtet – Einstellungen → Webseite")
+        raise ValueError("Webseite noch nicht eingerichtet – Einstellungen → SSTV-Export")
     if not Path(png).exists():
         raise ValueError("Bild nicht mehr vorhanden")
     rec = row.get("recording_path") or str(png)

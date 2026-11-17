@@ -74,7 +74,7 @@ def sstv_activity(i, q, rate, conjugate, shift_hz, side):
 
 
 def _publish(png, img, band, seg, dial, side, rf, lvl, dev, cfg, t_img):
-    """Kurzwellen-SSTV-Bild mit Angaben zum Hochladen vormerken (Einstellungen → Webseite)."""
+    """Kurzwellen-SSTV-Bild mit Angaben zum Hochladen vormerken (Einstellungen → SSTV-Export)."""
     try:
         import publish as PUB
         if not PUB.cfg().get("enabled"):

@@ -34,6 +34,7 @@
 </nav>
 
 <main class="views">
+<div class="live-banner" id="liveBanner" hidden role="status"><span class="dot"></span><span id="liveBannerText"></span><button type="button" class="btn btn-small" id="liveBannerGo">Zu Live</button><button type="button" class="btn btn-small btn-danger" id="liveBannerStop">Live beenden</button></div>
 
 <section class="view" data-view="hits" hidden>
 <section class="panel" id="panel-hits-1">
@@ -274,7 +275,10 @@
       <button class="btn" id="liveSeekUp" title="Suchlauf aufwärts ab der eingestellten Frequenz">Suchlauf ▶▶</button>
       <button class="btn btn-seekstop" id="liveSeekStop" hidden title="Suchlauf beenden und auf der aktuellen Frequenz weiterhören">■ Suchlauf anhalten</button>
     </div>
-    <div class="smeter" id="liveSmeter"><div class="smeter-bar" id="liveLevel"></div></div>
+    <div class="smeter-wrap" id="liveSmeterWrap" title="Lautstärke des Tons, der aus dem Empfänger kommt (dBFS: 0 = Vollaussteuerung, ganz rechts). Sagt nichts über die Signalstärke – bei SSB regelt der Empfänger den Ton fast immer hoch.">
+      <div class="smeter-label"><span>Tonpegel</span><span class="mono" id="liveLevelVal">–</span></div>
+      <div class="smeter" id="liveSmeter"><div class="smeter-bar" id="liveLevel"></div></div>
+    </div>
     <div class="meter" id="liveMeter" hidden></div>
     <div class="rds-box" id="liveRds" hidden></div>
     <div class="wf-wrap" id="wfWrap" hidden>
@@ -553,9 +557,9 @@
         </label>
         <label class="check"><input type="checkbox" id="pskOn"> FT8/FT4-Spots an PSK Reporter melden</label>
         <p class="hint">Gehörte FT8/FT4-Stationen erscheinen dann alle 5 Minuten auf <a href="https://pskreporter.info/pskmap.html" target="_blank" rel="noopener">pskreporter.info</a> – mit deinem Rufzeichen als Empfänger. Braucht Rufzeichen und Locator.</p>
-        <details class="wsjtx-box" id="wxBox"><summary><b>Im Netzwerk bereitstellen (WSJT-X-Protokoll)</b> <small class="muted" id="wxSum"></small></summary>
+        <details class="wsjtx-box" id="wxBox" open><summary><b>Im Netzwerk bereitstellen (WSJT-X-Protokoll)</b> <small class="muted" id="wxSum"></small></summary>
           <p class="hint">Wie WSJT-X: jede FT8/FT4-Dekodierung (Scan und Live) geht als UDP-Paket an die eingetragenen Ziele – für <b>OpenHamClock</b>, GridTracker, JTAlert und andere Programme, die den „UDP Server“ von WSJT-X lesen. Ziel = Rechner, auf dem das Programm läuft, Port meist 2237 (bei OpenHamClock: WSJTX_UDP_PORT). Mehrere Ziele mit Komma; eine Multicast-Gruppe wie 224.0.0.1:2237 können mehrere Programme gleichzeitig hören.</p>
-          <label class="check"><input type="checkbox" id="wxOn"> Dekodierungen senden</label>
+          <label class="check"><input type="checkbox" id="wxOn"> Ins Netzwerk senden</label>
           <label class="field"><span>Ziele (Rechner:Port)</span><input id="wxTargets" type="text" placeholder="z. B. 192.168.178.50:2237, 224.0.0.1:2237" autocomplete="off"></label>
           <label class="field" title="So erscheint Hesperos DX im Empfänger (WSJT-X: „Id“)"><span>Kennung</span><input id="wxIdent" type="text" maxlength="32" placeholder="Hesperos DX"></label>
           <div class="actions"><button type="button" class="btn" id="wxSave" hidden>Speichern</button><button type="button" class="btn" id="wxTest">Testpaket senden</button></div>
@@ -736,7 +740,7 @@
         </form>
       </section>
       <section class="panel" id="panel-publish">
-        <h2>Webseite <small class="muted" id="pubSum"></small></h2>
+        <h2>SSTV-Export <small class="muted" id="pubSum"></small></h2>
         <p class="hint">Jedes SSTV-Bild (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Pi auf die eigene WordPress-Seite. Dort braucht es das Plugin <b>Hesperos DX SSTV-Galerie</b> (<a href="/api/publish/plugin.zip" id="pubZip" download>herunterladen</a>) und einen Zugang: WordPress → Einstellungen → SSTV-Galerie → „Zugang für die Pis“ legt je Pi einen Benutzer (Rolle SSTV-Melder, darf nur Bilder einsenden) mit Anwendungspasswort an. Jedes Bild trägt den Stationsnamen dieses Pi.</p>
         <label class="check"><input type="checkbox" id="pubOn"> SSTV-Bilder hochladen</label>
         <div class="filter-grid">
