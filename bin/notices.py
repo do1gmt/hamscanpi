@@ -74,6 +74,9 @@ def raise_(nid, level, area, title, detail="", fix="", cmd="", key=None, notify=
         d = _load()
         r = d.get(nid)
         new = r is None or not r.get("active")
+        if not new and (r.get("level"), r.get("area"), r.get("title"), r.get("detail"), r.get("fix"), r.get("cmd")) \
+                == (level, area, title, detail, fix, cmd) and now - float(r.get("last") or 0) < 3600:
+            return r                     # unverändert: nicht jede Minute auf die Speicherkarte schreiben
         if r is None:
             r = {"id": nid, "first": now, "count": 0, "kind": "state"}
         r.update(level=level, area=area, title=title, detail=detail, fix=fix, cmd=cmd, key=key or nid,
@@ -165,6 +168,16 @@ def is_active(nid):
 import re as _re
 
 EN_EXACT = {
+    "Sicherungen ohne Zugangsdaten im Klartext": "Backups without credentials in plain text",
+    "Die automatische Sicherung nimmt Mail-Passwort, Tokens und Zugangsschutz nicht mehr im Klartext mit.":
+        "The automatic backup no longer includes mail password, tokens and access protection in plain text.",
+    "Wer sie trotzdem in der Sicherung haben will: System → Sicherung → „Zugangsdaten verschlüsselt“ mit eigenem Passwort (auf eigenes Risiko).":
+        "If you still want them in the backup: System → Backup → “credentials encrypted” with a password of your own (at your own risk).",
+    "Dashboard ohne Passwort": "Dashboard without password",
+    "Jeder in deinem Netz kann Einstellungen ändern, WLAN eintragen, Updates starten und den Pi neu starten.":
+        "Anyone in your network can change settings, add Wi-Fi networks, start updates and restart the Pi.",
+    "Einstellungen → Zugangsschutz: Passwort setzen. Ist das so gewollt (abgeschottetes Netz), den Hinweis quittieren – er kommt dann nicht wieder.":
+        "Settings → Access protection: set a password. If this is intended (isolated network), acknowledge the notice – it will not come back.",
     "System neu gestartet": "System restarted", "System neu gestartet (geplant)": "System restarted (planned)", "Sticks lassen sich nicht abfragen": "Sticks cannot be queried",
     "Haupt-Stick fehlt": "Main stick missing", "Stick mit Allerwelts-Seriennummer": "Stick with a generic serial number",
     "Neuer Stick wartet auf Zuordnung": "New stick waiting for a role", "Kernel-Protokoll nicht lesbar": "Kernel log not readable",

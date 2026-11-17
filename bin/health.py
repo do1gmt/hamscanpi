@@ -662,12 +662,33 @@ def check_backup_target(st):
     storage.ensure(log=lambda lv, src, ev, **d: log(lv, src, ev, **d))
 
 
-CHECKS = (check_reboot, check_wifi, check_backup_target, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
+def check_auth(st):
+    """Dashboard ohne Passwort: einmal ein ruhiger Hinweis. Quittiert bleibt er still (gewolltes offenes Netz)."""
+    import auth as AUTH
+    if AUTH.enabled():
+        NT.clear("auth_none", "Passwort gesetzt")
+        return
+    NT.raise_("auth_none", "info", "system", "Dashboard ohne Passwort",
+              "Jeder in deinem Netz kann Einstellungen ändern, WLAN eintragen, Updates starten und den Pi neu starten.",
+              fix="Einstellungen → Zugangsschutz: Passwort setzen. Ist das so gewollt (abgeschottetes Netz), "
+                  "den Hinweis quittieren – er kommt dann nicht wieder.", notify=False)
+
+
+CHECKS = (check_reboot, check_auth, check_wifi, check_backup_target, check_internet, check_network, check_wifi_powersave, check_update, check_sticks, check_kernel, check_storage, check_power, check_clock, check_services,
           check_software)
+
+
+ALIVE_SAVE_S = 600          # Lebenszeichen höchstens alle 10 min auf die Karte (sonst jede Minute geschrieben)
+
+
+def _sig(st):
+    """Zustand ohne die laufend wechselnden Zeitstempel – ändert er sich, wird gleich geschrieben."""
+    return json.dumps({k: v for k, v in st.items() if k not in ("alive", "boot_time")}, sort_keys=True, default=str)
 
 
 def run_all():
     st = _state()
+    before, alive_before = _sig(st), float(st.get("alive") or 0)
     for fn in CHECKS:
         try:
             fn(st)
@@ -678,7 +699,8 @@ def run_all():
             except Exception:
                 pass
     st["alive"] = time.time()
-    _save(st)
+    if _sig(st) != before or st["alive"] - alive_before >= ALIVE_SAVE_S:
+        _save(st)
     try:
         import notify as N
         if not st.get("offline_since"):

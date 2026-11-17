@@ -2330,6 +2330,20 @@ class Handler(BaseHTTPRequestHandler):
     def client_ip(self):
         return self.client_address[0]
 
+    def foreign_origin(self):
+        """Kommt die Anfrage von einer fremden Webseite? Ohne diese Prüfung könnte jede Seite, die man im Browser
+        öffnet, heimlich Befehle an den Pi schicken (Einstellungen, WLAN, Neustart, Update) – ohne Passwort oder
+        aus einem „vertrauenswürdigen“ Netz sogar ohne Anmeldung. Browser schicken bei solchen Anfragen Origin
+        (bzw. Sec-Fetch-Site) mit; Skripte und curl schicken nichts und bleiben erlaubt."""
+        o = self.headers.get("Origin")
+        if o:
+            if o == "null":
+                return o
+            host = (self.headers.get("Host") or "").strip().lower()
+            return None if urlparse(o).netloc.lower() == host else o
+        sfs = (self.headers.get("Sec-Fetch-Site") or "").lower()
+        return sfs if sfs in ("cross-site", "same-site") else None
+
     def gate(self, path):
         """True = weiter. Sonst ist die Antwort schon geschickt (Umleitung bzw. 401)."""
         if path in self.PUBLIC or path.startswith("/static/"):
@@ -2624,7 +2638,7 @@ class Handler(BaseHTTPRequestHandler):
                         up = BK.info(BK.UPLOAD)
                     except ValueError:
                         up = None
-                return self.send_json({"sizes": BK.sizes(), "pending": BK.PENDING.exists(), "upload": up,
+                return self.send_json({"sizes": BK.sizes(), "pending": BK.PENDING.exists(), "upload": up, "key_set": BK.key_set(),
                                        "auto": BK.auto_cfg(read_json(SETTINGS, {})), "auto_state": BK.auto_state(),
                                        "candidates": BK.candidates(),
                                        "free_gb": round(__import__("shutil").disk_usage(str(BASE)).free / 1e9, 1)})
@@ -2659,9 +2673,11 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/backup/download":
                 # Sicherung direkt in die Antwort schreiben (kein Zwischenstand auf der Karte, auch bei GB)
                 scope = qs.get("scope", "data")
-                secrets = qs.get("secrets", "1") != "0"
+                secrets = BK.secrets_mode(qs.get("secrets"))          # none | encrypted (nie Klartext)
                 if scope not in BK.SCOPES:
                     raise ValueError("Umfang: settings, data oder all")
+                if secrets == "encrypted" and not BK.key_set():
+                    raise ValueError("Für verschlüsselte Zugangsdaten zuerst ein Passwort festlegen")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/gzip")
                 self.send_header("Content-Disposition", f'attachment; filename="{BK.filename(scope)}"')
@@ -2794,6 +2810,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         try:
+            fo = self.foreign_origin()
+            if fo:
+                APPLOG.log("WARN", "webapp", "foreign_request_blocked", path=path, origin=str(fo)[:120], ip=self.client_ip())
+                return self.send_json({"ok": False, "error": "Anfrage von einer fremden Webseite abgewiesen"}, 403)
             if not self.gate(path):
                 return
             if path in ("/api/wifi/add", "/api/wifi/remove"):
@@ -3250,9 +3270,21 @@ class Handler(BaseHTTPRequestHandler):
                 # automatische Sicherung einstellen (und auf Wunsch gleich einmal ausführen)
                 st = read_json(SETTINGS, {})
                 c = BK.auto_cfg(st)
-                for k in ("enabled", "secrets"):
-                    if k in data:
-                        c[k] = bool(data[k])
+                if "enabled" in data:
+                    c["enabled"] = bool(data["enabled"])
+                pw = str(data.get("secrets_password") or "")
+                if pw and set(pw) != {"•"}:
+                    BK.set_key(pw)                       # nur auf dem Pi, nie zurückgegeben, nie in einer Sicherung
+                    APPLOG.log("INFO", "webapp", "backup_key_set")
+                if data.get("secrets_password_clear"):
+                    BK.clear_key()
+                    APPLOG.log("INFO", "webapp", "backup_key_cleared")
+                if "secrets" in data:
+                    c["secrets"] = BK.secrets_mode(data["secrets"])
+                if c["secrets"] == "encrypted" and not BK.key_set():
+                    c["secrets"] = "none"
+                    if "secrets" in data and BK.secrets_mode(data["secrets"]) == "encrypted":
+                        raise ValueError("Für verschlüsselte Zugangsdaten zuerst ein Passwort festlegen (mindestens 8 Zeichen)")
                 if data.get("interval") in ("daily", "weekly"):
                     c["interval"] = data["interval"]
                 if "hour" in data:
@@ -3276,8 +3308,8 @@ class Handler(BaseHTTPRequestHandler):
                 res = None
                 if data.get("run_now"):
                     res = BK.run_auto(c, log=lambda m: APPLOG.log("INFO", "backup", "backup_now", detail=m))
-                APPLOG.log("INFO", "webapp", "auto_backup_set", **{k: c[k] for k in ("enabled", "interval", "hour", "dir", "scope", "keep")})
-                return self.send_json({"ok": True, "auto": c, "auto_state": BK.auto_state(), "result": res})
+                APPLOG.log("INFO", "webapp", "auto_backup_set", **{k: c[k] for k in ("enabled", "interval", "hour", "dir", "scope", "keep", "secrets")})
+                return self.send_json({"ok": True, "auto": c, "auto_state": BK.auto_state(), "result": res, "key_set": BK.key_set()})
             if path == "/api/publish":
                 # Webseite (SSTV-Bilder): Anwendungspasswort nur bei echter Eingabe ändern, nie zurückgeben
                 import publish as PUB
@@ -3382,10 +3414,12 @@ class Handler(BaseHTTPRequestHandler):
                 if data.get("cancel"):
                     BK.PENDING.unlink(missing_ok=True)
                     BK.UPLOAD.unlink(missing_ok=True)
+                    BK.RESTORE_SECRETS.unlink(missing_ok=True)
                     return self.send_json({"ok": True})
-                BK.info(BK.UPLOAD)
+                man = BK.info(BK.UPLOAD)
+                with_sec = BK.prepare_secrets(str(data.get("password") or "")) if man.get("secrets_enc") else False
                 BK.PENDING.write_text(str(time.time()))
-                APPLOG.log("WARN", "webapp", "restore_requested", ip=self.client_ip())
+                APPLOG.log("WARN", "webapp", "restore_requested", ip=self.client_ip(), secrets=with_sec)
                 return self.send_json({"ok": True, "pending": True})
             if path == "/api/sticks/forget":
                 STK.forget(str(data.get("key", "")))
@@ -3440,6 +3474,11 @@ def main():
     threading.Thread(target=watchdog_loop, args=(port,), daemon=True).start()
     threading.Thread(target=stall_loop, args=(port,), daemon=True).start()
     threading.Thread(target=trim_loop, daemon=True).start()
+    try:                                                     # wer schreibt welche Datei? (Diagnose: io_files.txt)
+        import writewatch
+        writewatch.start()
+    except Exception as e:
+        APPLOG.log("WARN", "webapp", "writewatch_failed", error=f"{type(e).__name__}: {e}")
 
     def eibi_loop():                                   # EiBi-Sendeplan: nach dem Start und täglich prüfen, ob neu zu holen
         time.sleep(90)

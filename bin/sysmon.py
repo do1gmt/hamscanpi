@@ -30,6 +30,52 @@ SCAN_LOCK = BASE / "data" / "scan.lock"
 LIVE_LOCK = BASE / "data" / "live.lock"
 SAT_PID = BASE / "data" / "sat_pass.pid"
 KEEP_S = 7 * 86400
+FLUSH_S = 600                   # Messpunkte im RAM sammeln, alle 10 min gesammelt in die Datenbank (schont die Karte)
+COLS = ("t", "cpu", "cpu_peak", "mem_avail", "swap", "temp", "throttled", "act", "top_name", "top_mb", "wr_mb",
+        "wifi_dbm", "wr_by")
+
+
+def _pending_file():
+    import rundir
+    return rundir.path("sysmon_pending.jsonl")
+
+
+def _pending():
+    """Noch nicht in die Datenbank geschriebene Messpunkte (RAM) – für den Verlauf im Dashboard mitgelesen."""
+    import json
+    out = []
+    try:
+        with open(_pending_file(), encoding="utf-8") as f:
+            for line in f:
+                try:
+                    out.append(tuple(json.loads(line)))
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    return out
+
+
+def flush(db=None, now=None):
+    """Gesammelte Messpunkte in die Datenbank (eine Schreibrunde statt einer je Minute)."""
+    rows = _pending()
+    if not rows:
+        return 0
+    own = db is None
+    db = db or _db()
+    try:
+        db.executemany("INSERT OR REPLACE INTO samples (" + ", ".join(COLS) + ") VALUES (" + ",".join("?" * len(COLS)) + ")",
+                       [r for r in rows if len(r) == len(COLS)])
+        db.execute("DELETE FROM samples WHERE t < ?", (int((now or time.time()) - KEEP_S),))
+        db.commit()
+    finally:
+        if own:
+            db.close()
+    try:
+        _pending_file().unlink()
+    except OSError:
+        pass
+    return len(rows)
 ACT = {0: "idle", 1: "scan", 2: "live", 3: "sat"}
 CLK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
@@ -557,16 +603,18 @@ class Sampler:
                cpu_temp(), None if thr is None else int(thr), self.act,
                self.top[0], int(round(self.top[1])) if self.top[0] else None, self._written(), wifi_dbm(),
                ", ".join(f"{k} {v / 1e6:.1f}" for k, v in sorted(self.wby.items(), key=lambda x: -x[1])[:4] if v >= 50_000) or None)
-        db = _db()
-        try:
-            db.execute("INSERT OR REPLACE INTO samples (t, cpu, cpu_peak, mem_avail, swap, temp, throttled, act, "
-                       "top_name, top_mb, wr_mb, wifi_dbm, wr_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
-            if now - self.pruned > 3600:
-                db.execute("DELETE FROM samples WHERE t < ?", (int(now - KEEP_S),))
-                self.pruned = now
-            db.commit()
-        finally:
-            db.close()
+        import json
+        try:                                                            # erst in den RAM, gesammelt in die Datenbank
+            with open(_pending_file(), "a", encoding="utf-8") as f:
+                f.write(json.dumps(row) + "\n")
+        except OSError:
+            pass
+        if now - self.pruned >= FLUSH_S:
+            try:
+                flush(now=now)
+            except sqlite3.Error:
+                pass
+            self.pruned = now
         self.reset(now)
         return row
 
@@ -576,17 +624,25 @@ def history(hours=24, now=None):
     now = now or time.time()
     b = max(60, -(-hours * 3600 // 720) // 60 * 60)                    # Rastergröße, auf Minuten gerundet
     since = int(now - hours * 3600)
-    if not DB.exists():
+    pend = [r for r in _pending() if len(r) == len(COLS) and r[0] >= since]
+    if not DB.exists() and not pend:
         return {"bucket_s": b, "from": since, "to": int(now), "points": []}
-    db = _db()
+    db = sqlite3.connect(":memory:") if not DB.exists() else _db()
+    if pend:                                                            # noch im RAM: für diese Abfrage dazunehmen
+        db.execute("CREATE TEMP TABLE pend AS SELECT * FROM main.samples WHERE 0") if DB.exists() else \
+            db.execute("CREATE TEMP TABLE pend (" + ", ".join(COLS) + ")")
+        db.executemany("INSERT INTO pend (" + ", ".join(COLS) + ") VALUES (" + ",".join("?" * len(COLS)) + ")", pend)
+        src = "(SELECT * FROM main.samples UNION ALL SELECT * FROM pend)" if DB.exists() else "pend"
+    else:
+        src = "samples"
     try:
         rows = db.execute("SELECT (t / ?) * ? AS tb, ROUND(AVG(cpu), 1), ROUND(MAX(cpu_peak), 1), MIN(mem_avail), MAX(swap), "
-                          "MAX(temp), MAX(throttled), MAX(act), MIN(wifi_dbm) FROM samples WHERE t >= ? GROUP BY tb ORDER BY tb",
+                          "MAX(temp), MAX(throttled), MAX(act), MIN(wifi_dbm) FROM " + src + " WHERE t >= ? GROUP BY tb ORDER BY tb",
                           (b, b, since)).fetchall()
-        total = db.execute("SELECT COUNT(*), MIN(t) FROM samples").fetchone()
+        total = db.execute("SELECT COUNT(*), MIN(t) FROM " + src).fetchone()
         # größter Prozess je Raster: der Eintrag mit dem meisten Speicher
         tops = {}
-        for tb, name, mb in db.execute("SELECT (t / ?) * ?, top_name, top_mb FROM samples WHERE t >= ? AND top_mb IS NOT NULL",
+        for tb, name, mb in db.execute("SELECT (t / ?) * ?, top_name, top_mb FROM " + src + " WHERE t >= ? AND top_mb IS NOT NULL",
                                        (b, b, since)):
             if mb > tops.get(tb, (None, -1))[1]:
                 tops[tb] = (name, mb)

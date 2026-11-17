@@ -81,6 +81,45 @@ def io_sample(secs=10):
     return "\n".join(lines) + "\n"
 
 
+def mem_report():
+    """Was hält der Webserver im Speicher? (diag läuft im Webserver selbst.) Speicherbereiche nach Herkunft
+    (Bibliotheken wie numpy/scipy, Heap), große geladene Module, häufigste Python-Objekte."""
+    import gc
+    out = []
+    try:
+        out.append(Path("/proc/self/status").read_text())
+    except OSError:
+        pass
+    agg = {}
+    try:
+        cur = None
+        for line in Path("/proc/self/smaps").read_text().splitlines():
+            parts = line.split()
+            if parts and "-" in parts[0] and len(parts) >= 5:
+                cur = parts[5] if len(parts) >= 6 else "[anonym]"
+                if "/site-packages/" in cur or "/dist-packages/" in cur:
+                    cur = "…/" + cur.split("-packages/", 1)[1].split("/", 1)[0] + " (Paket)"
+            elif parts and parts[0] in ("Rss:", "Swap:") and cur:
+                a = agg.setdefault(cur, [0, 0])
+                a[0 if parts[0] == "Rss:" else 1] += int(parts[1])
+    except OSError:
+        pass
+    out.append("Speicher nach Herkunft (KB im RAM · KB ausgelagert):")
+    for k, (rss, sw) in sorted(agg.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))[:40]:
+        out.append(f"{rss:9d} {sw:9d}  {k}")
+    big = sorted({m.split(".")[0] for m in list(sys.modules)})
+    out.append("\nGeladene Pakete: " + ", ".join(big))
+    try:
+        cnt = {}
+        for o in gc.get_objects():
+            t = type(o).__name__
+            cnt[t] = cnt.get(t, 0) + 1
+        out.append("\nHäufigste Python-Objekte: " + ", ".join(f"{k} {v}" for k, v in sorted(cnt.items(), key=lambda kv: -kv[1])[:20]))
+    except Exception:
+        pass
+    return "\n".join(out) + "\n"
+
+
 def git_info():
     """Stand der Installation und Herkunft der Updates – Zugangsdaten in der Adresse werden entfernt."""
     g = ["git", "-C", str(BASE)]
@@ -201,6 +240,12 @@ def write(fileobj, stream=True):
             + "\n" + _run(["vcgencmd", "measure_temp"]) + "\n" + _run(["python3", str(BASE / "bin" / "lockinfo.py")]) + "\n" + _run(["journalctl", "--list-boots", "--no-pager"])[-3000:]
             + "\n" + _run(["ps", "aux", "--sort=-rss"])[:20000])
         add("io.txt", io_sample())                                                    # Schreiblast
+        try:                                                                          # je Datei, seit Start des Webservers
+            import writewatch
+            add("io_files.txt", writewatch.report())
+        except Exception as e:
+            add("io_files.txt", f"{type(e).__name__}: {e}")
+        add("webapp_mem.txt", mem_report())                                           # Speicher des Webservers
         add("log/app.jsonl", _tail(BASE / "log" / "app.jsonl", 5_000_000))
         add("log/satellite.log", _tail(BASE / "log" / "satellite.log", 1_000_000))
         add("log/scan-cycle.log", _tail(BASE / "log" / "scan-cycle.log", 1_000_000))       # Ausgabe der Scanläufe

@@ -270,7 +270,12 @@ installs `/etc/sudoers.d/hesperosdx`, which allows exactly `systemctl --no-block
 hesperosdx-scheduler | hesperosdx-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
 *Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs (including the output of
 the scan runs and the scheduler), kernel and service messages of the last 2 days, the system history, which
-processes hold the scan locks, and the settings without credentials into one file.
+processes hold the scan locks, and the settings without credentials into one file. It also contains
+`io_files.txt` – which file was written how often since the web server started (counted via inotify, costs
+practically nothing) – and `webapp_mem.txt`, what the web server holds in memory (by library, loaded packages,
+Python objects). To spare the SD card, the system history is collected in RAM and written to `data/sysmon.db`
+every 10 minutes, the health check's "alive" stamp is saved every 10 minutes (instead of every minute), and
+unchanged notices are not rewritten.
 If a requested scan cannot start because the receiver or a run is still busy, the scan box says so with the
 process holding the lock (`scan_start_rejected` in the log; `python3 bin/lockinfo.py` shows it any time); a
 request that has not started after 3 minutes is reset, so the dashboard never stays at "Scan requested 0 %".
@@ -425,9 +430,15 @@ largest process per minute to find the cause.
 
 *System → Backup* downloads everything important as one file – settings; optionally with the data (hits,
 stations, FM stations, interference lines, system history) and the recordings (audio, I/Q, waterfalls,
-images, can be large). The databases are copied consistently even while a scan is writing. *Include
-credentials* (on by default) also stores the mail password and Telegram/ntfy token in plain text – keep the
-file safe. To restore, upload the file in the same card: Hesperos DX shows what is in it, restores as soon as
+images, can be large). The databases are copied consistently even while a scan is writing.
+**Credentials** (mail password, Telegram/ntfy token, website application password, dashboard password) are
+never stored in plain text. By default they are left out; on request they go in **encrypted** (`secrets.enc`,
+AES-256 via openssl with PBKDF2) with a password of your own, set under *Credentials in the backup* – at your own
+risk: whoever has the file and the password has the credentials. The password is kept only on the Pi
+(`config/.backup_key`, readable by the user only) and is in no backup, so keep it safe – without it everything
+except the credentials can still be restored. When restoring, the card asks for it; left empty (or for a backup
+without credentials) the credentials currently on the Pi are kept. Until 1.8.21 automatic backups could contain
+them in plain text; that setting is switched to "without" once (with a notice). To restore, upload the file in the same card: Hesperos DX shows what is in it, restores as soon as
 no scan or pass is running, moves the current settings and data to `restore-previous/<time>/` first, adds
 recordings (never deletes them) and restarts its services.
 
@@ -452,9 +463,9 @@ card fails. A failed backup becomes a notice.
 From the command line, e.g. after losing the card (fresh install, then):
 
 ```
-python3 bin/backup.py create --scope data          # settings | data | all, --no-secrets, -o file
+python3 bin/backup.py create --scope data          # settings | data | all, --secrets none|encrypted, -o file
 python3 bin/backup.py info hesperosdx-backup-….tar.gz
-python3 bin/backup.py restore hesperosdx-backup-….tar.gz
+python3 bin/backup.py restore hesperosdx-backup-….tar.gz   # --password: also the encrypted credentials
 sudo systemctl restart hesperosdx-scheduler hesperosdx-web
 ```
 
@@ -499,13 +510,20 @@ with a lightbox. Older or rejected images can be sent by hand with *↑ Auf Webs
 
 ## Access protection
 
-By default the dashboard is open to everyone who can reach it. Set a password under
+By default the dashboard is open to everyone who can reach it – a quiet notice "Dashboard without password" says
+so once (acknowledge it if this is intended, e.g. in an isolated network). Set a password under
 *Settings → Access protection* (or during `./install.sh`). Then every device has to log in once
 (session cookie, 30 days); after 5 wrong passwords an address is blocked for 5 minutes. You can
 list networks that need no login, e.g. your home network `192.168.178.0/24`. The Pi itself
 (localhost) never needs to log in.
 
 Forgot the password? On the Pi: `python3 bin/auth.py set` (or `python3 bin/auth.py off`).
+
+**Requests from other websites are refused.** The dashboard only accepts commands (save, Wi-Fi, restart, update …)
+from its own page: browsers send the origin of a request along, and a request started by a foreign website –
+which could otherwise remote-control the Pi through your browser, without a password or from a trusted network
+even without login – is answered with 403 and logged (`foreign_request_blocked`). Scripts and `curl` send no
+origin and keep working.
 
 > If you make the dashboard reachable from the internet, put it behind HTTPS (e.g. a reverse proxy
 > or a VPN such as WireGuard/Tailscale). The built-in server speaks plain HTTP. Behind a reverse

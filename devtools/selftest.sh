@@ -3059,5 +3059,114 @@ JS
   || { node /tmp/hsp_prefs_t.js "$SRC/web/prefs.js"; bad "prefs.js"; }
 rm -f /tmp/hsp_prefs_t.js
 
+echo "== 82 Sicherheit und Schreiblast: fremde Webseiten, kein Passwort, Zugangsdaten nur verschlüsselt, Verlauf gesammelt"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Befehle fremder Webseiten abgewiesen (Skripte erlaubt), Hinweis ohne Passwort (quittiert still), Hinweise ohne Änderung nicht jede Minute geschrieben" || bad "fremde Webseiten / Passwort-Hinweis"
+import json, os, threading, time, urllib.request, urllib.error
+import webapp as W, notices as NT, health as H, auth as AUTH
+srv = W._Server(("127.0.0.1", 0), W.Handler); threading.Thread(target=srv.serve_forever, daemon=True).start()
+port = srv.server_address[1]; op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+logs = []; W.APPLOG.log = lambda *a, **k: logs.append((a, k))
+def post(hdr):
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/ui-prefs", data=b'{"profile":"pc","set":{"x":"1"}}',
+                                 headers=dict({"Content-Type": "application/json"}, **hdr))
+    try:
+        return op.open(req, timeout=30).status
+    except urllib.error.HTTPError as e:
+        return e.code
+assert post({}) == 200                                                          # Skript/curl
+assert post({"Origin": f"http://127.0.0.1:{port}"}) == 200                     # eigene Seite
+assert post({"Origin": "http://boese.example"}) == 403
+assert post({"Origin": "null"}) == 403
+assert post({"Sec-Fetch-Site": "cross-site"}) == 403
+assert post({"Origin": f"http://127.0.0.1:{port + 1}"}) == 403                 # anderer Port = andere Seite
+assert any(a[2] == "foreign_request_blocked" for a, k in logs)
+srv.shutdown()
+# kein Passwort: ruhiger Hinweis, quittiert bleibt er still, mit Passwort weg
+AUTH.enabled = lambda: False
+H.check_auth({}); n = NT._load()["auth_none"]; assert n["active"] and n["level"] == "info" and n["en"]["title"] == "Dashboard without password"
+NT.ack("auth_none"); m0 = os.stat(NT.FILE).st_mtime_ns; time.sleep(0.05)
+H.check_auth({}); assert NT._load()["auth_none"]["acked"] and os.stat(NT.FILE).st_mtime_ns == m0   # unverändert: nicht geschrieben
+AUTH.enabled = lambda: True
+H.check_auth({}); assert not NT._load()["auth_none"]["active"]
+PY
+(cd bin && timeout 120 python3 - <<'PY') && ok "Zugangsdaten nie im Klartext, verschlüsselt nur mit eigenem Passwort (falsches abgewiesen), beim Einspielen bleiben die des Pi, alte Einstellung „mitsichern“ umgestellt" || bad "Zugangsdaten in Sicherungen"
+import io, json, os, stat, tarfile
+import backup as B
+cfg = B.BASE / "config" / "web_settings.json"
+ws = json.loads(cfg.read_text()); ws.setdefault("notify", {})["tg_token"] = "GEHEIM-1"; ws["publish"] = {"url": "https://x", "app_password": "WP-PW"}
+ws["auto_backup"] = {"enabled": False, "secrets": True}; cfg.write_text(json.dumps(ws))
+(B.BASE / "config" / "auth.json").write_text('{"password_hash": "H1"}')
+def mk(mode):
+    f = io.BytesIO(); man = B.write(f, "settings", mode); return f.getvalue(), man
+raw, man = mk("none")
+t = tarfile.open(fileobj=io.BytesIO(raw)); names = t.getnames()
+assert man["secrets"] == "none" and "config/auth.json" not in names and "secrets.enc" not in names
+assert b"GEHEIM-1" not in raw and b"WP-PW" not in tarfile.open(fileobj=io.BytesIO(raw)).extractfile("config/web_settings.json").read()
+raw2, _ = mk(True)                                                              # alter Aufruf „mit“ – trotzdem kein Klartext
+assert b"GEHEIM-1" not in tarfile.open(fileobj=io.BytesIO(raw2)).extractfile("config/web_settings.json").read()
+try:
+    mk("encrypted"); raise SystemExit("ohne Passwort verschlüsselt?")
+except ValueError:
+    pass
+try:
+    B.set_key("kurz"); raise SystemExit("kurzes Passwort angenommen")
+except ValueError:
+    pass
+B.set_key("richtig-gutes-pw")
+assert stat.S_IMODE(os.stat(B.KEY_FILE).st_mode) == 0o600
+raw, man = mk("encrypted")
+t = tarfile.open(fileobj=io.BytesIO(raw)); names = t.getnames()
+assert man["secrets"] == "encrypted" and "secrets.enc" in names and not any(".backup_key" in n for n in names)
+assert b"GEHEIM-1" not in t.extractfile("config/web_settings.json").read() and b"richtig-gutes-pw" not in raw
+p = B.BASE / "data" / "t_enc.tgz"; p.write_bytes(raw)
+assert B.info(p)["secrets"] == "encrypted" and B.info(p)["secrets_enc"]
+try:
+    B.read_secrets(p, "falsch-falsch"); raise SystemExit("falsches Passwort angenommen")
+except ValueError:
+    pass
+sec = B.read_secrets(p, "richtig-gutes-pw")
+assert sec["notify"]["tg_token"] == "GEHEIM-1" and sec["publish"]["app_password"] == "WP-PW" and "H1" in sec["auth"]
+# auf dem Pi geändert, dann ohne Passwort eingespielt: die des Pi bleiben
+ws = json.loads(cfg.read_text()); ws["notify"]["tg_token"] = "AKTUELL"; cfg.write_text(json.dumps(ws))
+B.restore(p, wait=False, log=lambda m: None)
+ws = json.loads(cfg.read_text()); assert ws["notify"]["tg_token"] == "AKTUELL" and ws["publish"]["app_password"] == "WP-PW"
+# mit Passwort: die aus der Sicherung
+B.UPLOAD.write_bytes(raw); assert B.prepare_secrets("richtig-gutes-pw")
+assert stat.S_IMODE(os.stat(B.RESTORE_SECRETS).st_mode) == 0o600
+B.PENDING.write_text("x"); assert B.apply_pending(log=lambda m: None)
+assert json.loads(cfg.read_text())["notify"]["tg_token"] == "GEHEIM-1" and not B.RESTORE_SECRETS.exists()
+# alte Einstellung „Zugangsdaten mitsichern“ (Klartext) wird einmal auf „ohne“ umgestellt
+B.NT = None
+assert B.migrate_plain_secrets() and json.loads(cfg.read_text())["auto_backup"]["secrets"] == "none"
+assert not B.migrate_plain_secrets()
+import notices as NT
+assert any(r.get("key") == "backup_secrets" for r in NT._load().values())
+p.unlink()
+PY
+(cd bin && timeout 120 python3 - <<'PY') && ok "Systemverlauf im RAM gesammelt und alle 10 min geschrieben (Verlauf zeigt beides), Zählung geschriebener Dateien, Speicherbild des Webservers" || bad "Schreiblast / Diagnose"
+import json, os, sqlite3, time
+import sysmon as S, writewatch as WW, diag as D
+S.DB.unlink(missing_ok=True); S._pending_file().unlink(missing_ok=True)
+sm = S.Sampler()
+now = time.time(); sm.t0 = now - 61
+sm.tick(now)                                                                     # erster Punkt: schreibt sofort (Rest von vorher)
+assert S.DB.exists() and not S._pending_file().exists()
+sm.t0 = now; sm.tick(now + 61)
+assert S._pending_file().exists() and len(S._pending()) == 1
+n_db = sqlite3.connect(S.DB).execute("select count(*) from samples").fetchone()[0]
+h = S.history(1, now=now + 70); assert h["samples"] == n_db + 1, (h["samples"], n_db, S._pending(), S.DB)
+n3 = now + 61 + S.FLUSH_S + 5; sm.t0 = n3 - 61; sm.tick(n3)
+assert not S._pending_file().exists() and sqlite3.connect(S.DB).execute("select count(*) from samples").fetchone()[0] == n_db + 2
+WW.start(); time.sleep(0.5)
+for i in range(3):
+    tmp = WW.BASE / "data" / "ww_test.tmp"; tmp.write_text("x" * 500); os.replace(tmp, WW.BASE / "data" / "ww_test.json")
+time.sleep(0.5)
+r = WW.report(); assert "data/ww_test.json" in r and "GB/Tag" in r, r
+m = D.mem_report(); assert "Speicher nach Herkunft" in m and "Geladene Pakete" in m
+(WW.BASE / "data" / "ww_test.json").unlink()
+PY
+grep -q 'id="bkPassBox"' "$SRC/web/index.html" && grep -q 'secrets_password' "$SRC/web/app.js" && ! grep -q 'im Klartext – nicht weitergeben' "$SRC/web/index.html" \
+  && grep -q ' openssl"' "$SRC/bin/setup_system.sh" && ok "Dashboard: Zugangsdaten verschlüsselt mit eigenem Passwort, Passwort beim Einspielen; openssl wird installiert" || bad "Dashboard Zugangsdaten"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

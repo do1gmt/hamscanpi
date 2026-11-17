@@ -63,7 +63,7 @@ migrate_files
 bold "$(t "Pakete" "Packages")"
 PKGS="python3 python3-numpy python3-scipy python3-matplotlib python3-pil python3-soundfile python3-sgp4 rtl-sdr
       multimon-ng sqlite3 alsa-utils util-linux curl git avahi-daemon avahi-utils build-essential iw
-      libusb-1.0-0-dev libreadline-dev cifs-utils ntfs-3g"
+      libusb-1.0-0-dev libreadline-dev cifs-utils ntfs-3g openssl"
 NEED=""
 for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || NEED="$NEED $p"; done
 if [ -n "$NEED" ]; then

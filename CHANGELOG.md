@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.22 – 2026-11-17
+
+- **Security: commands from other websites are refused.** The dashboard did not check where a command came from –
+  a website opened in the same browser could have sent commands to the Pi (settings, Wi-Fi, restart, update),
+  without a password or from a trusted network even without login. Now every POST with a foreign `Origin` (or
+  `Sec-Fetch-Site: cross-site`) is answered with 403 and logged (`foreign_request_blocked`); scripts and `curl`
+  keep working.
+- **Notice "Dashboard without password"** (info, no mail/push). Acknowledged it stays quiet; it disappears once a
+  password is set.
+- **Credentials never in plain text in backups.** Default: without credentials; on request encrypted
+  (`secrets.enc`, AES-256/PBKDF2 via openssl) with a password of your own – at your own risk. The password is
+  kept only on the Pi (`config/.backup_key`, 600) and in no backup. Restore asks for it; without it the
+  credentials currently on the Pi are kept (before, restoring a backup without credentials emptied them). An
+  automatic backup set to "include credentials" (plain text) is switched to "without" once, with a notice.
+  `backup.py create --secrets none|encrypted`, `restore --password`. Setup installs `openssl`.
+- **Fewer SD card writes:** system history collected in RAM and written every 10 minutes (one write instead of
+  ten; the history in the dashboard shows both), the health check's "alive" stamp saved every 10 minutes (state
+  changes at once), unchanged notices no longer rewritten every minute.
+- **Diagnostics:** `io_files.txt` – which file is written how often (inotify, since the web server started) –
+  and `webapp_mem.txt` – what the web server holds in memory.
+- Self-test section 82.
+
 ## 1.8.21 – 2026-11-17
 
 - **Dashboard settings on the Pi, per view profile (PC / phone).** Card layout and folded cards, design, language,

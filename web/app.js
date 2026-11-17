@@ -2839,20 +2839,22 @@
   const fmtSize = b => b >= 1e9 ? (b / 1e9).toFixed(1).replace('.', ',') + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
   function bkLink() {
     const scope = (document.querySelector('input[name=bkScope]:checked') || {}).value || 'data';
-    $('bkDownload').href = `/api/backup/download?scope=${scope}&secrets=${$('bkSecrets').checked ? 1 : 0}`;
+    $('bkDownload').href = `/api/backup/download?scope=${scope}&secrets=${$('bkSecrets').value}`;
   }
   function bkShowUpload(m) {
     $('bkUploaded').hidden = !m;
     if (!m) return;
     const scope = { settings: 'Einstellungen', data: 'Einstellungen + Datenbestände', all: 'Einstellungen + Datenbestände + Aufnahmen' }[m.scope] || m.scope;
     $('bkInfo').innerHTML = `<b>Sicherung vom ${esc(tfmt(m.created, { date: true, year: true }))}</b> · Version ${esc(m.version)} · ${esc(m.call || '–')} ${esc(m.locator || '')}<br>`
-      + `<small class="muted">${esc(scope)} · ${m.files} Dateien · ${fmtSize(m.size)} · ${m.secrets ? 'mit' : 'ohne'} Zugangsdaten · Rechner ${esc(m.host || '?')}</small>`;
+      + `<small class="muted">${esc(scope)} · ${m.files} Dateien · ${fmtSize(m.size)} · ${{ encrypted: 'Zugangsdaten verschlüsselt', plain: 'Zugangsdaten im Klartext (alte Sicherung)', none: 'ohne Zugangsdaten' }[m.secrets] || 'ohne Zugangsdaten'} · Rechner ${esc(m.host || '?')}</small>`;
+    $('bkPassBox').hidden = !m.secrets_enc; $('bkPass').value = '';
   }
   function renderAutoBackup(d) {
     const c = d.auto || {}, st = d.auto_state || {};
     if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#panel-backup .filter-grid, #abDir')) return;
     $('abOn').checked = !!c.enabled; $('abInterval').value = c.interval || 'daily'; $('abHour').value = c.hour ?? 3;
-    $('abScope').value = c.scope || 'data'; $('abKeep').value = c.keep || 7; $('abDir').value = c.dir || ''; $('abSecrets').checked = c.secrets !== false;
+    $('abScope').value = c.scope || 'data'; $('abKeep').value = c.keep || 7; $('abDir').value = c.dir || ''; $('abSecrets').value = c.secrets === 'encrypted' ? 'encrypted' : 'none';
+    if ('key_set' in d) bkKey(d.key_set);
     if (c.dir && !(c.target || {}).kind) $('abDir').closest('details').open = true;   // bisher eigener Ordner eingetragen
     $('abDirs').innerHTML = (d.candidates || []).map(x => `<option value="${esc(x.dir)}">${esc(x.dir)} – ${x.free_gb} GB frei</option>`).join('');
     $('abState').textContent = st.last ? `Letzte Sicherung: ${tfmt(st.last, { date: true, year: true })} · ${esc(String(st.file || '').split('/').pop())} · ${fmtSize(st.size || 0)}`
@@ -2860,13 +2862,40 @@
   }
   async function abPost(extra) {
     const body = Object.assign({ enabled: $('abOn').checked, interval: $('abInterval').value, hour: Number($('abHour').value), scope: $('abScope').value,
-                                 keep: Number($('abKeep').value), secrets: $('abSecrets').checked }, extra || {});
+                                 keep: Number($('abKeep').value), secrets: $('abSecrets').value }, extra || {});
     if ($('abDir').closest('details').open) body.dir = $('abDir').value.trim();   // eigener Ordner nur, wenn aufgeklappt
     const d = await post('/api/backup/auto', body);
     renderAutoBackup(Object.assign({}, d, { candidates: [...$('abDirs').options].map(o => ({ dir: o.value, free_gb: '' })) }));
     return d;
   }
-  autoSave($('panel-backup'), () => $('abSave').click(), el => !el.closest('#abOn, #abInterval, #abHour, #abScope, #abKeep, #abDir, #abSecrets'));
+  autoSave($('panel-backup'), () => $('abSave').click(), el => !el.closest('#abOn, #abInterval, #abHour, #abScope, #abKeep, #abDir'));
+  // Zugangsdaten: nie im Klartext – auf Wunsch verschlüsselt mit eigenem Passwort (nur auf dem Pi)
+  let bkKeySet = false;
+  function bkKey(set) {
+    bkKeySet = !!set;
+    $('abKey').placeholder = set ? (EN ? '•••••••• saved – enter a new one to change' : '•••••••• gespeichert – neu eintragen zum Ändern') : (EN ? 'at least 8 characters' : 'mindestens 8 Zeichen');
+    $('abKeyClear').hidden = !set;
+    $('abKeyBox').hidden = $('abSecrets').value !== 'encrypted' && !set;
+    const o = $('bkSecrets').querySelector('option[value=encrypted]');
+    o.disabled = !set; o.textContent = set ? (EN ? 'include encrypted' : 'verschlüsselt mitsichern') : (EN ? 'include encrypted (set a password first)' : 'verschlüsselt mitsichern (erst Passwort festlegen)');
+    if (!set && $('bkSecrets').value === 'encrypted') { $('bkSecrets').value = 'none'; bkLink(); }
+  }
+  $('abSecrets').addEventListener('change', async () => {
+    if ($('abSecrets').value === 'encrypted' && !bkKeySet) { $('abKeyBox').hidden = false; $('abKey').focus(); note($('abNote'), 'Erst ein Passwort für die Zugangsdaten festlegen'); return; }
+    $('abKeyBox').hidden = $('abSecrets').value !== 'encrypted' && !bkKeySet;
+    try { await abPost(); note($('abNote'), '✓ gespeichert'); } catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('abKeySave').addEventListener('click', async () => {
+    const pw = $('abKey').value;
+    if (pw.length < 8) { note($('abNote'), 'Fehler: mindestens 8 Zeichen', true); return; }
+    try { const d = await abPost({ secrets_password: pw }); $('abKey').value = ''; bkKey(d.key_set); note($('abNote'), '✓ Passwort gespeichert – die nächste Sicherung enthält die Zugangsdaten verschlüsselt'); }
+    catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); }
+  });
+  $('abKeyClear').addEventListener('click', async () => {
+    if (!confirm('Passwort löschen? Sicherungen enthalten danach keine Zugangsdaten mehr.')) return;
+    try { const d = await abPost({ secrets: 'none', secrets_password_clear: true }); bkKey(d.key_set); note($('abNote'), '✓ gelöscht'); }
+    catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); }
+  });
   $('abSave').addEventListener('click', async () => { try { await abPost(); note($('abNote'), '✓ gespeichert'); } catch (e) { note($('abNote'), 'Fehler: ' + e.message, true); } });
   $('abNow').addEventListener('click', async () => {
     note($('abNote'), 'sichere …');
@@ -2954,7 +2983,7 @@
   });
   setInterval(() => { if ($('panel-backup').offsetParent !== null && !document.hidden) loadStorage(); }, 15000);
   document.querySelectorAll('input[name=bkScope]').forEach(r => r.addEventListener('change', bkLink));
-  $('bkSecrets').addEventListener('change', bkLink);
+  $('bkSecrets').addEventListener('change', bkLink);   // Auswahl (none/encrypted)
   bkLink();
   $('bkUpload').addEventListener('click', () => {
     const f = $('bkFile').files[0];
@@ -2973,7 +3002,7 @@
   });
   $('bkRestore').addEventListener('click', async () => {
     if (!confirm('Diese Sicherung einspielen? Einstellungen und Datenbestände werden ersetzt (der bisherige Stand wird zur Seite gelegt). Danach starten die Dienste neu.')) return;
-    try { await post('/api/backup/restore', {}); note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …'); clearInterval(bkWaiting); bkWaiting = setInterval(loadBackup, 3000); }
+    try { await post('/api/backup/restore', { password: $('bkPass').value }); $('bkPass').value = ''; note($('bkNote'), 'Wird eingespielt, sobald kein Scan und kein Überflug läuft …'); clearInterval(bkWaiting); bkWaiting = setInterval(loadBackup, 3000); }
     catch (e) { note($('bkNote'), 'Fehler: ' + e.message, true); }
   });
   $('bkDiscard').addEventListener('click', async () => {

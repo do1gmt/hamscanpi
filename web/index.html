@@ -523,9 +523,9 @@
           <label class="check"><input type="radio" name="bkScope" value="data" checked> + Datenbestände (Treffer, Stationen, Verlauf) <small class="muted" data-bs="data"></small></label>
           <label class="check"><input type="radio" name="bkScope" value="all"> + Aufnahmen (Ton, I/Q, Wasserfälle, Bilder) <small class="muted" data-bs="all"></small></label>
         </div>
-        <label class="check" title="Mail-Passwort, Telegram-/ntfy-Token und Zugangsschutz. Ohne sie ist die Wiederherstellung unvollständig – mit ihnen die Datei sorgsam aufbewahren."><input type="checkbox" id="bkSecrets" checked> Zugangsdaten mitsichern</label>
+        <label class="field" title="Mail-Passwort, Telegram-/ntfy-Token, Anwendungspasswort der Webseite und Zugangsschutz"><span>Zugangsdaten</span>
+          <select id="bkSecrets"><option value="none">nicht mitsichern</option><option value="encrypted">verschlüsselt mitsichern</option></select></label>
         <div class="actions"><a class="btn" id="bkDownload" href="#" download>↓ Sicherung herunterladen</a></div>
-        <p class="hint">Die Datei enthält mit Zugangsdaten das Mail-Passwort und den Telegram-Token im Klartext – nicht weitergeben.</p>
         <h3>Wohin sichern</h3>
         <p class="hint">Nicht auf die Speicherkarte selbst – bei einem Kartenausfall wäre die Sicherung mit weg. USB-Stick oder Festplatte (FAT32, exFAT, NTFS oder ext4 – es wird nichts formatiert) oder eine Netzwerkfreigabe.</p>
         <p class="hint" id="stoTarget"></p>
@@ -551,7 +551,15 @@
         <details class="sto-adv"><summary>Zielordner selbst eintragen (für Fortgeschrittene)</summary>
         <label class="field" title="Nur nötig, wenn das Ziel nicht oben unter „Wohin sichern“ gewählt wird – etwa ein selbst eingehängtes Laufwerk. Nicht die Speicherkarte selbst."><span>Zielordner</span><input id="abDir" type="text" list="abDirs" placeholder="wird oben gewählt" autocomplete="off"><datalist id="abDirs"></datalist></label>
         </details>
-        <label class="check"><input type="checkbox" id="abSecrets" checked> Zugangsdaten mitsichern</label>
+        <h3>Zugangsdaten in der Sicherung</h3>
+        <label class="field"><span>Zugangsdaten (Mail, Telegram/ntfy, Webseite, Zugangsschutz)</span>
+          <select id="abSecrets"><option value="none">nicht mitsichern</option><option value="encrypted">verschlüsselt mitsichern – auf eigenes Risiko</option></select></label>
+        <div id="abKeyBox" hidden>
+          <label class="field"><span>Passwort für die Zugangsdaten</span><input id="abKey" type="password" autocomplete="new-password" minlength="8" placeholder="mindestens 8 Zeichen"></label>
+          <p class="hint">Nie im Klartext: die Zugangsdaten werden mit diesem Passwort verschlüsselt (AES-256). Es liegt nur auf dem Pi und steht in keiner Sicherung – gut aufheben, ohne es lassen sich die Zugangsdaten auf einem neuen Pi nicht wiederherstellen (alles andere schon). Wer Datei und Passwort hat, hat die Zugangsdaten.</p>
+          <div class="actions"><button class="btn" id="abKeySave" type="button">Passwort speichern</button><button class="btn btn-danger" id="abKeyClear" type="button" hidden>Passwort löschen</button></div>
+        </div>
+        <p class="hint" id="abSecretsHint">Ohne Zugangsdaten: nach dem Einspielen auf einem neuen Pi Mail-Passwort, Tokens, Webseiten-Passwort und Dashboard-Passwort neu eintragen. Auf demselben Pi bleiben sie beim Einspielen erhalten.</p>
         <div class="actions"><button class="btn" id="abSave" type="button" hidden>Speichern</button><button class="btn" id="abNow" type="button">Jetzt sichern</button></div>
         <div class="save-note" id="abNote" aria-live="polite"></div>
         <p class="hint" id="abState"></p>
@@ -561,6 +569,7 @@
         <div class="save-note" id="bkNote" aria-live="polite"></div>
         <div id="bkUploaded" hidden>
           <p id="bkInfo"></p>
+          <label class="field" id="bkPassBox" hidden><span>Passwort der Zugangsdaten (leer = ohne Zugangsdaten einspielen, die des Pi bleiben)</span><input id="bkPass" type="password" autocomplete="off"></label>
           <div class="actions"><button class="btn btn-danger" id="bkRestore" type="button">Einspielen</button><button class="btn" id="bkDiscard" type="button">Verwerfen</button></div>
           <p class="hint">Eingespielt wird, sobald kein Scan und kein Überflug läuft. Der bisherige Stand von Einstellungen und Datenbeständen wird vorher nach <code>restore-previous/</code> gelegt; Aufnahmen werden ergänzt, nicht gelöscht. Danach starten die Dienste neu und die Seite lädt sich neu.</p>
         </div>
