@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.27 – 2026-11-17
+
+- **Fix: SSTV events "Fetch now", "Add" and delete failed** with "cannot access local variable 'data'" (since
+  1.8.13 – the request was read only further down). Self-test section 86 checks every early command route for this.
+- **New screenshots** for the README (scan, system, settings, log, stations) – current version with schedules,
+  the new service names and the English UI; personal data (Telegram chat ID) removed, all shrunk with pngquant.
+- **Log:** readable names for the newer events (system updates, notices, restart after an update, refused
+  requests from foreign websites, credentials password, images from Live, view profiles, backup folder move …)
+  instead of internal names such as `sysupgrade_done`.
+- **English dashboard:** SSTV export hint fully translated (was half German), "Digital (narrow/wide)",
+  "PMSDR control", "of which" in the SD card tile, the placeholder of the website application password.
+- **Images from Live:** no alt text in the empty thumbnail frame while loading; if a thumbnail cannot be made the
+  frame says so ("no preview – tap for the image") and the reason is logged once (`live_thumb_failed`).
+- Self-test: section 63 waits until its test process is visible (was flaky).
+
 ## 1.8.26 – 2026-11-17
 
 - Self-test section 83 (documentation) now flags every old name `hamscanpi` outside the notes on the renaming –

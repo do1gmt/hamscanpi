@@ -2232,6 +2232,7 @@ from pathlib import Path
 import housekeeping as HK, sysmon as SM
 d = Path(tempfile.mkdtemp())
 live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "sat_pass.py"])
+time.sleep(0.5)                                                                  # bis der Prozess sichtbar läuft
 old = d / f".sat_iss_{live.pid}.r16"; old.write_bytes(b"x" * 100)                 # läuft gerade
 dead = d / ".sat_iss_999999.r16"; dead.write_bytes(b"x" * 100)                   # Überflug abgebrochen
 fresh = d / ".sat_ao7_999998.r16"; fresh.write_bytes(b"x")                       # wird noch geschrieben
@@ -3315,6 +3316,29 @@ PY
 grep -q '/usr/local/sbin/hesperosdx-sys\\n' "$SRC/bin/setup_system.sh" && grep -q 'share/root/hesperosdx-sys" /usr/local/sbin/hesperosdx-sys' "$SRC/bin/setup_system.sh" \
   && grep -q 'id="panel-sysupd"' "$SRC/web/index.html" && grep -q 'function loadSysupd' "$SRC/web/app.js" \
   && ok "sudo-Regel und Helfer installiert, Karte unter System" || bad "Systemupdates: Einbau"
+
+echo "== 86 Befehle ans Dashboard: jeder liest seine Angaben selbst ein (kein „data“ vor dem Einlesen)"
+(cd bin && timeout 60 python3 - <<'PY') && ok "alle frühen POST-Wege lesen ihre Angaben selbst, SSTV-Termine „Jetzt holen“ antwortet" || bad "POST-Wege"
+import ast, json, threading, urllib.request
+from pathlib import Path
+import webapp as W, sstv_events as SE
+src = Path("webapp.py").read_text()
+fn = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef) and n.name == "do_POST")
+body = ast.get_source_segment(src, fn)
+head = body.split("data = self.read_body()")[0]
+bad = []
+for blk in head.split("if path ==")[1:]:
+    uses = "data[" in blk or "data.get(" in blk or "in data" in blk
+    if uses and "data = " not in blk:
+        bad.append(blk.split(":")[0].strip())
+assert not bad, bad
+SE.refresh = lambda force=False: None
+srv = W._Server(("127.0.0.1", 0), W.Handler); threading.Thread(target=srv.serve_forever, daemon=True).start()
+op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/api/sstv-events", data=b'{"refresh": true}', headers={"Content-Type": "application/json"})
+assert op.open(req, timeout=30).status == 200
+srv.shutdown()
+PY
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

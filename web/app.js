@@ -1403,6 +1403,7 @@
 
   // ---------- Protokoll ----------
   const EVENT_TEXT = {
+    'notice_raised': 'Hinweis gemeldet', 'notice_resolved': 'Hinweis behoben', 'notice_event': 'Ereignis gemeldet', 'update_done': 'Update fertig', 'rescue.start': 'Notfallseite gestartet', 'sysupdate_checked': 'Systemupdates geprüft', 'sysupgrade_requested': 'Systemupdate angefordert', 'sysupgrade_started': 'Systemupdate gestartet', 'sysupgrade_done': 'Systemupdate fertig', 'sysupgrade_failed': 'Systemupdate fehlgeschlagen', 'sysupgrade_waiting': 'Systemupdate wartet auf eine freie Minute', 'sysupgrade_cancelled': 'Systemupdate nicht mehr angefordert', 'sysupgrade_start_failed': 'Systemupdate ließ sich nicht starten', 'reboot_after_update': 'Neustart nach Systemupdate', 'reboot_postponed': 'Neustart verschoben', 'reboot_done': 'Neustart nach Systemupdate erledigt', 'sysupdate_settings': 'Systemupdates eingestellt', 'sysupdate_failed': 'Systemupdates: Fehler', 'foreign_request_blocked': 'Anfrage einer fremden Webseite abgewiesen', 'backup_key_set': 'Passwort der Zugangsdaten gesetzt', 'backup_key_cleared': 'Passwort der Zugangsdaten gelöscht', 'live_image_keep': 'Bild aus Live behalten (★)', 'live_image_unkeep': 'Bild aus Live nicht mehr behalten', 'live_image_delete': 'Bild aus Live gelöscht', 'live_image_publish': 'Bild aus Live für die Webseite vorgemerkt', 'ui_prefs_replaced': 'Ansicht-Profil übernommen', 'ui_prefs_copied': 'Ansicht-Profil kopiert', 'backup_dir_moved': 'Sicherungsordner umgezogen', 'writewatch_failed': 'Schreib-Zählung: Fehler', 'live_yield': 'Live hält kurz an', 'live_resumed': 'Live läuft weiter', 'auth_none': 'Dashboard ohne Passwort', 'live_thumb_failed': 'Vorschaubild ließ sich nicht erzeugen',
     run_start: 'Scan gestartet', run_done: 'Scan fertig', run_failed: 'Scan fehlgeschlagen', run_cancelled: 'Scan abgebrochen',
     run_interrupted: 'Scan unterbrochen', schedule_start: 'Zeitplan beginnt', schedule_end: 'Zeitplan endet', schedule_live_yield: 'Zeitplan: Live hält kurz an', schedule_kick_skipped: 'Zeitplan: Scan zu Beginn ausgelassen',
     satellite_live_yield: 'Überflug: Live hält kurz an', live_yield: 'Live angehalten', live_resumed: 'Live läuft weiter', watch_yield: 'Dauerwache angehalten', watch_resumed: 'Dauerwache läuft weiter',
@@ -2177,7 +2178,7 @@
       const f = x.freq_hz ? ` · ${+(x.freq_hz / 1e6).toFixed(5)} MHz` : '';
       const exp = x.keep ? (EN ? 'kept' : 'behalten') : x.expires ? `${EN ? 'deleted' : 'gelöscht'} ${tfmt(x.expires, { date: true, label: false })}` : '';
       return `<figure class="liveimg${x.keep ? ' kept' : ''}" data-li="${esc(x.name)}">
-        <a href="/files/${esc(x.name)}?v=${v}" target="_blank" rel="noopener"><img loading="lazy" src="/api/live/thumb?name=${encodeURIComponent(x.name)}&v=${v}" alt="${esc(what)}"></a>
+        <a href="/files/${esc(x.name)}?v=${v}" target="_blank" rel="noopener"><img loading="lazy" src="/api/live/thumb?name=${encodeURIComponent(x.name)}&v=${v}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'liveimg-noprev', textContent: '${EN ? 'no preview – tap for the image' : 'keine Vorschau – antippen für das Bild'}' }))"></a>
         <figcaption><b>${what}</b><br><small>${esc(tfmt(x.t, { date: true }))}${f}</small><br><small>${esc(exp)} · ${fmtSize(x.size)}</small></figcaption>
         ${x.kind === 'sstv' && liveImgPub ? `<span class="pub-st-wrap">${pubCell(x.pub)}</span>` : ''}
         <div class="actions">
@@ -2557,7 +2558,7 @@
       const perDay = sto.written_7d_mb != null && days ? sto.written_7d_mb / days : null;
       const sd = sto.kind === 'SD-Karte';
       const wr = (sto.writers_24h || []).filter(x => x[1] >= 1).map(x => `${esc(x[0])} ${gb(x[1])}`).join(' · ');
-      tile(gb(sto.written_24h_mb), `geschrieben in 24 h · ${sto.kind}${perDay != null && days >= 2 ? ` (Ø ${gb(perDay)}/Tag)` : ''}${wr ? `<br><small>davon: ${wr}</small>` : ''}`,
+      tile(gb(sto.written_24h_mb), `geschrieben in 24 h · ${sto.kind}${perDay != null && days >= 2 ? ` (Ø ${gb(perDay)}/Tag)` : ''}${wr ? `<br><small>${EN ? 'of which' : 'davon'}: ${wr}</small>` : ''}`,
            sd && sto.written_24h_mb > 20480 ? 'warn' : '');
       const swOn = (sto.swap || []).filter(x => !x.zram).map(x => x.name);
       const swZ = (sto.swap || []).some(x => x.zram);
@@ -3441,7 +3442,7 @@
     if (!document.activeElement.closest?.('#panel-publish')) {
       $('pubOn').checked = !!c.enabled; $('pubUrl').value = c.url || ''; $('pubUser').value = c.user || '';
       $('pubStatus').value = c.status || 'draft'; $('pubMin').value = c.min_complete ?? 60;
-      $('pubPw').placeholder = c.has_password ? '•••• gespeichert – leer lassen = unverändert' : 'xxxx xxxx xxxx xxxx xxxx xxxx';
+      $('pubPw').placeholder = c.has_password ? (EN ? '•••• saved – leave empty = unchanged' : '•••• gespeichert – leer lassen = unverändert') : 'xxxx xxxx xxxx xxxx xxxx xxxx';
     }
     $('pubSum').textContent = c.enabled ? (c.status === 'publish' ? '· an, sofort öffentlich' : '· an, als Entwurf') : '· aus';
     const tm = t => tfmt(t, { date: true });

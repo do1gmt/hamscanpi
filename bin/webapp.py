@@ -1804,6 +1804,7 @@ def clean_live_favorites(items):
 #    danach auf derselben Frequenz weiter,
 #  - beendet sie zur eingestellten Uhrzeit.
 LIVE_YIELD = BASE / "data" / "live_yield.json"
+_thumb_err = set()
 _watch = {"paused_until": 0.0, "sat": None, "resume": None, "why": None}
 
 
@@ -2776,7 +2777,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"images": items, "publish": pub_on, "keep_days": LIM.KEEP_DAYS})
             if path == "/api/live/thumb":
                 import liveimages as LIM
-                return self.send_file(LIM.thumb(qs.get("name", "")))
+                try:
+                    th = LIM.thumb(qs.get("name", ""))
+                except ValueError:
+                    raise
+                except Exception as e:                   # einmal je Bild ins Protokoll (warum fehlt die Vorschau?)
+                    nm = str(qs.get("name", ""))[:80]
+                    if nm not in _thumb_err:
+                        _thumb_err.add(nm)
+                        APPLOG.log("WARN", "live", "live_thumb_failed", name=nm, error=f"{type(e).__name__}: {e}")
+                    raise ValueError(f"Vorschau fehlt: {type(e).__name__}")
+                return self.send_file(th)
             if path == "/api/live/favname":
                 import live_decode as LDK
                 f = int(round(float(qs.get("freq_hz", 0) or 0)))
@@ -2910,6 +2921,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "cfg": EI.scan_cfg(st)})
             if path == "/api/sstv-events":
                 import sstv_events as SE
+                data = self.read_body()                  # steht vor dem allgemeinen Einlesen weiter unten
                 st = read_json(SETTINGS, {})
                 man = list(st.get("sstv_events_manual") or [])
                 if data.get("refresh"):
