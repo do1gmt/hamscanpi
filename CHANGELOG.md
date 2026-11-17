@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.26 – 2026-11-17
+
+- Self-test section 83 (documentation) now flags every old name `hamscanpi` outside the notes on the renaming –
+  also bare ones such as a clone into `hamscanpi` (README and docs are already free of them).
+
 ## 1.8.25 – 2026-11-17
 
 - **System updates for Raspberry Pi OS from the dashboard** (*System → System updates*), no SSH needed:

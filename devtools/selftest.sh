@@ -3169,8 +3169,8 @@ grep -q 'id="bkPassBox"' "$SRC/web/index.html" && grep -q 'secrets_password' "$S
   && grep -q ' openssl"' "$SRC/bin/setup_system.sh" && ok "Dashboard: Zugangsdaten verschlüsselt mit eigenem Passwort, Passwort beim Einspielen; openssl wird installiert" || bad "Dashboard Zugangsdaten"
 
 echo "== 83 Doku ohne alte Namen, Befehle und Pfade stimmen"
-STALE="$(grep -n -iE 'hamscanpi[-_.]|~/hamscanpi|HamScanPi-Sicherungen|--no-secrets' "$SRC/README.md" "$SRC"/docs/*.md "$SRC"/share/wordpress/*/readme.txt \
-  | grep -viE 'until|before|umstieg|früher|vorher|gilt weiter|formerly|alte|old |was |since 1\.8' || true)"
+STALE="$(grep -n -iE 'hamscanpi|--no-secrets' "$SRC/README.md" "$SRC"/docs/*.md "$SRC"/share/wordpress/*/readme.txt \
+  | grep -viE 'until|before|umstieg|früher|vorher|gilt weiter|formerly|alte|old |was |since 1\.8|called \*\*HamScanPi' || true)"
 MISS=""
 for f in "$SRC/README.md" "$SRC"/docs/*.md; do
   for p in $(grep -o '`[^`]*`' "$f" | tr -d '`' | grep -oE '(^|[ (])(bin|devtools|share|web|docs)/[A-Za-z0-9_./-]+' | sed 's/^[ (]//' | sort -u); do
