@@ -18,7 +18,7 @@ USB_MP=/mnt/hesperosdx-usb
 NAS_MP=/mnt/hesperosdx-nas
 CRED_DIR=/etc/hesperosdx
 CRED=$CRED_DIR/nas.cred
-SUB=HamScanPi-Sicherungen
+SUB=HesperosDX-Sicherungen
 die() { echo "$*" >&2; exit 2; }
 OWN_UID="${SUDO_UID:-0}"; OWN_GID="${SUDO_GID:-0}"
 [[ "$OWN_UID" =~ ^[0-9]+$ && "$OWN_GID" =~ ^[0-9]+$ ]] || die "ungültiger Benutzer"

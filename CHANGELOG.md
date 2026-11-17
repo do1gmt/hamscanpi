@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.18 – 2026-11-17
+
+- **Renaming on the Pi, step D (last step) – backups.** Folder on USB stick / network share
+  `HamScanPi-Sicherungen` → `HesperosDX-Sicherungen`, files `hamscanpi-backup-…` → `hesperosdx-backup-…`.
+  Once the target is mounted, this Pi moves its own folder (its host name) into the new folder – merged without
+  overwriting; folders of other Pis stay where they are and move with their own update; an empty old folder is
+  removed. Old files and folders are still listed, sorted by date together with the new ones, and can be restored;
+  "keep the last N" counts both names. Renaming the station also takes a folder still lying in the old place along.
+  Log `backup_dir_moved`.
+- Fix: moving a backup folder whose name only differed in upper/lower case from a folder in another place was
+  treated as a pure rename.
+- Self-test section 78.
+
 ## 1.8.17 – 2026-11-17
 
 - **Renaming on the Pi, step C – program folder `~/hamscanpi` → `~/HesperosDX`.** The update moves the folder and

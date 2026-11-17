@@ -159,7 +159,7 @@ def write(fileobj, scope="data", secrets=True, stream=False):
 
 
 def filename(scope):
-    return f"hamscanpi-backup-{time.strftime('%Y%m%d-%H%M')}-{scope}.tar.gz"
+    return f"hesperosdx-backup-{time.strftime('%Y%m%d-%H%M')}-{scope}.tar.gz"
 
 
 def info(path):
@@ -391,7 +391,9 @@ def run_auto(cfg=None, log=print):
     st = {"last": time.time(), "file": str(out), "size": out.stat().st_size, "files": man["files"], "error": None}
     keep = max(1, int(cfg.get("keep", 7)))
     # nach dem Namen (Datum und Uhrzeit stehen darin) – die gerade geschriebene Datei bleibt immer
-    others = sorted((p for p in d.glob("hamscanpi-backup-*.tar.gz") if p != out), key=lambda p: p.name, reverse=True)
+    import storage as STO                             # alte (hamscanpi-backup-…) und neue Namen zusammen, nach Datum
+    others = sorted((p for p in d.iterdir() if p != out and STO.BACKUP_RE.match(p.name)),
+                    key=lambda p: STO.backup_stamp(p.name), reverse=True)
     old = others[max(0, keep - 1):]
     for p in old:
         try:

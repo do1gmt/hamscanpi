@@ -428,7 +428,7 @@ hits a read/write error remounts it once and tries again. *Eject* unmounts it cl
 been unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
 `//host/share` with user and password and mounted at `/mnt/hesperosdx-nas` (SMB 2 or newer, package cifs-utils);
 if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hesperosdx/nas.cred`
-(root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` (folder name kept from the former name) on the
+(root only) – not in the settings, not in backups. Backups go to `HesperosDX-Sicherungen/<host name>/` (until 1.8.17 `HamScanPi-Sicherungen` – still read, the own folder moves over by itself) on the
 target, so several Hesperos-DX-Stationen can share one stick or share. Renaming the station takes its folder along
 (done later if the target is not reachable at that moment). Backups found there (also those of another Pi, e.g.
 when moving to a new one) can be checked and restored directly from the list.
@@ -441,8 +441,8 @@ From the command line, e.g. after losing the card (fresh install, then):
 
 ```
 python3 bin/backup.py create --scope data          # settings | data | all, --no-secrets, -o file
-python3 bin/backup.py info hamscanpi-backup-….tar.gz
-python3 bin/backup.py restore hamscanpi-backup-….tar.gz
+python3 bin/backup.py info hesperosdx-backup-….tar.gz
+python3 bin/backup.py restore hesperosdx-backup-….tar.gz
 sudo systemctl restart hesperosdx-scheduler hesperosdx-web
 ```
 
@@ -556,4 +556,5 @@ wants lower case). Since 1.8.15 the services are `hesperosdx-*` (with the helper
 safely – the old services are only removed once the new ones run and the dashboard answers, otherwise the old ones
 keep running. Since 1.8.16 the address is `hesperosdx.local` (without a station name of its own), since 1.8.17 the
 program folder is `~/HesperosDX` (the old path `~/hamscanpi` stays as a link; stored paths in the database are
-rewritten). Still to follow: the backup folder `HamScanPi-Sicherungen`. Station names that were left at the old default "HamScanPi" count as the default.
+rewritten), since 1.8.18 backups are in `HesperosDX-Sicherungen` and named `hesperosdx-backup-…` (old files and
+folders are still listed and can be restored). Station names that were left at the old default "HamScanPi" count as the default.

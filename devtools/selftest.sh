@@ -2829,5 +2829,44 @@ PY
 }
 dir77 && ok "Ordner verschoben, alter Pfad als Verweis, Pfade in Datenbank und Zustandsdateien umgeschrieben (Rechte bleiben), zweiter Lauf ändert nichts, vorhandenes Ziel bleibt unberührt" || bad "Programmordner"
 
+echo "== 78 Sicherungen: HesperosDX-Sicherungen, hesperosdx-backup-…, alte Namen weiter lesbar"
+(cd bin && timeout 60 python3 - <<'PY') && ok "neue Namen geschrieben, alte und neue gemeinsam gelistet und nach Datum sortiert, „behalten“ zählt beide, nur der eigene Ordner zieht um" || bad "Sicherungen umbenannt"
+import socket, tempfile, time
+from pathlib import Path
+import storage as STO, backup as BK
+assert BK.filename("data").startswith("hesperosdx-backup-") and STO.SUB == "HesperosDX-Sicherungen"
+assert STO.backup_stamp("hamscanpi-backup-20261117-1121-data.tar.gz") == "20261117-1121" == STO.backup_stamp("hesperosdx-backup-20261117-1121-all.tar.gz")
+assert not STO.BACKUP_RE.match("hesperosdx-backup-2026-data.tar.gz") and not STO.BACKUP_RE.match("x-backup-20261117-1121-data.tar.gz")
+tmp = Path(tempfile.mkdtemp())
+STO.USB_MP, STO.NAS_MP, STO.STATE = tmp / "usb", tmp / "nas", tmp / "state.json"
+STO.mounted = lambda mp: mp == STO.USB_MP
+socket.gethostname = lambda: "do1gmt-devpi"
+def put(p, name):
+    p.mkdir(parents=True, exist_ok=True); (p / name).write_bytes(b"x")
+old, new = STO.USB_MP / "HamScanPi-Sicherungen", STO.USB_MP / "HesperosDX-Sicherungen"
+put(old / "do1gmt-devpi", "hamscanpi-backup-20261116-0300-data.tar.gz")
+put(old / "do1gmt-devpi", "hamscanpi-backup-20261117-1121-data.tar.gz")
+put(old / "afgn-pi", "hamscanpi-backup-20261117-0300-data.tar.gz")            # anderer Pi: bleibt
+put(new / "do1gmt-devpi", "hesperosdx-backup-20261117-1805-data.tar.gz")
+names = [b["name"] for b in STO.list_backups()]
+assert names[0] == "hesperosdx-backup-20261117-1805-data.tar.gz" and names[1] == "hamscanpi-backup-20261117-1121-data.tar.gz" and len(names) == 4, names
+assert {b["host"] for b in STO.list_backups()} == {"do1gmt-devpi", "afgn-pi"}
+STO.migrate_backup_dir()
+assert sorted(p.name for p in (new / "do1gmt-devpi").iterdir()) == ["hamscanpi-backup-20261116-0300-data.tar.gz",
+       "hamscanpi-backup-20261117-1121-data.tar.gz", "hesperosdx-backup-20261117-1805-data.tar.gz"]
+assert not (old / "do1gmt-devpi").exists() and (old / "afgn-pi").is_dir() and old.is_dir()   # alter Ordner bleibt für den anderen Pi
+STO.migrate_backup_dir()                                                     # nichts mehr zu tun
+assert STO.checked_path(new / "do1gmt-devpi" / "hesperosdx-backup-20261117-1805-data.tar.gz")
+# „behalten“: alte und neue Namen zusammen, nach Datum
+d = Path(tempfile.mkdtemp())
+for n in ("hamscanpi-backup-20261101-0300-data.tar.gz", "hamscanpi-backup-20261102-0300-data.tar.gz", "hesperosdx-backup-20261103-0300-data.tar.gz"):
+    (d / n).write_bytes(b"x")
+BK.check_dir = lambda x, t=None: None
+BK.AUTO_STATE = d / "state.json"
+BK.filename = lambda scope: "hesperosdx-backup-20261104-0300-settings.tar.gz"
+BK.run_auto({"dir": str(d), "scope": "settings", "secrets": False, "keep": 2}, log=lambda m: None)
+assert sorted(p.name for p in d.glob("*.tar.gz")) == ["hesperosdx-backup-20261103-0300-data.tar.gz", "hesperosdx-backup-20261104-0300-settings.tar.gz"], sorted(p.name for p in d.glob("*.tar.gz"))
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

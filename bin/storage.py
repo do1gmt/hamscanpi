@@ -11,7 +11,8 @@ NAS: Adresse //rechner/freigabe, Benutzer, Passwort. Das Passwort liegt nur in /
 kann es lesen) – nicht in den Einstellungen und nicht in Sicherungen. Eingehängt nach /mnt/hesperosdx-nas; fällt
 die Verbindung weg, wird alle 10 min neu versucht.
 
-Die Sicherungen landen in <ziel>/HamScanPi-Sicherungen/<rechnername>/ – so können mehrere HamScanPis denselben
+Die Sicherungen landen in <ziel>/HesperosDX-Sicherungen/<rechnername>/ (bis 1.8.17 HamScanPi-Sicherungen – wird
+weiter gelesen, der eigene Ordner zieht um) – so können mehrere Hesperos-DX-Stationen denselben
 Stick oder dieselbe Freigabe benutzen, ohne sich gegenseitig alte Sicherungen wegzuräumen.
 Root-Handgriffe über /usr/local/sbin/hesperosdx-store (sudo-Regel nur für diese Datei).
 """
@@ -28,13 +29,21 @@ BASE = Path(__file__).resolve().parent.parent
 HELPER = "/usr/local/sbin/hesperosdx-store"
 USB_MP = Path("/mnt/hesperosdx-usb")
 NAS_MP = Path("/mnt/hesperosdx-nas")
-SUB = "HamScanPi-Sicherungen"
+SUB = "HesperosDX-Sicherungen"
+SUB_OLD = "HamScanPi-Sicherungen"            # bis 1.8.17 – wird weiter gelesen
 CRED = Path("/etc/hesperosdx/nas.cred")
 STATE = BASE / "data" / "storage_state.json"
 FS_OK = ("vfat", "exfat", "ntfs", "ext2", "ext3", "ext4", "btrfs", "xfs")
 FS_NAME = {"vfat": "FAT32", "exfat": "exFAT", "ntfs": "NTFS"}
 NAS_RETRY_S = 600
-BACKUP_RE = re.compile(r"^hamscanpi-backup-\d{8}-\d{4}-(settings|data|all)\.tar\.gz$")
+# Dateien heißen seit 1.8.18 hesperosdx-backup-…, vorher hamscanpi-backup-… – beide gelten
+BACKUP_RE = re.compile(r"^(?:hesperosdx|hamscanpi)-backup-(\d{8}-\d{4})-(settings|data|all)\.tar\.gz$")
+
+
+def backup_stamp(name):
+    """„20261117-1805“ aus dem Dateinamen (zum Sortieren über beide Namensformen), sonst \"\"."""
+    m = BACKUP_RE.match(name)
+    return m.group(1) if m else ""
 
 
 def _run(cmd, timeout=30, input=None):
@@ -304,6 +313,7 @@ def ensure(now=None, settings=None, log=None):
         _write_state(st)
     if read_state().get("pending_renames"):
         apply_renames(log)
+    migrate_backup_dir(log)
 
 
 def ensure_now(settings=None):
@@ -312,6 +322,35 @@ def ensure_now(settings=None):
     st.pop("usb_try", None); st.pop("nas_try", None)
     _write_state(st)
     ensure(settings=settings)
+
+
+# ------------------------------------------------------------------ Sicherungsordner HamScanPi- → HesperosDX-Sicherungen
+def migrate_backup_dir(log=None):
+    """Seit 1.8.18 heißt der Ordner auf USB/Freigabe HesperosDX-Sicherungen. Den eigenen Ordner (Rechnername) aus
+    HamScanPi-Sicherungen herüberholen – Ordner anderer Pis bleiben, die ziehen mit ihrem eigenen Update um. Ein leerer
+    alter Ordner verschwindet. Gelesen wird ohnehin beides (list_backups)."""
+    host = _safe_host(socket.gethostname())
+    if not host:
+        return
+    for mp in (USB_MP, NAS_MP):
+        if not mounted(mp):
+            continue
+        old = Path(mp) / SUB_OLD
+        if not (old / host).is_dir():
+            continue
+        try:
+            (Path(mp) / SUB).mkdir(exist_ok=True)
+            n = _move_dir(old / host, Path(mp) / SUB / host)
+            if log:
+                log("INFO", "storage", "backup_dir_moved", where="USB" if mp == USB_MP else "NAS", old=f"{SUB_OLD}/{host}",
+                    new=f"{SUB}/{host}", files=n)
+            try:
+                old.rmdir()                                    # nur, wenn leer (keine anderen Pis darin)
+            except OSError:
+                pass
+        except OSError as e:
+            if log:
+                log("WARN", "storage", "backup_dir_move_failed", error=f"{type(e).__name__}: {e}")
 
 
 # ------------------------------------------------------------------ Station umbenannt: Sicherungsordner mitnehmen
@@ -340,7 +379,8 @@ def _move_dir(src, dst, log=None):
     nichts wird überschrieben; ein leerer src wird danach entfernt. Rückgabe: Anzahl verschobener Dateien."""
     if not src.is_dir():
         return 0
-    same = src.name.lower() == dst.name.lower()                # FAT kennt keine Groß-/Kleinschreibung
+    # nur Groß-/Kleinschreibung anders im selben Ordner (FAT unterscheidet das nicht): einfach umbenennen
+    same = src.parent == dst.parent and src.name.lower() == dst.name.lower()
     if same or not dst.exists():
         n = sum(1 for _ in src.iterdir())
         os.rename(src, dst)
@@ -376,7 +416,10 @@ def apply_renames(log=None):
                 continue
             base = Path(mp) / SUB
             try:
-                n = _move_dir(base / p["old"], base / p["new"], log)
+                # liegt der alte Ordner noch unter dem alten Namen (HamScanPi-Sicherungen), gleich an den neuen Ort
+                src = base / p["old"] if (base / p["old"]).is_dir() else Path(mp) / SUB_OLD / p["old"]
+                base.mkdir(exist_ok=True)
+                n = _move_dir(src, base / p["new"], log)
                 done.add(str(mp))
                 if log and n:
                     log("INFO", "storage", "backup_dir_renamed", where="USB" if mp == USB_MP else "NAS",
@@ -401,7 +444,11 @@ def list_backups():
     """Sicherungen auf den eingehängten Zielen – auch die anderer Hesperos-DX-Stationen (z. B. beim Umzug auf einen neuen Pi)."""
     out = []
     for mp in roots():
-        for d in [mp, mp / SUB] + sorted((mp / SUB).glob("*/")) if (mp / SUB).is_dir() else [mp]:
+        dirs = [mp]
+        for sub in (SUB, SUB_OLD):
+            if (mp / sub).is_dir():
+                dirs += [mp / sub] + sorted((mp / sub).glob("*/"))
+        for d in dirs:
             try:
                 files = list(d.iterdir())
             except OSError:
@@ -414,9 +461,9 @@ def list_backups():
                         continue
                     out.append({"path": str(f), "name": f.name, "size": sz, "mtime": mt,
                                 "where": "USB" if mp == USB_MP else "NAS",
-                                "host": d.name if d.parent.name == SUB else "",
-                                "scope": BACKUP_RE.match(f.name).group(1)})
-    out.sort(key=lambda x: x["name"][17:30], reverse=True)
+                                "host": d.name if d.parent.name in (SUB, SUB_OLD) else "",
+                                "scope": BACKUP_RE.match(f.name).group(2)})
+    out.sort(key=lambda x: backup_stamp(x["name"]), reverse=True)
     return out
 
 
