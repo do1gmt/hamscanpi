@@ -2448,7 +2448,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(WEB / name, cache=False)
             if path.startswith("/files/"):
                 name = Path(path[len("/files/"):]).name
-                return self.send_file(REPORTS / name)
+                return self.send_file(REPORTS / name, download_name=name if qs.get("dl") else None)
             if path == "/api/status":
                 st_ = load_status()
                 try:                                     # Version des Servers: nach einem Update lädt sich die Seite neu
@@ -2756,6 +2756,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(f, download_name=name, cache=False)
             if path == "/api/live/favorites":
                 return self.send_json({"favorites": read_json(SETTINGS, {}).get("live_favorites") or []})
+            if path == "/api/live/images":
+                import liveimages as LIM
+                items = LIM.listing()
+                try:
+                    import publish as PUB
+                    pst, pub_on = PUB.states(), bool(PUB.cfg().get("url"))
+                    for x in items:
+                        if x["kind"] == "sstv":
+                            x["pub"] = pst.get(PUB.key_for(LIM.REPORTS / x["name"]))
+                except Exception:
+                    pub_on = False
+                return self.send_json({"images": items, "publish": pub_on, "keep_days": LIM.KEEP_DAYS})
+            if path == "/api/live/thumb":
+                import liveimages as LIM
+                return self.send_file(LIM.thumb(qs.get("name", "")))
             if path == "/api/live/favname":
                 import live_decode as LDK
                 f = int(round(float(qs.get("freq_hz", 0) or 0)))
@@ -3191,6 +3206,19 @@ class Handler(BaseHTTPRequestHandler):
                                _gain_value(data["gain"]) if data.get("gain") not in (None, "") else None)
                     live_state_update({"freq_hz": data.get("freq_hz"), "mode": data.get("mode")})
                     return self.send_json({"ok": True, "live": _live.status()})
+            if path == "/api/live/images":
+                import liveimages as LIM
+                act, name = str(data.get("action") or ""), str(data.get("name") or "")
+                if act in ("keep", "unkeep"):
+                    LIM.set_keep(name, act == "keep")
+                elif act == "delete":
+                    LIM.delete(name)
+                elif act == "publish":
+                    LIM.publish(name)
+                else:
+                    raise ValueError("Aktion: keep, unkeep, delete oder publish")
+                APPLOG.log("INFO", "live", "live_image_" + act, name=name)
+                return self.send_json({"ok": True})
             if path == "/api/ui-prefs":
                 import uiprefs as UIP
                 prof = str(data.get("profile") or "")

@@ -43,7 +43,7 @@ FORMAT = 1
 SCOPES = ("settings", "data", "all")
 SECRET_KEYS = ("smtp_pass", "tg_token", "ntfy_token")
 DATA_SMALL = ("sticks.json", "sat_stats.json", "sat_results.json", "fm_gain.json", "pskreporter_state.json", "live_state.json", "antennas.json",
-              "notify_state.json", "tle.json", "ui_prefs.json")
+              "notify_state.json", "tle.json", "ui_prefs.json", "live_keep.json")
 DATABASES = ("scanner.db", "sysmon.db")
 SKIP_SUFFIX = (".lock", ".pid", ".tmp", ".trigger")
 ALLOWED_TOP = ("config/", "data/", "recordings/", "reports/")

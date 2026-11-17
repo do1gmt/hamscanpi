@@ -252,13 +252,18 @@ def run(settings, bulk_delete, log):
                 p.unlink()
         except OSError:
             pass
-    # 2c. Live-Mitschnitte (Live → Mitschneiden) nach 30 Tagen
-    for p in [*(BASE / "recordings" / "live").glob("live_*.wav"), *(BASE / "reports").glob("live_sstv_*.png"), *(BASE / "reports").glob("live_wefax_*.png")]:
+    # 2c. Live-Mitschnitte (Live → Mitschneiden) nach 30 Tagen; Bilder aus Live ebenso – außer den mit ★ behaltenen
+    for p in (BASE / "recordings" / "live").glob("live_*.wav"):
         try:
             if now - p.stat().st_mtime > 30 * 86400:
                 p.unlink()
         except OSError:
             pass
+    try:
+        import liveimages as LI
+        LI.cleanup(now)
+    except Exception:
+        pass
     for p in (BASE / "reports").glob("*_spectrum2*.png"):            # alte Spektrumbilder (vor 1.5.1)
         try:
             p.unlink()

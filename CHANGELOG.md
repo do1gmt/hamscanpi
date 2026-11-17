@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.24 – 2026-11-17
+
+- **Images from Live:** new card in the Live tab with the SSTV pictures and weather fax charts decoded in Live
+  (before, they were only in the decode list while Live ran and then hard to find). Thumbnails (240 px, made on
+  demand in RAM – not on the SD card), tap for full size, ↓ download, ✕ delete, filter SSTV / weather fax / ★;
+  each picture shows mode, completeness, frequency and when it will be deleted.
+- **★ keeps a picture** beyond the 30-day cleanup (`data/live_keep.json`, part of every backup).
+- **SSTV to the website by hand** ("↑ To website", same as on hit cards) when the SSTV export is set up.
+- The Live decoders write a small description next to each picture (`live_*.json`: frequency, demodulator, SSTV
+  mode, completeness); the cleanup removes it together with the picture. New `GET/POST /api/live/images`,
+  `GET /api/live/thumb`, `/files/<name>?dl=1` downloads.
+- Self-test section 84.
+
 ## 1.8.23 – 2026-11-17
 
 - Documentation: the udev rules are named `20-hesperosdx-rtlsdr.rules` and `90-hesperosdx-pmsdr.rules` since

@@ -3184,5 +3184,57 @@ src = Path(sys.argv[1]) / "bin" / "backup.py"
 assert '"app": "Hesperos DX"' in src.read_text()
 PY
 
+echo "== 84 Bilder aus Live: Liste, Vorschau, ★ behalten, löschen, aufräumen nach 30 Tagen"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Liste mit Beschreibung, Vorschaubild 240 px im RAM, ★ übersteht das Aufräumen, Löschen samt Beschreibung, fremde Namen abgewiesen, nur SSTV auf die Webseite" || bad "Bilder aus Live"
+import json, os, threading, time, urllib.request
+from PIL import Image
+import liveimages as LI, webapp as W, backup as BK
+LI.REPORTS.mkdir(parents=True, exist_ok=True)
+now = time.time()
+def mk(kind, age_days, size=(640, 496)):
+    t = now - age_days * 86400
+    n = f"live_{kind}_{time.strftime('%Y%m%d_%H%M%S', time.gmtime(t))}.png"
+    Image.new("RGB", size, (20, 90, 160)).save(LI.REPORTS / n)
+    os.utime(LI.REPORTS / n, (t, t))
+    LI.write_meta(LI.REPORTS / n, kind=kind, freq_hz=145_800_000, mode="nfm", image_mode="PD120", complete=0.9)
+    return n
+a, b, c = mk("sstv", 1), mk("wefax", 40, (1810, 1200)), mk("sstv", 45)
+L = {x["name"]: x for x in LI.listing()}
+assert L[a]["kind"] == "sstv" and L[a]["image_mode"] == "PD120" and L[a]["freq_hz"] == 145_800_000 and abs(L[a]["t"] - (now - 86400)) < 2
+assert list(L)[0] == a                                                          # neueste zuerst
+th = LI.thumb(b); from PIL import Image as I2
+assert I2.open(th).size[0] == 240 and not str(th).startswith(str(LI.REPORTS))      # Vorschau nicht auf der Karte
+assert LI.thumb(b) == th                                                        # zwischengespeichert
+LI.set_keep(c, True); assert c in LI.keep_list()
+LI.cleanup(now)
+assert (LI.REPORTS / a).exists() and not (LI.REPORTS / b).exists() and not LI.meta_path(LI.REPORTS / b).exists()
+assert (LI.REPORTS / c).exists()                                                # ★ bleibt
+LI.delete(c); assert not (LI.REPORTS / c).exists() and c not in LI.keep_list()
+for bad in ("../config/web_settings.json", "live_sstv_x.png", "live_wefax_20260101_000000.png"):
+    try:
+        LI.checked(bad); raise SystemExit("angenommen: " + bad)
+    except ValueError:
+        pass
+w = mk("wefax", 2)
+try:
+    LI.publish(w); raise SystemExit("Wetterfax auf die Webseite?")
+except ValueError:
+    pass
+assert "live_keep.json" in BK.DATA_SMALL
+# Webserver
+srv = W._Server(("127.0.0.1", 0), W.Handler); threading.Thread(target=srv.serve_forever, daemon=True).start()
+op = urllib.request.build_opener(urllib.request.ProxyHandler({})); base = f"http://127.0.0.1:{srv.server_address[1]}"
+d = json.load(op.open(base + "/api/live/images", timeout=30)); assert {x["name"] for x in d["images"]} == {a, w}
+assert op.open(base + f"/api/live/thumb?name={a}", timeout=30).headers["Content-Type"] == "image/png"
+r = op.open(base + f"/files/{a}?dl=1", timeout=30); assert "attachment" in r.headers.get("Content-Disposition", "")
+req = urllib.request.Request(base + "/api/live/images", data=json.dumps({"action": "keep", "name": a}).encode(), headers={"Content-Type": "application/json"})
+assert json.load(op.open(req, timeout=30))["ok"] and a in LI.keep_list()
+srv.shutdown()
+for n in (a, w):
+    LI.delete(n)
+PY
+grep -q 'id="panel-liveimg"' "$SRC/web/index.html" && grep -q 'function renderLiveImgs' "$SRC/web/app.js" && grep -q 'LI.write_meta' "$SRC/bin/live_decode.py" \
+  && grep -q 'LI.cleanup' "$SRC/bin/housekeeping.py" && ok "Karte im Live-Reiter, Dekoder schreiben die Beschreibung, Aufräumen über liveimages" || bad "Bilder aus Live: Einbau"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

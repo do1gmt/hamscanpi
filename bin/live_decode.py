@@ -632,6 +632,9 @@ class LiveDecoders:
                 REPORTS.mkdir(parents=True, exist_ok=True)
                 WF.save_png(F["dec"].image(), REPORTS / F["img"])
                 n = len(F["dec"].lines)
+                import liveimages as LI                      # Beschreibung für „Bilder aus Live“
+                LI.write_meta(REPORTS / F["img"], kind="wefax", freq_hz=int(self.freq_hz), mode=self.mode, lines=n,
+                              done="stop" in evs, antenna=self.antenna)
                 text = f"Wetterfax · {n} Zeilen ({n // 2 // 60} min {n // 2 % 60} s)" + (" · fertig" if "stop" in evs else "")
                 img = f"/files/{F['img']}?v={int(t)}"
                 ev = None
@@ -681,6 +684,9 @@ class LiveDecoders:
             name = self._sstv_img[1]
             REPORTS.mkdir(parents=True, exist_ok=True)
             SD.save_png(im["image"], REPORTS / name)
+            import liveimages as LI                          # Beschreibung für „Bilder aus Live“
+            LI.write_meta(REPORTS / name, kind="sstv", freq_hz=int(self.freq_hz), mode=self.mode, image_mode=im.get("mode"),
+                          complete=round(float(im.get("complete") or 0), 3), start=start, antenna=self.antenna)
             self._publish(REPORTS / name, im, start)
             text, img = f"{im['mode']} – {round(im['complete'] * 100)} % der Zeilen", f"/files/{name}?v={int(t)}"
             ev = None

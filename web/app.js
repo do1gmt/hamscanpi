@@ -1634,7 +1634,7 @@
   setTimeout(jumpCurrent, 1500);                             // nach dem ersten Laden (Karten und Übersetzung stehen)
 
   function showView(name) {
-    if (name === 'live') setTimeout(() => { eibiList(); eibiNow(true); }, 0);
+    if (name === 'live') setTimeout(() => { eibiList(); eibiNow(true); loadLiveImgs(); }, 0);
     if (name === 'stations') setTimeout(() => { fillStationBands(); loadStations(); loadActivity(); loadFm(); loadInterf(); }, 0);   // nach dem Start des Skripts
     document.querySelectorAll('.view').forEach(v => v.hidden = v.dataset.view !== name);
     document.querySelectorAll('.tabs-main button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
@@ -2101,6 +2101,53 @@
   });
   $('seFetch').addEventListener('change', async e => { try { await post('/api/sstv-events', { fetch_on: e.target.checked }); } catch (err) { toast(err.message); } });
   loadSstvEvents(); setInterval(loadSstvEvents, 600000);
+
+  // ---------- Bilder aus Live (bin/liveimages.py) ----------
+  let liveImgs = [], liveImgPub = false, liveImgSel = 'all';
+  const LIK = { all: EN ? 'All' : 'Alle', sstv: 'SSTV', wefax: EN ? 'Weather fax' : 'Wetterfax', keep: '★' };
+  async function loadLiveImgs() {
+    let d; try { d = await api('/api/live/images'); } catch (e) { return; }
+    liveImgs = d.images || []; liveImgPub = !!d.publish;
+    renderLiveImgs();
+  }
+  function renderLiveImgs() {
+    const box = $('liveImgFilter'); box.innerHTML = '';
+    const n = k => k === 'all' ? liveImgs.length : k === 'keep' ? liveImgs.filter(x => x.keep).length : liveImgs.filter(x => x.kind === k).length;
+    Object.keys(LIK).forEach(k => { if (k !== 'all' && !n(k)) return; const c = chip(`${LIK[k]} <span class="n">${n(k)}</span>`, liveImgSel === k); c.addEventListener('click', () => { liveImgSel = k; renderLiveImgs(); }); box.appendChild(c); });
+    $('liveImgFilter').hidden = !liveImgs.length;
+    $('liveImgCount').textContent = liveImgs.length ? `(${liveImgs.length})` : '';
+    const list = liveImgs.filter(x => liveImgSel === 'all' || (liveImgSel === 'keep' ? x.keep : x.kind === liveImgSel));
+    if (!list.length) { $('liveImgList').innerHTML = `<div class="muted">${EN ? 'No images yet – SSTV and weather fax from Live end up here.' : 'Noch keine Bilder – SSTV und Wetterfax aus Live landen hier.'}</div>`; return; }
+    $('liveImgList').innerHTML = list.map(x => {
+      const v = Math.round(x.mtime), what = x.kind === 'sstv' ? `SSTV${x.image_mode ? ' · ' + esc(x.image_mode) : ''}${x.complete != null ? ` · ${Math.round(x.complete * 100)} %` : ''}`
+        : `${EN ? 'Weather fax' : 'Wetterfax'}${x.lines ? ` · ${Math.floor(x.lines / 120)} min` : ''}`;
+      const f = x.freq_hz ? ` · ${+(x.freq_hz / 1e6).toFixed(5)} MHz` : '';
+      const exp = x.keep ? (EN ? 'kept' : 'behalten') : x.expires ? `${EN ? 'deleted' : 'gelöscht'} ${tfmt(x.expires, { date: true, label: false })}` : '';
+      return `<figure class="liveimg${x.keep ? ' kept' : ''}" data-li="${esc(x.name)}">
+        <a href="/files/${esc(x.name)}?v=${v}" target="_blank" rel="noopener"><img loading="lazy" src="/api/live/thumb?name=${encodeURIComponent(x.name)}&v=${v}" alt="${esc(what)}"></a>
+        <figcaption><b>${what}</b><br><small>${esc(tfmt(x.t, { date: true }))}${f}</small><br><small>${esc(exp)} · ${fmtSize(x.size)}</small></figcaption>
+        ${x.kind === 'sstv' && liveImgPub ? `<span class="pub-st-wrap">${pubCell(x.pub)}</span>` : ''}
+        <div class="actions">
+          <button type="button" class="btn btn-small" data-li-act="${x.keep ? 'unkeep' : 'keep'}" title="${x.keep ? (EN ? 'no longer keep (deleted after 30 days)' : 'nicht mehr behalten (nach 30 Tagen gelöscht)') : (EN ? 'keep permanently' : 'dauerhaft behalten')}">${x.keep ? '★' : '☆'}</button>
+          <a class="btn btn-small" href="/files/${esc(x.name)}?dl=1" download title="${EN ? 'download' : 'herunterladen'}">↓</a>
+          <button type="button" class="btn btn-small btn-danger" data-li-act="delete" title="${EN ? 'delete' : 'löschen'}">✕</button>
+        </div></figure>`;
+    }).join('');
+  }
+  $('liveImgList').addEventListener('click', async e => {
+    const fig = e.target.closest('[data-li]'); if (!fig) return;
+    const b = e.target.closest('[data-li-act], [data-act="pub"]'); if (!b) return;
+    const act = b.dataset.liAct || 'publish', name = fig.dataset.li;
+    if (act === 'delete' && !confirm(EN ? 'Delete this image?' : 'Dieses Bild löschen?')) return;
+    b.disabled = true;
+    try {
+      await post('/api/live/images', { action: act, name });
+      note($('liveImgNote'), { keep: EN ? '★ kept permanently' : '★ wird dauerhaft behalten', unkeep: EN ? 'no longer kept – deleted after 30 days' : 'nicht mehr behalten – nach 30 Tagen gelöscht',
+        delete: EN ? 'deleted' : 'gelöscht', publish: EN ? '↑ queued for the website' : '↑ für die Webseite vorgemerkt' }[act]);
+      loadLiveImgs();
+    } catch (err) { note($('liveImgNote'), (EN ? 'Error: ' : 'Fehler: ') + err.message, true); b.disabled = false; }
+  });
+  setInterval(() => { if (document.querySelector('section.view[data-view="live"]:not([hidden])') && !document.hidden) loadLiveImgs(); }, 30000);
 
   // ---------- Zeitpläne ----------
   const DAYS = EN ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];

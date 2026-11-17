@@ -44,6 +44,10 @@ shortwave.
   signal-to-noise display and overload warning;
   live decoders also for **NAVTEX** (518/490/4209.5 kHz), **weather fax** (charts as images, e.g. DWD Pinneberg)
   and **weather RTTY** (450/850 Hz shift), chosen automatically by frequency.
+- **Images from Live:** SSTV pictures and weather fax charts decoded in Live are collected in the card *Images
+  from Live* (Live tab) – thumbnails (made in RAM, not on the SD card), full size on tap, download, delete, filter
+  by SSTV / weather fax / ★. They are deleted after 30 days unless kept with ★ (`data/live_keep.json`, in every
+  backup); SSTV pictures can be sent to your website with "↑ To website".
 - **Shortwave broadcasting with the [EiBi](http://www.eibispace.de/) schedule:** in Live the station on the tuned
   frequency and a list of everything on air now (tap to listen); as chip *EiBi* in the scan a check of every
   scheduled broadcast with carrier level – a log of what was heard per band.
