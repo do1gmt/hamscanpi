@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.11 – 2026-11-17
+
+- **Renaming the station takes its backup folder along:** the backups on the USB stick or network share are kept in
+  a folder per Pi name; renaming the station (and with it the Pi's network name) started a new folder each time.
+  Now the old folder is renamed – or, if the new name already has one, its files are moved in (nothing is
+  overwritten). If the stick is not plugged in or the share is unreachable at that moment, it is done as soon as
+  it is back, several renamings in their order. Log `backup_dir_renamed`.
+- Publishing: the publishing file copied the new files with their old time stamps; a changed file with the same size
+  and the same second as in the working copy was taken as unchanged by git and not published. Now copied with
+  fresh time stamps (found by self-test section 67, which failed now and then).
+- Self-test section 71.
+
 ## 1.8.10 – 2026-11-17
 
 - **New logo:** the evening star (Hesperos) sending – a star with radio waves on both sides. The old antenna mast

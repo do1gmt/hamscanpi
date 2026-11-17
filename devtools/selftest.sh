@@ -2368,7 +2368,7 @@ ren67() {
     # GitHub-Umleitung – auf dasselbe Repository)
     ln -s "$G/hesperos-dx.git" "$G/hamscanpi.git"
     git clone -q "$G/hamscanpi.git" "$G/pub/hamscanpi" 2>/dev/null || return 1
-    local O; O="$(cd "$G/pub" && HSP_REPO="$G/hesperos-dx.git" bash hesperos-publish.sh 2>&1)" || { echo "$O" | tail -5; return 1; }
+    local O; O="$(cd "$G/pub" && HSP_REPO="$G/hesperos-dx.git" bash hesperos-publish.sh 2>&1)" || { echo "$O" | tail -25; git -C "$G/hesperos-dx.git" log --oneline --all | head; return 1; }
     [ ! -e "$G/pub/hamscanpi" ] && [ -d "$G/pub/hesperos-dx/.git" ] || return 1
     [ "$(git -C "$G/pub/hesperos-dx" remote get-url origin)" = "$G/hesperos-dx.git" ] || return 1
     git -C "$G/hesperos-dx.git" tag | grep -q v9.9.1 || return 1
@@ -2512,6 +2512,54 @@ assert NH.scan_detail() == ([], "kein WLAN-Adapter gefunden")
 W = Path(sys.argv[1]) / "web"
 html, js = (W / "index.html").read_text(), (W / "app.js").read_text()
 assert 'id="wifiSeenList"' in html and "$('wifiSeenList').addEventListener('click'" in js and "Suche fehlgeschlagen: " in js
+PY
+
+echo "== 71 Station umbenannt: Sicherungsordner zieht mit"
+(cd bin && timeout 30 python3 - <<'PY') && ok "Ordner umbenannt, mit bestehendem zusammengeführt ohne Überschreiben, bei fehlendem Stick nachgeholt, auch mehrfach und hin und zurück" || bad "Sicherungsordner bei Umbenennung"
+import tempfile
+from pathlib import Path
+import storage as STO
+tmp = Path(tempfile.mkdtemp())
+STO.USB_MP, STO.NAS_MP, STO.STATE = tmp / "usb", tmp / "nas", tmp / "state.json"
+base = STO.USB_MP / STO.SUB
+plugged = {"on": True}
+STO.mounted = lambda mp: mp == STO.USB_MP and plugged["on"]
+STO.target = lambda settings=None: {"kind": "usb", "uuid": "ABCD-1234"}
+logs = []
+log = lambda *a, **k: logs.append((a, k))
+def mk(host, *files):
+    (base / host).mkdir(parents=True, exist_ok=True)
+    for f in files:
+        (base / host / f).write_text(f)
+def names(host):
+    return sorted(x.name for x in (base / host).iterdir()) if (base / host).is_dir() else None
+# 1) einfach: alter Ordner wird zum neuen
+mk("hamscanpidev", "hamscanpi-backup-20261114-0300-data.tar.gz")
+STO.follow_rename("hamscanpidev", "do1gmt-dev", log)
+assert names("hamscanpidev") is None and names("do1gmt-dev") == ["hamscanpi-backup-20261114-0300-data.tar.gz"]
+assert any(a[2] == "backup_dir_renamed" for a, k in logs)
+# 2) neuer Name gab es schon: zusammenführen, nichts überschreiben
+mk("do1gmt-devpi", "hamscanpi-backup-20261117-1121-data.tar.gz")
+(base / "do1gmt-dev" / "hamscanpi-backup-20261117-1121-data.tar.gz").write_text("ALT")
+STO.follow_rename("do1gmt-dev", "do1gmt-devpi", log)
+assert names("do1gmt-devpi") == ["hamscanpi-backup-20261114-0300-data.tar.gz", "hamscanpi-backup-20261117-1121-data.tar.gz"]
+assert (base / "do1gmt-devpi" / "hamscanpi-backup-20261117-1121-data.tar.gz").read_text() != "ALT"
+assert names("do1gmt-dev") == ["hamscanpi-backup-20261117-1121-data.tar.gz"]       # gleicher Name: bleibt liegen
+# 3) Stick steckt nicht: vorgemerkt, mehrfach umbenannt, beim Anstecken in Reihenfolge nachgeholt
+plugged["on"] = False
+STO.follow_rename("do1gmt-devpi", "do1gmt-entwicklungpi", log)
+STO.follow_rename("do1gmt-entwicklungpi", "do1gmt-pi", log)
+assert len(STO.read_state()["pending_renames"]) == 2 and names("do1gmt-devpi")
+plugged["on"] = True
+STO.apply_renames(log)
+assert names("do1gmt-pi") and names("do1gmt-devpi") is None and names("do1gmt-entwicklungpi") is None
+assert STO.read_state()["pending_renames"] == []
+# 4) hin und zurück und wieder hin
+STO.follow_rename("do1gmt-pi", "a-pi", log); STO.follow_rename("a-pi", "do1gmt-pi", log); STO.follow_rename("do1gmt-pi", "a-pi", log)
+assert names("a-pi") and names("do1gmt-pi") is None
+# 5) ungültige Namen werden nie als Pfad benutzt
+STO.follow_rename("../x", "a-pi", log); STO.follow_rename("a-pi", "", log)
+assert names("a-pi") and STO.read_state()["pending_renames"] == []
 PY
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt

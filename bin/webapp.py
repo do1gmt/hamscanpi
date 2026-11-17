@@ -2810,7 +2810,16 @@ class Handler(BaseHTTPRequestHandler):
                     import station as STN
                     import netheal as NH
                     want = STN.hostname_for(res.get("station_name"))
+                    old_host = __import__("socket").gethostname()
                     ok, out_ = NH.helper("hostname", want, timeout=30)
+                    new_host = __import__("socket").gethostname()
+                    if ok and new_host != old_host:                 # Sicherungsordner auf USB/Freigabe mitnehmen
+                        try:
+                            import storage as STO
+                            STO.follow_rename(old_host, new_host, APPLOG.log)
+                        except Exception as e:
+                            APPLOG.log("WARN", "storage", "backup_dir_rename_failed", old=old_host, new=new_host,
+                                       error=f"{type(e).__name__}: {e}")
                     APPLOG.log("INFO" if ok else "WARN", "webapp", "station_renamed", name=res.get("station_name"),
                                hostname=want, ok=ok, error=None if ok else out_[-200:])
                     res = dict(res, station_hostname=__import__("socket").gethostname(),

@@ -302,6 +302,8 @@ def ensure(now=None, settings=None, log=None):
                 log("INFO" if ok else "WARN", "storage", "nas_mounted" if ok else "nas_mount_failed", detail=out[-200:])
     if changed:
         _write_state(st)
+    if read_state().get("pending_renames"):
+        apply_renames(log)
 
 
 def ensure_now(settings=None):
@@ -310,6 +312,84 @@ def ensure_now(settings=None):
     st.pop("usb_try", None); st.pop("nas_try", None)
     _write_state(st)
     ensure(settings=settings)
+
+
+# ------------------------------------------------------------------ Station umbenannt: Sicherungsordner mitnehmen
+def _safe_host(h):
+    h = str(h or "").strip()
+    return h if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}", h) else ""
+
+
+def follow_rename(old, new, log=None):
+    """Der Pi heißt jetzt anders: seinen Sicherungsordner auf USB/Freigabe mit umbenennen, statt neben dem alten einen
+    neuen anzufangen. Ist ein Ziel gerade nicht eingehängt, wird es vorgemerkt und nachgeholt (pending_renames,
+    apply_renames() aus ensure()). Mehrere Umbenennungen hintereinander werden in ihrer Reihenfolge nachgeholt."""
+    old, new = _safe_host(old), _safe_host(new)
+    if not old or not new or old == new:
+        return
+    st = read_state()
+    pend = [p for p in st.get("pending_renames") or [] if isinstance(p, dict)]
+    pend.append({"old": old, "new": new, "done": []})
+    st["pending_renames"] = pend[-20:]
+    _write_state(st)
+    apply_renames(log)
+
+
+def _move_dir(src, dst, log=None):
+    """src → dst. Gibt es dst schon (z. B. derselbe Name schon einmal benutzt), wandern die Dateien hinein –
+    nichts wird überschrieben; ein leerer src wird danach entfernt. Rückgabe: Anzahl verschobener Dateien."""
+    if not src.is_dir():
+        return 0
+    same = src.name.lower() == dst.name.lower()                # FAT kennt keine Groß-/Kleinschreibung
+    if same or not dst.exists():
+        n = sum(1 for _ in src.iterdir())
+        os.rename(src, dst)
+        return n
+    n = 0
+    for f in sorted(src.iterdir()):
+        t = dst / f.name
+        if t.exists():
+            continue
+        os.rename(f, t)
+        n += 1
+    try:
+        src.rmdir()
+    except OSError:
+        pass                                                   # blieb etwas liegen (gleicher Name): stehen lassen
+    return n
+
+
+def apply_renames(log=None):
+    """Vorgemerkte Umbenennungen auf den eingehängten Zielen ausführen (in ihrer Reihenfolge). Eine Umbenennung ist
+    erledigt, wenn sie auf dem gewählten Sicherungsziel geschehen ist; fehlt das Ziel gerade, bleibt sie vorgemerkt."""
+    st = read_state()
+    pend = [p for p in st.get("pending_renames") or [] if isinstance(p, dict)]
+    if not pend:
+        return
+    t = target()
+    want = USB_MP if t.get("kind") == "usb" else NAS_MP if t.get("kind") == "nas" else None
+    left = []
+    for p in pend:
+        done = set(p.get("done") or [])
+        for mp in (USB_MP, NAS_MP):
+            if str(mp) in done or not mounted(mp):
+                continue
+            base = Path(mp) / SUB
+            try:
+                n = _move_dir(base / p["old"], base / p["new"], log)
+                done.add(str(mp))
+                if log and n:
+                    log("INFO", "storage", "backup_dir_renamed", where="USB" if mp == USB_MP else "NAS",
+                        old=p["old"], new=p["new"], files=n)
+            except OSError as e:
+                if log:
+                    log("WARN", "storage", "backup_dir_rename_failed", old=p["old"], new=p["new"],
+                        error=f"{type(e).__name__}: {e}")
+        if want is not None and str(want) not in done:
+            left.append({"old": p["old"], "new": p["new"], "done": sorted(done)})
+    st = read_state()
+    st["pending_renames"] = left
+    _write_state(st)
 
 
 # ------------------------------------------------------------------ Sicherungen auf dem Ziel

@@ -418,7 +418,8 @@ been unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows sh
 `//host/share` with user and password and mounted at `/mnt/hamscanpi-nas` (SMB 2 or newer, package cifs-utils);
 if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hamscanpi/nas.cred`
 (root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` (folder name kept from the former name) on the
-target, so several Hesperos-DX-Stationen can share one stick or share. Backups found there (also those of another Pi, e.g.
+target, so several Hesperos-DX-Stationen can share one stick or share. Renaming the station takes its folder along
+(done later if the target is not reachable at that moment). Backups found there (also those of another Pi, e.g.
 when moving to a new one) can be checked and restored directly from the list.
 
 **Automatic backup:** daily or weekly at a chosen hour to the chosen target, keeping the last N files. A folder

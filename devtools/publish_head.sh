@@ -60,7 +60,10 @@ if [ "$ALREADY" = 0 ]; then
 bold "2/4 Neuer Stand"
 # alles außer .git ersetzen: so verschwinden auch Dateien, die es im neuen Stand nicht mehr gibt
 find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-cp -a "$TMP/new/." "$WORK/"
+# ohne die alten Zeitstempel kopieren: hätte eine geänderte Datei dieselbe Größe und dieselbe Sekunde wie die in der
+# Arbeitskopie, hielte git sie sonst für unverändert – die Änderung käme nicht mit
+cp -R --preserve=mode,links "$TMP/new/." "$WORK/"
+git -C "$WORK" update-index -q --really-refresh >/dev/null 2>&1 || true
 cd "$WORK"
 git add -A
 BAD="$(git diff --cached --name-only | grep -E '(^|/)auth\.json$|(^|/)web_settings\.json$|^config/scanner\.json$|^(data|recordings|reports|log|backup)/' || true)"
