@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Hesperos DX unter http://hamscanpi.local:8080 erreichbar machen – unabhängig davon, wie der Pi heißt.
+"""Hesperos DX unter http://hesperosdx.local:8080 erreichbar machen – unabhängig davon, wie der Pi heißt.
 
-Der eigentliche Rechnername gehört dem Benutzer und wird nicht angefasst. Heißt der Pi ohnehin „hamscanpi“
+Der eigentliche Rechnername gehört dem Benutzer und wird nicht angefasst. Heißt der Pi ohnehin „hesperosdx“
 (Groß-/Kleinschreibung egal), meldet avahi den Namen schon selbst an und hier ist nichts zu tun. Sonst meldet
-dieser Dienst zusätzlich den Namen hamscanpi.local mit der aktuellen IPv4-Adresse an (avahi-publish -a) und zieht
+dieser Dienst zusätzlich den Namen hesperosdx.local mit der aktuellen IPv4-Adresse an (avahi-publish -a) und zieht
 ihn nach, wenn sich die Adresse ändert. Belegt schon ein anderes Gerät den Namen (zweiter Hesperos DX im Netz),
 bleibt dieser Pi unter seinem eigenen Namen erreichbar; das steht im Zustand und als Hinweis.
 
 Zustand: data/mdns_state.json {"name", "ip", "mode": "hostname"|"alias"|"conflict"|"missing", "url"}
-Läuft als Dienst hamscanpi-mdns (systemd), prüft alle 30 s.
+Läuft als Dienst hesperosdx-mdns (systemd), prüft alle 30 s.
 """
 import json
 import socket
@@ -20,7 +20,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "bin"))
 STATE = BASE / "data" / "mdns_state.json"
-NAME = "hamscanpi"
+NAME = "hesperosdx"
 
 
 def _ip():
@@ -51,8 +51,8 @@ def _notice(mode, host):
     try:
         import notices as NT
         if mode == "conflict":
-            NT.raise_("mdns_conflict", "info", "system", "Name hamscanpi.local schon vergeben",
-                      f"Ein anderes Gerät im Netz meldet sich schon als hamscanpi.local (zweiter Hesperos DX?). Dieser Pi "
+            NT.raise_("mdns_conflict", "info", "system", "Name hesperosdx.local schon vergeben",
+                      f"Ein anderes Gerät im Netz meldet sich schon als hesperosdx.local (zweiter Hesperos DX?). Dieser Pi "
                       f"bleibt unter http://{host}.local:8080 und seiner IP-Adresse erreichbar.")
         else:
             NT.clear("mdns_conflict")
@@ -78,8 +78,8 @@ def run(port=8080, rounds=None, every=30, host=None, custom=None):
         ip = _ip()
         own = _custom_name() if custom is None else custom
         if host.lower() == NAME or own:
-            # eigener Stationsname: der Rechnername ist schon daraus abgeleitet (hamscanpi-afgn.local) – kein
-            # zusätzliches hamscanpi.local, sonst streiten sich zwei Pis darum
+            # eigener Stationsname: der Rechnername ist schon daraus abgeleitet (hesperos-afgn.local) – kein
+            # zusätzliches hesperosdx.local, sonst streiten sich zwei Pis darum
             if proc and proc.poll() is None:
                 proc.terminate()
             proc = None

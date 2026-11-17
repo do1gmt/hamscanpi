@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.16 – 2026-11-17
+
+- **Renaming on the Pi, step B – name in the network:** a Pi without a station name of its own is now
+  `hesperosdx.local` (was `hamscanpi.local`): on the update its host name changes from `hamscanpi` to `hesperosdx`,
+  without a transition. The new address is shown in the update log and as a notice ("New address in the network:
+  hesperosdx.local"); the IP address keeps working; its backup folder on the USB stick/share moves along.
+  With a station name of its own nothing changes (the name in the network comes from it, e.g. "DO1GMT-DevPi" →
+  `do1gmt-devpi.local`). A Pi with another host name of its own announces `hesperosdx.local` in addition, as before
+  with the old name. New installations get `hesperosdx`. Log `hostname_changed`.
+- Download names: `hesperosdx_<band>_<MHz>_<time>.png` (spectrum), `hesperosdx_swl_<date>.adi` (ADIF export).
+- Self-test section 76.
+
 ## 1.8.15 – 2026-11-17
 
 - **Renaming on the Pi, step A – services and system files are now called `hesperosdx-*`** (technical name

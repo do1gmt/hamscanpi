@@ -525,7 +525,7 @@ def check_network(st):
     port = _web_port()
     host = socket.gethostname()
     url = f"http://{cur['ip']}:{port}"
-    try:                                                  # Name im Netz (hamscanpi.local oder der Rechnername)
+    try:                                                  # Name im Netz (hesperosdx.local oder der Rechnername)
         mname = json.loads((BASE / "data" / "mdns_state.json").read_text(encoding="utf-8")).get("name") or f"{host}.local"
     except Exception:
         mname = f"{host}.local"

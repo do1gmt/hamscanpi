@@ -92,7 +92,7 @@ def target(settings=None):
 
 def host_dir(mp):
     """Ordner für die Sicherungen dieses Pi auf einem eingehängten Ziel."""
-    return Path(mp) / SUB / (socket.gethostname() or "hamscanpi")
+    return Path(mp) / SUB / (socket.gethostname() or "hesperosdx")
 
 
 def mounted(mp):

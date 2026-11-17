@@ -57,7 +57,7 @@ if [ "$LNG" = de ]; then cat <<EOF
 
 Nächste Schritte
   1. Den RTL-SDR-Stick einmal ab- und wieder anstecken (oder den Pi neu starten).
-  2. Dashboard öffnen:  http://hamscanpi.local:$PORT/   oder   http://$IP:$PORT/
+  2. Dashboard öffnen:  http://hesperosdx.local:$PORT/   oder   http://$IP:$PORT/
      (Android-Handys kennen .local oft nicht – dort die IP-Adresse nehmen)
   3. Einstellungen → Station: Locator (für Satelliten nötig), Rufzeichen.
      Einstellungen → Zugangsschutz: Passwort setzen (empfohlen).
@@ -70,7 +70,7 @@ else cat <<EOF
 
 Next steps
   1. Unplug the RTL-SDR stick and plug it in again (or reboot the Pi).
-  2. Open the dashboard:  http://hamscanpi.local:$PORT/   or   http://$IP:$PORT/
+  2. Open the dashboard:  http://hesperosdx.local:$PORT/   or   http://$IP:$PORT/
      (Android phones often do not resolve .local – use the IP address there)
   3. Settings → Station: locator (needed for satellites), callsign.
      Settings → Access protection: set a password (recommended).

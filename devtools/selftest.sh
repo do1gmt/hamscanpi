@@ -1354,7 +1354,7 @@ assert len(b["recordings"]) < len(a["recordings"])
 PY
 
 echo "== 44 Stick wieder angesteckt, Standortfrage nach Netzwechsel, Name im Netz"
-(cd bin && timeout 120 python3 - <<'PY') && ok "„abgezogen“ erledigt sich, Standortfrage bis zur Antwort, hamscanpi.local angemeldet bzw. belegt erkannt" || bad "Stick/Standort/Name"
+(cd bin && timeout 120 python3 - <<'PY') && ok "„abgezogen“ erledigt sich, Standortfrage bis zur Antwort, hesperosdx.local angemeldet bzw. belegt erkannt" || bad "Stick/Standort/Name"
 import json, os, stat, sys, tempfile, time
 from pathlib import Path
 import health as H, notices as NT
@@ -1391,11 +1391,11 @@ for name, body in (("ok", "sleep 30"), ("busy", "echo 'Failed to add address: Lo
     open(f, "w").write("#!/bin/sh\n" + body + "\n"); os.chmod(f, 0o755)
 os.environ["PATH"] = f"{d}/ok:" + os.environ["PATH"]
 MD.run(8080, rounds=1, every=0, host="raspberrypi")
-assert MD.state()["mode"] == "alias" and MD.state()["url"] == "http://hamscanpi.local:8080", MD.state()
+assert MD.state()["mode"] == "alias" and MD.state()["url"] == "http://hesperosdx.local:8080", MD.state()
 os.environ["PATH"] = f"{d}/busy:" + os.environ["PATH"]
 MD.run(8080, rounds=1, every=0, host="raspberrypi")
 assert MD.state()["mode"] == "conflict" and MD.state()["name"] == "raspberrypi.local", MD.state()
-MD.run(8080, rounds=1, every=0, host="HamScanPi")
+MD.run(8080, rounds=1, every=0, host="HesperosDX")
 assert MD.state()["mode"] == "hostname"
 PY
 echo "== 46 Kurzwelle je Stick per Hand"
@@ -1622,12 +1622,12 @@ bash -n "$SRC/share/root/hesperosdx-net" && ! bash "$SRC/share/root/hesperosdx-n
   && ok "Root-Helfer prüft seine Eingaben (falscher Rechnername, fremde Verbindung)" || bad "Root-Helfer"
 
 echo "== 53 Name dieser Station: Rechnername, Mail, Namensdienst"
-(cd bin && python3 - <<'PY') && ok "„Hesperos-AFGN“ → hesperos-afgn, Vorgabe bleibt hamscanpi, Betreff [Hesperos-AFGN], kein zusätzliches hamscanpi.local" || bad "Stationsname"
+(cd bin && python3 - <<'PY') && ok "„Hesperos-AFGN“ → hesperos-afgn, Vorgabe hesperosdx, Betreff [Hesperos-AFGN], kein zusätzliches hesperosdx.local" || bad "Stationsname"
 import json, tempfile
 from pathlib import Path
 import station as STN
 assert STN.hostname_for("Hesperos-AFGN") == "hesperos-afgn" and STN.hostname_for("HamScanPi-AFGN") == "hamscanpi-afgn"
-assert STN.hostname_for("Hesperos DX") == STN.hostname_for("HamScanPi") == STN.hostname_for("") == "hamscanpi"   # Vorgabe: Rechnername bleibt
+assert STN.hostname_for("Hesperos DX") == STN.hostname_for("HamScanPi") == STN.hostname_for("") == "hesperosdx"   # Vorgabe seit 1.8.16
 assert STN.validate("HamScanPi") == "Hesperos DX" and not STN.custom({"station_name": "HamScanPi"})                  # alte Vorgabe
 assert STN.hostname_for("Funkbude Müller") == "funkbude-mueller"
 assert STN.validate("") == "Hesperos DX" and STN.name({}) == "Hesperos DX" and not STN.custom({})
@@ -2757,6 +2757,37 @@ SC
     rm -rf "$R0"
 }
 ren75 && ok "alte Dienste erst nach erfolgreichem Start der neuen entfernt, laufendes Update bleibt bis zum Ende, Rückfall auf die alten, Systemdateien und Zugangsdaten umgezogen" || bad "Umstellung der Dienstnamen"
+
+echo "== 76 Name im Netz: Vorgabe hesperosdx.local, sonst aus dem Stationsnamen"
+host76() {
+    local T6; T6="$(mktemp -d)"
+    run6() {   # run6 <rechnername> <eigener stationsname 1/0> <helfer ok 1/0>
+        ( t() { printf '%s' "$1"; }; ok() { echo "OK $*"; }; warn() { echo "WARN $*"; }; bold() { :; }; asuser() { :; }
+          PORT=8080; DIR=/x
+          HOSTNAME_BIN="echo $1"
+          PYRUN="python3 $T6/py.sh_$2"
+          NETHELPER="bash $T6/net_$3"
+          . "$SRC/bin/migrate_services.sh"; migrate_hostname )
+    }
+    # Stationsname eigen (1) oder Vorgabe (0): das kleine Python-Programm ersetzt „station.custom()“ und den Rest
+    printf 'import sys\nif "-c" in sys.argv: sys.exit(0)\n' > "$T6/py.sh_1"
+    printf 'import sys\nif "-c" in sys.argv: sys.exit(1)\nopen("%s/py_ran", "w").write(sys.stdin.read())\n' "$T6" > "$T6/py.sh_0"
+    printf 'echo "$@" > %s/net_called\n' "$T6" > "$T6/net_1"
+    printf 'echo "$@" > %s/net_called\nexit 1\n' "$T6" > "$T6/net_0"
+    local O
+    # Vorgabename, Pi heißt hamscanpi → hesperosdx, neue Adresse gemeldet, Sicherungsordner zieht mit
+    O="$(run6 hamscanpi 0 1)"
+    [ "$(cat "$T6/net_called")" = "hostname hesperosdx" ] && echo "$O" | grep -q "http://hesperosdx.local:8080" || { echo "$O"; return 1; }
+    grep -q 'follow_rename("hamscanpi", "hesperosdx"' "$T6/py_ran" && grep -q "hostname_changed" "$T6/py_ran" || { echo "Hinweis/Ordner fehlt"; return 1; }
+    # eigener Stationsname: nichts anfassen
+    rm -f "$T6/net_called"; O="$(run6 hamscanpi 1 1)"; [ ! -e "$T6/net_called" ] || { echo "eigener Name angefasst"; return 1; }
+    # Pi heißt schon anders (z. B. raspberrypi oder do1gmt-devpi): nichts anfassen
+    rm -f "$T6/net_called"; O="$(run6 do1gmt-devpi 0 1)"; [ ! -e "$T6/net_called" ] || { echo "anderer Name angefasst"; return 1; }
+    # Helfer scheitert: Warnung, kein Absturz
+    O="$(run6 hamscanpi 0 0)"; echo "$O" | grep -q "WARN" || { echo "$O"; return 1; }
+    rm -rf "$T6"
+}
+host76 && ok "ohne eigenen Stationsnamen hamscanpi → hesperosdx (neue Adresse gemeldet, Sicherungsordner zieht mit), eigener Name und andere Rechnernamen bleiben" || bad "Name im Netz"
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

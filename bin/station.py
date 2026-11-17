@@ -3,7 +3,8 @@
 
 Erscheint in Mail und Push (Absender/Betreff), im Browser-Tab und in der Kopfzeile, als Kennung im WSJT-X-Protokoll
 (OpenHamClock) und bei PSK Reporter in der Antennenangabe – so lassen sich mehrere Hesperos-DX-Stationen auseinanderhalten.
-Daraus abgeleitet der Rechnername im Netz (hostname_for): „Hesperos-AFGN“ → hamscanpi-afgn → hamscanpi-afgn.local.
+Daraus abgeleitet der Rechnername im Netz (hostname_for): „Hesperos-AFGN“ → hesperos-afgn → hesperos-afgn.local.
+Ohne eigenen Namen: hesperosdx (seit 1.8.16, vorher hamscanpi).
 """
 import json
 import re
@@ -28,10 +29,10 @@ def validate(name):
 def hostname_for(name):
     """Rechnername (a–z, 0–9, Bindestrich, höchstens 63 Zeichen) aus dem Stationsnamen."""
     if not name or name == DEFAULT or name in LEGACY:
-        return "hamscanpi"                          # technischer Name bleibt (hamscanpi.local, Dienste, Ordner)
+        return "hesperosdx"                         # Vorgabe: hesperosdx.local
     n = "".join(_UML.get(c, c) for c in str(name)).lower()
     n = re.sub(r"[^a-z0-9]+", "-", n).strip("-")[:63].strip("-")
-    return n or "hamscanpi"
+    return n or "hesperosdx"
 
 
 def name(settings=None):

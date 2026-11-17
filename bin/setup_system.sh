@@ -132,6 +132,7 @@ if not d.get("ui_lang"):
     json.dump(d, open(p, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 PY
 ( cd "$DIR" && asuser python3 bin/migrate_config.py | sed 's/^/  /' ) || warn "migrate_config.py"
+migrate_hostname || true                # ohne eigenen Stationsnamen: hamscanpi → hesperosdx (.local)
 
 bold "$(t "FT8/FT4-Dekoder (ft8_lib)" "FT8/FT4 decoder (ft8_lib)")"
 if [ -x "$UHOME/ft8_lib/decode_ft8" ]; then
@@ -183,7 +184,7 @@ MemoryMax=750M
 OOMPolicy=continue"
 unit hesperosdx-rescue "Hesperos DX rescue page (restart services, reboot, diagnostics)" \
      "/usr/bin/python3 $DIR/bin/rescue.py $((PORT + 1))" "MemoryMax=120M"
-unit hesperosdx-mdns "Hesperos DX name in the network (hamscanpi.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
+unit hesperosdx-mdns "Hesperos DX name in the network (hesperosdx.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
      "MemoryMax=60M"
 # Update (Knopf im Dashboard): läuft als root, holt den neuen Stand als $U und richtet dann das System ein
 cat > /etc/systemd/system/hesperosdx-update.service <<UNIT

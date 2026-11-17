@@ -107,3 +107,41 @@ start_services() {
     _ms_log ERROR setup services_rename_failed detail="neue Dienste nicht aktiv oder Dashboard antwortet nicht; alte laufen weiter"
     return 1
 }
+
+# Name im Netz (seit 1.8.16): ohne eigenen Stationsnamen heißt der Pi hesperosdx (hesperosdx.local), vorher hamscanpi.
+# Mit eigenem Stationsnamen bleibt der daraus abgeleitete Name. Kein Übergang mit dem alten Namen – die neue Adresse
+# steht im Update-Protokoll und als Hinweis im Dashboard; der Sicherungsordner zieht mit (storage.follow_rename).
+# Für den Selbsttest: HOSTNAME_BIN, NETHELPER, PYRUN.
+migrate_hostname() {
+    local cur
+    cur="$(${HOSTNAME_BIN:-hostname} 2>/dev/null)"
+    [ "$cur" = "$SVC_OLD" ] || return 0
+    if ${PYRUN:-asuser python3} -c "import sys; sys.path.insert(0, '$DIR/bin'); import station; sys.exit(0 if station.custom() else 1)" 2>/dev/null; then
+        return 0                                       # eigener Stationsname: dessen Name gilt (wird nicht angefasst)
+    fi
+    if ${NETHELPER:-bash $DIR/share/root/hesperosdx-net} hostname "$SVC_NEW" >/dev/null 2>&1; then
+        ok "$(t "Neue Adresse im Netz: http://$SVC_NEW.local:$PORT (vorher $SVC_OLD.local) – Lesezeichen bitte anpassen" \
+                "New address in the network: http://$SVC_NEW.local:$PORT (was $SVC_OLD.local) – please update bookmarks")"
+        ${PYRUN:-asuser python3} - "$DIR" "$PORT" <<'PY' >/dev/null 2>&1 || true
+import sys
+sys.path.insert(0, sys.argv[1] + "/bin")
+import applog
+applog.log("INFO", "setup", "hostname_changed", old="hamscanpi", new="hesperosdx")
+try:
+    import notices as NT
+    NT.event("hostname_changed", "info", "system", "Neue Adresse im Netz: hesperosdx.local",
+             f"Das Dashboard ist jetzt unter http://hesperosdx.local:{sys.argv[2]} erreichbar (vorher hamscanpi.local). "
+             "Lesezeichen bitte anpassen; die IP-Adresse gilt weiter.")
+except Exception as e:
+    applog.log("WARN", "setup", "hostname_notice_failed", error=str(e))
+try:
+    import storage as STO
+    STO.follow_rename("hamscanpi", "hesperosdx", applog.log)
+except Exception as e:
+    applog.log("WARN", "storage", "backup_dir_rename_failed", error=str(e))
+PY
+    else
+        warn "$(t "Name im Netz ließ sich nicht auf $SVC_NEW umstellen – bleibt $SVC_OLD.local" "could not change the network name to $SVC_NEW – stays $SVC_OLD.local")"
+        _ms_log WARN setup hostname_change_failed
+    fi
+}

@@ -200,7 +200,7 @@
     $('myLocator').value = settings.my_locator || '';
     $('myCall').value = settings.my_call || '';
     if (document.activeElement !== $('stationName')) $('stationName').value = settings.station_name && !['Hesperos DX', 'HamScanPi'].includes(settings.station_name) ? settings.station_name : '';
-    $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${settings.station_hostname || 'hamscanpi'}.local:${location.port || 80}`;
+    $('stationNameHint').textContent = (EN ? 'In the network: ' : 'Im Netz: ') + `http://${settings.station_hostname || 'hesperosdx'}.local:${location.port || 80}`;
     $('pskOn').checked = !!settings.pskreporter;
     renderSchedules();
     renderWatch();
@@ -849,9 +849,9 @@
     const f = h.files || {};
     let html = '';
     if (f.sstv) {
-      // Download mit sprechendem Namen: hamscanpi_<Band>_<MHz>_<UTC>.png
+      // Download mit sprechendem Namen: hesperosdx_<Band>_<MHz>_<UTC>.png
       const stamp = (h.time || '').replace(/[-:]/g, '').slice(0, 15).replace('T', '_');
-      const fname = `hamscanpi_${h.band}_${fmtMHz(h.rf_hz)}MHz_${stamp}Z.png`.replace(/[^A-Za-z0-9_.-]/g, '_');
+      const fname = `hesperosdx_${h.band}_${fmtMHz(h.rf_hz)}MHz_${stamp}Z.png`.replace(/[^A-Za-z0-9_.-]/g, '_');
       html += `<img class="sstv-img" src="${f.sstv}" alt="SSTV-Bild" loading="lazy">
         <div class="actions sstv-dl"><a class="btn btn-small" href="${f.sstv}" download="${fname}">↓ Bild herunterladen (PNG)</a>${pubCell(h.pub)}</div>`;
     }
@@ -2587,7 +2587,7 @@
     const M = d.mdns || {}, port = location.port || 80;
     $('svcMdns').innerHTML = M.mode === 'alias' || M.mode === 'hostname'
       ? `${EN ? 'In the network also reachable as' : 'Im Netz auch erreichbar unter'} <a href="http://${esc(M.name)}:${port}/" class="no-i18n">http://${esc(M.name)}:${port}</a>${EN ? ' (not on every Android phone – use the IP address there)' : ' (nicht auf jedem Android-Handy – dort die IP-Adresse nehmen)'}`
-      : M.mode === 'conflict' ? (EN ? `hamscanpi.local is already used by another device – this Pi: http://${esc(M.host)}.local:${port}` : `hamscanpi.local ist schon von einem anderen Gerät belegt – dieser Pi: http://${esc(M.host)}.local:${port}`)
+      : M.mode === 'conflict' ? (EN ? `hesperosdx.local is already used by another device – this Pi: http://${esc(M.host)}.local:${port}` : `hesperosdx.local ist schon von einem anderen Gerät belegt – dieser Pi: http://${esc(M.host)}.local:${port}`)
       : M.mode === 'missing' ? (EN ? 'Name in the network: avahi-utils missing – install the update again.' : 'Name im Netz: avahi-utils fehlt – Update noch einmal einspielen.') : '';
     $('svcReboot').disabled = !d.sudo;
     if (!d.sudo) note($('svcNote'), 'Neu starten ist noch nicht freigegeben – das Update legt die nötige sudo-Regel an.', true);

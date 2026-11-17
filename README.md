@@ -20,7 +20,7 @@ shortwave.
 
 **Quick start** on a fresh Raspberry Pi OS Lite: `sudo apt install -y git`, then
 `git clone https://github.com/do1gmt/hesperos-dx.git hamscanpi && cd hamscanpi && ./install.sh`, re-plug the stick and open
-`http://hamscanpi.local:8080/` – details under [Installation](#installation).
+`http://hesperosdx.local:8080/` – details under [Installation](#installation).
 
 ![Scan page: bands, satellite passes and scan status](docs/screenshots/scan.png)
 
@@ -228,10 +228,13 @@ tap one to take its name. The system history shows the Wi-Fi signal; a weak sign
 
 **Several Hesperos-DX-Stationen:** *Settings → Station → Name of this station* (default "Hesperos DX") appears in mail (subject
 and sender) and push, in the browser tab and header, as the WSJT-X/OpenHamClock id and in the PSK Reporter
-antenna info – and becomes the Pi's host name in the network: "Hesperos-AFGN" → `http://hamscanpi-afgn.local:8080`.
+antenna info – and becomes the Pi's host name in the network: "Hesperos-AFGN" → `http://hesperos-afgn.local:8080`.
+Without a name of its own the Pi is `http://hesperosdx.local:8080` (until 1.8.15 `hamscanpi.local`; the update
+switches without a transition and shows the new address in its log and as a notice).
 
 **Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
-network it is reachable at the address it gets by DHCP – and as **`http://hamscanpi.local:8080`**: the service
+network it is reachable at the address it gets by DHCP – and, without a station name of its own, as
+**`http://hesperosdx.local:8080`**: the service
 `hesperosdx-mdns` announces that name via avahi with the current address, whatever the Pi's host name is (the host
 name itself is not changed; if another device already uses the name, this Pi stays reachable as
 `<hostname>.local` and a notice says so). Windows 10/11, macOS, iOS and Linux resolve `.local` names; Android
@@ -310,7 +313,7 @@ Everything it sets up on the system is in `bin/setup_system.sh`, which runs agai
 - gives the stick access rights (udev rule `/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules` – without it `rtl_sdr`
   reports `usb_open error -3`);
 - installs the services `hesperosdx-web` (dashboard, port 8080), `hesperosdx-scheduler` (scans, satellite passes),
-  `hesperosdx-rescue` (rescue page, port 8081), `hesperosdx-mdns` (name `hamscanpi.local`) and `hesperosdx-update`
+  `hesperosdx-rescue` (rescue page, port 8081), `hesperosdx-mdns` (name `hesperosdx.local`) and `hesperosdx-update`
   (the update button);
 - adds a sudo rule for exactly the dashboard buttons (restart services, start the update, reboot), keeps the
   system journal across reboots (max. 64 MB) and switches Wi-Fi power saving off (otherwise Live stutters over
@@ -321,7 +324,7 @@ hotplug – plug in the PMSDR and it is ready (see [docs/pmsdr.md](docs/pmsdr.md
 
 **3. Re-plug the stick** (or reboot) – until then the old TV driver may still hold it.
 
-**4. Open the dashboard:** `http://hamscanpi.local:8080/` or `http://<IP-of-the-Pi>:8080/` (Android phones often do
+**4. Open the dashboard:** `http://hesperosdx.local:8080/` or `http://<IP-of-the-Pi>:8080/` (Android phones often do
 not resolve `.local` – use the IP there; `hostname -I` on the Pi shows it). Then, all in the dashboard:
 - *Settings → Station*: locator, callsign, language, country/band plan;
 - *Settings → Access protection*: a password (recommended – without it everyone in your network can use it);
@@ -551,5 +554,6 @@ and the publishing file is `hesperos-publish.sh`. The technical name is **Hesper
 wants lower case). Since 1.8.15 the services are `hesperosdx-*` (with the helpers, sudo rule, `/mnt/hesperosdx-usb`,
 `-nas` and `/etc/hesperosdx/`) and the WordPress plugin folder is `hesperosdx-sstv-galerie`; the update switches
 safely – the old services are only removed once the new ones run and the dashboard answers, otherwise the old ones
-keep running. Still to follow, step by step: the address `hamscanpi.local`, the folder `~/hamscanpi` and the backup
+keep running. Since 1.8.16 the address is `hesperosdx.local` (without a station name of its own). Still to follow,
+step by step: the folder `~/hamscanpi` and the backup
 folder `HamScanPi-Sicherungen`. Station names that were left at the old default "HamScanPi" count as the default.
