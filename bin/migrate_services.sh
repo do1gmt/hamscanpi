@@ -145,3 +145,77 @@ PY
         _ms_log WARN setup hostname_change_failed
     fi
 }
+
+# Programmordner (seit 1.8.17): ~/hamscanpi → ~/HesperosDX. An der alten Stelle bleibt ein Verweis (Symlink) – alles,
+# was noch den alten Pfad kennt (laufende Prozesse während des Updates, eigene Skripte, Gewohnheiten), geht weiter.
+# Absolute Pfade in den Datenbanken (data/*.db) und in data/*.json, config/*.json werden auf den neuen Ort
+# umgeschrieben. Setzt DIR auf den neuen Ort. Für den Selbsttest: PYRUN.
+DIR_NEW_NAME=HesperosDX
+migrate_dir() {
+    local cur parent new
+    cur="$(cd "$DIR" 2>/dev/null && pwd -P)" || return 0
+    DIR="$cur"
+    [ "$(basename "$cur")" = "$SVC_OLD" ] || return 0
+    parent="$(dirname "$cur")"; new="$parent/$DIR_NEW_NAME"
+    if [ -e "$new" ] || [ -L "$new" ]; then
+        warn "$(t "$new gibt es schon – Programmordner bleibt $cur" "$new already exists – program folder stays $cur")"
+        _ms_log WARN setup dir_move_skipped reason="Ziel vorhanden" target="$new"
+        return 0
+    fi
+    # nur umbenennen, nie kopieren: liegt der Ordner auf einem anderen Laufwerk als sein Elternordner (eigener
+    # Einhängepunkt), bleibt er, wo er ist
+    if [ "$(stat -c %d "$cur")" != "$(stat -c %d "$parent")" ]; then
+        warn "$(t "$cur ist ein eigenes Laufwerk – Programmordner bleibt, wo er ist" "$cur is a separate drive – program folder stays where it is")"
+        _ms_log WARN setup dir_move_skipped reason="eigenes Laufwerk" dir="$cur"
+        return 0
+    fi
+    # verschieben und sofort den Verweis setzen: Prozesse, die gerade laufen, finden ihre Dateien weiter
+    if ! { mv "$cur" "$new" && ln -s "$DIR_NEW_NAME" "$cur"; }; then
+        [ -d "$new" ] && [ ! -e "$cur" ] && mv "$new" "$cur"               # halb geschehen: zurück
+        warn "$(t "Programmordner ließ sich nicht verschieben – bleibt $cur" "program folder could not be moved – stays $cur")"
+        _ms_log WARN setup dir_move_failed
+        return 0
+    fi
+    chown -h "$U:" "$cur" 2>/dev/null || true
+    DIR="$new"
+    ok "$(t "Programmordner jetzt $new (der alte Pfad $cur bleibt als Verweis)" "program folder now $new (the old path $cur stays as a link)")"
+    ${PYRUN:-asuser python3} - "$cur" "$new" <<'PY' >/dev/null || warn "$(t "gespeicherte Pfade nicht umgeschrieben – gehen über den Verweis weiter" "stored paths not rewritten – they keep working through the link")"
+import json, sqlite3, sys
+from pathlib import Path
+old, new = sys.argv[1].rstrip("/") + "/", sys.argv[2].rstrip("/") + "/"
+n = 0
+for db in sorted((Path(new) / "data").glob("*.db")):
+    con = sqlite3.connect(str(db), timeout=60)
+    try:
+        for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall():
+            for col in con.execute(f'PRAGMA table_info("{t}")').fetchall():
+                if (col[2] or "").upper() in ("INTEGER", "REAL", "BLOB", "NUMERIC"):
+                    continue
+                c = con.execute(f'UPDATE "{t}" SET "{col[1]}" = replace("{col[1]}", ?, ?) WHERE instr("{col[1]}", ?) > 0',
+                                (old, new, old))
+                n += c.rowcount
+        con.commit()
+    finally:
+        con.close()
+for f in sorted(list((Path(new) / "data").glob("*.json")) + list((Path(new) / "config").glob("*.json"))):
+    try:
+        s = f.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        continue
+    if old in s:
+        tmp = f.with_name(f.name + ".tmp")
+        tmp.write_text(s.replace(old, new), encoding="utf-8")
+        try:
+            tmp.chmod(f.stat().st_mode & 0o777)
+        except OSError:
+            pass
+        tmp.replace(f)
+        n += 1
+sys.path.insert(0, new + "bin")
+try:
+    import applog
+    applog.log("INFO", "setup", "dir_moved", old=old.rstrip("/"), new=new.rstrip("/"), paths_rewritten=n)
+except Exception:
+    pass
+PY
+}

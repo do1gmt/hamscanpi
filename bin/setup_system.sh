@@ -17,7 +17,7 @@
 #   PMSDR-Dienst (wenn dessen Programm vorhanden ist).
 set -e
 [ "$(id -u)" = 0 ] || { echo "setup_system.sh: bitte mit sudo aufrufen (sudo HSP_USER=\$USER bash bin/setup_system.sh)"; exit 1; }
-DIR="${HSP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+DIR="${HSP_DIR:-$(cd "$(dirname "$0")/.." && pwd -P)}"
 U="${HSP_USER:-${SUDO_USER:-}}"
 [ -n "$U" ] && [ "$U" != root ] || { echo "setup_system.sh: HSP_USER fehlt (der Benutzer, unter dem Hesperos DX läuft)"; exit 1; }
 UHOME="$(getent passwd "$U" | cut -d: -f6)"
@@ -57,6 +57,7 @@ fi
 asuser() { runuser -u "$U" -- "$@"; }
 # Dienste und Systemdateien heißen seit 1.8.15 hesperosdx-* (vorher hamscanpi-*): Übergang
 . "$DIR/bin/migrate_services.sh"
+migrate_dir                            # Programmordner ~/hamscanpi → ~/HesperosDX (setzt DIR neu), seit 1.8.17
 migrate_files
 
 bold "$(t "Pakete" "Packages")"

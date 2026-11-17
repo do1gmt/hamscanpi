@@ -156,7 +156,7 @@ def check_sticks(st):
                   + " – Hesperos DX darf ihn nicht öffnen, Scans und Live schlagen fehl („usb_open error -3“).",
                   fix="Die udev-Regel fehlt: im Dashboard unter System „Jetzt aktualisieren“ bzw. per SSH bin/update.sh "
                       "ausführen, danach den Stick einmal ab- und wieder anstecken.",
-                  cmd="cd ~/hamscanpi && bin/update.sh")
+                  cmd="cd ~/HesperosDX && bin/update.sh")
     else:
         NT.clear("stick_access")
     main = next((r for r in ov["sticks"] if r.get("role") == "main"), None)
@@ -406,7 +406,7 @@ def check_software(st):
             NT.raise_("tle_old", "warn", "satellite", "Bahndaten veraltet",
                       f"Zuletzt geholt {__import__('timefmt').fmt(tle.stat().st_mtime)} – "
                       "Überflugzeiten werden ungenau.", fix="Internetverbindung prüfen; von Hand holen:",
-                      cmd="cd ~/hamscanpi && python3 bin/satellites.py fetch")
+                      cmd="cd ~/HesperosDX && python3 bin/satellites.py fetch")
         else:
             NT.clear("tle_old")
     except OSError:

@@ -21,7 +21,7 @@ _DIR = None
 def directory():
     global _DIR
     if _DIR is None:
-        d = Path("/dev/shm") / f"hamscanpi-{os.getuid()}-{hashlib.sha1(str(BASE).encode()).hexdigest()[:8]}"
+        d = Path("/dev/shm") / f"hesperosdx-{os.getuid()}-{hashlib.sha1(str(BASE).encode()).hexdigest()[:8]}"
         try:
             d.mkdir(mode=0o700, exist_ok=True)
             if not os.access(d, os.W_OK):

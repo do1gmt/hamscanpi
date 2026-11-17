@@ -19,7 +19,7 @@ sampling (e.g. Nooelec NESDR SMArt v5, RTL-SDR Blog V3) – and optionally with 
 shortwave.
 
 **Quick start** on a fresh Raspberry Pi OS Lite: `sudo apt install -y git`, then
-`git clone https://github.com/do1gmt/hesperos-dx.git hamscanpi && cd hamscanpi && ./install.sh`, re-plug the stick and open
+`git clone https://github.com/do1gmt/hesperos-dx.git HesperosDX && cd HesperosDX && ./install.sh`, re-plug the stick and open
 `http://hesperosdx.local:8080/` – details under [Installation](#installation).
 
 ![Scan page: bands, satellite passes and scan status](docs/screenshots/scan.png)
@@ -297,8 +297,8 @@ sudo apt install -y git
 
 **2. Get Hesperos DX and install it:**
 ```bash
-git clone https://github.com/do1gmt/hesperos-dx.git hamscanpi
-cd hamscanpi
+git clone https://github.com/do1gmt/hesperos-dx.git HesperosDX
+cd HesperosDX
 ./install.sh            # asks once for the language (Deutsch / English); ./install.sh --lang de asks nothing
                         # another port: ./install.sh --port 8090 (the rescue page uses port + 1)
 ```
@@ -342,7 +342,7 @@ kept in `log/update.log`. Settings, data and recordings stay. The dashboard chec
 when a new version is out. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 *Updating an older installation for the first time this way* (before 1.7.76 `bin/update.sh` did not set up the
-system yet): `cd ~/hamscanpi && git pull && bin/update.sh` – from then on the button works.
+system yet): `cd ~/hamscanpi && git pull && bin/update.sh` (since 1.8.17 the folder is `~/HesperosDX`) – from then on the button works.
 
 *Maintainers* publish a version from a PC with git and a GitHub SSH key: `bash hesperos-publish.sh` (built with
 `devtools/build_publish.sh`) clones or updates a working copy next to it, brings in the new version, commits, tags
@@ -458,10 +458,10 @@ their drive is mounted.
 4. Stop the services and copy your data from the old card (in a USB card reader, here mounted at `/media/$USER/rootfs`):
    ```
    sudo systemctl stop hesperosdx-scheduler hesperosdx-web
-   OLD=/media/$USER/rootfs/home/$USER/hamscanpi
-   cp -a $OLD/config/. ~/hamscanpi/config/       # settings, band plan, passwords, Telegram
-   cp -a $OLD/data/. ~/hamscanpi/data/           # database, stick register, history, satellite results
-   cp -a $OLD/recordings $OLD/reports ~/hamscanpi/   # only if you want to keep the old hits
+   OLD=/media/$USER/rootfs/home/$USER/HesperosDX     # before 1.8.17: …/hamscanpi
+   cp -a $OLD/config/. ~/HesperosDX/config/       # settings, band plan, passwords, Telegram
+   cp -a $OLD/data/. ~/HesperosDX/data/           # database, stick register, history, satellite results
+   cp -a $OLD/recordings $OLD/reports ~/HesperosDX/   # only if you want to keep the old hits
    sudo systemctl start hesperosdx-scheduler hesperosdx-web
    ```
 5. Check *System → Devices* (main stick still recognised by its serial number) and *System → Status*
@@ -554,6 +554,6 @@ and the publishing file is `hesperos-publish.sh`. The technical name is **Hesper
 wants lower case). Since 1.8.15 the services are `hesperosdx-*` (with the helpers, sudo rule, `/mnt/hesperosdx-usb`,
 `-nas` and `/etc/hesperosdx/`) and the WordPress plugin folder is `hesperosdx-sstv-galerie`; the update switches
 safely – the old services are only removed once the new ones run and the dashboard answers, otherwise the old ones
-keep running. Since 1.8.16 the address is `hesperosdx.local` (without a station name of its own). Still to follow,
-step by step: the folder `~/hamscanpi` and the backup
-folder `HamScanPi-Sicherungen`. Station names that were left at the old default "HamScanPi" count as the default.
+keep running. Since 1.8.16 the address is `hesperosdx.local` (without a station name of its own), since 1.8.17 the
+program folder is `~/HesperosDX` (the old path `~/hamscanpi` stays as a link; stored paths in the database are
+rewritten). Still to follow: the backup folder `HamScanPi-Sicherungen`. Station names that were left at the old default "HamScanPi" count as the default.

@@ -11,7 +11,7 @@
 # stückweise – ohne Kopie liefe sonst ein Mischmasch aus alter und neuer Fassung.
 if [ -z "${HSP_UPDATE_COPY:-}" ]; then
     C="$(mktemp /tmp/hesperosdx-update.XXXXXX.sh)"; cp "$0" "$C"
-    HSP_UPDATE_COPY=1 HSP_DIR="$(cd "$(dirname "$0")/.." && pwd)" exec bash "$C" "$@"
+    HSP_UPDATE_COPY=1 HSP_DIR="$(cd "$(dirname "$0")/.." && pwd -P)" exec bash "$C" "$@"
 fi
 set -e
 DIR="${HSP_DIR}"

@@ -466,7 +466,7 @@ def _db():
 
 
 def _short(cmd):
-    """„/usr/bin/python3 /home/x/hamscanpi/bin/scanner.py --x“ -> „scanner.py“, „rtl_sdr -f …“ -> „rtl_sdr“."""
+    """„/usr/bin/python3 /home/x/HesperosDX/bin/scanner.py --x“ -> „scanner.py“, „rtl_sdr -f …“ -> „rtl_sdr“."""
     parts = cmd.split(b"\0")
     for a in parts[1:3]:
         if a.endswith(b".py"):

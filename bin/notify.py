@@ -385,7 +385,7 @@ def send_log_now(levels=None, hours=24):
     c = cfg()
     ls = levels or (c.get("log_send") or {}).get("levels") or ["ERROR", "WARN"]
     txt = log_text(ls, hours)
-    send_document(f"Protokoll {time.strftime('%d.%m.%Y %H:%M')}", f"hamscanpi-log-{time.strftime('%Y%m%d-%H%M')}.txt", txt, c)
+    send_document(f"Protokoll {time.strftime('%d.%m.%Y %H:%M')}", f"hesperosdx-log-{time.strftime('%Y%m%d-%H%M')}.txt", txt, c)
     return txt.count("\n") - 2
 
 

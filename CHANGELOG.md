@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.17 – 2026-11-17
+
+- **Renaming on the Pi, step C – program folder `~/hamscanpi` → `~/HesperosDX`.** The update moves the folder and
+  at once leaves a link (symlink) at the old place, so everything that still knows the old path keeps working:
+  the processes running during the update, own scripts and crontabs, SSH habits. Absolute paths stored in the
+  databases (`data/*.db`, e.g. recordings and pictures of hits) and in `data/*.json`, `config/*.json` are rewritten
+  to the new place (file permissions kept). The services are set up with the new path and restarted. If the target
+  already exists the folder stays where it is (notice in the log). Log `dir_moved` (with the number of rewritten
+  paths). New installations clone into `~/HesperosDX`.
+- Hints and commands name `~/HesperosDX`; RAM folder `/dev/shm/hesperosdx-…`, log file sent by mail/Telegram
+  `hesperosdx-log-….txt`.
+- Self-test section 77.
+
 ## 1.8.16 – 2026-11-17
 
 - **Renaming on the Pi, step B – name in the network:** a Pi without a station name of its own is now

@@ -3,8 +3,8 @@
 eine Minutentabelle mit Richtung, Höhe und der Frequenz, die an der Handfunke einzustellen ist
 (Doppler auf 5-kHz-Raster gerundet). Rechnet mit den Bahndaten und dem Locator von Hesperos DX.
 
-   python3 ~/hamscanpi/bin/funktest.py            Überflüge der nächsten 24 h (ab 20°)
-   python3 ~/hamscanpi/bin/funktest.py 3          Minutentabelle für Überflug Nr. 3
+   python3 ~/HesperosDX/bin/funktest.py            Überflüge der nächsten 24 h (ab 20°)
+   python3 ~/HesperosDX/bin/funktest.py 3          Minutentabelle für Überflug Nr. 3
 """
 import json
 import sys
@@ -58,7 +58,7 @@ def main():
         for i, (aos, los, el, sid, desc, f, _) in enumerate(rows, 1):
             print(f"{i:2d}. {local(aos)}–{time.strftime('%H:%M', time.localtime(los))}  {el:3.0f}°  "
                   f"{f / 1e6:.3f} MHz  {desc}")
-        print("\nMinutentabelle: python3 ~/hamscanpi/bin/funktest.py <Nr>")
+        print("\nMinutentabelle: python3 ~/HesperosDX/bin/funktest.py <Nr>")
         return
     aos, los, el, sid, desc, f, tr = rows[int(sys.argv[1]) - 1]
     print(f"{desc}\nNennfrequenz {f / 1e6:.3f} MHz · Wide (25 kHz) · Rauschsperre aus · "

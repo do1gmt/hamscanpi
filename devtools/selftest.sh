@@ -2789,5 +2789,45 @@ host76() {
 }
 host76 && ok "ohne eigenen Stationsnamen hamscanpi → hesperosdx (neue Adresse gemeldet, Sicherungsordner zieht mit), eigener Name und andere Rechnernamen bleiben" || bad "Name im Netz"
 
+echo "== 77 Programmordner ~/hamscanpi → ~/HesperosDX"
+dir77() {
+    local T7; T7="$(mktemp -d)"
+    local H="$T7/home/gmt" O="$T7/home/gmt/hamscanpi" N="$T7/home/gmt/HesperosDX"
+    mkdir -p "$O/data" "$O/config" "$O/log" && cp -r "$SRC/bin" "$O/" || return 1
+    python3 - "$O" <<'PY' || return 1
+import sqlite3, sys, json, os
+o = sys.argv[1]
+con = sqlite3.connect(o + "/data/scanner.db")
+con.execute("CREATE TABLE peak (id INTEGER PRIMARY KEY, recording_path TEXT, snr_db REAL, note)")
+con.execute("INSERT INTO peak (recording_path, snr_db, note) VALUES (?, 3.5, ?)", (o + "/recordings/a.wav", "Bild " + o + "/reports/x.png"))
+con.execute("INSERT INTO peak (recording_path, snr_db, note) VALUES ('/anderswo/b.wav', 1, NULL)")
+con.commit(); con.close()
+json.dump({"png": o + "/reports/x.png"}, open(o + "/data/publish_queue.json", "w"))
+json.dump({"x": 1, "p": o + "/data"}, open(o + "/config/web_settings.json", "w")); os.chmod(o + "/config/web_settings.json", 0o600)
+PY
+    run7() { ( t() { printf '%s' "$1"; }; ok() { echo "OK $*"; }; warn() { echo "WARN $*"; }; asuser() { "$@"; }
+               U="$(id -un)"; DIR="$1"; PYRUN=python3; . "$SRC/bin/migrate_services.sh"; migrate_dir; echo "DIR=$DIR" ) }
+    local out; out="$(run7 "$O")"
+    echo "$out" | grep -q "^DIR=$N$" && [ -d "$N" ] && [ -L "$O" ] && [ "$(readlink "$O")" = HesperosDX ] || { echo "$out"; return 1; }
+    python3 - "$O" "$N" <<'PY' || return 1
+import sqlite3, sys, json, os, stat
+o, n = sys.argv[1], sys.argv[2]
+rows = sqlite3.connect(n + "/data/scanner.db").execute("SELECT recording_path, snr_db, note FROM peak ORDER BY id").fetchall()
+assert rows[0] == (n + "/recordings/a.wav", 3.5, "Bild " + n + "/reports/x.png") and rows[1][0] == "/anderswo/b.wav", rows
+assert json.load(open(n + "/data/publish_queue.json"))["png"] == n + "/reports/x.png"
+assert json.load(open(n + "/config/web_settings.json"))["p"] == n + "/data"
+assert stat.S_IMODE(os.stat(n + "/config/web_settings.json").st_mode) == 0o600
+assert json.load(open(o + "/data/publish_queue.json"))                       # über den Verweis weiter lesbar
+assert any('"dir_moved"' in l for l in open(n + "/log/app.jsonl"))
+PY
+    # zweiter Lauf über den alten Pfad (Verweis): nichts mehr zu tun, DIR zeigt auf den neuen Ort
+    out="$(run7 "$O")"; echo "$out" | grep -q "^DIR=$N$" && ! echo "$out" | grep -q "OK" || { echo "$out"; return 1; }
+    # Ziel gibt es schon: bleibt, wo es ist
+    local T8; T8="$(mktemp -d)"; mkdir -p "$T8/hamscanpi/bin" "$T8/HesperosDX"; cp "$SRC/bin/applog.py" "$T8/hamscanpi/bin/"
+    out="$(run7 "$T8/hamscanpi")"; echo "$out" | grep -q "WARN" && [ -d "$T8/hamscanpi" ] && [ ! -L "$T8/hamscanpi" ] || { echo "$out"; return 1; }
+    rm -rf "$T7" "$T8"
+}
+dir77 && ok "Ordner verschoben, alter Pfad als Verweis, Pfade in Datenbank und Zustandsdateien umgeschrieben (Rechte bleiben), zweiter Lauf ändert nichts, vorhandenes Ziel bleibt unberührt" || bad "Programmordner"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -2392,7 +2392,7 @@
     tile(`${d.free_gb} GB`, `frei von ${d.total_gb} GB (${d.used_pct} % belegt)`, dcls);
     if (dcls) warn.push(d.used_pct >= 95 ? 'Speicherkarte fast voll – keine neuen Scans und Überflüge, bis wieder Platz ist.' : 'Speicherkarte wird voll – alte Treffer aufräumen oder automatisch löschen lassen.');
     tile(`${s.recordings.gb} GB`, `Aufnahmen (${s.recordings.files} Dateien)`);
-    if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – retten per SSH: cd ~/hamscanpi && python3 bin/sat_recover.py (sonst nach 48 h gelöscht)'); }
+    if (s.sat_raw.files) { tile(`${s.sat_raw.files}`, `abgebrochene Überflüge (${s.sat_raw.mb} MB)`, 'warn'); warn.push('Abgebrochene Überflüge liegen noch als Rohdaten vor – retten per SSH: cd ~/HesperosDX && python3 bin/sat_recover.py (sonst nach 48 h gelöscht)'); }
     if (s.throttled) {
       const t = s.throttled; const now = t.now, ever = t.since_boot;
       tile(now ? 'gedrosselt' : ever ? 'war gedrosselt' : 'nein', 'Drosselung / Unterspannung', now ? 'bad' : ever ? 'warn' : '');
