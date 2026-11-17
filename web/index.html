@@ -260,8 +260,11 @@
     <div class="col">
 <section class="panel" id="panel-live">
     <h2>Live hören</h2>
+    <div class="row fav-row">
+      <label class="field grow"><span>Favoriten</span><select id="liveFav"><option value="">– Favorit wählen –</option></select></label>
+    </div>
     <div class="row">
-      <label class="field grow"><span>Frequenz (MHz)</span><input id="liveFreq" type="text" inputmode="decimal" value="145.500" autocomplete="off"></label>
+      <label class="field grow"><span>Frequenz (MHz)</span><span class="fav-input"><input id="liveFreq" type="text" inputmode="decimal" value="145.500" autocomplete="off"><button type="button" class="btn fav-star" id="liveFavStar" title="Als Favorit speichern" aria-label="Als Favorit speichern">☆</button></span></label>
       <label class="field"><span>Demodulator</span>
         <select id="liveMode"><option value="nfm">FM schmal</option><option value="wfm">FM breit</option><option value="am">AM</option><option value="usb">USB</option><option value="lsb">LSB</option></select>
       </label>
@@ -311,6 +314,10 @@
     <div class="hint" id="liveText">aus</div>
     <div class="eibi-now" id="liveEibi" hidden></div>
     <div class="hint" id="liveSsbHint" hidden>SSB: Sprache unter 10 MHz meist <b>LSB</b>, darüber <b>USB</b> – FT8 und andere Digitalbetriebsarten immer USB. Klingt es wie „Gequake“, ist meist das Seitenband falsch.</div>
+    <details class="fav-manage" id="liveFavManage"><summary>Favoriten verwalten <small class="muted" id="liveFavCount"></small></summary>
+      <div id="liveFavList"></div>
+      <p class="hint">Name ändern: ins Feld tippen. Reihenfolge mit ↑. Gespeichert wird auf dem Pi – gilt für jeden Browser, ist in jeder Sicherung dabei.</p>
+    </details>
     <label class="check"><input type="checkbox" id="liveFallback"> einfacher Player (falls kein Ton kommt)</label>
     <audio id="liveAudio" controls hidden></audio>
   </section>

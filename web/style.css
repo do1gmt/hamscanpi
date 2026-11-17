@@ -42,6 +42,15 @@ a { color: var(--accent); }
 .brand { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
 .brand span { color: var(--muted); font-weight: 500; }
 .status-pill { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; max-width: 55%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fav-input { display: flex; gap: .4rem; }
+.fav-input input { flex: 1 1 auto; min-width: 0; }
+.fav-star { font-size: 1.15rem; padding: 0 .7rem; min-width: var(--tap); }
+.fav-star.on { color: var(--amber); border-color: var(--amber); }
+.fav-manage { margin: .6rem 0; }
+.fav-manage summary small { margin-left: .35rem; }
+.fav-item { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; padding: .35rem 0; border-bottom: 1px solid var(--line); }
+.fav-item input { flex: 1 1 10rem; min-width: 0; }
+.fav-item small { white-space: nowrap; }
 .se-ev { display: flex; flex-wrap: wrap; gap: .25rem .7rem; align-items: baseline; padding: .55rem 0; border-bottom: 1px solid var(--line); }
 .se-ev:last-child { border-bottom: 0; }
 .se-ev .se-when { flex: 1 1 16rem; }

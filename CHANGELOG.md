@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.14 – 2026-11-17
+
+- **Live favourites:** a "Favourites" drop-down above the frequency (grouped by band). Choosing one tunes Live there
+  with demodulator, tuning step and decoder (and starts Live if it is not running). ☆ next to the frequency saves
+  the current setting (★ = already a favourite, tap again to remove); the suggested name is the RDS station, the
+  channel name or band and frequency. "Manage favourites": rename, order, delete. Stored on the Pi (settings
+  `live_favorites`, up to 100) – the same on PC and phone, included in every backup. Log `live_favorites_saved`.
+- **Live decoder choice fixed:** choosing CW, RTTY, SSTV, NAVTEX or weather fax by hand silently fell back to
+  "automatic" (the server only knew FT8/FT4, packet and POCSAG). Now every decoder in the list can be chosen.
+- Self-test section 74.
+
 ## 1.8.13 – 2026-11-17
 
 - **New card "SSTV events"** below the satellite passes: when the ISS (and other satellites) send pictures.

@@ -2675,5 +2675,28 @@ W = Path(sys.argv[1]) / "web"
 assert 'id="panel-sstvev"' in (W / "index.html").read_text() and "loadSstvEvents" in (W / "app.js").read_text()
 PY
 
+echo "== 74 Live-Favoriten, alle Live-Dekoder wählbar"
+(cd bin && timeout 60 python3 - "$SRC" <<'PY') && ok "Favoriten geprüft gespeichert (Frequenz, Demodulator, Raster, Dekoder), Unsinn abgewiesen; CW/RTTY/SSTV/NAVTEX/Wetterfax lassen sich in Live wählen" || bad "Live-Favoriten"
+import sys
+from pathlib import Path
+import webapp as W, live_decode as LDK
+f = W.clean_live_favorites([{"name": " DWD Wetterfax ", "freq_hz": 7878100, "mode": "usb", "step_hz": 100, "dec": "wefax"},
+                             {"name": "", "freq_hz": 145500000.4, "mode": "nfm", "step_hz": 999999, "dec": "quatsch"}])
+assert f[0] == {"name": "DWD Wetterfax", "freq_hz": 7878100, "mode": "usb", "step_hz": 100, "dec": "wefax"}, f
+assert f[1]["name"] == "145.5000 MHz" and f[1]["step_hz"] == 0 and f[1]["dec"] == "auto" and f[1]["freq_hz"] == 145500000
+for bad in ([{"freq_hz": 5, "mode": "nfm"}], [{"freq_hz": 145e6, "mode": "xyz"}], "keine Liste", [{"freq_hz": 145e6, "mode": "nfm"}] * 101):
+    try:
+        W.clean_live_favorites(bad); raise SystemExit(f"angenommen: {str(bad)[:60]}")
+    except ValueError:
+        pass
+src = (Path(sys.argv[1]) / "bin" / "webapp.py").read_text()
+assert "_live_dec_kind[0] = kind if kind in LDK.KINDS" in src and {"cw", "rtty", "sstv", "navtex", "wefax"} <= set(LDK.KINDS)
+html = (Path(sys.argv[1]) / "web" / "index.html").read_text()
+opts = set(__import__("re").findall(r'value="([a-z0-9]+)"', html.split('id="liveDecKind"')[1].split("</select>")[0]))
+assert opts <= set(LDK.KINDS), opts - set(LDK.KINDS)                 # jede Auswahl im Dashboard kennt der Server
+js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
+assert 'id="liveFav"' in html and 'id="liveFavStar"' in html and "saveLiveFavs" in js and "/api/live/favorites" in js
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

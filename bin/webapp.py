@@ -1730,6 +1730,34 @@ def live_presets():
     return out
 
 
+# ------------------------------------------------------------------ Live-Favoriten (Einstellungen „live_favorites“)
+LIVE_FAV_MAX = 100
+
+
+def clean_live_favorites(items):
+    """Favoriten aus dem Dashboard prüfen: [{name, freq_hz, mode, step_hz, dec}] – Reihenfolge wie übergeben."""
+    import live_decode as LDK
+    if not isinstance(items, list):
+        raise ValueError("Favoriten: Liste erwartet")
+    if len(items) > LIVE_FAV_MAX:
+        raise ValueError(f"Höchstens {LIVE_FAV_MAX} Favoriten")
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            raise ValueError("Favorit: ungültiger Eintrag")
+        f = int(round(float(it.get("freq_hz") or 0)))
+        if not 100_000 <= f <= 2_000_000_000:
+            raise ValueError("Favorit: Frequenz zwischen 0,1 und 2000 MHz")
+        mode = str(it.get("mode") or "")
+        if mode not in ("nfm", "wfm", "am", "usb", "lsb"):
+            raise ValueError("Favorit: unbekannter Demodulator")
+        step = int(it.get("step_hz") or 0)
+        dec = str(it.get("dec") or "auto")
+        out.append({"name": str(it.get("name") or "").strip()[:40] or f"{f / 1e6:.4f} MHz", "freq_hz": f, "mode": mode,
+                    "step_hz": step if 0 < step <= 200_000 else 0, "dec": dec if dec in LDK.KINDS else "auto"})
+    return out
+
+
 # ------------------------------------------------------------------ Dauerwache (Live ohne Browser)
 # Gespeichert in data/live_state.json („watch“): Frequenz, Betriebsart, Dekoder, Endzeit. Ein Wächter-Thread
 #  - startet die Dauerwache nach einem Neustart des Webservers wieder,
@@ -2633,6 +2661,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not name.endswith(".wav") or not f.is_file():
                     raise FileNotFoundError("Mitschnitt nicht gefunden")
                 return self.send_file(f, download_name=name, cache=False)
+            if path == "/api/live/favorites":
+                return self.send_json({"favorites": read_json(SETTINGS, {}).get("live_favorites") or []})
             if path == "/api/live/presets":
                 return self.send_json({"presets": live_presets()})
             if path in ("/api/live/audio", "/api/live/stream.wav"):
@@ -3025,7 +3055,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/live/decoder":
                 kind = str(data.get("kind", "auto"))
                 with _live_lock:
-                    _live_dec_kind[0] = kind if kind in ("auto", "ft8", "ft4", "packet", "pocsag", "off") else "auto"
+                    import live_decode as LDK                   # alle Dekoder des Live-Empfangs (vorher fehlten CW,
+                    _live_dec_kind[0] = kind if kind in LDK.KINDS else "auto"   # RTTY, SSTV, NAVTEX, Wetterfax)
                     if _live and _live.running:
                         _live.dec.set_kind(_live_dec_kind[0])
                 return self.send_json({"ok": True, "kind": _live_dec_kind[0]})
@@ -3056,6 +3087,13 @@ class Handler(BaseHTTPRequestHandler):
                                _gain_value(data["gain"]) if data.get("gain") not in (None, "") else None)
                     live_state_update({"freq_hz": data.get("freq_hz"), "mode": data.get("mode")})
                     return self.send_json({"ok": True, "live": _live.status()})
+            if path == "/api/live/favorites":
+                favs = clean_live_favorites(data.get("favorites"))
+                st = read_json(SETTINGS, {})
+                st["live_favorites"] = favs
+                write_json(SETTINGS, st)
+                APPLOG.log("INFO", "webapp", "live_favorites_saved", count=len(favs), what=str(data.get("what") or "")[:20])
+                return self.send_json({"ok": True, "favorites": favs})
             if path == "/api/live/state":
                 # Frequenz/Betriebsart/Raster und „Zuletzt gehört“ merken (auch ohne laufenden Empfang)
                 return self.send_json({"ok": True, "state": live_state_update(data, force=bool(data.get("history")))})

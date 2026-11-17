@@ -179,7 +179,7 @@
     if (pending.length || saveTimer) return;                 // ungespeicherte Klicks nicht vom alten Stand überschreiben
     settings = await api('/api/settings');
     tzApply(settings);
-    setTimeout(() => { try { renderCountry(); } catch (e) { } try { applyLiveState(); } catch (e) { } }, 0);
+    setTimeout(() => { try { renderCountry(); } catch (e) { } try { applyLiveState(); } catch (e) { } loadLiveFavs(); }, 0);
     const iv = $('interval');
     iv.innerHTML = settings.allowed_intervals.map(m => `<option value="${m}">${intervalLabel(m)}</option>`).join('');
     iv.value = settings.scan_interval_minutes;
@@ -1175,6 +1175,7 @@
     $('liveDirectNote').hidden = !(on && st.direct);
     $('liveGainField').hidden = !!(on && st.direct);
     renderRds(on ? st.rds : null);
+    try { favStarUpdate(); } catch (e) { }
     renderLiveDec(on ? st.decode : null);
     if (on && document.activeElement !== $('liveWatch')) $('liveWatch').checked = !!st.watch;
     if (on && st.watch && st.watch.until && document.activeElement !== $('liveWatchUntil')) {
@@ -1629,6 +1630,82 @@
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;   // Mittelklick/Strg: neuer Tab wie gewohnt
     e.preventDefault(); showView('scan');
   });
+  // ---------- Live-Favoriten (auf dem Pi: Einstellungen „live_favorites“) ----------
+  let liveFavs = [];
+  async function loadLiveFavs() { try { liveFavs = (await api('/api/live/favorites')).favorites || []; } catch (e) { return; } renderLiveFavs(); }
+  async function saveLiveFavs(what) {
+    try { liveFavs = (await post('/api/live/favorites', { favorites: liveFavs, what })).favorites || []; }
+    catch (e) { toast(e.message); loadLiveFavs(); return; }
+    renderLiveFavs();
+  }
+  const favIndexNow = () => { const f = lf(), m = $('liveMode').value; return liveFavs.findIndex(x => Math.abs(x.freq_hz - f) < 50 && x.mode === m); };
+  function favStarUpdate() {
+    const on = favIndexNow() >= 0, b = $('liveFavStar');
+    b.textContent = on ? '★' : '☆'; b.classList.toggle('on', on);
+    b.title = on ? (EN ? 'Favourite – tap to remove' : 'Favorit – antippen zum Entfernen') : (EN ? 'Save as favourite' : 'Als Favorit speichern');
+    b.setAttribute('aria-label', b.title);
+  }
+  function renderLiveFavs() {
+    const sel = $('liveFav'), groups = new Map();
+    liveFavs.forEach((x, i) => { const b = freqInfo(x.freq_hz).band || (EN ? 'other' : 'sonstige'); if (!groups.has(b)) groups.set(b, []); groups.get(b).push([x, i]); });
+    sel.innerHTML = `<option value="">${liveFavs.length ? (EN ? '– choose a favourite –' : '– Favorit wählen –') : (EN ? '– no favourites yet (☆ next to the frequency) –' : '– noch keine Favoriten (☆ neben der Frequenz) –')}</option>`
+      + [...groups].map(([b, l]) => `<optgroup label="${esc(b)}">${l.map(([x, i]) => `<option value="${i}">${esc(x.name)} · ${(x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4)} ${x.mode.toUpperCase()}</option>`).join('')}</optgroup>`).join('');
+    sel.value = '';
+    $('liveFavCount').textContent = liveFavs.length ? `(${liveFavs.length})` : '';
+    if ($('liveFavList').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') { favStarUpdate(); return; }   // nicht mitten im Tippen
+    $('liveFavList').innerHTML = liveFavs.length ? liveFavs.map((x, i) => `<div class="fav-item"><input type="text" maxlength="40" value="${esc(x.name)}" data-favname="${i}" aria-label="${EN ? 'Name' : 'Name'}">`
+      + `<small class="muted no-i18n">${(x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4)} MHz · ${x.mode.toUpperCase()}${x.dec && x.dec !== 'auto' ? ' · ' + esc(x.dec) : ''}</small>`
+      + `<button type="button" class="btn btn-small" data-favup="${i}" ${i ? '' : 'disabled'} title="${EN ? 'Move up' : 'Nach oben'}">↑</button>`
+      + `<button type="button" class="btn btn-small btn-danger" data-favdel="${i}" title="${EN ? 'Delete' : 'Löschen'}">✕</button></div>`).join('')
+      : `<p class="muted">${EN ? 'No favourites yet – tune in and tap ☆ next to the frequency.' : 'Noch keine Favoriten – abstimmen und ☆ neben der Frequenz antippen.'}</p>`;
+    favStarUpdate();
+  }
+  function favDefaultName(f, m) {
+    const h = liveHist.find(x => Math.abs(x.f - f) < 100 && x.m === m && x.name);
+    if (h) return h.name;
+    const fi = freqInfo(f), mhz = (f / 1e6).toFixed(['usb', 'lsb'].includes(m) ? 5 : 4);
+    // fester Kanal (z. B. „APRS 144.800“): dessen Name ohne Klammerzusatz – sonst Band und Frequenz
+    if (fi.seg && (fi.seg.frequencies_hz || []).some(x => Math.abs(x - f) <= 1000)) return fi.seg.label.replace(/\s*\(.*$/, '').slice(0, 40);
+    return `${fi.band ? fi.band + ' ' : ''}${mhz}`;
+  }
+  $('liveFavStar').addEventListener('click', () => {
+    const i = favIndexNow();
+    if (i >= 0) {
+      if (!confirm((EN ? 'Remove favourite “' : 'Favorit „') + liveFavs[i].name + (EN ? '”?' : '“ entfernen?'))) return;
+      liveFavs.splice(i, 1); saveLiveFavs('remove'); return;
+    }
+    const f = lf(); if (!(f > 0)) { toast(EN ? 'Enter a frequency first' : 'Erst eine Frequenz eintragen'); return; }
+    const m = $('liveMode').value;
+    liveFavs.push({ name: favDefaultName(f, m), freq_hz: f, mode: m, step_hz: Number($('liveStep').value) || 0, dec: $('liveDecKind').value });
+    saveLiveFavs('add').then(() => { $('liveFavManage').open = true; const el = $('liveFavList').querySelector(`[data-favname="${liveFavs.length - 1}"]`); if (el) { el.focus(); el.select(); } });
+    toast(EN ? '★ saved – change the name below if you like' : '★ gespeichert – Name darunter nach Wunsch ändern');
+  });
+  $('liveFav').addEventListener('change', async e => {
+    const x = liveFavs[Number(e.target.value)]; if (!x) return;
+    e.target.value = '';
+    $('liveMode').value = x.mode;
+    $('liveFreq').value = (x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4);
+    if (x.step_hz && [...$('liveStep').options].some(o => Number(o.value) === x.step_hz)) $('liveStep').value = String(x.step_hz);
+    if (x.dec && [...$('liveDecKind').options].some(o => o.value === x.dec) && $('liveDecKind').value !== x.dec) {
+      $('liveDecKind').value = x.dec;
+      try { await post('/api/live/decoder', { kind: x.dec }); } catch (err) { toast(err.message); }
+    }
+    liveTouched = Date.now();
+    await liveStart({ freq_hz: x.freq_hz, mode: x.mode, squelch_db: Number($('liveSquelch').value), gain: $('liveGain').value });
+    favStarUpdate();
+  });
+  $('liveFavList').addEventListener('click', e => {
+    const up = e.target.closest('[data-favup]'), del = e.target.closest('[data-favdel]');
+    if (up) { const i = Number(up.dataset.favup); if (i > 0) { [liveFavs[i - 1], liveFavs[i]] = [liveFavs[i], liveFavs[i - 1]]; saveLiveFavs('order'); } }
+    if (del) { const i = Number(del.dataset.favdel); if (confirm((EN ? 'Delete favourite “' : 'Favorit „') + liveFavs[i].name + (EN ? '”?' : '“ löschen?'))) { liveFavs.splice(i, 1); saveLiveFavs('remove'); } }
+  });
+  $('liveFavList').addEventListener('change', e => {
+    const n = e.target.closest('[data-favname]'); if (!n) return;
+    const i = Number(n.dataset.favname), v = n.value.trim().slice(0, 40);
+    if (v && liveFavs[i] && liveFavs[i].name !== v) { liveFavs[i].name = v; saveLiveFavs('rename'); }
+  });
+  ['input', 'change'].forEach(ev => { $('liveFreq').addEventListener(ev, favStarUpdate); $('liveMode').addEventListener(ev, favStarUpdate); });
+
   const liveHist = [];                 // [{f, m, name}] – name: Sendername aus RDS
   function liveRemember(f, m, name) {
     f = Math.round(f / 100) * 100;
