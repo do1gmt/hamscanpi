@@ -2892,5 +2892,106 @@ PY
 grep -q 'async function favDefaultName' "$SRC/web/app.js" && grep -q '/api/live/favname' "$SRC/web/app.js" && grep -q 'maxlength="60" value="${esc(x.name)}" data-favname' "$SRC/web/app.js" \
   && ok "Dashboard fragt den Vorschlag beim ☆ ab, Name bis 60 Zeichen" || bad "Dashboard Favoritenname"
 
+echo "== 80 Zeitpläne: Gerät passt nicht, nächster Beginn, Scan zu Fensterbeginn vor Live, letzter Lauf"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Status je Zeitplan (Gerät, aktiv, nächster Beginn, über Mitternacht), Beginn/Ende protokolliert, Scan zu Beginn mit Zeitplan-Kennung, Live hält an und läuft weiter, letzter Lauf aus der Tabelle run" || bad "Zeitpläne"
+import ast, calendar, json, sqlite3, subprocess, tempfile, time
+from pathlib import Path
+import scan_plan as SP, webapp as W
+now = calendar.timegm((2026, 11, 17, 10, 30, 0))                                # Dienstag 10:30 UTC
+A = {"id": "a70", "name": "70 cm", "days": list(range(7)), "from": "10:00", "to": "11:00", "bands": ["70cm"], "enabled": True, "tz": "utc"}
+B = {"id": "b40", "name": "40 m nachts", "days": [3], "from": "22:00", "to": "02:00", "bands": ["40m"], "enabled": True, "tz": "utc"}
+C = dict(B, id="c40", enabled=False)
+pm = {"active_device": "pmsdr", "schedules": [A, B, C]}
+st = {x["id"]: x for x in SP.schedule_status(pm, None, now)}
+assert st["a70"]["supported"] is False and st["a70"]["active"] is False and st["a70"]["next"] is None, st
+assert st["b40"]["supported"] and not st["b40"]["active"] and st["b40"]["next"] == calendar.timegm((2026, 11, 19, 22, 0, 0)), st
+assert st["c40"]["next"] is None
+assert SP.active_schedule(pm, None, now) is None                                # 70 cm am PMSDR: greift nie
+assert SP.active_schedule(pm, None, calendar.timegm((2026, 11, 20, 1, 0, 0)))["id"] == "b40"   # Fr 01:00 – über Mitternacht
+rt = {"active_device": "rtlsdr", "schedules": [A, B]}
+st = {x["id"]: x for x in SP.schedule_status(rt, None, now)}
+assert st["a70"]["active"] and st["a70"]["next"] == calendar.timegm((2026, 11, 18, 10, 0, 0)) and st["b40"]["supported"] is False
+loc = dict(A, tz="local", **{"from": "06:00"})
+nx = SP.next_start(loc, now); lt = time.localtime(nx)
+assert (lt.tm_hour, lt.tm_min) == (6, 0) and 0 < nx - now <= 86400
+# Kennungen nur aus harmlosen Zeichen
+cs = W.clean_schedules([dict(A, id="x'; rm -rf /"), dict(B, id="gut_1-2")])
+assert cs[0]["id"] != "x'; rm -rf /" and cs[0]["id"].isalnum() and cs[1]["id"] == "gut_1-2"
+# letzter Lauf je Zeitplan
+W.ensure_schema()
+db = sqlite3.connect(W.DB)
+db.executemany("INSERT INTO run(started_at, status, peaks, schedule) VALUES(?,?,?,?)",
+               [("2026-11-16T22:00:00+00:00", "success", 5, "b40"), ("2026-11-17T22:00:00+00:00", "success", 3, "b40"),
+                ("2026-11-17T23:00:00+00:00", "success", 9, None)])
+db.commit(); db.close()
+info = {x["id"]: x for x in W.schedules_info({"active_device": "pmsdr", "schedules": [A, B]})}
+assert info["b40"]["last"] == {"started_at": "2026-11-17T22:00:00+00:00", "peaks": 3, "status": "success"} and info["a70"]["last"] is None
+assert info["a70"]["supported"] is False
+# Zeitplaner: Fensterwechsel, Scan zu Beginn (kick), Bitte an Live, Kennung an run_cycle.sh
+src = Path("scheduler.py").read_text()
+names = ("run_scan", "_sched_file", "schedule_tick", "_sched_save", "schedule_live_yield", "schedule_scan_started")
+code = "\n".join(ast.get_source_segment(src, n) for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name in names)
+tmp = Path(tempfile.mkdtemp()); (tmp / "data").mkdir(); (tmp / "log").mkdir()
+logs, envs = [], []
+class RD:
+    @staticmethod
+    def path(n): return tmp / n
+class SPX:
+    STDOUT = subprocess.STDOUT
+    @staticmethod
+    def Popen(cmd, **k): envs.append(k.get("env") or {})
+def mk():
+    g = {"json": json, "time": time, "os": __import__("os"), "BASE": tmp, "subprocess": SPX, "_RD": RD,
+         "cycle_running": lambda: False, "scan_running": lambda: False, "log": lambda m: None,
+         "applog": lambda lv, c, ev, **d: logs.append((ev, d)),
+         "_sched": {"id": None, "name": None, "kick": False, "loaded": False, "yield_t": 0.0}}
+    exec(code, g); return g
+g = mk()
+g["schedule_tick"](None); assert not logs and not g["_sched"]["kick"]
+g["schedule_tick"](A); assert logs[-1][0] == "schedule_start" and logs[-1][1]["name"] == "70 cm" and g["_sched"]["kick"]
+g2 = mk(); g2["schedule_tick"](A)                                              # Neustart des Zeitplaners im Fenster
+assert len(logs) == 1 and g2["_sched"]["kick"]                                 # kein zweites „beginnt“, Scan steht noch aus
+assert g2["schedule_live_yield"]() is True
+y = json.loads((tmp / "data" / "live_yield.json").read_text()); assert y["why"] == "schedule" and y["name"] == "70 cm"
+assert g2["run_scan"]("a70") and envs[-1].get("HSP_SCHEDULE") == "a70"
+g2["schedule_scan_started"]()
+assert json.loads((tmp / "data" / "live_yield.json").read_text())["started"] and not g2["_sched"]["kick"]
+g3 = mk(); g3["schedule_tick"](A); assert not g3["_sched"]["kick"]             # Scan zu Beginn war schon
+g3["schedule_tick"](None); assert logs[-1] == ("schedule_end", {"name": "70 cm"})
+g3["run_scan"](None); assert "HSP_SCHEDULE" not in envs[-1]
+# Webserver: Live im Browser hält an und läuft danach auf derselben Frequenz weiter
+class FakeLive:
+    running, active_hz, freq_hz, mode, device, gain = True, 145_500_000, 145_500_000, "nfm", "rtlsdr", None
+    def stop(self): self.running = False
+started = []
+W.LIVE_YIELD = tmp / "data" / "live_yield.json"
+W.LIVE_YIELD.write_text(json.dumps({"why": "schedule", "name": "70 cm", "t": time.time()}))
+W._live = FakeLive(); W._watch_cfg = lambda: None
+W.scan_running = W.cycle_running = lambda: False
+W.live_start = lambda d: started.append(d)
+W.watch_tick()
+assert W._live is None and W._watch["resume"]["freq_hz"] == 145_500_000 and not started
+ls = W.live_status(); assert ls["paused"]["why"] == "Zeitplan „70 cm“", ls
+W.watch_tick(); assert not started and W.LIVE_YIELD.exists()                    # Scan noch nicht gestartet
+W.LIVE_YIELD.write_text(json.dumps({"why": "schedule", "name": "70 cm", "t": time.time(), "started": time.time()}))
+W.watch_tick()
+assert started and started[0]["freq_hz"] == 145_500_000 and started[0]["mode"] == "nfm" and not W.LIVE_YIELD.exists()
+assert W._watch["resume"] is None and "paused" not in W.live_status()
+# im Browser gestoppt, während Live angehalten war: nicht wieder anfangen
+W.LIVE_YIELD.write_text(json.dumps({"why": "sat", "sat": "ISS", "until": time.time() + 600}))
+W._live = FakeLive(); W.watch_tick(); assert W._watch["resume"]
+W.live_stop(); assert W._watch["resume"] is None
+W.LIVE_YIELD.write_text(json.dumps({"why": "sat", "sat": "ISS", "until": time.time() - 1})); started.clear()
+W.watch_tick(); assert not started and not W.LIVE_YIELD.exists()
+PY
+RCT="$(mktemp -d)"; cp -r bin config data "$RCT/" 2>/dev/null; mkdir -p "$RCT/log" "$RCT/data"
+printf '#!/usr/bin/env python3\nprint("Peaks : 2")\n' > "$RCT/bin/scanner.py"; chmod +x "$RCT/bin/scanner.py"
+(cd "$RCT" && HSP_SCHEDULE="b40'; DROP TABLE run;--" timeout 120 bash bin/run_cycle.sh >/dev/null 2>&1)
+[ "$(sqlite3 "$RCT/data/scanner.db" "SELECT schedule FROM run ORDER BY id DESC LIMIT 1")" = "b40DROPTABLErun--" ] \
+  && ok "run_cycle.sh merkt sich den Zeitplan (nur harmlose Zeichen)" || bad "Zeitplan im Lauf"
+rm -rf "$RCT"
+grep -q 'sched-bad' "$SRC/web/app.js" && grep -q '\.sched-bad' "$SRC/web/style.css" && grep -q 'function schedState' "$SRC/web/app.js" \
+  && grep -q 'live.resumeAudio' "$SRC/web/app.js" && ok "Dashboard: roter Rand bei unpassendem Gerät, Status und letzter Lauf, Ton nach der Pause wieder verbunden" || bad "Dashboard Zeitpläne"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

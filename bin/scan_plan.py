@@ -127,11 +127,8 @@ def _hm(s):
     return int(h) * 60 + int(m)
 
 
-def active_schedule(settings, cfg=None, now=None):
-    """Der gerade gültige Zeitplan (dict) oder None."""
-    import time as _t
-    lts = {"local": _t.localtime(now), "utc": _t.gmtime(now)}
-    cfg = cfg if cfg is not None else _bp(read_json(CFG, {"ranges": []}))
+def device_bands(settings, cfg):
+    """Bänder, die das gewählte Gerät (eine Antenne) gerade empfangen kann."""
     dev = "rtlsdr" if settings.get("active_device") == "rtlsdr" else "pmsdr"
     dev_bands = {b["name"] for b in cfg.get("ranges", []) if str(b.get("device", "pmsdr")) == dev}
     if dev == "rtlsdr":                                   # Kurzwelle auch mit dem Stick (Direktabtastung)
@@ -142,23 +139,75 @@ def active_schedule(settings, cfg=None, now=None):
                               if str(b.get("device", "pmsdr")) == "pmsdr" and b["start_hz"] < HF_DS_MAX}
         except Exception:
             pass
+    return dev_bands
+
+
+def _inside(sc, now=None):
+    """Liegt now im Fenster des Zeitplans (Wochentage, über Mitternacht)? None bei kaputten Uhrzeiten."""
+    import time as _t
+    try:
+        a, b = _hm(sc["from"]), _hm(sc["to"])
+    except Exception:
+        return None
+    lt = _t.gmtime(now) if sc.get("tz") == "utc" else _t.localtime(now)
+    minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
+    days = set(sc.get("days") or range(7))
+    if a <= b:
+        return a <= minute < b and wd in days
+    return (minute >= a and wd in days) or (minute < b and (wd - 1) % 7 in days)   # über Mitternacht: Tag ab Beginn
+
+
+def next_start(sc, now=None):
+    """Nächster Fensterbeginn des Zeitplans (Unix-Zeit) nach now, höchstens 8 Tage voraus – oder None."""
+    import time as _t
+    from datetime import datetime, timedelta, timezone
+    now = _t.time() if now is None else now
+    try:
+        a = _hm(sc["from"])
+    except Exception:
+        return None
+    days = set(sc.get("days") or range(7))
+    if sc.get("tz") == "utc":
+        base = datetime.fromtimestamp(now, timezone.utc)
+    else:
+        base = datetime.fromtimestamp(now).astimezone()
+    for d in range(9):
+        day = (base + timedelta(days=d)).date()
+        if day.weekday() not in days:
+            continue
+        if sc.get("tz") == "utc":
+            t = datetime(day.year, day.month, day.day, a // 60, a % 60, tzinfo=timezone.utc).timestamp()
+        else:
+            t = _t.mktime((day.year, day.month, day.day, a // 60, a % 60, 0, 0, 0, -1))
+        if t > now:
+            return t
+    return None
+
+
+def active_schedule(settings, cfg=None, now=None):
+    """Der gerade gültige Zeitplan (dict) oder None. Zeitpläne, deren Bänder das gewählte Gerät nicht empfangen
+    kann, gelten nie (die Liste im Dashboard zeigt sie rot umrandet)."""
+    cfg = cfg if cfg is not None else _bp(read_json(CFG, {"ranges": []}))
+    dev_bands = device_bands(settings, cfg)
     for sc in settings.get("schedules") or []:
         if not sc.get("enabled", True):
             continue
-        try:
-            a, b = _hm(sc["from"]), _hm(sc["to"])
-        except Exception:
-            continue
-        lt = lts["utc" if sc.get("tz") == "utc" else "local"]
-        minute, wd = lt.tm_hour * 60 + lt.tm_min, lt.tm_wday
-        days = set(sc.get("days") or range(7))
-        if a <= b:
-            inside = a <= minute < b and wd in days
-        else:                                               # über Mitternacht: Tag zählt ab Beginn
-            inside = (minute >= a and wd in days) or (minute < b and (wd - 1) % 7 in days)
-        if inside and dev_bands & set(sc.get("bands") or []):
+        if _inside(sc, now) and dev_bands & set(sc.get("bands") or []):
             return sc
     return None
+
+
+def schedule_status(settings, cfg=None, now=None):
+    """Je Zeitplan: kann das gewählte Gerät ihn (supported), gilt er gerade (active), nächster Beginn (next)."""
+    cfg = cfg if cfg is not None else _bp(read_json(CFG, {"ranges": []}))
+    dev_bands = device_bands(settings, cfg)
+    act = active_schedule(settings, cfg, now)
+    out = []
+    for sc in settings.get("schedules") or []:
+        ok = bool(dev_bands & set(sc.get("bands") or []))
+        out.append({"id": sc.get("id"), "supported": ok, "active": act is not None and act.get("id") == sc.get("id"),
+                    "next": next_start(sc, now) if ok and sc.get("enabled", True) else None})
+    return out
 
 
 def effective_settings(settings, cfg=None, now=None):

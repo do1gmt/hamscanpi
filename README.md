@@ -51,7 +51,10 @@ shortwave.
   live and for every scanned station (list of FM stations).
 - TMC traffic messages from RDS in plain text (road, direction, between which junctions, event,
   duration) using the German location table – live, on hit cards and as watchlist alerts ("A9").
-- Band schedules: other bands by time of day and weekday.
+- Band schedules: other bands by time of day and weekday. A scan starts right at the beginning of the window
+  (Live pauses for it and continues on the same frequency); the list shows "running now", the next start and
+  the last run with its hits. A schedule whose bands the selected SDR stick cannot receive is framed in red and
+  does not apply.
 - On repeaters and FM channels the scanner stays until the QSO ends and records it as a whole.
 
 **Stations and alerts**
@@ -216,7 +219,9 @@ ended by force and leftover `rtl_sdr` processes cleaned up. A pass that is alrea
 interrupt a scan. A scan without a sign of life for 10 minutes is ended and reported. After switching on
 "Satellites" or changing the satellite selection or priorities, no pass starts for **60 seconds** (countdown
 with a "now" button in the pass list), so looking around or choosing satellites does not throw out a running
-scan.
+scan. **Order of precedence:** satellite pass > start of a schedule > Live > normal scan. Live – in the browser or
+as continuous watch – pauses for a pass and for the first scan of a schedule window and then continues on the
+same frequency (the browser reconnects the audio by itself); further scans in the window wait while Live runs.
 
 **Wi-Fi that repairs itself:** every minute Hesperos DX checks whether the router answers. If not, it helps in
 steps – reconnect after 2 min, Wi-Fi off/on after 5 min, restart the network service after 9 min, reload the Wi-Fi

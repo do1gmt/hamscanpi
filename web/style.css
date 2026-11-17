@@ -451,6 +451,11 @@ h3.sub { font-size: .85rem; color: var(--muted); margin: .9rem 0 .3rem; font-wei
 .sched-on { color: var(--teal); font-weight: 600; }
 .sched-add summary { margin-top: .5rem; }
 .sched-now td { background: rgba(45,212,191,.06); }
+.sched-bad { outline: 2px solid var(--red); outline-offset: -2px; }
+.sched-bad td { opacity: .9; }
+.sched-why { color: var(--red); font-size: .85em; margin-top: .2rem; }
+.badge-off { color: var(--red); border-color: var(--red); }
+.sched-st { display: block; margin-top: .15rem; }
 #scDays, #scBands { margin: .4rem 0; }
 
 .st-map { height: 70vh; min-height: 420px; max-height: 900px; border-radius: 8px; margin: .5rem 0; background: var(--panel-2); resize: vertical; overflow: hidden; }

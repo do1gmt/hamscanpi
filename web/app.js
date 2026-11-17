@@ -43,6 +43,8 @@
   }
   function tzLabel(d = new Date()) { return TZ.mode === 'utc' ? 'UTC' : zoneAt(d, TZ.zone); }
   // tfmt(x, {date: 'auto' (heute/Datum) | true | false, sec, year, label: false = ohne Kennung})
+  // Grund einer Live-Pause (Satellit oder „Zeitplan „Name““) in der Sprache des Dashboards
+  const whyText = w => EN ? String(w || '').replace(/^Zeitplan „(.*)“$/, 'schedule “$1”') : String(w || '');
   function tfmt(x, o = {}) {
     const d = toDate(x); if (!d) return '–';
     const p = tparts(d), date = o.date === undefined ? 'auto' : o.date;
@@ -597,7 +599,7 @@
     const lw = s.live_watch;
     if (lw && !busy) {
       const end = lw.until ? ' · bis ' + tfmt(lw.until, { date: false }) : '';
-      setPill(lw.paused_for ? `Dauerwache pausiert (${lw.paused_for})` : `Dauerwache ${(lw.freq_hz / 1e6).toFixed(3)} ${String(lw.mode || '').toUpperCase()}${end}`, 'running');
+      setPill(lw.paused_for ? `Dauerwache pausiert (${whyText(lw.paused_for)})` : `Dauerwache ${(lw.freq_hz / 1e6).toFixed(3)} ${String(lw.mode || '').toUpperCase()}${end}`, 'running');
     } else if (s.live_active && !busy) { setPill('Live-Empfang', 'running'); }
     // ein Fehler von vor über einer Stunde ist Vergangenheit: neutral „Bereit“, der Grund steht klein darunter
     const stale = s.state === 'error' && s.updated_at && Date.now() - new Date(s.updated_at).getTime() > 3600e3;
@@ -645,11 +647,11 @@
   }
   // Live belegt den Empfänger: Scans ruhen. Das steht auf jedem Reiter, damit es beim Herumprobieren nicht untergeht.
   function liveBanner(s, busy) {
-    const lw = s.live_watch, on = !!(s.live_active || lw);
+    const lw = s.live_watch, lp = s.live_paused, on = !!(s.live_active || lw || lp);
     $('liveBanner').hidden = !on || busy;
     if (!on || busy) { $('scanNow').title = ''; return; }
-    const what = lw ? `${EN ? 'Continuous watch' : 'Dauerwache'} ${(lw.freq_hz / 1e6).toFixed(4)} MHz ${String(lw.mode || '').toUpperCase()}${lw.until ? (EN ? ' until ' : ' bis ') + tfmt(lw.until, { date: false }) : ''}${lw.paused_for ? (EN ? ' (paused: ' : ' (pausiert: ') + lw.paused_for + ')' : ''}` : (EN ? 'Live reception running' : 'Live-Empfang läuft');
-    $('liveBannerText').textContent = EN ? `${what} – scans pause until Live is stopped. Satellite passes interrupt briefly.` : `${what} – Scans ruhen, bis Live beendet ist. Satellitenüberflüge unterbrechen kurz.`;
+    const what = lw ? `${EN ? 'Continuous watch' : 'Dauerwache'} ${(lw.freq_hz / 1e6).toFixed(4)} MHz ${String(lw.mode || '').toUpperCase()}${lw.until ? (EN ? ' until ' : ' bis ') + tfmt(lw.until, { date: false }) : ''}${lw.paused_for ? (EN ? ' (paused: ' : ' (pausiert: ') + whyText(lw.paused_for) + ')' : ''}` : lp ? `${EN ? 'Live' : 'Live'} ${(lp.freq_hz / 1e6).toFixed(4)} MHz ${String(lp.mode || '').toUpperCase()} ${EN ? '(paused: ' : '(pausiert: '}${whyText(lp.why)}${EN ? ', continues afterwards)' : ', geht danach weiter)'}` : (EN ? 'Live reception running' : 'Live-Empfang läuft');
+    $('liveBannerText').textContent = lp && !lw && !s.live_active ? what : EN ? `${what} – scans pause until Live is stopped. Satellite passes and the start of a schedule interrupt briefly.` : `${what} – Scans ruhen, bis Live beendet ist. Satellitenüberflüge und der Beginn eines Zeitplans unterbrechen kurz.`;
     $('liveBannerGo').hidden = document.querySelector('.tabs-main button.on')?.dataset.view === 'live';
     $('scanNow').title = 'Live-Empfang läuft – erst Live beenden';
     if (s.scan_interval_minutes !== 0) $('nextRun').textContent = 'nach Live-Empfang';
@@ -1157,6 +1159,8 @@
     $('liveSeekStop').hidden = !seeking;
     $('panel-live').classList.toggle('seeking', seeking);
     $('liveText').textContent = st.text || (on ? 'läuft' : 'aus');
+    if (!on && st.paused) { $('liveText').textContent = (EN ? 'paused for ' : 'pausiert für ') + whyText(st.paused.why) + (EN ? ' – continues by itself' : ' – geht danach von selbst weiter'); live.resumeAudio = true; }
+    if (on && live.resumeAudio) { live.resumeAudio = false; liveAudio().catch(() => { }); }   // nach der Pause: Ton wieder verbinden
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
     if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = mhzField(st.active_hz, st.device !== 'rtlsdr');
     if (on) eibiNow();                                     // EiBi: nur neu fragen, wenn sich die Frequenz geändert hat
@@ -1251,6 +1255,7 @@
     })().catch(() => { });
   }
   async function liveStop() {
+    live.resumeAudio = false;
     try { await post('/api/live/stop'); } catch (e) { }
     if (live.reader) { try { await live.reader.cancel(); } catch (e) { } live.reader = null; }
     const el = $('liveAudio'); el.pause(); el.removeAttribute('src'); el.hidden = true;
@@ -1386,7 +1391,7 @@
   $('liveVol').addEventListener('input', setVol); setVol();
   $('liveFallback').addEventListener('change', () => { if (live.active) { liveEnsureCtx(); liveAudio(); } });
 
-  async function pollLive() { try { const st = await api('/api/live/status'); if (st.active || live.active) liveSetUI(st); } catch (e) { } }
+  async function pollLive() { try { const st = await api('/api/live/status'); if (st.active || live.active || st.paused || live.resumeAudio) liveSetUI(st); } catch (e) { } }
   // Treffer direkt live hören
   window.__liveFromHit = (h) => {
     const m = h.mode === 'am' ? 'am' : h.mode === 'wfm' ? 'wfm' : (h.sideband ? h.sideband.toLowerCase() : (['fm', 'relais', 'dv', 'aprs', 'pocsag', 'data', 'sat'].includes(h.mode) ? 'nfm' : (h.rf_hz < 10e6 ? 'lsb' : 'usb')));
@@ -1399,7 +1404,9 @@
   // ---------- Protokoll ----------
   const EVENT_TEXT = {
     run_start: 'Scan gestartet', run_done: 'Scan fertig', run_failed: 'Scan fehlgeschlagen', run_cancelled: 'Scan abgebrochen',
-    run_interrupted: 'Scan unterbrochen', scan_start: 'Scan wird gestartet', scan_postponed: 'Scan verschoben', scan_stopped: 'Scan beendet',
+    run_interrupted: 'Scan unterbrochen', schedule_start: 'Zeitplan beginnt', schedule_end: 'Zeitplan endet', schedule_live_yield: 'Zeitplan: Live hält kurz an', schedule_kick_skipped: 'Zeitplan: Scan zu Beginn ausgelassen',
+    satellite_live_yield: 'Überflug: Live hält kurz an', live_yield: 'Live angehalten', live_resumed: 'Live läuft weiter', watch_yield: 'Dauerwache angehalten', watch_resumed: 'Dauerwache läuft weiter',
+    scan_start: 'Scan wird gestartet', scan_postponed: 'Scan verschoben', scan_stopped: 'Scan beendet',
     trigger_ignored: 'Scan-Anforderung ignoriert', band_start: 'Band wird abgesucht', band_skipped: 'Band übersprungen',
     device_opened: 'Empfänger geöffnet', device_open_failed: 'Empfänger lässt sich nicht öffnen', hit: 'Treffer',
     rtl_no_data: 'RTL-SDR liefert keine Daten', rtl_recovered: 'RTL-SDR läuft wieder',
@@ -1410,7 +1417,7 @@
     channel_watch_failed: 'Kanalbeobachtung fehlgeschlagen', voice_watch_failed: 'Sprachbeobachtung fehlgeschlagen',
     live_start: 'Live-Empfang gestartet', login: 'Anmeldung', login_failed: 'Anmeldung fehlgeschlagen', login_blocked: 'Anmeldung gesperrt', password_set: 'Passwort gesetzt', auth_disabled: 'Zugangsschutz ausgeschaltet', run_summary: 'Scan-Zusammenfassung', phase_start: 'Auswertung', decode_done: 'Dekodierung fertig', live_stop: 'Live-Empfang beendet', notify_sent: 'Mail verschickt', notify_failed: 'Mail fehlgeschlagen',
   };
-  const KEY_TEXT = { run_id: 'Lauf', peaks: 'Treffer', rejected: 'verworfen', duration_s: 'Dauer s', band: 'Band', sat: 'Satellit', error: 'Fehler',
+  const KEY_TEXT = { schedule: 'Zeitplan', name: 'Name', bands: 'Bänder', until: 'bis', run_id: 'Lauf', peaks: 'Treffer', rejected: 'verworfen', duration_s: 'Dauer s', band: 'Band', sat: 'Satellit', error: 'Fehler',
     reason: 'Grund', hits: 'Treffer', channels: 'Kanäle', max_el: 'max. Höhe°', freq_hz: 'Frequenz', rf_hz: 'Frequenz', device: 'Gerät',
     problem: 'Problem', interval_min: 'Intervall min', rule: 'Regel', detail: 'Was', coverage: 'abgehört (MHz)', windows: 'Fenstermitten (MHz)', segments: 'Segmente', channels_n: 'Kanäle', digital: 'Digital (MHz)', freq_mhz: 'Frequenzen (MHz)', seconds_band: 'Dauer s', seconds: 'Sekunden', tune_hz: 'Mitte', until: 'bis', per_channel: 'je Kanal', plan: 'Plan' };
   function fmtVal(k, v) {
@@ -2080,8 +2087,23 @@
   loadSstvEvents(); setInterval(loadSstvEvents, 600000);
 
   // ---------- Zeitpläne ----------
-  const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const DAYS = EN ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const scSel = { days: new Set([0, 1, 2, 3, 4, 5, 6]), bands: new Set() };
+  // „läuft gerade“ / „nächstes Mal …“ / „ausgeschaltet“ und der letzte Lauf unter diesem Zeitplan
+  function schedState(r, ss, on) {
+    const parts = [];
+    if (on) parts.push(EN ? 'running now' : 'läuft gerade');
+    else if (!r.enabled) parts.push(EN ? 'switched off' : 'ausgeschaltet');
+    else if (ss.next) parts.push((EN ? 'next ' : 'nächstes Mal ') + tfmt(ss.next, { date: true, label: false }));
+    if (settings.scan_interval_minutes === 0 && r.enabled) parts.push(EN ? 'automatic scan is off – the schedule does not scan' : 'automatischer Scan ist aus – der Zeitplan scannt nicht');
+    const l = ss.last;
+    if (l) {
+      const res = l.status === 'success' ? `${l.peaks} ${EN ? 'hits' : 'Treffer'}` : l.status === 'running' ? (EN ? 'running' : 'läuft')
+        : l.status === 'cancelled' ? (EN ? 'cancelled' : 'abgebrochen') : (EN ? 'failed' : 'fehlgeschlagen');
+      parts.push(`${EN ? 'last' : 'zuletzt'} ${tfmt(l.started_at, { date: true, label: false })} · ${res}`);
+    } else if (r.enabled) parts.push(EN ? 'not run yet' : 'noch nicht gelaufen');
+    return esc(parts.join(' · '));
+  }
   function renderSchedules() {
     if (!settings) return;
     const act = settings.schedule_active;
@@ -2093,11 +2115,13 @@
     $('schedList').innerHTML = list.length ? `<table class="table watch-table"><tbody>${list.map((r, i) => {
       const sh = schedShown(r);
       const days = sh.days.length === 7 ? 'täglich' : sh.days.map(d => DAYS[d]).join(' ');
-      const on = act && act.name === r.name;
-      return `<tr class="${on ? 'sched-now' : ''}"><td><label class="check"><input type="checkbox" data-si="${i}" ${r.enabled ? 'checked' : ''}> <b>${esc(r.name)}</b>${on ? ' <span class="badge badge-new">aktiv</span>' : ''}</label>
-        <small class="muted">${esc(days)} · ${sh.from}–${sh.to} ${tzLabel()} · ${esc(r.bands.join(', '))}</small></td>
+      const ss = (settings.schedule_status || []).find(x => x.id === r.id) || {};
+      const bad = ss.supported === false, on = !bad && act && (act.id ? act.id === r.id : act.name === r.name);
+      return `<tr class="${on ? 'sched-now' : ''}${bad ? ' sched-bad' : ''}"><td><label class="check"><input type="checkbox" data-si="${i}" ${r.enabled ? 'checked' : ''}> <b>${esc(r.name)}</b>${on ? ' <span class="badge badge-new">aktiv</span>' : ''}${bad ? ` <span class="badge badge-off">${EN ? 'inactive' : 'inaktiv'}</span>` : ''}</label>
+        <small class="muted">${esc(days)} · ${sh.from}–${sh.to} ${tzLabel()} · ${esc(r.bands.join(', '))}</small>
+        ${bad ? `<div class="sched-why">${EN ? 'The current SDR stick does not support these bands – the schedule does not apply.' : 'Der aktuelle SDR-Stick unterstützt diese Bänder nicht – der Zeitplan greift nicht.'}</div>` : `<small class="muted sched-st">${schedState(r, ss, on)}</small>`}</td>
         <td><button type="button" class="btn btn-small btn-danger" data-sdel="${i}">✕</button></td></tr>`; }).join('')}</tbody></table>
-        <p class="hint">Uhrzeiten in ${TZ.mode === 'utc' ? 'UTC' : 'der Ortszeit des Pi'} (jetzt ${esc(tfmt(new Date(), { date: false }))}) – umschalten unter Einstellungen → Station → Zeitangaben.</p>` : '<p class="muted">Noch kein Zeitplan.</p>';
+        <p class="hint">${EN ? `Times in ${TZ.mode === 'utc' ? 'UTC' : "the Pi's local time"} (now ${esc(tfmt(new Date(), { date: false }))}) – switch under Settings → Station → Times.` : `Uhrzeiten in ${TZ.mode === 'utc' ? 'UTC' : 'der Ortszeit des Pi'} (jetzt ${esc(tfmt(new Date(), { date: false }))}) – umschalten unter Einstellungen → Station → Zeitangaben.`}</p>` : '<p class="muted">Noch kein Zeitplan.</p>';
     $('schedList').querySelectorAll('[data-si]').forEach(cb => cb.addEventListener('change', () => { const l = [...settings.schedules]; l[cb.dataset.si] = { ...l[cb.dataset.si], enabled: cb.checked }; saveSchedules(l); }));
     $('schedList').querySelectorAll('[data-sdel]').forEach(b => b.addEventListener('click', () => { const l = [...settings.schedules]; l.splice(Number(b.dataset.sdel), 1); saveSchedules(l); }));
     $('scDays').innerHTML = ''; DAYS.forEach((d, i) => { const c = chip(d, scSel.days.has(i)); c.addEventListener('click', () => { scSel.days.has(i) ? scSel.days.delete(i) : scSel.days.add(i); renderSchedules(); }); $('scDays').appendChild(c); });

@@ -107,7 +107,7 @@
     'Wiederholungen zusammenfassen': 'Group repeats', 'Laden': 'Load', '◀ neuere': '◀ newer', 'ältere ▶': 'older ▶',
     'Scan-Ausgabe (roh, letzte Zeilen)': 'Scan output (raw, last lines)', 'keine Einträge': 'no entries', 'Ereignis': 'Event',
     'Scan gestartet': 'Scan started', 'Scan fehlgeschlagen': 'Scan failed', 'Scan abgebrochen': 'Scan cancelled', 'Scan unterbrochen': 'Scan interrupted',
-    'Scan wird gestartet': 'Starting scan', 'Scan verschoben': 'Scan postponed', 'Scan beendet': 'Scan stopped', 'Scan-Anforderung ignoriert': 'Scan request ignored',
+    'Scan wird gestartet': 'Starting scan', 'Scan verschoben': 'Scan postponed', 'Zeitplan beginnt': 'Schedule starts', 'Zeitplan endet': 'Schedule ends', 'Zeitplan: Live hält kurz an': 'Schedule: Live pauses briefly', 'Zeitplan: Scan zu Beginn ausgelassen': 'Schedule: scan at the start skipped', 'Überflug: Live hält kurz an': 'Pass: Live pauses briefly', 'Live angehalten': 'Live paused', 'Live läuft weiter': 'Live continues', 'Dauerwache angehalten': 'Continuous watch paused', 'Dauerwache läuft weiter': 'Continuous watch continues', 'Zeitplan': 'Schedule', 'Scan beendet': 'Scan stopped', 'Scan-Anforderung ignoriert': 'Scan request ignored',
     'Band wird abgesucht': 'Scanning band', 'Band übersprungen': 'Band skipped', 'Empfänger geöffnet': 'Receiver opened',
     'Empfänger lässt sich nicht öffnen': 'Cannot open receiver', 'RTL-SDR liefert keine Daten': 'RTL-SDR delivers no data', 'RTL-SDR läuft wieder': 'RTL-SDR running again',
     'Überflug: Aufnahme startet': 'Pass: recording starts', 'Überflug übersprungen': 'Pass skipped', 'Satelliten: Problem': 'Satellites: problem',

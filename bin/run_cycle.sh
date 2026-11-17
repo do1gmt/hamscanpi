@@ -35,10 +35,15 @@ START_EPOCH="$(date +%s)"
 mkdir -p "$BASE/data"
 sqlite3 "$DB" "CREATE TABLE IF NOT EXISTS run (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT, finished_at TEXT, duration_s INTEGER, status TEXT, peaks INTEGER DEFAULT 0, rejected INTEGER DEFAULT 0, error TEXT);" 2>/dev/null
 
+sqlite3 "$DB" "ALTER TABLE run ADD COLUMN schedule TEXT;" 2>/dev/null
+# Zeitplan, unter dem der Scheduler den Lauf gestartet hat (Kennung nur aus Buchstaben, Ziffern, _ und -)
+SCHED="$(printf '%s' "${HSP_SCHEDULE:-}" | tr -cd 'A-Za-z0-9_-' | cut -c1-32)"
+if [ -n "$SCHED" ]; then SCHED_SQL="'$SCHED'"; else SCHED_SQL="NULL"; fi
+
 RUN_ID="$(
 sqlite3 "$DB" "
-INSERT INTO run(started_at,status)
-VALUES('$START_ISO','running');
+INSERT INTO run(started_at,status,schedule)
+VALUES('$START_ISO','running',$SCHED_SQL);
 SELECT last_insert_rowid();
 "
 )"

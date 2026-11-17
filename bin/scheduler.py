@@ -166,7 +166,8 @@ def _status_back(msg):
         pass
 
 
-def run_scan():
+def run_scan(schedule=None):
+    """Scanlauf starten; schedule = Kennung des gerade gültigen Zeitplans (landet in der Tabelle run)."""
     if cycle_running() or scan_running():
         # Wer hält die Sperre? Läuft wirklich ein Scan, ist alles in Ordnung; sonst steht im Protokoll, welcher
         # Prozess sie festhält (früher blieb die Anzeige stumm auf „Scan angefordert 0 %“ stehen)
@@ -186,13 +187,106 @@ def run_scan():
     # run_cycle.sh nimmt die Sperren selbst: cycle.lock für den ganzen Lauf, scan.lock (Stick) nur beim Scannen
     cmd = [str(BASE / "bin" / "run_cycle.sh")]
 
+    env = dict(os.environ)
+    env.pop("HSP_SCHEDULE", None)
+    if schedule:
+        env["HSP_SCHEDULE"] = str(schedule)
     with open(BASE / "log" / "scan-cycle.log", "a", encoding="utf-8") as out:
         subprocess.Popen(
             cmd,
             stdout=out,
             stderr=subprocess.STDOUT,
-            start_new_session=True
+            start_new_session=True,
+            env=env
         )
+    return True
+
+
+# ---------------------------------------------------------------- Zeitpläne
+# Beginn und Ende eines Zeitfensters stehen im Protokoll; zu Beginn startet gleich ein Scan („kick“) – vor Live
+# (Live hält kurz an und läuft danach auf derselben Frequenz weiter), nach einem Überflug. Weitere Scans im
+# Fenster folgen dem normalen Takt und warten, solange Live läuft. Zustand im RAM: übersteht einen Neustart
+# des Zeitplaners (kein zweiter Scan im selben Fenster), ein Neustart des Pi stößt im Fenster erneut einen an.
+_sched = {"id": None, "name": None, "kick": False, "loaded": False, "yield_t": 0.0}
+
+
+def _sched_file():
+    return _RD.path("schedule_state.json")
+
+
+def schedule_now():
+    """Gerade gültiger Zeitplan (mit dem Gerät, das wirklich steckt) oder None."""
+    try:
+        st = json.loads(SETTINGS.read_text(encoding="utf-8"))
+        from devices import detect_hardware, resolve_device
+        import scan_plan as SP
+        d = dict(st)
+        # Hardware höchstens jede Minute neu erkennen (startet sonst alle 10 s Prozesse)
+        d["active_device"] = resolve_device("rtlsdr" if st.get("active_device") == "rtlsdr" else "pmsdr",
+                                            detect_hardware(max_age=60))
+        return SP.active_schedule(d)
+    except Exception:
+        return None
+
+
+def schedule_tick(sc):
+    """Fensterwechsel erkennen und protokollieren; zu Beginn eines Fensters einen Scan vormerken."""
+    if not _sched["loaded"]:
+        _sched["loaded"] = True
+        try:
+            old = json.loads(_sched_file().read_text(encoding="utf-8"))
+            _sched.update(id=old.get("id"), name=old.get("name"), kick=bool(old.get("kick")))
+        except Exception:
+            pass
+    sid = sc.get("id") if sc else None
+    if sid == _sched["id"]:
+        return
+    if _sched["id"]:
+        applog("INFO", "scheduler", "schedule_end", name=_sched["name"])
+    if sc:
+        applog("INFO", "scheduler", "schedule_start", name=sc.get("name"), bands=sc.get("bands"), until=sc.get("to"),
+               tz=sc.get("tz", "local"))
+    _sched.update(id=sid, name=sc.get("name") if sc else None, kick=bool(sc), yield_t=0.0)
+    _sched_save()
+
+
+def _sched_save():
+    try:
+        _sched_file().write_text(json.dumps({"id": _sched["id"], "name": _sched["name"], "kick": _sched["kick"]}),
+                                 encoding="utf-8")
+    except OSError:
+        pass
+
+
+def schedule_live_yield():
+    """Live für den ersten Scan im Zeitfenster um den Stick bitten. True = Bitte steht (in 10 s erneut prüfen)."""
+    yf = BASE / "data" / "live_yield.json"
+    if not yf.exists():
+        yf.write_text(json.dumps({"why": "schedule", "name": _sched["name"], "t": time.time()}), encoding="utf-8")
+        _sched["yield_t"] = time.time()
+        applog("INFO", "scheduler", "schedule_live_yield", name=_sched["name"])
+    elif _sched["yield_t"] and time.time() - _sched["yield_t"] > 120:
+        # Live gibt den Stick nicht frei (Webserver hängt?): diesen Fensterbeginn auslassen statt ewig zu warten
+        applog("WARN", "scheduler", "schedule_kick_skipped", name=_sched["name"], reason="Live gab den Stick nicht frei")
+        yf.unlink(missing_ok=True)
+        _sched.update(kick=False, yield_t=0.0)
+        _sched_save()
+        return False
+    return True
+
+
+def schedule_scan_started():
+    """Der Scan zum Fensterbeginn läuft: Live darf nach dessen Ende weitermachen."""
+    yf = BASE / "data" / "live_yield.json"
+    try:
+        y = json.loads(yf.read_text(encoding="utf-8"))
+        if y.get("why") == "schedule":
+            y["started"] = time.time()
+            yf.write_text(json.dumps(y), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+    _sched.update(kick=False, yield_t=0.0)
+    _sched_save()
 
 
 # ---------------------------------------------------------------- Satelliten
@@ -502,19 +596,26 @@ def start_sat_pass(p):
     import satellites as SAT
     if p["key"] in _sat["started"]:
         return True
-    if live_active_now() and live_watch_on():
-        # Dauerwache: um den Stick bitten (der Webserver hält Live an und macht nach dem Überflug weiter)
-        yf = BASE / "data" / "live_yield.json"
-        if not yf.exists():
-            yf.write_text(json.dumps({"until": float(p["los"]) + 30, "sat": p["name"]}), encoding="utf-8")
-            applog("INFO", "scheduler", "satellite_live_yield", sat=p["name"])
-        return False                                         # in 10 s erneut – dann ist der Stick frei
     if live_active_now():
-        _sat["started"].add(p["key"])
-        applog("WARN", "scheduler", "satellite_skipped", sat=p["name"], reason="Live-Empfang läuft")
-        for k in p.get("keys", [p["key"]]):
-            SAT.write_result(k, state="skipped", error="Live-Empfang lief")
-        return True
+        # Live (im Browser oder als Dauerwache): um den Stick bitten – der Webserver hält Live an und macht nach
+        # dem Überflug auf derselben Frequenz weiter. Rangfolge: Überflug > Zeitplan > Live > normaler Scan
+        yf = BASE / "data" / "live_yield.json"
+        try:
+            y = json.loads(yf.read_text(encoding="utf-8")) if yf.exists() else {}
+        except (OSError, ValueError):
+            y = {}
+        if y.get("sat") != p["name"]:
+            yf.write_text(json.dumps({"why": "sat", "until": float(p["los"]) + 30, "sat": p["name"]}), encoding="utf-8")
+            applog("INFO", "scheduler", "satellite_live_yield", sat=p["name"])
+            _sat.setdefault("yield_t", {})[p["key"]] = time.time()
+        elif time.time() - _sat.get("yield_t", {}).get(p["key"], time.time()) > 120:
+            _sat["started"].add(p["key"])                    # Live gibt den Stick nicht frei: auslassen
+            yf.unlink(missing_ok=True)
+            applog("WARN", "scheduler", "satellite_skipped", sat=p["name"], reason="Live gab den Stick nicht frei")
+            for k in p.get("keys", [p["key"]]):
+                SAT.write_result(k, state="skipped", error="Live gab den Stick nicht frei")
+            return True
+        return False                                         # in 10 s erneut – dann ist der Stick frei
     if sat_pass_active():
         return False
     try:
@@ -678,12 +779,15 @@ while True:
                 applog("WARN", "scheduler", "trigger_ignored", reason="live")
             else:
                 applog("INFO", "scheduler", "scan_start", reason="trigger")
-                run_scan()
+                _sc = schedule_now()
+                run_scan(_sc.get("id") if _sc else None)
 
         # automatischer Scan: „alle N min“ von Start zu Start; dauert ein Scan länger,
         # folgt der nächste nach MIN_PAUSE_S
         last = last_scan_time()
         interval = interval_minutes()
+        sched = schedule_now()
+        schedule_tick(sched)
         due = False
         if interval == 0:
             due = False
@@ -775,10 +879,28 @@ while True:
 
         live_lock = BASE / "data" / "live.lock"
         live = live_lock.exists() and (time.time() - live_lock.stat().st_mtime) < 120
+        # Beginn eines Zeitfensters: gleich scannen (nicht erst im normalen Takt), notfalls Live kurz anhalten.
+        # Ein Überflug, der bald kommt oder läuft, geht vor (soon/sat_pass_active oben); automatischer Scan aus: nie
+        kick = bool(_sched["kick"] and sched and interval)
+        if kick and not soon and not sat_pass_active() and not scan_running() and not cycle_running():
+            try:
+                import housekeeping as HK
+                full = HK.disk_full()
+            except Exception:
+                full = False
+            if not full:
+                if live:
+                    schedule_live_yield()                    # Live hält an – nächste Runde ist der Stick frei
+                else:
+                    (BASE / "data" / "scan_postponed.json").unlink(missing_ok=True)
+                    applog("INFO", "scheduler", "scan_start", reason="schedule", schedule=_sched["name"])
+                    if run_scan(sched.get("id")):
+                        schedule_scan_started()
+                    due = False
         if due and not scan_running() and not cycle_running() and not live:
             (BASE / "data" / "scan_postponed.json").unlink(missing_ok=True)
             applog("INFO", "scheduler", "scan_start", reason="interval", interval_min=interval)
-            run_scan()
+            run_scan(sched.get("id") if sched else None)
 
         time.sleep(10)
 

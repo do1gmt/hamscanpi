@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.20 – 2026-11-17
+
+- **Schedules you can follow:** each entry shows "running now", "next Thu 22:00" or "switched off" and its last
+  run ("last Tue 22:00 · 4 hits"). Every scan remembers the schedule it ran under (new column `run.schedule`).
+- **Schedule the selected SDR stick cannot receive** (e.g. 70 cm while the PMSDR is selected): framed in red with
+  the note "The current SDR stick does not support these bands" and marked inactive – it does not apply (as
+  before, but now visible). Your on/off tick stays, so it works again after switching the device.
+- **Scan right at the beginning of a schedule window** instead of waiting for the next regular scan (with
+  "every 60 min" a 30-minute window could be missed completely). A pass coming up or running goes first; with
+  the automatic scan switched off schedules do not scan (shown in the list). Log `schedule_start` /
+  `schedule_end`.
+- **Order of precedence: satellite pass > schedule > Live > normal scan.** Live in the browser now pauses for a
+  satellite pass and for the first scan of a schedule window and continues afterwards on the same frequency –
+  the browser reconnects the audio by itself; Live card and banner show "paused for …". Before, a pass was
+  skipped while Live ran in the browser (only the continuous watch paused). Further scans inside the window wait
+  while Live runs. If Live does not free the stick within 2 minutes, the pass/start scan is skipped and logged.
+- Schedule list: weekdays and hint in English in the English dashboard.
+- Fix: a message still named the old service `pmsdr-scheduler.service`.
+- Self-test section 80.
+
 ## 1.8.19 – 2026-11-17
 
 - **Live favourites: better name suggestion** – mode, name and frequency, e.g. "RTTY DWD Pinneberg 7.646 MHz",
