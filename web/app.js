@@ -1593,9 +1593,25 @@
   }
   function jumpCurrent() { buildJump(document.querySelector('section.view:not([hidden])')); }
   document.addEventListener('layoutchange', () => jumpCurrent());          // Karte verschoben/eingeklappt (layout.js)
+  // Ansicht-Profil (web/prefs.js): automatisch / PC / Handy, vom anderen übernehmen, zurücksetzen
+  if (window.HSPPrefs) {
+    const PN = p => p === 'handy' ? (EN ? 'Phone' : 'Handy') : 'PC';
+    const other = HSPPrefs.profile === 'pc' ? 'handy' : 'pc';
+    $('uiProfile').value = HSPPrefs.choice;
+    $('uiProfile').options[0].textContent = (EN ? 'automatic – now: ' : 'automatisch – jetzt: ') + PN(HSPPrefs.auto);
+    $('uiProfileCopy').textContent = (EN ? 'Take over from ' : 'Von ') + PN(other) + (EN ? '' : ' übernehmen');
+    $('uiProfileBox').querySelector('span').textContent = (EN ? 'View profile: ' : 'Ansicht-Profil: ') + PN(HSPPrefs.profile);
+    $('uiProfile').addEventListener('change', e => HSPPrefs.choose(e.target.value));
+    $('uiProfileCopy').addEventListener('click', () => {
+      if (confirm(EN ? `Replace the settings of profile ${PN(HSPPrefs.profile)} with those of ${PN(other)}?` : `Einstellungen des Profils ${PN(HSPPrefs.profile)} durch die von ${PN(other)} ersetzen?`)) HSPPrefs.copyFrom(other);
+    });
+    $('uiProfileReset').addEventListener('click', () => {
+      if (confirm(EN ? `Reset profile ${PN(HSPPrefs.profile)} (layout, design, filters, Live volume)? The language stays.` : `Profil ${PN(HSPPrefs.profile)} zurücksetzen (Anordnung, Design, Filter, Live-Lautstärke)? Die Sprache bleibt.`)) HSPPrefs.reset();
+    });
+  } else $('uiProfileBox').hidden = true;
   $('layoutReset').addEventListener('click', () => {
     if (!window.HSPLayout) return;
-    if (confirm(EN ? 'Restore the original order of all cards in this browser?' : 'Ursprüngliche Anordnung aller Karten in diesem Browser wiederherstellen?')) HSPLayout.reset();
+    if (confirm(EN ? 'Restore the original order of all cards in this view profile?' : 'Ursprüngliche Anordnung aller Karten in diesem Ansicht-Profil wiederherstellen?')) HSPLayout.reset();
   });
   const topBtn = document.createElement('button');
   topBtn.type = 'button'; topBtn.className = 'to-top'; topBtn.textContent = '↑'; topBtn.title = EN ? 'to the top' : 'nach oben'; topBtn.hidden = true;

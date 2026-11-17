@@ -1,7 +1,7 @@
-/* Hesperos DX – Karten verschieben und einklappen, je Browser gespeichert (PC und Handy unabhängig).
+/* Hesperos DX – Karten verschieben und einklappen, gespeichert im Ansicht-Profil auf dem Pi (PC und Handy
+ * unabhängig, web/prefs.js gleicht den Browser-Speicher mit dem Pi ab).
  * Griff ⠿ oben rechts an jeder Karte: ziehen (Maus oder Finger), oder antippen und mit ↑/↓ verschieben.
  * ▾ klappt eine Karte ein. Anordnung zurücksetzen: Einstellungen → Station → Anordnung.
- * Läuft nur im Browser – der Pi merkt davon nichts.
  */
 (function () {
   'use strict';

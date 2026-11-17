@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.8.21 – 2026-11-17
+
+- **Dashboard settings on the Pi, per view profile (PC / phone).** Card layout and folded cards, design, language,
+  hit filters, last open tab, Live volume and gain, map and history view, satellite list options were kept only
+  in the browser – every browser (and `hesperosdx.local` vs. the IP address) started from scratch. Now they are
+  stored on the Pi in `data/ui_prefs.json` and are part of every backup (no credentials in it). The Pi sends them
+  with the page (no flicker, no extra request); the browser sends changes collected every 2 s (new
+  `web/prefs.js`, `POST /api/ui-prefs`).
+- Profile chosen automatically – phone when the screen is used by touch and its shorter side is at most 600 CSS
+  pixels (a phone stays a phone in landscape, a tablet counts as PC) – or fixed under *Settings → Station → View
+  profile*; there also "take over from PC/phone" and "reset profile" (the language stays).
+- An empty profile takes over the settings of the first browser that opens it, so your present layout stays.
+- The language now belongs to the profile as well; the Pi-wide language (notifications) is still set when you
+  switch it.
+- Self-test section 81.
+
 ## 1.8.20 – 2026-11-17
 
 - **Schedules you can follow:** each entry shows "running now", "next Thu 22:00" or "switched off" and its last

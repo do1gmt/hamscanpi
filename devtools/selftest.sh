@@ -2993,5 +2993,71 @@ rm -rf "$RCT"
 grep -q 'sched-bad' "$SRC/web/app.js" && grep -q '\.sched-bad' "$SRC/web/style.css" && grep -q 'function schedState' "$SRC/web/app.js" \
   && grep -q 'live.resumeAudio' "$SRC/web/app.js" && ok "Dashboard: roter Rand bei unpassendem Gerät, Status und letzter Lauf, Ton nach der Pause wieder verbunden" || bad "Dashboard Zeitpläne"
 
+echo "== 81 Einstellungen der Oberfläche auf dem Pi, je Profil (PC/Handy)"
+(cd bin && timeout 60 python3 - "$SRC" <<'PY') && ok "Profile pc/handy geprüft gespeichert, übernehmen und ersetzen, mit der Seite ausgeliefert (sicher maskiert), Teil der Sicherung" || bad "Profile auf dem Pi"
+import json, sys, threading, urllib.request
+from pathlib import Path
+import uiprefs as U, backup as BK, webapp as W
+W.WEB = Path(sys.argv[1]) / "web"
+assert U.load() == {"profiles": {"pc": {}, "handy": {}}}
+assert U.update("pc", set_={"theme": "ocean", "layout.v1": '{"order":{}}', "f.band": "40m"}) == {"theme": "ocean", "layout.v1": '{"order":{}}', "f.band": "40m"}
+assert U.update("pc", set_={"f.band": None}) == {"theme": "ocean", "layout.v1": '{"order":{}}'}
+assert U.update("handy", copy_from="pc")["theme"] == "ocean"
+assert U.update("handy", replace={"theme": "night", "x": None}) == {"theme": "night"}
+for bad in (lambda: U.update("tablet", set_={}), lambda: U.update("pc", set_={"a b": "1"}), lambda: U.update("pc", set_={"k": "x" * 20001}),
+            lambda: U.update("pc", copy_from="pc"), lambda: U.update("pc", set_={f"k{i}": "1" for i in range(90)})):
+    try:
+        bad(); raise SystemExit("angenommen")
+    except ValueError:
+        pass
+U.update("pc", set_={"view": "</script><script>alert(1)</script>"})
+tag = U.script_tag()
+assert tag.count("</script>") == 1 and "<\\/script>" in tag
+assert "ui_prefs.json" in BK.DATA_SMALL
+srv = W._Server(("127.0.0.1", 0), W.Handler); threading.Thread(target=srv.serve_forever, daemon=True).start()
+op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+base = f"http://127.0.0.1:{srv.server_address[1]}"
+html = op.open(base + "/", timeout=30).read().decode()
+i, j, k = html.index("window.HSP_PREFS="), html.index('<script src="/static/prefs.js">'), html.index('<script src="/static/theme.js">')
+assert i < j < k and html.index('<script src="/static/i18n.js">') > k
+req = urllib.request.Request(base + "/api/ui-prefs", data=json.dumps({"profile": "handy", "set": {"liveVol": "40"}}).encode(),
+                             headers={"Content-Type": "application/json"})
+assert json.load(op.open(req, timeout=30))["profile"] == {"theme": "night", "liveVol": "40"}
+srv.shutdown()
+PY
+cat > /tmp/hsp_prefs_t.js <<'JS'
+const { JSDOM } = require('jsdom'); const fs = require('fs');
+const src = fs.readFileSync(process.argv[2], 'utf8');
+function page(prefs, local) {
+  const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>', { url: 'http://pi.local/', runScripts: 'outside-only' });
+  const w = dom.window, sent = [];
+  w.fetch = (u, o) => { sent.push(JSON.parse(o.body)); return Promise.resolve({}); };
+  Object.entries(local || {}).forEach(([k, v]) => w.localStorage.setItem(k, v));
+  if (prefs) w.HSP_PREFS = prefs;
+  w.eval(src);
+  return { w, sent };
+}
+let ok = true; const t = (c, m) => { if (!c) { ok = false; console.log('FEHLER: ' + m); } };
+// 1) Profil auf dem Pi gilt: Werte übernommen, fremde Browser-Werte entfernt, nicht synchronisierte bleiben
+let { w, sent } = page({ profiles: { pc: { theme: 'ocean', 'f.band': '40m' }, handy: {} } }, { theme: 'light', 'f.mode': 'FM', other: 'x' });
+t(w.HSPPrefs.profile === 'pc', 'Profil pc'); t(w.localStorage.getItem('theme') === 'ocean', 'theme vom Pi');
+t(w.localStorage.getItem('f.mode') === null, 'f.mode entfernt'); t(w.localStorage.getItem('other') === 'x', 'fremder Schlüssel bleibt');
+t(sent.length === 0, 'nichts gesendet'); t(w.HSPPrefs.has('theme') && !w.HSPPrefs.has('lang'), 'has()');
+// 2) Änderung wird gesammelt gesendet
+w.localStorage.setItem('theme', 'night'); w.localStorage.setItem('view', 'live'); w.localStorage.removeItem('f.band'); w.localStorage.setItem('nope', '1');
+w.dispatchEvent(new w.Event('pagehide'));
+t(sent.length === 1 && sent[0].profile === 'pc' && sent[0].set.theme === 'night' && sent[0].set.view === 'live' && sent[0].set['f.band'] === null && !('nope' in sent[0].set), 'gesammelt gesendet: ' + JSON.stringify(sent));
+// 3) leeres Profil übernimmt diesen Browser
+({ w, sent } = page({ profiles: { pc: {}, handy: {} } }, { theme: 'light', 'layout.v1': '{}', other: 'x' }));
+t(sent.length === 1 && JSON.stringify(sent[0]) === JSON.stringify({ profile: 'pc', replace: { theme: 'light', 'layout.v1': '{}' } }), 'übernommen: ' + JSON.stringify(sent));
+// 4) fest gewähltes Profil
+({ w, sent } = page({ profiles: { pc: { theme: 'a' }, handy: { theme: 'b' } } }, { 'prefs.profile': 'handy' }));
+t(w.HSPPrefs.profile === 'handy' && w.localStorage.getItem('theme') === 'b', 'feste Wahl handy');
+console.log(ok ? 'OK' : 'FEHLER');
+JS
+[ "$(node /tmp/hsp_prefs_t.js "$SRC/web/prefs.js" 2>&1 | tail -1)" = "OK" ] && ok "Browser: Profil vom Pi übernommen, Änderungen gesammelt gesendet, leeres Profil übernimmt den Browser, feste Wahl" \
+  || { node /tmp/hsp_prefs_t.js "$SRC/web/prefs.js"; bad "prefs.js"; }
+rm -f /tmp/hsp_prefs_t.js
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

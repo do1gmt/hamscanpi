@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>Hesperos DX · Ham Radio Watch</title>
 <link rel="stylesheet" href="/static/style.css">
+<script src="/static/prefs.js"></script>
 <script src="/static/theme.js"></script>
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
@@ -605,12 +606,18 @@
         <label class="field" title="Gilt überall: Dashboard, Hinweise, Mail, Telegram, Webseite. Jede Zeit trägt ihre Kennung. Die Uhr oben rechts zeigt immer beides."><span>Zeitangaben</span>
           <select id="uiTime"><option value="utc">UTC (Funk-Standard)</option><option value="local">Ortszeit des Pi</option></select>
         </label>
-        <label class="field" title="Gilt nur für diesen Browser. Auch oben rechts mit ◐ umschaltbar."><span>Design</span>
+        <label class="field" title="Gilt für das Ansicht-Profil (PC oder Handy). Auch oben rechts mit ◐ umschaltbar."><span>Design</span>
           <select id="uiTheme"></select>
         </label>
         <div class="field"><span>Anordnung der Karten</span>
-          <p class="hint">Jede Karte lässt sich am Griff ⠿ oben rechts verschieben und mit ▾ einklappen – gilt nur für diesen Browser (Handy und PC getrennt).</p>
+          <p class="hint">Jede Karte lässt sich am Griff ⠿ oben rechts verschieben und mit ▾ einklappen – gilt für das Ansicht-Profil (PC oder Handy).</p>
           <div class="actions"><button type="button" class="btn" id="layoutReset">Anordnung zurücksetzen</button></div>
+        </div>
+        <div class="field" id="uiProfileBox"><span>Ansicht-Profil</span>
+          <select id="uiProfile"><option value="">automatisch</option><option value="pc">PC</option><option value="handy">Handy</option></select>
+          <p class="hint" id="uiProfileHint">Design, Sprache, Anordnung, Filter und Live-Lautstärke liegen auf dem Pi – getrennt für PC und Handy, gleich in jedem Browser und in jeder Sicherung.</p>
+          <div class="actions"><button type="button" class="btn" id="uiProfileCopy">Vom anderen Profil übernehmen</button>
+            <button type="button" class="btn" id="uiProfileReset">Profil zurücksetzen</button></div>
         </div>
         <div class="save-note" id="stationNote" aria-live="polite"></div>
       </section>

@@ -2414,6 +2414,11 @@ class Handler(BaseHTTPRequestHandler):
                     html = html.replace("<title>Hesperos DX · Ham Radio Watch</title>",
                                         f"<title>{_sn.replace('<', '').replace('&', '')} · Hesperos DX</title>", 1)
                 html = html.replace("<head>", f'<head>\n  <meta name="hsp-version" content="{ver}">', 1)
+                try:                                     # Einstellungen der Oberfläche je Profil (web/prefs.js)
+                    import uiprefs as UIP
+                    html = html.replace('<script src="/static/prefs.js">', UIP.script_tag() + '\n<script src="/static/prefs.js">', 1)
+                except Exception as e:
+                    APPLOG.log("WARN", "webapp", "ui_prefs_failed", error=f"{type(e).__name__}: {e}")
                 data = html.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -3166,6 +3171,18 @@ class Handler(BaseHTTPRequestHandler):
                                _gain_value(data["gain"]) if data.get("gain") not in (None, "") else None)
                     live_state_update({"freq_hz": data.get("freq_hz"), "mode": data.get("mode")})
                     return self.send_json({"ok": True, "live": _live.status()})
+            if path == "/api/ui-prefs":
+                import uiprefs as UIP
+                prof = str(data.get("profile") or "")
+                if data.get("copy_from"):
+                    p = UIP.update(prof, copy_from=str(data["copy_from"]))
+                    APPLOG.log("INFO", "webapp", "ui_prefs_copied", profile=prof, source=str(data["copy_from"]))
+                elif isinstance(data.get("replace"), dict):
+                    p = UIP.update(prof, replace=data["replace"])
+                    APPLOG.log("INFO", "webapp", "ui_prefs_replaced", profile=prof, keys=len(p))
+                else:
+                    p = UIP.update(prof, set_=data.get("set") if isinstance(data.get("set"), dict) else {})
+                return self.send_json({"ok": True, "profile": p})
             if path == "/api/live/favorites":
                 favs = clean_live_favorites(data.get("favorites"))
                 st = read_json(SETTINGS, {})
