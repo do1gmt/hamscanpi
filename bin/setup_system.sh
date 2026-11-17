@@ -11,7 +11,8 @@
 #
 # Was eingerichtet wird:
 #   Pakete, Sperre des DVB-T-Treibers, Zugriffsrechte für RTL-SDR-Sticks (udev), Konfigurationsdateien und
-#   deren Ergänzung (bin/migrate_config.py), ft8_lib, Dienste hamscanpi-web/-scheduler/-rescue/-mdns/-update,
+#   deren Ergänzung (bin/migrate_config.py), ft8_lib, Dienste hesperosdx-web/-scheduler/-rescue/-mdns/-update
+#   (bis 1.8.14 hamscanpi-*: Übergang in bin/migrate_services.sh),
 #   sudo-Regel für die Knöpfe im Dashboard, dauerhaftes Systemprotokoll, WLAN ohne Stromsparen,
 #   PMSDR-Dienst (wenn dessen Programm vorhanden ist).
 set -e
@@ -31,10 +32,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 # Port der bestehenden Installation übernehmen
-if [ "$PORT" = 8080 ] && [ -f /etc/systemd/system/hamscanpi-web.service ]; then
-    P="$(sed -nE 's#^ExecStart=.*webapp\.py ([0-9]+).*#\1#p' /etc/systemd/system/hamscanpi-web.service | head -1)"
-    [ -n "$P" ] && PORT="$P"
-fi
+for f in /etc/systemd/system/hesperosdx-web.service /etc/systemd/system/hamscanpi-web.service; do
+    if [ "$PORT" = 8080 ] && [ -f "$f" ]; then
+        P="$(sed -nE 's#^ExecStart=.*webapp\.py ([0-9]+).*#\1#p' "$f" | head -1)"
+        [ -n "$P" ] && PORT="$P" && break
+    fi
+done
 # Sprache: Parameter > Einstellung im Dashboard > Systemsprache
 if [ -z "$LNG" ]; then
     LNG="$(python3 -c "import json;print(json.load(open('$DIR/config/web_settings.json')).get('ui_lang') or '')" 2>/dev/null || true)"
@@ -52,6 +55,9 @@ else
     warn() { printf '  ! %s\n' "$*"; }
 fi
 asuser() { runuser -u "$U" -- "$@"; }
+# Dienste und Systemdateien heißen seit 1.8.15 hesperosdx-* (vorher hamscanpi-*): Übergang
+. "$DIR/bin/migrate_services.sh"
+migrate_files
 
 bold "$(t "Pakete" "Packages")"
 PKGS="python3 python3-numpy python3-scipy python3-matplotlib python3-pil python3-soundfile python3-sgp4 rtl-sdr
@@ -78,7 +84,7 @@ if ! grep -rqs "dvb_usb_rtl28xxu" /etc/modprobe.d/; then
 fi
 # Zugriffsrechte: ohne diese Regel meldet rtl_sdr „usb_open error -3“ (die Regel des Pakets gibt einem Dienst
 # ohne Anmeldung am Bildschirm je nach Version keinen Zugriff)
-RULE=/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules
+RULE=/etc/udev/rules.d/20-hesperosdx-rtlsdr.rules
 NEWRULE='# Hesperos DX: RTL-SDR-Sticks (RTL2832U) für alle Benutzer – rtl_sdr läuft als Dienst ohne Bildschirm-Anmeldung
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE="0666"
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE="0666"'
@@ -161,13 +167,13 @@ $4
 WantedBy=multi-user.target
 UNIT
 }
-unit hamscanpi-web "Hesperos DX web dashboard" "/usr/bin/python3 $DIR/bin/webapp.py $PORT" \
+unit hesperosdx-web "Hesperos DX web dashboard" "/usr/bin/python3 $DIR/bin/webapp.py $PORT" \
 "# Wächter: der Webserver prüft sich alle 30 s selbst; antwortet er 3 min nicht, startet systemd ihn neu
 NotifyAccess=main
 WatchdogSec=180
 # Speichergrenze: ein Ausreißer trifft nur den Webserver (Neustart) statt den ganzen Pi
 MemoryMax=500M"
-unit hamscanpi-scheduler "Hesperos DX scheduler (scans and satellite passes)" "/usr/bin/python3 $DIR/bin/scheduler.py" \
+unit hesperosdx-scheduler "Hesperos DX scheduler (scans and satellite passes)" "/usr/bin/python3 $DIR/bin/scheduler.py" \
 "# Wächter: Meldung bei jedem Durchlauf (10 s); hängt die Schleife 5 min, Neustart
 NotifyAccess=main
 WatchdogSec=300
@@ -175,12 +181,12 @@ WatchdogSec=300
 # (meist eine Auswertung), der Zeitplaner selbst läuft weiter
 MemoryMax=750M
 OOMPolicy=continue"
-unit hamscanpi-rescue "Hesperos DX rescue page (restart services, reboot, diagnostics)" \
+unit hesperosdx-rescue "Hesperos DX rescue page (restart services, reboot, diagnostics)" \
      "/usr/bin/python3 $DIR/bin/rescue.py $((PORT + 1))" "MemoryMax=120M"
-unit hamscanpi-mdns "Hesperos DX name in the network (hamscanpi.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
+unit hesperosdx-mdns "Hesperos DX name in the network (hamscanpi.local)" "/usr/bin/python3 $DIR/bin/mdns_alias.py $PORT" \
      "MemoryMax=60M"
 # Update (Knopf im Dashboard): läuft als root, holt den neuen Stand als $U und richtet dann das System ein
-cat > /etc/systemd/system/hamscanpi-update.service <<UNIT
+cat > /etc/systemd/system/hesperosdx-update.service <<UNIT
 [Unit]
 Description=Hesperos DX update from GitHub (git pull, set-up, restart)
 After=network-online.target
@@ -191,16 +197,16 @@ Environment=HSP_USER=$U
 ExecStart=/bin/bash $DIR/bin/update.sh --auto
 TimeoutStartSec=3600
 UNIT
-ok "$(t "hamscanpi-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), -mdns, -update" \
-        "hamscanpi-web (port $PORT), -scheduler, -rescue (port $((PORT + 1))), -mdns, -update")"
+ok "$(t "hesperosdx-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), -mdns, -update" \
+        "hesperosdx-web (port $PORT), -scheduler, -rescue (port $((PORT + 1))), -mdns, -update")"
 
 # sudo-Regel: genau diese Befehle ohne Passwort (Knöpfe im Dashboard und auf der Notfall-Seite)
 SC="$(command -v systemctl || echo /usr/bin/systemctl)"
 TMPS="$(mktemp)"
-printf '# Hesperos DX: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hamscanpi-web, %s --no-block restart hamscanpi-scheduler, %s --no-block restart hamscanpi-rescue, %s --no-block restart hamscanpi-mdns, %s --no-block restart pmsdr-control, %s --no-block start hamscanpi-update, %s reboot, /usr/local/sbin/hamscanpi-net, /usr/local/sbin/hamscanpi-store\n' \
+printf '# Hesperos DX: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hesperosdx-web, %s --no-block restart hesperosdx-scheduler, %s --no-block restart hesperosdx-rescue, %s --no-block restart hesperosdx-mdns, %s --no-block restart pmsdr-control, %s --no-block start hesperosdx-update, %s reboot, /usr/local/sbin/hesperosdx-net, /usr/local/sbin/hesperosdx-store\n' \
     "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
 if visudo -cf "$TMPS" >/dev/null 2>&1; then
-    install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hamscanpi
+    install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hesperosdx
     ok "$(t "sudo-Regel für die Knöpfe im Dashboard" "sudo rule for the dashboard buttons")"
 else
     warn "$(t "sudo-Regel ungültig – Knöpfe bleiben gesperrt" "sudo rule invalid – buttons stay locked")"
@@ -257,7 +263,7 @@ UNIT
     printf '[Unit]\nBindsTo=sys-subsystem-usb-pmsdr.device\nAfter=sys-subsystem-usb-pmsdr.device\n\n[Service]\nRestartSec=5\n' \
         > /etc/systemd/system/pmsdr-control.service.d/hotplug.conf
     echo 'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04d8", ATTR{idProduct}=="000c", MODE="0666", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/sys/subsystem/usb/pmsdr", ENV{SYSTEMD_WANTS}+="pmsdr-control.service"' \
-        > /etc/udev/rules.d/90-hamscanpi-pmsdr.rules
+        > /etc/udev/rules.d/90-hesperosdx-pmsdr.rules
     systemctl daemon-reload
     udevadm control --reload-rules 2>/dev/null || true
     # steckt die PMSDR schon: Dienst gleich (neu) starten
@@ -267,46 +273,40 @@ UNIT
 fi
 
 # Root-Helfer (gehören root, für den Benutzer nicht beschreibbar; die sudo-Regel erlaubt genau diese Datei)
-install -m 755 -o root -g root "$DIR/share/root/hamscanpi-net" /usr/local/sbin/hamscanpi-net
-install -m 755 -o root -g root "$DIR/share/root/hamscanpi-store" /usr/local/sbin/hamscanpi-store
+install -m 755 -o root -g root "$DIR/share/root/hesperosdx-net" /usr/local/sbin/hesperosdx-net
+install -m 755 -o root -g root "$DIR/share/root/hesperosdx-store" /usr/local/sbin/hesperosdx-store
 
 bold "$(t "System" "System")"
 # Systemprotokoll über Neustarts behalten (höchstens 64 MB, gebündelt geschrieben)
-if [ ! -f /etc/systemd/journald.conf.d/hamscanpi.conf ]; then
+if [ ! -f /etc/systemd/journald.conf.d/hesperosdx.conf ]; then
     mkdir -p /etc/systemd/journald.conf.d /var/log/journal
-    printf '[Journal]\nStorage=persistent\nSystemMaxUse=64M\nSyncIntervalSec=5m\n' > /etc/systemd/journald.conf.d/hamscanpi.conf
+    printf '[Journal]\nStorage=persistent\nSystemMaxUse=64M\nSyncIntervalSec=5m\n' > /etc/systemd/journald.conf.d/hesperosdx.conf
     systemctl restart systemd-journald 2>/dev/null || true
 fi
 ok "$(t "Systemprotokoll bleibt über Neustarts erhalten (höchstens 64 MB)" "system journal kept across reboots (max. 64 MB)")"
 # Abmelden von SSH darf den RAM-Ordner der Dienste nicht leeren (logind RemoveIPC=yes räumt sonst /dev/shm des
 # Benutzers ab – Lebenszeichen des Zeitplaners und Pegelanzeige verschwanden). Gilt ab dem nächsten Neustart;
 # bis dahin legen die Dienste den Ordner selbst neu an (bin/rundir.py).
-if [ ! -f /etc/systemd/logind.conf.d/hamscanpi.conf ]; then
+if [ ! -f /etc/systemd/logind.conf.d/hesperosdx.conf ]; then
     mkdir -p /etc/systemd/logind.conf.d
-    printf '[Login]\nRemoveIPC=no\n' > /etc/systemd/logind.conf.d/hamscanpi.conf
+    printf '[Login]\nRemoveIPC=no\n' > /etc/systemd/logind.conf.d/hesperosdx.conf
 fi
 ok "$(t "RAM-Ordner bleibt beim Abmelden erhalten" "RAM folder kept on logout")"
 # WLAN ohne Stromsparen (sonst ruckelt Live und das Dashboard meldet „Server nicht erreichbar“)
-if command -v nmcli >/dev/null 2>&1 && [ ! -f /etc/NetworkManager/conf.d/hamscanpi-wifi.conf ]; then
+if command -v nmcli >/dev/null 2>&1 && [ ! -f /etc/NetworkManager/conf.d/hesperosdx-wifi.conf ]; then
     mkdir -p /etc/NetworkManager/conf.d
-    printf '[connection]\nwifi.powersave = 2\n' > /etc/NetworkManager/conf.d/hamscanpi-wifi.conf
+    printf '[connection]\nwifi.powersave = 2\n' > /etc/NetworkManager/conf.d/hesperosdx-wifi.conf
 fi
 for w in $(ls /sys/class/net 2>/dev/null | grep '^wl'); do iw dev "$w" set power_save off 2>/dev/null || true; done
 ok "$(t "WLAN-Stromsparen aus" "Wi-Fi power saving off")"
 
-systemctl daemon-reload
 systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
-systemctl enable hamscanpi-web hamscanpi-scheduler hamscanpi-rescue hamscanpi-mdns >/dev/null 2>&1
-if [ "$RESTART" = 1 ]; then
-    systemctl restart hamscanpi-web hamscanpi-scheduler hamscanpi-rescue hamscanpi-mdns
-else
-    systemctl start hamscanpi-web hamscanpi-scheduler hamscanpi-rescue hamscanpi-mdns
-fi
+start_services || true                 # Übergang von hamscanpi-*: bei Problemen laufen die alten weiter (Hinweis)
 sleep 3
-for u in hamscanpi-web hamscanpi-scheduler hamscanpi-rescue hamscanpi-mdns; do echo "  $u: $(systemctl is-active $u)"; done
+for u in hesperosdx-web hesperosdx-scheduler hesperosdx-rescue hesperosdx-mdns; do echo "  $u: $(systemctl is-active $u)"; done
 for i in 1 2 3 4 5 6 7 8 9 10; do curl -fs -m 3 "http://127.0.0.1:$PORT/api/ping" >/dev/null 2>&1 && break; sleep 1; done
 if curl -fs -m 3 "http://127.0.0.1:$PORT/api/ping" >/dev/null 2>&1; then
     ok "$(t "Dashboard antwortet auf Port $PORT" "dashboard answers on port $PORT")"
 else
-    warn "$(t "Dashboard antwortet noch nicht – journalctl -u hamscanpi-web -n 30" "dashboard does not answer yet – journalctl -u hamscanpi-web -n 30")"
+    warn "$(t "Dashboard antwortet noch nicht – journalctl -u hesperosdx-web -n 30" "dashboard does not answer yet – journalctl -u hesperosdx-web -n 30")"
 fi

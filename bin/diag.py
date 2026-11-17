@@ -209,10 +209,14 @@ def write(fileobj, stream=True):
         # letzte Minuten vor dem vorigen Start (nur mit dauerhaftem Systemprotokoll): warum hat er neu gestartet?
         add("journal/previous-boot-tail.txt", _run(["journalctl", "-b", "-1", "-n", "300", "--no-pager", "-o", "short-iso"]).encode())
         add("journal/kernel.txt", _run(["journalctl", "-k", "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-3_000_000:])
-        for u in ("hamscanpi-web", "hamscanpi-scheduler", "hamscanpi-rescue"):
-            add(f"journal/{u}.txt", _run(["journalctl", "-u", u, "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-2_000_000:])
-        add("systemd/status.txt", _run(["systemctl", "status", "--no-pager", "-l", "hamscanpi-web", "hamscanpi-scheduler",
-                                         "hamscanpi-rescue"]))
+        # Dienste heißen seit 1.8.15 hesperosdx-*; die Meldungen von davor stehen im Systemprotokoll unter hamscanpi-*
+        for u in ("hesperosdx-web", "hesperosdx-scheduler", "hesperosdx-rescue", "hesperosdx-update",
+                  "hamscanpi-web", "hamscanpi-scheduler", "hamscanpi-rescue"):
+            txt = _run(["journalctl", "-u", u, "--since", "-2d", "--no-pager", "-o", "short-iso"], 60)[-2_000_000:]
+            if u.startswith("hesperosdx") or "-- No entries --" not in str(txt)[:200]:
+                add(f"journal/{u}.txt", txt)
+        add("systemd/status.txt", _run(["systemctl", "status", "--no-pager", "-l", "hesperosdx-web", "hesperosdx-scheduler",
+                                         "hesperosdx-rescue", "hesperosdx-mdns"]))
         add("git.txt", git_info())                                                    # woher kommen Updates?
         add("pmsdr.txt", pmsdr_info())                                                # Kurzwelle: Soundkarte, Empfangstest
         for name in ("notices.json", "health_state.json", "live_state.json", "sticks.json", "pskreporter_state.json",

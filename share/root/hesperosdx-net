@@ -1,18 +1,18 @@
 #!/bin/bash
 # Hesperos DX – Netzwerk-Handgriffe, die Root-Rechte brauchen. Wird von bin/setup_system.sh nach
-# /usr/local/sbin/hamscanpi-net kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel erlaubt
+# /usr/local/sbin/hesperosdx-net kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel erlaubt
 # genau diese Datei. Jeder Befehl prüft seine Eingaben selbst.
 #
-#   hamscanpi-net reconnect <iface>        WLAN neu verbinden
-#   hamscanpi-net radio                    WLAN aus- und wieder einschalten
-#   hamscanpi-net restart-nm               Netzwerkdienst (NetworkManager) neu starten
-#   hamscanpi-net reload-driver            WLAN-Treiber (brcmfmac) neu laden
-#   hamscanpi-net switch <verbindung>      zu einer bekannten WLAN-Verbindung wechseln
-#   hamscanpi-net list                     bekannte WLAN-Verbindungen: NAME<TAB>SSID<TAB>PRIORITÄT<TAB>AKTIV
-#   hamscanpi-net scan <iface>             sichtbare WLANs: SSID<TAB>SIGNAL(%)<TAB>SICHERHEIT
-#   hamscanpi-net add <ssid> <priorität>   Ausweich-WLAN anlegen (Passwort auf stdin, leer = offenes Netz)
-#   hamscanpi-net remove <verbindung>      Ausweich-WLAN löschen (nur von Hesperos DX angelegte: Name „hsp-…“)
-#   hamscanpi-net hostname <name>          Rechnernamen setzen (a–z, 0–9, Bindestrich), /etc/hosts nachziehen
+#   hesperosdx-net reconnect <iface>        WLAN neu verbinden
+#   hesperosdx-net radio                    WLAN aus- und wieder einschalten
+#   hesperosdx-net restart-nm               Netzwerkdienst (NetworkManager) neu starten
+#   hesperosdx-net reload-driver            WLAN-Treiber (brcmfmac) neu laden
+#   hesperosdx-net switch <verbindung>      zu einer bekannten WLAN-Verbindung wechseln
+#   hesperosdx-net list                     bekannte WLAN-Verbindungen: NAME<TAB>SSID<TAB>PRIORITÄT<TAB>AKTIV
+#   hesperosdx-net scan <iface>             sichtbare WLANs: SSID<TAB>SIGNAL(%)<TAB>SICHERHEIT
+#   hesperosdx-net add <ssid> <priorität>   Ausweich-WLAN anlegen (Passwort auf stdin, leer = offenes Netz)
+#   hesperosdx-net remove <verbindung>      Ausweich-WLAN löschen (nur von Hesperos DX angelegte: Name „hsp-…“)
+#   hesperosdx-net hostname <name>          Rechnernamen setzen (a–z, 0–9, Bindestrich), /etc/hosts nachziehen
 set -u
 NMCLI="$(command -v nmcli || echo /usr/bin/nmcli)"
 die() { echo "$*" >&2; exit 2; }

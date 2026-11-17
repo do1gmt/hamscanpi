@@ -5,7 +5,7 @@
 #   ./install.sh --lang de       without any question;  --port 8090 for another port (rescue page: port + 1)
 # Everything that is set up on the system is in bin/setup_system.sh (the same script runs on every update):
 # packages, DVB-T driver blacklist, access rights for RTL-SDR sticks, configuration, ft8_lib, the services
-# hamscanpi-web/-scheduler/-rescue/-mdns/-update, a sudo rule for the dashboard buttons, persistent system journal,
+# hesperosdx-web/-scheduler/-rescue/-mdns/-update, a sudo rule for the dashboard buttons, persistent system journal,
 # Wi-Fi without power saving. Locator, callsign, password, notifications … are set later in the dashboard.
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"

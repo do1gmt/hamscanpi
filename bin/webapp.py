@@ -2448,7 +2448,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"config": WX.cfg(), "state": WX.state()})
             if path == "/api/update":
                 import subprocess as _sp
-                running = _sp.run(["systemctl", "is-active", "hamscanpi-update"], capture_output=True, text=True).stdout.strip()
+                # beim Umstieg auf die neuen Dienstnamen (1.8.15) läuft das Update noch im alten Dienst
+                running = next((r for r in (_sp.run(["systemctl", "is-active", u], capture_output=True, text=True).stdout.strip()
+                                            for u in ("hesperosdx-update", "hamscanpi-update")) if r == "activating" or r == "active"),
+                               _sp.run(["systemctl", "is-active", "hesperosdx-update"], capture_output=True, text=True).stdout.strip())
                 try:
                     tail = (BASE / "log" / "update.log").read_text(encoding="utf-8", errors="replace")[-6000:]
                     tail = re.sub(r"\x1b\[[0-9;]*m", "", tail)            # Farbcodes der Konsole
@@ -2462,7 +2465,7 @@ class Handler(BaseHTTPRequestHandler):
                                        "newer": bool(up.get("latest") and HK._vtuple(up["latest"]) > HK._vtuple(cur)),
                                        "running": running in ("activating", "active"),
                                        "state": running, "log": tail, "git": (BASE / ".git").exists(),
-                                       "unit": _sp.run(["systemctl", "cat", "hamscanpi-update"], capture_output=True).returncode == 0})
+                                       "unit": _sp.run(["systemctl", "cat", "hesperosdx-update"], capture_output=True).returncode == 0})
             if path == "/api/wifi":
                 import netheal as NH
                 return self.send_json(dict(NH.status(), networks=NH.networks()))
@@ -2554,16 +2557,16 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/publish/plugin.zip":
                 # WordPress-Plugin aus share/wordpress als ZIP (in WordPress: Plugins → Installieren → Plugin hochladen)
                 import io as _io, zipfile as _zf
-                src = BASE / "share" / "wordpress" / "hamscanpi-sstv-galerie"
+                src = BASE / "share" / "wordpress" / "hesperosdx-sstv-galerie"
                 buf = _io.BytesIO()
                 with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as z:
                     for f in sorted(src.rglob("*")):
                         if f.is_file():
-                            z.write(f, "hamscanpi-sstv-galerie/" + str(f.relative_to(src)))
+                            z.write(f, "hesperosdx-sstv-galerie/" + str(f.relative_to(src)))
                 data_ = buf.getvalue()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
-                self.send_header("Content-Disposition", 'attachment; filename="hamscanpi-sstv-galerie.zip"')
+                self.send_header("Content-Disposition", 'attachment; filename="hesperosdx-sstv-galerie.zip"')
                 self.send_header("Content-Length", str(len(data_)))
                 self.end_headers()
                 self.wfile.write(data_)
@@ -2739,7 +2742,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not (BASE / ".git").exists():
                     raise ValueError("Diese Installation stammt nicht aus git – Update nur mit bin/update.sh nach einer Neuinstallation per git clone")
                 sc = _sp.run(["sh", "-c", "command -v systemctl"], capture_output=True, text=True).stdout.strip() or "/usr/bin/systemctl"
-                r = _sp.run(["sudo", "-n", sc, "--no-block", "start", "hamscanpi-update"], capture_output=True, text=True, timeout=15)
+                r = _sp.run(["sudo", "-n", sc, "--no-block", "start", "hesperosdx-update"], capture_output=True, text=True, timeout=15)
                 if r.returncode != 0:
                     raise ValueError("Update lässt sich nicht starten (sudo-Regel fehlt – einmal per SSH bin/update.sh ausführen): "
                                      + (r.stderr or r.stdout).strip()[:200])

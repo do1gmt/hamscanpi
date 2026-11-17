@@ -207,7 +207,7 @@ def system_status():
         except Exception:
             pass
     services = {}
-    for u in ("hamscanpi-web", "hamscanpi-scheduler", "pmsdr-control"):
+    for u in ("hesperosdx-web", "hesperosdx-scheduler", "pmsdr-control"):
         try:
             r = subprocess.run(["systemctl", "is-active", u], capture_output=True, text=True, timeout=3)
             services[u] = r.stdout.strip() or "unknown"

@@ -1,36 +1,11 @@
 <?php
 /**
- * Plugin Name:       Hesperos DX SSTV-Galerie
- * Description:       Empfängt SSTV-Bilder von Hesperos DX · Ham Radio Watch (früher HamScanPi) (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.4.3
- * Plugin URI:        https://github.com/do1gmt/hesperos-dx
- * Requires at least: 5.6
- * Requires PHP:      7.4
- * Author:            Hesperos DX
- * Author URI:        https://github.com/do1gmt/hesperos-dx
- * License:           GPL-3.0-or-later
- * Text Domain:       hsp-sstv
- *
- * Anpassen ohne das Plugin zu ändern:
- *  - Einstellungen → SSTV-Galerie: Reihenfolge, Gruppierung (Tag, Quelle, Überflug), Zeitzone der Angaben, Filterknöpfe,
- *    Farben, Rundung, Bildgröße, Überblenddauer, eigenes CSS, Plugin-CSS ganz aus.
- *  - Je Bild (SSTV-Bilder → bearbeiten): Empfangszeit, Quelle, „hervorheben“ – die Galerie sortiert sofort neu.
- *  - Mehrere Pis: je Pi ein Benutzer mit der Rolle „SSTV-Melder“ (darf nur Bilder einsenden). Liste und Protokoll
- *    zeigen, welcher Pi (Stationsname) und welcher Benutzer ein Bild geschickt hat; Kurzcode-Filter station="…".
- *  - Vorlage: templates/galerie.php ins Theme kopieren nach  <theme>/hamscanpi-sstv/galerie.php  und dort ändern.
- *  - CSS-Variablen (--hsp-…) im Theme überschreiben, z. B.  .hsp-galerie { --hsp-accent: #c00; }
- *  - Filter: hsp_sstv_item (ein Bild für die Ausgabe), hsp_sstv_insert_status (Status beim Empfang).
+ * Hesperos DX SSTV-Galerie – Inhalt des Plugins (geladen von hesperosdx-sstv-galerie.php).
  */
 
-if (!defined('ABSPATH')) {
+if (!defined('ABSPATH') || !defined('HSP_SSTV_VERSION')) {
     exit;
 }
-
-define('HSP_SSTV_VERSION', '1.4.3');
-define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
-define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
-define('HSP_SSTV_NS', 'hsp-sstv/v1');
-define('HSP_SSTV_HOME', 'https://github.com/do1gmt/hesperos-dx');   // Programm, Anleitung, Updates
 
 /* ------------------------------------------------------------------ Einstellungen */
 
@@ -515,7 +490,7 @@ add_shortcode('sstv_galerie', function ($atts) {
         'statistik' => $a['statistik'] !== 'nein',
         'credit'    => (bool) $o['credit'],
     );
-    $tpl = locate_template('hamscanpi-sstv/galerie.php');
+    $tpl = locate_template(array('hesperosdx-sstv/galerie.php', 'hamscanpi-sstv/galerie.php'));   // alter Ordner gilt weiter
     ob_start();
     include $tpl ? $tpl : HSP_SSTV_DIR . 'templates/galerie.php';
     return ob_get_clean();

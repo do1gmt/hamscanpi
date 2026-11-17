@@ -1,13 +1,15 @@
 === Hesperos DX SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.4.3
+Stable tag: 1.5.0
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
 
 == Einrichten ==
-1. Plugins → Installieren → Plugin hochladen → hamscanpi-sstv-galerie.zip → aktivieren.
+1. Plugins → Installieren → Plugin hochladen → hesperosdx-sstv-galerie.zip → aktivieren.
+   Umstieg von Version 1.4 (Ordner hamscanpi-sstv-galerie): das alte Plugin deaktivieren und löschen, dann das neue
+   hochladen und aktivieren – Bilder, Einstellungen, SSTV-Melder und Anwendungspasswörter bleiben erhalten.
 2. Benutzer → Profil → Anwendungspasswörter: Name „Hesperos DX“ → Passwort erzeugen (nur einmal sichtbar).
 3. In Hesperos DX: Einstellungen → SSTV-Export: Adresse, Benutzer, Anwendungspasswort → „Verbindung prüfen“, „Testbild senden“.
 4. Eine Seite anlegen (z. B. unter Satelliten) mit dem Kurzcode [sstv_galerie].
@@ -28,7 +30,7 @@ Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
 == Anpassen ==
 * Einstellungen → SSTV-Galerie: Farben, Ecken, Größe der Vorschaubilder, Überblenddauer, eigenes CSS, Plugin-CSS aus.
 * CSS-Variablen im Theme: .hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-gap: …; }
-* Vorlage ins Theme kopieren: <theme>/hamscanpi-sstv/galerie.php
+* Vorlage ins Theme kopieren: <theme>/hesperosdx-sstv/galerie.php (der alte Ordner hamscanpi-sstv gilt weiter)
 * Filter: hsp_sstv_item, hsp_sstv_insert_status
 
 == Mehrere Pis ==
@@ -42,6 +44,9 @@ Raspberry Pi (Temperatur, Last, Speicher). Keine IP- oder MAC-Adressen, kein WLA
 und Pi-Werte lassen sich in den Einstellungen ausblenden.
 
 == Änderungen ==
+= 1.5.0 =
+* Neuer Ordner hesperosdx-sstv-galerie (vorher hamscanpi-sstv-galerie): für WordPress ein neues Plugin – das alte deaktivieren und löschen, alles Gespeicherte bleibt. Ist das alte noch aktiv, bleibt das neue still und sagt Bescheid.
+* Theme-Vorlage unter <theme>/hesperosdx-sstv/galerie.php (alter Ordner gilt weiter).
 = 1.4.3 =
 * Links auf Hesperos DX bei GitHub (https://github.com/do1gmt/hesperos-dx): in der Pluginliste, auf der Einstellungsseite und in der Zeile „Empfangen mit …“ unter der Galerie.
 = 1.4.2 =

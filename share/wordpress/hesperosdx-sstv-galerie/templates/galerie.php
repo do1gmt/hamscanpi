@@ -1,6 +1,6 @@
 <?php
 /**
- * Vorlage der SSTV-Galerie. Zum Anpassen ins Theme kopieren:  <theme>/hamscanpi-sstv/galerie.php
+ * Vorlage der SSTV-Galerie. Zum Anpassen ins Theme kopieren:  <theme>/hesperosdx-sstv/galerie.php
  * Verfügbar: $hsp['endpoint'], $hsp['per_page'], $hsp['quelle'], $hsp['station'], $hsp['statistik'], $hsp['credit'].
  * Das Skript (assets/galerie.js) füllt .hsp-stats, .hsp-filter, .hsp-days und .hsp-more – diese Klassen bleiben nötig.
  */

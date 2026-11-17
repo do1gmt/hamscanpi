@@ -1,22 +1,22 @@
 #!/bin/bash
 # Hesperos DX – Sicherungsziele einhängen (USB-Stick/-Festplatte, Netzwerkfreigabe). Wird von bin/setup_system.sh
-# nach /usr/local/sbin/hamscanpi-store kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel
+# nach /usr/local/sbin/hesperosdx-store kopiert (gehört root, für den Benutzer nicht beschreibbar); die sudo-Regel
 # erlaubt genau diese Datei. Eingehängt wird nur an zwei feste Stellen, jede Eingabe wird geprüft.
 #
-#   hamscanpi-store mount-usb <uuid>      Datenträger mit dieser UUID nach /mnt/hamscanpi-usb einhängen
-#   hamscanpi-store umount-usb            alles schreiben und aushängen (danach darf er abgezogen werden)
-#   hamscanpi-store remount-usb <uuid>    hängengebliebenen Stick (kurz vom USB getrennt, Ein-/Ausgabefehler)
+#   hesperosdx-store mount-usb <uuid>      Datenträger mit dieser UUID nach /mnt/hesperosdx-usb einhängen
+#   hesperosdx-store umount-usb            alles schreiben und aushängen (danach darf er abgezogen werden)
+#   hesperosdx-store remount-usb <uuid>    hängengebliebenen Stick (kurz vom USB getrennt, Ein-/Ausgabefehler)
 #                                         aushängen – notfalls lose – und mit dieser UUID neu einhängen
-#   hamscanpi-store nas-cred              Zugangsdaten der Freigabe speichern (stdin: Benutzer, Passwort, Domäne –
+#   hesperosdx-store nas-cred              Zugangsdaten der Freigabe speichern (stdin: Benutzer, Passwort, Domäne –
 #                                         je eine Zeile; nur root kann die Datei lesen)
-#   hamscanpi-store mount-nas <//rechner/freigabe[/ordner]>   Freigabe nach /mnt/hamscanpi-nas einhängen
-#   hamscanpi-store umount-nas            Freigabe aushängen
-#   hamscanpi-store nas-forget            aushängen und Zugangsdaten löschen
+#   hesperosdx-store mount-nas <//rechner/freigabe[/ordner]>   Freigabe nach /mnt/hesperosdx-nas einhängen
+#   hesperosdx-store umount-nas            Freigabe aushängen
+#   hesperosdx-store nas-forget            aushängen und Zugangsdaten löschen
 # Formatiert wird nie etwas. Dateisysteme: FAT32, exFAT, NTFS, ext2/3/4, btrfs, xfs.
 set -u
-USB_MP=/mnt/hamscanpi-usb
-NAS_MP=/mnt/hamscanpi-nas
-CRED_DIR=/etc/hamscanpi
+USB_MP=/mnt/hesperosdx-usb
+NAS_MP=/mnt/hesperosdx-nas
+CRED_DIR=/etc/hesperosdx
 CRED=$CRED_DIR/nas.cred
 SUB=HamScanPi-Sicherungen
 die() { echo "$*" >&2; exit 2; }

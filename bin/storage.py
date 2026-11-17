@@ -3,17 +3,17 @@
 unter System → Sicherung.
 
 USB: Ein angesteckter Datenträger erscheint in der Liste; „Für Sicherungen verwenden“ hängt ihn nach
-/mnt/hamscanpi-usb ein und merkt sich seine UUID. Wird er abgezogen und wieder angesteckt (auch nach einem
+/mnt/hesperosdx-usb ein und merkt sich seine UUID. Wird er abgezogen und wieder angesteckt (auch nach einem
 Neustart), hängt ihn der Scheduler binnen einer Minute selbst wieder ein. „Auswerfen“ hängt ihn sauber aus;
 bis er abgezogen wurde, wird er dann nicht wieder eingehängt. Formatiert wird nie etwas.
 
-NAS: Adresse //rechner/freigabe, Benutzer, Passwort. Das Passwort liegt nur in /etc/hamscanpi/nas.cred (nur root
-kann es lesen) – nicht in den Einstellungen und nicht in Sicherungen. Eingehängt nach /mnt/hamscanpi-nas; fällt
+NAS: Adresse //rechner/freigabe, Benutzer, Passwort. Das Passwort liegt nur in /etc/hesperosdx/nas.cred (nur root
+kann es lesen) – nicht in den Einstellungen und nicht in Sicherungen. Eingehängt nach /mnt/hesperosdx-nas; fällt
 die Verbindung weg, wird alle 10 min neu versucht.
 
 Die Sicherungen landen in <ziel>/HamScanPi-Sicherungen/<rechnername>/ – so können mehrere HamScanPis denselben
 Stick oder dieselbe Freigabe benutzen, ohne sich gegenseitig alte Sicherungen wegzuräumen.
-Root-Handgriffe über /usr/local/sbin/hamscanpi-store (sudo-Regel nur für diese Datei).
+Root-Handgriffe über /usr/local/sbin/hesperosdx-store (sudo-Regel nur für diese Datei).
 """
 import json
 import os
@@ -25,11 +25,11 @@ import time
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-HELPER = "/usr/local/sbin/hamscanpi-store"
-USB_MP = Path("/mnt/hamscanpi-usb")
-NAS_MP = Path("/mnt/hamscanpi-nas")
+HELPER = "/usr/local/sbin/hesperosdx-store"
+USB_MP = Path("/mnt/hesperosdx-usb")
+NAS_MP = Path("/mnt/hesperosdx-nas")
 SUB = "HamScanPi-Sicherungen"
-CRED = Path("/etc/hamscanpi/nas.cred")
+CRED = Path("/etc/hesperosdx/nas.cred")
 STATE = BASE / "data" / "storage_state.json"
 FS_OK = ("vfat", "exfat", "ntfs", "ext2", "ext3", "ext4", "btrfs", "xfs")
 FS_NAME = {"vfat": "FAT32", "exfat": "exFAT", "ntfs": "NTFS"}

@@ -232,7 +232,7 @@ antenna info – and becomes the Pi's host name in the network: "Hesperos-AFGN" 
 
 **Taking the Pi elsewhere:** the dashboard (8080) and the rescue page (8081) listen on all interfaces, so in another
 network it is reachable at the address it gets by DHCP – and as **`http://hamscanpi.local:8080`**: the service
-`hamscanpi-mdns` announces that name via avahi with the current address, whatever the Pi's host name is (the host
+`hesperosdx-mdns` announces that name via avahi with the current address, whatever the Pi's host name is (the host
 name itself is not changed; if another device already uses the name, this Pi stays reachable as
 `<hostname>.local` and a notice says so). Windows 10/11, macOS, iOS and Linux resolve `.local` names; Android
 does not reliably – use the IP address there (it is in the push message). In a **different network** (other
@@ -251,8 +251,8 @@ Memory limits per service (web 500 MB, scheduler with scans and analysis 750 MB)
 own service instead of the whole Pi. *System → Services* shows the services and restarts them or the Pi; if the
 dashboard itself does not answer, the **rescue page** on port 8081 (`http://<pi>:8081`, a separate tiny service,
 same password) does the same and shows memory and the latest log lines. Restarting needs root: the update
-installs `/etc/sudoers.d/hamscanpi`, which allows exactly `systemctl --no-block restart hamscanpi-web |
-hamscanpi-scheduler | hamscanpi-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
+installs `/etc/sudoers.d/hesperosdx`, which allows exactly `systemctl --no-block restart hesperosdx-web |
+hesperosdx-scheduler | hesperosdx-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
 *Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs (including the output of
 the scan runs and the scheduler), kernel and service messages of the last 2 days, the system history, which
 processes hold the scan locks, and the settings without credentials into one file.
@@ -309,8 +309,8 @@ Everything it sets up on the system is in `bin/setup_system.sh`, which runs agai
 - creates `config/scanner.json` and `config/web_settings.json`;
 - gives the stick access rights (udev rule `/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules` – without it `rtl_sdr`
   reports `usb_open error -3`);
-- installs the services `hamscanpi-web` (dashboard, port 8080), `hamscanpi-scheduler` (scans, satellite passes),
-  `hamscanpi-rescue` (rescue page, port 8081), `hamscanpi-mdns` (name `hamscanpi.local`) and `hamscanpi-update`
+- installs the services `hesperosdx-web` (dashboard, port 8080), `hesperosdx-scheduler` (scans, satellite passes),
+  `hesperosdx-rescue` (rescue page, port 8081), `hesperosdx-mdns` (name `hamscanpi.local`) and `hesperosdx-update`
   (the update button);
 - adds a sudo rule for exactly the dashboard buttons (restart services, start the update, reboot), keeps the
   system journal across reboots (max. 64 MB) and switches Wi-Fi power saving off (otherwise Live stutters over
@@ -418,13 +418,13 @@ recordings (never deletes them) and restarts its services.
 
 **Where to back up:** under *Where to back up* in the same card, plugged-in USB sticks and USB drives are listed
 (FAT32, exFAT, NTFS, ext4 – nothing is ever formatted, the system card is never offered). *Use for backups* mounts
-the drive at `/mnt/hamscanpi-usb` and remembers it by its UUID: unplugged and plugged in again – also after a
+the drive at `/mnt/hesperosdx-usb` and remembers it by its UUID: unplugged and plugged in again – also after a
 reboot – it is mounted again within a minute. Pulled out without *Eject* (e.g. to rename it on the PC), the dead
 mount is released and the stick is mounted afresh when it comes back – also under a new device name; a backup that
 hits a read/write error remounts it once and tries again. *Eject* unmounts it cleanly; it stays out until it has
 been unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
-`//host/share` with user and password and mounted at `/mnt/hamscanpi-nas` (SMB 2 or newer, package cifs-utils);
-if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hamscanpi/nas.cred`
+`//host/share` with user and password and mounted at `/mnt/hesperosdx-nas` (SMB 2 or newer, package cifs-utils);
+if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hesperosdx/nas.cred`
 (root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` (folder name kept from the former name) on the
 target, so several Hesperos-DX-Stationen can share one stick or share. Renaming the station takes its folder along
 (done later if the target is not reachable at that moment). Backups found there (also those of another Pi, e.g.
@@ -440,7 +440,7 @@ From the command line, e.g. after losing the card (fresh install, then):
 python3 bin/backup.py create --scope data          # settings | data | all, --no-secrets, -o file
 python3 bin/backup.py info hamscanpi-backup-….tar.gz
 python3 bin/backup.py restore hamscanpi-backup-….tar.gz
-sudo systemctl restart hamscanpi-scheduler hamscanpi-web
+sudo systemctl restart hesperosdx-scheduler hesperosdx-web
 ```
 
 ### Moving to an SSD
@@ -454,12 +454,12 @@ their drive is mounted.
 3. Install Hesperos DX as described under *Installation* (`install.sh`).
 4. Stop the services and copy your data from the old card (in a USB card reader, here mounted at `/media/$USER/rootfs`):
    ```
-   sudo systemctl stop hamscanpi-scheduler hamscanpi-web
+   sudo systemctl stop hesperosdx-scheduler hesperosdx-web
    OLD=/media/$USER/rootfs/home/$USER/hamscanpi
    cp -a $OLD/config/. ~/hamscanpi/config/       # settings, band plan, passwords, Telegram
    cp -a $OLD/data/. ~/hamscanpi/data/           # database, stick register, history, satellite results
    cp -a $OLD/recordings $OLD/reports ~/hamscanpi/   # only if you want to keep the old hits
-   sudo systemctl start hamscanpi-scheduler hamscanpi-web
+   sudo systemctl start hesperosdx-scheduler hesperosdx-web
    ```
 5. Check *System → Devices* (main stick still recognised by its serial number) and *System → Status*
    (drive now "USB drive").
@@ -547,7 +547,9 @@ GNU General Public License v3.0 – see [LICENSE](LICENSE).
 
 Until version 1.8.06 the project was called **HamScanPi**. Since 1.8.08 the GitHub repository is
 `do1gmt/hesperos-dx` (GitHub forwards the old address; installed Pis switch to the new one with their next update)
-and the publishing file is `hesperos-publish.sh`. The names on the Pi itself stay for now so nothing breaks: the
-folder `~/hamscanpi`, the services `hamscanpi-*`, the address `hamscanpi.local`, the backup folder
-`HamScanPi-Sicherungen` and the WordPress plugin folder `hamscanpi-sstv-galerie`. Station names that were left at
-the old default "HamScanPi" count as the default.
+and the publishing file is `hesperos-publish.sh`. The technical name is **HesperosDX** (`hesperosdx` where Linux
+wants lower case). Since 1.8.15 the services are `hesperosdx-*` (with the helpers, sudo rule, `/mnt/hesperosdx-usb`,
+`-nas` and `/etc/hesperosdx/`) and the WordPress plugin folder is `hesperosdx-sstv-galerie`; the update switches
+safely – the old services are only removed once the new ones run and the dashboard answers, otherwise the old ones
+keep running. Still to follow, step by step: the address `hamscanpi.local`, the folder `~/hamscanpi` and the backup
+folder `HamScanPi-Sicherungen`. Station names that were left at the old default "HamScanPi" count as the default.

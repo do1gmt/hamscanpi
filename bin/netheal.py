@@ -13,7 +13,7 @@ niedrigerer Priorität an; ist das Haupt-WLAN weg, wählt NetworkManager selbst 
 auf einem Ausweich-WLAN und das Haupt-WLAN wieder in Reichweite, wird alle 10 min zurückgewechselt.
 Hängt ein Netzwerkkabel mit Verbindung dran, bleibt das WLAN unangetastet.
 
-Root-Handgriffe laufen über /usr/local/sbin/hamscanpi-net (sudo-Regel nur für diese Datei).
+Root-Handgriffe laufen über /usr/local/sbin/hesperosdx-net (sudo-Regel nur für diese Datei).
 Verlauf der Ausfälle: data/wifi_log.json (die letzten 50).
 """
 import json
@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-HELPER = "/usr/local/sbin/hamscanpi-net"
+HELPER = "/usr/local/sbin/hesperosdx-net"
 LOG = BASE / "data" / "wifi_log.json"
 SYS_NET = Path("/sys/class/net")
 STEPS = ((2, "reconnect", "neu verbunden"), (5, "radio", "WLAN aus- und wieder eingeschaltet"),

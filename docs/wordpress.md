@@ -6,7 +6,11 @@ Satellit und einer Lightbox (Durchblättern mit Pfeiltasten oder Wischen, Überb
 
 ## Einrichten
 
-1. **Plugin holen:** Dashboard → Einstellungen → SSTV-Export → „herunterladen“ (`hamscanpi-sstv-galerie.zip`).
+> **Umstieg von Plugin 1.4 (Ordner `hamscanpi-sstv-galerie`):** Für WordPress ist 1.5 ein neues Plugin. Das alte
+> deaktivieren und löschen, das neue hochladen und aktivieren – Bilder, Einstellungen, SSTV-Melder und
+> Anwendungspasswörter bleiben erhalten. Ist das alte noch aktiv, bleibt das neue still und zeigt einen Hinweis.
+
+1. **Plugin holen:** Dashboard → Einstellungen → SSTV-Export → „herunterladen“ (`hesperosdx-sstv-galerie.zip`).
 2. **In WordPress:** Plugins → Installieren → Plugin hochladen → ZIP wählen → aktivieren.
 3. **Zugang für den Pi:** WordPress → Einstellungen → SSTV-Galerie → *Zugang für die Pis* → Namen eingeben (z. B.
    `pi-afgn`) → „Benutzer mit Anwendungspasswort anlegen“. Der Benutzer bekommt die Rolle **SSTV-Melder**: er darf
@@ -101,7 +105,7 @@ in der Farbe des Themes.
 - **CSS-Variablen** im Theme: `.hsp-galerie { --hsp-accent: …; --hsp-card: …; --hsp-text: …; --hsp-muted: …;
   --hsp-radius: …; --hsp-thumb: …; --hsp-gap: …; --hsp-fade: …; --hsp-font: …; }`, Lightbox: `.hsp-lb { --hsp-lb-bg: …; }`.
   Leere Farben übernehmen Schrift und Hintergrund des Themes.
-- **Vorlage:** `templates/galerie.php` ins Theme kopieren nach `<theme>/hamscanpi-sstv/galerie.php`.
+- **Vorlage:** `templates/galerie.php` ins Theme kopieren nach `<theme>/hesperosdx-sstv/galerie.php` (der alte Ordner `hamscanpi-sstv` gilt weiter).
 - **Filter:** `hsp_sstv_item` (Daten eines Bildes vor der Ausgabe), `hsp_sstv_insert_status` (Status beim Empfang).
 
 ## Schnittstelle

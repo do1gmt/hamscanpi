@@ -2,9 +2,9 @@
 """Dienste von Hesperos DX anzeigen und neu starten, den Pi neu starten – für das Dashboard (System → Dienste)
 und die Notfall-Seite (bin/rescue.py, eigener Dienst auf Port 8081).
 
-Neu starten braucht root: das Update legt /etc/sudoers.d/hamscanpi an, das genau diese Befehle ohne Passwort
+Neu starten braucht root: das Update legt /etc/sudoers.d/hesperosdx an, das genau diese Befehle ohne Passwort
 erlaubt (und sonst nichts):
-  systemctl --no-block restart hamscanpi-web | hamscanpi-scheduler | hamscanpi-rescue | hamscanpi-mdns | pmsdr-control
+  systemctl --no-block restart hesperosdx-web | hesperosdx-scheduler | hesperosdx-rescue | hesperosdx-mdns | pmsdr-control
   systemctl reboot
 „--no-block“: systemd übernimmt den Auftrag sofort – auch wenn der Webserver sich damit selbst neu startet.
 """
@@ -14,8 +14,8 @@ import subprocess
 import time
 from pathlib import Path
 
-UNITS = {"hamscanpi-web": "Webserver", "hamscanpi-scheduler": "Zeitplaner", "hamscanpi-rescue": "Notfall-Seite",
-         "hamscanpi-mdns": "Name im Netz", "pmsdr-control": "PMSDR-Steuerung"}      # nur angezeigt, wenn eingerichtet
+UNITS = {"hesperosdx-web": "Webserver", "hesperosdx-scheduler": "Zeitplaner", "hesperosdx-rescue": "Notfall-Seite",
+         "hesperosdx-mdns": "Name im Netz", "pmsdr-control": "PMSDR-Steuerung"}      # nur angezeigt, wenn eingerichtet
 SYSTEMCTL = shutil.which("systemctl") or "/usr/bin/systemctl"
 
 
@@ -57,7 +57,7 @@ def status():
 def sudo_ok():
     """Darf Hesperos DX die Befehle ausführen (sudo-Regel vorhanden)?"""
     try:
-        r = subprocess.run(["sudo", "-n", "-l", SYSTEMCTL, "--no-block", "restart", "hamscanpi-web"],
+        r = subprocess.run(["sudo", "-n", "-l", SYSTEMCTL, "--no-block", "restart", "hesperosdx-web"],
                            capture_output=True, text=True, timeout=3)
         return r.returncode == 0
     except Exception:

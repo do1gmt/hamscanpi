@@ -3,14 +3,14 @@
 #   bin/update.sh            von Hand (SSH): wartet auf ein freies Fenster, holt den neuen Stand (git pull),
 #                            richtet das System ein (bin/setup_system.sh) und startet die Dienste neu
 #   bin/update.sh --now      ohne auf ein freies Fenster zu warten
-#   bin/update.sh --auto     vom Knopf im Dashboard (Dienst hamscanpi-update, läuft als root)
+#   bin/update.sh --auto     vom Knopf im Dashboard (Dienst hesperosdx-update, läuft als root)
 # Eigene Dateien (config/scanner.json, config/web_settings.json, config/auth.json, data/, recordings/ …)
 # bleiben unberührt. Ausgabe auch in log/update.log (das Dashboard zeigt sie an).
 #
 # Das Skript kopiert sich vor dem Start nach /tmp: git pull ersetzt diese Datei, und bash liest Skripte
 # stückweise – ohne Kopie liefe sonst ein Mischmasch aus alter und neuer Fassung.
 if [ -z "${HSP_UPDATE_COPY:-}" ]; then
-    C="$(mktemp /tmp/hamscanpi-update.XXXXXX.sh)"; cp "$0" "$C"
+    C="$(mktemp /tmp/hesperosdx-update.XXXXXX.sh)"; cp "$0" "$C"
     HSP_UPDATE_COPY=1 HSP_DIR="$(cd "$(dirname "$0")/.." && pwd)" exec bash "$C" "$@"
 fi
 set -e
@@ -80,9 +80,12 @@ if [ "$NOW" = 0 ] && [ -f data/cycle.lock ]; then
 fi
 # Zeitplaner anhalten, damit zwischen Prüfung und Neustart kein neuer Scan beginnt (die Einrichtung startet ihn
 # am Ende wieder) – sonst bricht der Neustart diesen Scan ab
-if systemctl is-active -q hamscanpi-scheduler 2>/dev/null && [ -z "${HSP_SETUP_CMD:-}" ]; then
-    $SUDO systemctl stop hamscanpi-scheduler 2>/dev/null || true
-fi
+# (Dienst heißt seit 1.8.15 hesperosdx-scheduler; beim Umstieg läuft noch der alte hamscanpi-scheduler)
+for s in hesperosdx-scheduler hamscanpi-scheduler; do
+    if systemctl is-active -q "$s" 2>/dev/null && [ -z "${HSP_SETUP_CMD:-}" ]; then
+        $SUDO systemctl stop "$s" 2>/dev/null || true
+    fi
+done
 echo "$(t "Neuer Stand von GitHub …" "Fetching the new version from GitHub …")"
 asuser git pull --ff-only
 NEW="$(cat VERSION 2>/dev/null || echo ?)"

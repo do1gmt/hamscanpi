@@ -1617,8 +1617,8 @@ for m in range(15):
     N.check(st3, now=t + m * 60)
 assert any(r["id"] == "wifi_weak" and r["active"] for r in NT.listing()["items"])
 PY
-bash -n "$SRC/share/root/hamscanpi-net" && ! bash "$SRC/share/root/hamscanpi-net" hostname "Böser Name" 2>/dev/null \
-  && ! bash "$SRC/share/root/hamscanpi-net" remove preconfigured 2>/dev/null \
+bash -n "$SRC/share/root/hesperosdx-net" && ! bash "$SRC/share/root/hesperosdx-net" hostname "Böser Name" 2>/dev/null \
+  && ! bash "$SRC/share/root/hesperosdx-net" remove preconfigured 2>/dev/null \
   && ok "Root-Helfer prüft seine Eingaben (falscher Rechnername, fremde Verbindung)" || bad "Root-Helfer"
 
 echo "== 53 Name dieser Station: Rechnername, Mail, Namensdienst"
@@ -1864,10 +1864,10 @@ assert "nicht erreichbar" in STO.status()["nas"]["error"]
 present["nas_down"] = False; STO.ensure(now=2e6 + 1202); assert STO.mounted(STO.NAS_MP)
 assert "geheim" not in cfgf.read_text()
 PY
-H="$SRC/share/root/hamscanpi-store"
+H="$SRC/share/root/hesperosdx-store"
 bash -n "$H" && ! bash "$H" mount-usb "../../etc" 2>/dev/null && ! bash "$H" mount-nas "//nas/a,uid=0" 2>/dev/null \
   && ! printf 'pi\n\001x\n\n' | bash "$H" nas-cred 2>/dev/null && ! bash "$H" format 2>/dev/null \
-  && grep -q "hamscanpi-store" "$SRC/bin/setup_system.sh" && grep -q "cifs-utils" "$SRC/bin/setup_system.sh" \
+  && grep -q "hesperosdx-store" "$SRC/bin/setup_system.sh" && grep -q "cifs-utils" "$SRC/bin/setup_system.sh" \
   && ok "Root-Helfer prüft UUID, Adresse und Zugangsdaten, formatiert nie; Installer richtet ihn ein" || bad "Root-Helfer Sicherungsziel"
 
 echo "== 57 Schreiblast, Scan nach Neustart, Hinweise aufräumen, Netz-Angaben"
@@ -1986,9 +1986,9 @@ cf = Path("../config/web_settings.json"); s = json.loads(cf.read_text()); s["pub
 arc = dict(BK._config_files(False))["config/web_settings.json"]
 assert b"abcd efgh" not in arc and b"app_password" not in arc
 PY
-phpok() { command -v php >/dev/null || return 0; php -l "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" >/dev/null 2>&1; }
-phpok && node -e "new Function(require('fs').readFileSync('$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js','utf8'))" \
-  && grep -q "Plugin Name: *Hesperos DX SSTV-Galerie" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
+phpok() { command -v php >/dev/null || return 0; php -l "$SRC/share/wordpress/hesperosdx-sstv-galerie/hesperosdx-sstv-galerie.php" >/dev/null 2>&1 && php -l "$SRC/share/wordpress/hesperosdx-sstv-galerie/includes/galerie-plugin.php" >/dev/null 2>&1; }
+phpok && node -e "new Function(require('fs').readFileSync('$SRC/share/wordpress/hesperosdx-sstv-galerie/assets/galerie.js','utf8'))" \
+  && grep -q "Plugin Name: *Hesperos DX SSTV-Galerie" "$SRC/share/wordpress/hesperosdx-sstv-galerie/hesperosdx-sstv-galerie.php" \
   && ok "WordPress-Plugin: PHP und Skript fehlerfrei" || bad "WordPress-Plugin"
 
 echo "== 59 Zeitangaben: UTC oder Ortszeit, überall mit Kennung"
@@ -2097,10 +2097,10 @@ import sys
 src = Path("webapp.py").read_text(); js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
 assert '"/api/publish/hit"' in src and "sstv_manual_queued" in src and "data-act=\"pub\"" in js and "pubCell(h.pub)" in js
 PY
-grep -q "'manual_status'" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
-  && grep -q "min(\$t, time())" "$SRC/share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php" \
-  && grep -q '.hsp-galerie \[hidden\]' "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.css" \
-  && grep -q "IntersectionObserver" "$SRC/share/wordpress/hamscanpi-sstv-galerie/assets/galerie.js" \
+grep -q "'manual_status'" "$SRC/share/wordpress/hesperosdx-sstv-galerie/includes/galerie-plugin.php" \
+  && grep -q "min(\$t, time())" "$SRC/share/wordpress/hesperosdx-sstv-galerie/includes/galerie-plugin.php" \
+  && grep -q '.hsp-galerie \[hidden\]' "$SRC/share/wordpress/hesperosdx-sstv-galerie/assets/galerie.css" \
+  && grep -q "IntersectionObserver" "$SRC/share/wordpress/hesperosdx-sstv-galerie/assets/galerie.js" \
   && ok "Plugin 1.3: Anordnung einstellbar, Nachladeknopf nur bei weiteren Bildern, nie geplante Beiträge" || bad "Plugin 1.3"
 
 echo "== 61 Update-Prüfung, Neustart-Meldung, Satellit in der Trefferkarte"
@@ -2274,9 +2274,9 @@ r = diag.pmsdr_info()
 assert "7.074 MHz: Pegel" in r and "7.0755 MHz +" in r and "ÜBERSTEUERT" not in r, r
 lk = open("../data/scan.lock", "a"); fcntl.flock(lk, fcntl.LOCK_EX)          # Scan läuft
 assert "übersprungen – Scan" in diag.pmsdr_info(); fcntl.flock(lk, fcntl.LOCK_UN)
-css = (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/assets/galerie.css").read_text()
+css = (Path(sys.argv[1]) / "share/wordpress/hesperosdx-sstv-galerie/assets/galerie.css").read_text()
 assert "var(--hsp-max, var(--max" in css and "margin: 1rem auto 2rem" in css
-assert "'max_w'" in (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php").read_text()
+assert "'max_w'" in (Path(sys.argv[1]) / "share/wordpress/hesperosdx-sstv-galerie/includes/galerie-plugin.php").read_text()
 PY
 
 echo "== 65 PMSDR-Eingang, Gerätewechsel beim Abstimmen, unterbrochener Überflug, Karten und schnelle Klicks"
@@ -2347,7 +2347,7 @@ ev = list(o.events)
 assert ev[1]["band"] == "40m" and ev[0]["band"] is None, ev
 js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
 assert "e.band || fmtMHz(e.freq_hz)" in js
-php = (Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie/hamscanpi-sstv-galerie.php").read_text()
+php = (Path(sys.argv[1]) / "share/wordpress/hesperosdx-sstv-galerie/hesperosdx-sstv-galerie.php").read_text() + (Path(sys.argv[1]) / "share/wordpress/hesperosdx-sstv-galerie/includes/galerie-plugin.php").read_text()
 for k in ("add_role('hsp_sstv_melder'", "'_hsp_station'", "'hsp_from'", "hsp_sstv_pi_user", "create_new_application_password",
           "'permission_callback' => 'hsp_sstv_can_send'", "admin_url('post.php?post='"):
     assert k in php, k
@@ -2414,8 +2414,8 @@ assert '<h2>SSTV-Export <small' in html and 'id="wxBox" open' in html and "Ins N
 assert 'id="liveBanner"' in html and "function liveBanner(s, busy)" in js and "liveBanner(s, busy);" in js
 assert "$('noticeAckAll').disabled = !ackable" in js
 assert "<th>Bedeutung</th>" not in js and 'id="liveLevelVal"' in html
-pl = Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie"
-php, tpl = (pl / "hamscanpi-sstv-galerie.php").read_text(), (pl / "templates/galerie.php").read_text()
+pl = Path(sys.argv[1]) / "share/wordpress/hesperosdx-sstv-galerie"
+php, tpl = (pl / "hesperosdx-sstv-galerie.php").read_text() + (pl / "includes/galerie-plugin.php").read_text(), (pl / "templates/galerie.php").read_text()
 assert "Plugin URI:        https://github.com/do1gmt/hesperos-dx" in php and "HSP_SSTV_HOME" in php and "esc_url(HSP_SSTV_HOME)" in php
 assert "HSP_SSTV_HOME" in tpl and 'rel="noopener"' in tpl
 # Spaltenwechsel: aus der anderen Spalte gezogene Karten bekommen beim Wiederherstellen einen Platz
@@ -2492,7 +2492,7 @@ assert DG.filename().startswith("hesperos-diagnose-do1gmt-devpi-") and DG.filena
 svg = (src / "web/icon.svg").read_text()
 assert "Abendstern" in svg and all((src / "web" / f).stat().st_size > 500 for f in ("icon-180.png", "icon-192.png", "icon-512.png", "favicon.ico"))
 PY
-bash -n "$SRC/share/root/hamscanpi-store" && grep -q "  remount-usb)" "$SRC/share/root/hamscanpi-store" && grep -q ';&' "$SRC/share/root/hamscanpi-store" \
+bash -n "$SRC/share/root/hesperosdx-store" && grep -q "  remount-usb)" "$SRC/share/root/hesperosdx-store" && grep -q ';&' "$SRC/share/root/hesperosdx-store" \
   && ok "Helfer kennt remount-usb und hängt abgezogene Sticks lose aus" || bad "Helfer remount-usb"
 
 echo "== 70 WLAN-Suche: sichtbare Liste, Fehler mit Grund"
@@ -2697,6 +2697,66 @@ assert opts <= set(LDK.KINDS), opts - set(LDK.KINDS)                 # jede Ausw
 js = (Path(sys.argv[1]) / "web" / "app.js").read_text()
 assert 'id="liveFav"' in html and 'id="liveFavStar"' in html and "saveLiveFavs" in js and "/api/live/favorites" in js
 PY
+
+echo "== 75 Dienste und Systemdateien hamscanpi-* → hesperosdx-* (sicherer Übergang)"
+ren75() {
+    local R0; R0="$(mktemp -d)"
+    mkfake() {   # mkfake <wurzel> <neue dienste aktiv: 1/0> <alter update-dienst aktiv: 1/0>
+        local R="$1"
+        mkdir -p "$R/etc/systemd/system" "$R/etc/sudoers.d" "$R/usr/local/sbin" "$R/etc/systemd/journald.conf.d" \
+                 "$R/etc/systemd/logind.conf.d" "$R/etc/NetworkManager/conf.d" "$R/etc/udev/rules.d" "$R/etc/hamscanpi" "$R/mnt/hamscanpi-usb" "$R/bin"
+        for u in web scheduler rescue mdns update; do echo "[Service]" > "$R/etc/systemd/system/hamscanpi-$u.service"; done
+        mkdir -p "$R/etc/systemd/system/hamscanpi-web.service.d"
+        touch "$R/etc/sudoers.d/hamscanpi" "$R/etc/sudoers.d/hesperosdx" "$R/usr/local/sbin/hamscanpi-net" "$R/usr/local/sbin/hamscanpi-store" \
+              "$R/usr/local/sbin/hesperosdx-net" "$R/usr/local/sbin/hesperosdx-store"
+        echo J > "$R/etc/systemd/journald.conf.d/hamscanpi.conf"; echo L > "$R/etc/systemd/logind.conf.d/hamscanpi.conf"
+        echo W > "$R/etc/NetworkManager/conf.d/hamscanpi-wifi.conf"; echo U > "$R/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules"
+        echo "username=x" > "$R/etc/hamscanpi/nas.cred"
+        cat > "$R/bin/systemctl" <<SC
+#!/bin/bash
+echo "\$*" >> "$R/calls"
+if [ "\$1" = is-active ]; then
+    u="\${@: -1}"
+    case "\$u" in hesperosdx-*) [ "$2" = 1 ];; hamscanpi-update) [ "$3" = 1 ];; *) false;; esac
+    exit \$?
+fi
+exit 0
+SC
+        chmod +x "$R/bin/systemctl"
+    }
+    run() {   # run <wurzel> <ping ok: true/false>
+        ( t() { printf '%s' "$1"; }; ok() { :; }; warn() { echo "WARN $*"; }; bold() { :; }; asuser() { :; }
+          R="$1"; SYSTEMCTL="$1/bin/systemctl"; PING="$2"; MOUNTPOINT=false; WAIT_S=2; RESTART=1; PORT=8080; DIR=/x
+          . "$SRC/bin/migrate_services.sh"; migrate_files; start_services )
+    }
+    # 1) Umstieg klappt; das Update läuft noch im alten Dienst
+    local A="$R0/a"; mkfake "$A" 1 1
+    run "$A" true >/dev/null || { echo "Umstieg meldet Fehler"; return 1; }
+    for u in web scheduler rescue mdns; do [ ! -e "$A/etc/systemd/system/hamscanpi-$u.service" ] || { echo "alter Dienst $u blieb"; return 1; }; done
+    [ ! -e "$A/etc/systemd/system/hamscanpi-web.service.d" ] && [ -e "$A/etc/systemd/system/hamscanpi-update.service" ] || { echo "Update-Dienst/Drop-in"; return 1; }
+    [ ! -e "$A/etc/sudoers.d/hamscanpi" ] && [ ! -e "$A/usr/local/sbin/hamscanpi-net" ] && [ ! -e "$A/usr/local/sbin/hamscanpi-store" ] || { echo "alte sudo-Regel/Helfer"; return 1; }
+    [ "$(cat "$A/etc/systemd/journald.conf.d/hesperosdx.conf")" = J ] && [ "$(cat "$A/etc/systemd/logind.conf.d/hesperosdx.conf")" = L ] \
+      && [ -f "$A/etc/NetworkManager/conf.d/hesperosdx-wifi.conf" ] && [ -f "$A/etc/udev/rules.d/20-hesperosdx-rtlsdr.rules" ] \
+      && [ ! -e "$A/etc/systemd/journald.conf.d/hamscanpi.conf" ] || { echo "Systemeinstellungen"; return 1; }
+    [ -f "$A/etc/hesperosdx/nas.cred" ] && [ ! -e "$A/etc/hamscanpi" ] && [ "$(stat -c %a "$A/etc/hesperosdx")" = 700 ] && [ ! -e "$A/mnt/hamscanpi-usb" ] || { echo "Zugangsdaten/Einhängepunkt"; return 1; }
+    # erst die alten stoppen (Port frei), dann die neuen starten
+    local sl rl
+    sl="$(grep -n "^stop hamscanpi-web" "$A/calls" | head -1 | cut -d: -f1)"; rl="$(grep -n "^restart hesperosdx-web" "$A/calls" | head -1 | cut -d: -f1)"
+    [ -n "$sl" ] && [ -n "$rl" ] && [ "$sl" -lt "$rl" ] || { echo "Reihenfolge"; cat "$A/calls"; return 1; }
+    grep -q "^stop hamscanpi-update" "$A/calls" && { echo "laufendes Update gestoppt"; return 1; }
+    # 2) nächster Lauf: der alte Update-Dienst ist fertig und verschwindet
+    : > "$A/calls"; sed -i 's/hamscanpi-update) \[ "1" = 1 \]/hamscanpi-update) [ "0" = 1 ]/' "$A/bin/systemctl"
+    run "$A" true >/dev/null && [ ! -e "$A/etc/systemd/system/hamscanpi-update.service" ] || { echo "Update-Dienst blieb"; return 1; }
+    grep -q "^restart hesperosdx-web hesperosdx-scheduler hesperosdx-rescue hesperosdx-mdns" "$A/calls" || return 1
+    # 3) neue Dienste kommen nicht hoch: alte laufen weiter, nichts Altes gelöscht
+    local B="$R0/b"; mkfake "$B" 0 1
+    local O; O="$(run "$B" false)" && { echo "Fehlschlag nicht erkannt"; return 1; }
+    echo "$O" | grep -q "WARN" || return 1
+    for u in web scheduler rescue mdns; do [ -e "$B/etc/systemd/system/hamscanpi-$u.service" ] && grep -q "^start hamscanpi-$u" "$B/calls" || { echo "alter Dienst $u nicht zurück"; return 1; }; done
+    grep -q "^disable hesperosdx-web" "$B/calls" && [ -e "$B/etc/sudoers.d/hamscanpi" ] && [ -e "$B/usr/local/sbin/hamscanpi-net" ] || { echo "Rückfall unvollständig"; return 1; }
+    rm -rf "$R0"
+}
+ren75 && ok "alte Dienste erst nach erfolgreichem Start der neuen entfernt, laufendes Update bleibt bis zum Ende, Rückfall auf die alten, Systemdateien und Zugangsdaten umgezogen" || bad "Umstellung der Dienstnamen"
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.15 – 2026-11-17
+
+- **Renaming on the Pi, step A – services and system files are now called `hesperosdx-*`** (technical name
+  HesperosDX): `hesperosdx-web`, `-scheduler`, `-rescue`, `-mdns`, `-update`; helpers `/usr/local/sbin/hesperosdx-net`
+  and `-store`; sudo rule `/etc/sudoers.d/hesperosdx`; `/mnt/hesperosdx-usb`, `/mnt/hesperosdx-nas`; NAS credentials
+  in `/etc/hesperosdx/` (still readable by root only); journal, login and Wi-Fi settings and the udev rules under the
+  new name. The update switches safely (`bin/migrate_services.sh`): stop the old services, start the new ones, check
+  that all run and the dashboard answers – only then remove the old services, sudo rule and helpers. If the new ones
+  do not come up, the old ones keep running (notice and log `services_rename_failed`). The update itself still runs
+  in the old update service; that one goes with the next update. The USB stick or share is mounted at the new place
+  within a minute. Diagnostics also contain the journal of the old services (last 2 days).
+- **WordPress plugin 1.5.0 in the folder `hesperosdx-sstv-galerie`** – for WordPress a new plugin: deactivate and
+  delete the old one (1.4, `hamscanpi-sstv-galerie`), upload and activate the new one; pictures, settings, SSTV
+  reporters and application passwords stay. While the old one is still active the new one stays idle and shows a
+  notice (the plugin code is now loaded from `includes/` so the two cannot clash). Theme template under
+  `<theme>/hesperosdx-sstv/galerie.php` (the old folder still works). Tested in WordPress 6.8.
+- Self-test section 75.
+
 ## 1.8.14 – 2026-11-17
 
 - **Live favourites:** a "Favourites" drop-down above the frequency (grouped by band). Choosing one tunes Live there

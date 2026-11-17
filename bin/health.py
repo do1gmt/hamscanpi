@@ -305,7 +305,7 @@ def check_storage(st):
                 NT.raise_("zram_full", "warn", "system", "Arbeitsspeicher und zram voll",
                           f"{used} von {tot} MB zram belegt – als Nächstes muss der Kernel einen Prozess beenden.",
                           fix="Im Systemverlauf den größten Prozess ansehen; Webserver neu starten gibt Speicher frei.",
-                          cmd="sudo systemctl restart hamscanpi-web")
+                          cmd="sudo systemctl restart hesperosdx-web")
             elif not tot or used < 0.8 * tot:
                 NT.clear("zram_full")
     except Exception:
@@ -357,7 +357,7 @@ def check_clock(st):
 
 
 def check_services(st):
-    for unit, name in (("hamscanpi-web", "Webserver"), ("hamscanpi-scheduler", "Zeitplaner"), ("hamscanpi-rescue", "Notfall-Seite")):
+    for unit, name in (("hesperosdx-web", "Webserver"), ("hesperosdx-scheduler", "Zeitplaner"), ("hesperosdx-rescue", "Notfall-Seite")):
         code, out = _run(["systemctl", "show", unit, "-p", "NRestarts", "--value"], timeout=5)
         if code != 0 or not out.strip().isdigit():
             continue
@@ -492,7 +492,8 @@ def net_state():
 def _web_port():
     try:
         import re
-        txt = Path("/etc/systemd/system/hamscanpi-web.service").read_text()
+        p = Path("/etc/systemd/system/hesperosdx-web.service")
+        txt = (p if p.exists() else Path("/etc/systemd/system/hamscanpi-web.service")).read_text()
         m = re.search(r"webapp\.py\s+(\d+)", txt)
         return int(m.group(1)) if m else 8080
     except Exception:

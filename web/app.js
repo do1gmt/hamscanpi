@@ -2474,7 +2474,7 @@
     else { $('wifiPsk').focus(); note($('wifiNote'), EN ? 'Enter the password, then “Add”' : 'Passwort eingeben, dann „Hinzufügen“'); }
   });
 
-  // ---------- Update per git (bin/update.sh über den Dienst hamscanpi-update) ----------
+  // ---------- Update per git (bin/update.sh über den Dienst hesperosdx-update) ----------
   let updTimer = null;
   async function loadUpdate(check) {
     let d; try { d = await api('/api/update' + (check ? '?check=1' : '')); } catch (e) { return; }
@@ -2595,9 +2595,9 @@
   $('svcList').addEventListener('click', async e => {
     const b = e.target.closest('[data-svc]'); if (!b) return;
     const label = b.closest('tr').querySelector('b').textContent;
-    if (!confirm(`${label} neu starten?` + (b.dataset.svc === 'hamscanpi-scheduler' ? ' Ein laufender Scan oder Überflug wird dabei abgebrochen.' : ''))) return;
+    if (!confirm(`${label} neu starten?` + (b.dataset.svc === 'hesperosdx-scheduler' ? ' Ein laufender Scan oder Überflug wird dabei abgebrochen.' : ''))) return;
     try { await post('/api/services/restart', { unit: b.dataset.svc }); note($('svcNote'), `✓ ${label} wird neu gestartet`);
-          if (b.dataset.svc === 'hamscanpi-web') setTimeout(() => location.reload(), 8000); else setTimeout(loadServices, 5000); }
+          if (b.dataset.svc === 'hesperosdx-web') setTimeout(() => location.reload(), 8000); else setTimeout(loadServices, 5000); }
     catch (err) { note($('svcNote'), 'Fehler: ' + err.message, true); }
   });
   // Diagnose: der Pi braucht bis ~20 s zum Zusammenstellen – Rückmeldung geben, doppeltes Antippen abfangen

@@ -16,7 +16,7 @@ Kommandozeile
   python3 bin/backup.py restore datei.tar.gz [--yes]
 Beim Wiederherstellen wird gewartet, bis kein Scan und kein Überflug läuft (Stick-Sperre); der bisherige
 Stand von config/ und data/ wird vorher nach restore-previous/<zeit>/ gelegt. Danach die Dienste neu
-starten: sudo systemctl restart hamscanpi-scheduler hamscanpi-web (im Dashboard geschieht das selbst).
+starten: sudo systemctl restart hesperosdx-scheduler hesperosdx-web (im Dashboard geschieht das selbst).
 """
 import argparse
 import fcntl
@@ -474,7 +474,7 @@ def main():
         if not a.yes and input("Einspielen? Der bisherige Stand wird zur Seite gelegt. [j/N] ").strip().lower() not in ("j", "ja", "y", "yes"):
             sys.exit("abgebrochen")
         restore(a.file)
-        print("Fertig. Dienste neu starten: sudo systemctl restart hamscanpi-scheduler hamscanpi-web")
+        print("Fertig. Dienste neu starten: sudo systemctl restart hesperosdx-scheduler hesperosdx-web")
 
 
 if __name__ == "__main__":
