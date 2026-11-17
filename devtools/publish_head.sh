@@ -20,7 +20,17 @@ command -v git >/dev/null || die "git fehlt: sudo apt install git"
 
 sed -n '/^__PAYLOAD__$/,$p' "$0" | tail -n +2 | base64 -d > "$TMP/p.tgz"
 mkdir -p "$TMP/new" && tar xzf "$TMP/p.tgz" -C "$TMP/new"
-V="$(cat "$TMP/new/VERSION")"
+# Zwei Arten: vollständig (das ganze Projekt) oder nur die Änderungen seit der letzten Veröffentlichung (.hsp-delta/:
+# BASE = Stand auf GitHub, auf dem sie aufbauen, TREE = Prüfsumme des Ergebnisses, files/ = geänderte und neue
+# Dateien, deleted = gelöschte, mit NUL getrennt)
+DELTA=0
+if [ -f "$TMP/new/.hsp-delta/BASE" ]; then
+    DELTA=1
+    V="$(cat "$TMP/new/.hsp-delta/VERSION")"; BASE="$(cat "$TMP/new/.hsp-delta/BASE")"
+    BASEV="$(cat "$TMP/new/.hsp-delta/BASE_VERSION")"; TREE="$(cat "$TMP/new/.hsp-delta/TREE")"
+else
+    V="$(cat "$TMP/new/VERSION")"
+fi
 bold "Hesperos DX $V veröffentlichen"
 echo "  $HSP_MSG"
 
@@ -58,14 +68,35 @@ fi
 if [ "$ALREADY" = 0 ]; then
 
 bold "2/4 Neuer Stand"
-# alles außer .git ersetzen: so verschwinden auch Dateien, die es im neuen Stand nicht mehr gibt
-find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-# ohne die alten Zeitstempel kopieren: hätte eine geänderte Datei dieselbe Größe und dieselbe Sekunde wie die in der
-# Arbeitskopie, hielte git sie sonst für unverändert – die Änderung käme nicht mit
-cp -R --preserve=mode,links "$TMP/new/." "$WORK/"
-git -C "$WORK" update-index -q --really-refresh >/dev/null 2>&1 || true
-cd "$WORK"
-git add -A
+if [ "$DELTA" = 1 ]; then
+    # nur die Änderungen: passen nur auf genau den Stand, aus dem sie gebaut wurden
+    if [ "$(git -C "$WORK" rev-parse HEAD)" != "$BASE" ]; then
+        die "Diese Datei enthält nur die Änderungen seit Version $BASEV – auf GitHub steht aber $OLDV. Zuerst die Datei für die fehlende Version veröffentlichen oder eine vollständige Datei anfordern. Nichts geändert."
+    fi
+    cd "$WORK"
+    # ohne die alten Zeitstempel (-m): sonst könnte git eine geänderte Datei für unverändert halten
+    if [ -d "$TMP/new/.hsp-delta/files" ]; then
+        tar cf - -C "$TMP/new/.hsp-delta/files" . | tar xmf - -C "$WORK" \
+            || { git reset -q --hard; die "Änderungen ließen sich nicht einspielen – nichts veröffentlicht"; }
+    fi
+    if [ -s "$TMP/new/.hsp-delta/deleted" ]; then
+        xargs -0 -a "$TMP/new/.hsp-delta/deleted" git rm -q --cached --ignore-unmatch -- >/dev/null
+        xargs -0 -a "$TMP/new/.hsp-delta/deleted" rm -f --
+    fi
+    git add -A
+    # Prüfsumme: das Ergebnis muss Datei für Datei dem Stand entsprechen, aus dem die Datei gebaut wurde
+    [ "$(git write-tree)" = "$TREE" ] || { git reset -q --hard; die "Ergebnis weicht vom erwarteten Stand ab – nichts veröffentlicht"; }
+    ok "Änderungen seit $BASEV eingespielt und geprüft"
+else
+    # alles außer .git ersetzen: so verschwinden auch Dateien, die es im neuen Stand nicht mehr gibt
+    find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+    # ohne die alten Zeitstempel kopieren: hätte eine geänderte Datei dieselbe Größe und dieselbe Sekunde wie die in der
+    # Arbeitskopie, hielte git sie sonst für unverändert – die Änderung käme nicht mit
+    cp -R --preserve=mode,links "$TMP/new/." "$WORK/"
+    git -C "$WORK" update-index -q --really-refresh >/dev/null 2>&1 || true
+    cd "$WORK"
+    git add -A
+fi
 BAD="$(git diff --cached --name-only | grep -E '(^|/)auth\.json$|(^|/)web_settings\.json$|^config/scanner\.json$|^(data|recordings|reports|log|backup)/' || true)"
 [ -z "$BAD" ] || { git reset -q --hard; die "persönliche Dateien wären im Repository gelandet: $BAD"; }
 GONE="$(git diff --cached --name-only --diff-filter=D)"

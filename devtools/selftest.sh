@@ -2562,5 +2562,48 @@ STO.follow_rename("../x", "a-pi", log); STO.follow_rename("a-pi", "", log)
 assert names("a-pi") and STO.read_state()["pending_renames"] == []
 PY
 
+echo "== 72 Veröffentlichen nur mit den Änderungen (Delta) und Prüfsumme"
+pub72() {
+    local G; G="$(mktemp -d)"
+    export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+    git init -q --bare -b main "$G/remote.git" || return 1
+    mkdir -p "$G/src" "$G/pub" && cp -r "$SRC/." "$G/src/" && rm -rf "$G/src/.git" "$G/src/data" "$G/src/log" || return 1
+    echo 9.9.0 > "$G/src/VERSION"
+    (cd "$G/src" && FULL=1 OUT="$G/pub/full.sh" bash devtools/build_publish.sh "Test 9.9.0" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_WORK="$G/pub/work" HSP_REPO="$G/remote.git" bash full.sh >/dev/null 2>&1) || return 1
+    # Entwicklungsstand als git-Klon des Veröffentlichten
+    (cd "$G/src" && git init -q -b main && git remote add origin "$G/remote.git" && git fetch -q origin main && git reset -q origin/main) || return 1
+    echo 9.9.1 > "$G/src/VERSION"
+    printf '\n## 9.9.1 – Test\n' >> "$G/src/CHANGELOG.md"
+    echo "neu" > "$G/src/docs/neu-9.9.1.md"
+    rm "$G/src/docs/testing.md"
+    printf '\x89PNG\x00\x01\x02binär' > "$G/src/docs/screenshots/test.png"
+    chmod +x "$G/src/bandplans/README.md" 2>/dev/null || chmod +x "$G/src/LICENSE"
+    local L; L="$(cd "$G/src" && OUT="$G/pub/delta.sh" bash devtools/build_publish.sh "Test 9.9.1")" || return 1
+    echo "$L" | grep -q "nur Änderungen seit 9.9.0" || { echo "$L"; return 1; }
+    [ "$(stat -c %s "$G/pub/delta.sh")" -lt $(( $(stat -c %s "$G/pub/full.sh") / 4 )) ] || { echo "Delta nicht kleiner"; return 1; }
+    local O; O="$(cd "$G/pub" && echo j | HSP_WORK="$G/pub/work" HSP_REPO="$G/remote.git" bash delta.sh 2>&1)" || { echo "$O" | tail -8; return 1; }
+    echo "$O" | grep -q "Änderungen seit 9.9.0 eingespielt und geprüft" || { echo "$O" | tail -8; return 1; }
+    # auf „GitHub“ steht jetzt genau der Entwicklungsstand
+    local want got
+    want="$(cd "$G/src" && GIT_INDEX_FILE="$G/idx" git read-tree HEAD && GIT_INDEX_FILE="$G/idx" git add -A && GIT_INDEX_FILE="$G/idx" git write-tree)"
+    got="$(git -C "$G/remote.git" rev-parse 'main^{tree}')"
+    [ "$want" = "$got" ] || { echo "Baum $got statt $want"; return 1; }
+    git -C "$G/remote.git" tag | grep -q v9.9.1 || return 1
+    git -C "$G/remote.git" show main:docs/testing.md >/dev/null 2>&1 && return 1
+    # veraltete Delta-Datei (baut auf 9.9.0 auf, GitHub ist schon weiter): bricht ab, nichts ändert sich
+    local before; before="$(git -C "$G/remote.git" rev-parse main)"
+    # der Entwicklungsklon hat GitHub seit 9.9.0 nicht mehr geholt (HSP_BASE: nicht neu holen)
+    L="$(cd "$G/src" && echo 9.9.2 > VERSION && HSP_BASE=origin/main OUT="$G/pub/alt.sh" bash devtools/build_publish.sh "Test 9.9.2")" || return 1
+    echo "$L" | grep -q "nur Änderungen seit 9.9.0" || { echo "$L"; return 1; }
+    O="$(cd "$G/pub" && HSP_WORK="$G/pub/work" HSP_REPO="$G/remote.git" bash alt.sh 2>&1)" && { echo "veraltete Datei lief durch"; echo "$O" | tail -12; return 1; }
+    echo "$O" | grep -q "nur die Änderungen seit Version 9.9.0 – auf GitHub steht aber 9.9.1" || { echo "$O" | tail -4; return 1; }
+    [ "$(git -C "$G/remote.git" rev-parse main)" = "$before" ] || return 1
+    rm -rf "$G"
+}
+big="$(find "$SRC/docs/screenshots" -name "*.png" -size +400k)"
+[ -z "$big" ] && ok "Doku-Bilder unter 400 KB (sonst devtools/shrink_screenshots.sh)" || bad "Doku-Bilder zu groß: $big"
+pub72 && ok "Delta-Datei viel kleiner, Ergebnis gleich dem Entwicklungsstand (neu, geändert, gelöscht, binär, Rechte), veraltete Datei bricht ohne Änderung ab" || bad "Veröffentlichen mit Delta"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

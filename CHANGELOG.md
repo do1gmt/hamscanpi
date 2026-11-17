@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.12 – 2026-11-17
+
+- **Publishing file with only the changes:** `hesperos-publish.sh` used to carry the whole project (about 9 MB) every
+  time. Now it carries only what changed since the version on GitHub – usually a few KB. Before publishing it checks
+  that GitHub is still exactly at that version (otherwise it stops and says which version is missing) and after
+  applying the changes it compares the result with a checksum of the intended state; if anything differs nothing is
+  published. `FULL=1 bash devtools/build_publish.sh` still builds a complete file.
+- **Smaller screenshots:** the documentation images were shrunk from 4.3 to 1.8 MB without visible difference
+  (`devtools/shrink_screenshots.sh`, pngquant). git keeps every version of an image for good – on GitHub and in the
+  copy on every Pi – so new ones go in shrunk; the self-test warns about images over 400 KB.
+- Self-test section 72.
+
 ## 1.8.11 – 2026-11-17
 
 - **Renaming the station takes its backup folder along:** the backups on the USB stick or network share are kept in

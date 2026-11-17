@@ -338,8 +338,12 @@ when a new version is out. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 system yet): `cd ~/hamscanpi && git pull && bin/update.sh` – from then on the button works.
 
 *Maintainers* publish a version from a PC with git and a GitHub SSH key: `bash hesperos-publish.sh` (built with
-`devtools/build_publish.sh`) clones or updates a working copy next to it, replaces its files with the new version,
-commits, tags `v<version>` and pushes; nothing personal can get into the repository (checked before the commit).
+`devtools/build_publish.sh`) clones or updates a working copy next to it, brings in the new version, commits, tags
+`v<version>` and pushes; nothing personal can get into the repository (checked before the commit). By default the
+file carries only the changes since the version on GitHub (usually a few KB): it checks that GitHub is still at
+that version, applies the changes and compares the result with a checksum of the intended state – if anything
+differs nothing is published. `FULL=1` builds a file with the whole project that fits any state. Screenshots are
+shrunk with `devtools/shrink_screenshots.sh` before they go in (git keeps every version of an image for good).
 
 ### Files
 
