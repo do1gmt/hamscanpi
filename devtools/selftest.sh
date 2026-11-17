@@ -3168,5 +3168,21 @@ PY
 grep -q 'id="bkPassBox"' "$SRC/web/index.html" && grep -q 'secrets_password' "$SRC/web/app.js" && ! grep -q 'im Klartext – nicht weitergeben' "$SRC/web/index.html" \
   && grep -q ' openssl"' "$SRC/bin/setup_system.sh" && ok "Dashboard: Zugangsdaten verschlüsselt mit eigenem Passwort, Passwort beim Einspielen; openssl wird installiert" || bad "Dashboard Zugangsdaten"
 
+echo "== 83 Doku ohne alte Namen, Befehle und Pfade stimmen"
+STALE="$(grep -n -iE 'hamscanpi[-_.]|~/hamscanpi|HamScanPi-Sicherungen|--no-secrets' "$SRC/README.md" "$SRC"/docs/*.md "$SRC"/share/wordpress/*/readme.txt \
+  | grep -viE 'until|before|umstieg|früher|vorher|gilt weiter|formerly|alte|old |was |since 1\.8' || true)"
+MISS=""
+for f in "$SRC/README.md" "$SRC"/docs/*.md; do
+  for p in $(grep -o '`[^`]*`' "$f" | tr -d '`' | grep -oE '(^|[ (])(bin|devtools|share|web|docs)/[A-Za-z0-9_./-]+' | sed 's/^[ (]//' | sort -u); do
+    [ -e "$SRC/$p" ] || MISS="$MISS $p"
+  done
+done
+python3 - "$SRC" <<'PY' && [ -z "$STALE" ] && [ -z "$MISS" ] && ok "keine alten Dienst-, Ordner- und Dateinamen, genannte Programme vorhanden, Sicherung heißt Hesperos DX" || { echo "$STALE"; echo "fehlt:$MISS"; bad "Doku veraltet"; }
+import sys
+from pathlib import Path
+src = Path(sys.argv[1]) / "bin" / "backup.py"
+assert '"app": "Hesperos DX"' in src.read_text()
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

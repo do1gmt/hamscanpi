@@ -327,7 +327,7 @@ Everything it sets up on the system is in `bin/setup_system.sh`, which runs agai
 - blacklists the DVB-T TV driver of the kernel that would otherwise grab the stick;
 - builds **ft8_lib** for FT8/FT4 (shortwave, 6 m, 2 m, 70 cm) in `~/ft8_lib`;
 - creates `config/scanner.json` and `config/web_settings.json`;
-- gives the stick access rights (udev rule `/etc/udev/rules.d/20-hamscanpi-rtlsdr.rules` – without it `rtl_sdr`
+- gives the stick access rights (udev rule `/etc/udev/rules.d/20-hesperosdx-rtlsdr.rules` – without it `rtl_sdr`
   reports `usb_open error -3`);
 - installs the services `hesperosdx-web` (dashboard, port 8080), `hesperosdx-scheduler` (scans, satellite passes),
   `hesperosdx-rescue` (rescue page, port 8081), `hesperosdx-mdns` (name `hesperosdx.local`) and `hesperosdx-update`

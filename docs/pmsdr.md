@@ -59,7 +59,7 @@ running” when the service is not active (unplug the PMSDR and plug it in again
 ## Hotplug (set up automatically)
 
 With this udev rule the control service starts when the PMSDR is plugged in and stops when it is
-unplugged (`/etc/udev/rules.d/90-hamscanpi-pmsdr.rules`):
+unplugged (`/etc/udev/rules.d/90-hesperosdx-pmsdr.rules`):
 
 ```
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04d8", ATTR{idProduct}=="000c", MODE="0666", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/sys/subsystem/usb/pmsdr", ENV{SYSTEMD_WANTS}+="pmsdr-control.service"

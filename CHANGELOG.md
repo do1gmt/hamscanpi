@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.23 – 2026-11-17
+
+- Documentation: the udev rules are named `20-hesperosdx-rtlsdr.rules` and `90-hesperosdx-pmsdr.rules` since
+  1.8.15 (README, docs/pmsdr.md still named the old files).
+- Backups now say "Hesperos DX" in their manifest (was still "HamScanPi"; both are read).
+- Self-test section 83 checks the documentation: no old service, folder or file names outside the notes on the
+  renaming, every program it names exists.
+
 ## 1.8.22 – 2026-11-17
 
 - **Security: commands from other websites are refused.** The dashboard did not check where a command came from –

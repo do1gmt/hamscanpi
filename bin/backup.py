@@ -267,7 +267,7 @@ def write(fileobj, scope="data", secrets="none", stream=False):
                     files.append((f"data/{name}", snap))
         if scope == "all":
             files += _walk("recordings") + _walk("reports")
-        manifest = {"format": FORMAT, "app": "HamScanPi", "version": _version(),
+        manifest = {"format": FORMAT, "app": "Hesperos DX", "version": _version(),
                     "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "host": socket.gethostname(),
                     "call": st.get("my_call", ""), "locator": st.get("my_locator", ""), "scope": scope,
                     "secrets": mode, "files": len(files)}
