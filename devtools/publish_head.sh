@@ -2,14 +2,15 @@
 # Hesperos DX – neue Version auf GitHub veröffentlichen. Läuft auf einem PC mit git und GitHub-Zugang (SSH-Schlüssel),
 # nicht auf dem Pi. Die Pis holen sich die Version dann selbst (Dashboard: „Jetzt aktualisieren“ oder bin/update.sh).
 #
-#   bash hamscanpi-publish.sh
+#   bash hesperos-publish.sh
 #
-# Arbeitskopie: Ordner „hamscanpi“ neben dieser Datei (beim ersten Mal per git clone angelegt, danach aktualisiert).
-# Andere GitHub-Adresse: HSP_REPO=git@github.com:<konto>/hamscanpi.git bash hamscanpi-publish.sh
+# Arbeitskopie: Ordner „hesperos-dx“ neben dieser Datei (beim ersten Mal per git clone angelegt, danach aktualisiert;
+# ein Ordner „hamscanpi“ von früher wird einmal umbenannt und auf die neue Adresse umgestellt).
+# Andere GitHub-Adresse: HSP_REPO=git@github.com:<konto>/hesperos-dx.git bash hesperos-publish.sh
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-WORK="${HSP_WORK:-$HERE/hamscanpi}"
-REPO="${HSP_REPO:-git@github.com:do1gmt/hamscanpi.git}"
+WORK="${HSP_WORK:-$HERE/hesperos-dx}"
+REPO="${HSP_REPO:-git@github.com:do1gmt/hesperos-dx.git}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -24,6 +25,19 @@ bold "Hesperos DX $V veröffentlichen"
 echo "  $HSP_MSG"
 
 bold "1/4 Arbeitskopie"
+# Repository hieß bis 1.8.07 „hamscanpi“: alte Arbeitskopie neben dieser Datei übernehmen statt neu zu klonen
+# (nur eine reine Arbeitskopie – eine Pi-Installation mit data/ oder Einstellungen bleibt, wo sie ist)
+if [ -z "${HSP_WORK:-}" ] && [ ! -e "$WORK" ] && [ -d "$HERE/hamscanpi/.git" ] && [ ! -e "$HERE/hamscanpi/data" ] \
+   && [ ! -e "$HERE/hamscanpi/config/web_settings.json" ]; then
+    mv "$HERE/hamscanpi" "$WORK" && ok "alte Arbeitskopie übernommen: $HERE/hamscanpi → $WORK"
+fi
+# Adresse der Arbeitskopie: alter Repository-Name → die Adresse, unter der veröffentlicht wird
+if [ -d "$WORK/.git" ]; then
+    OU="$(git -C "$WORK" remote get-url origin 2>/dev/null || true)"
+    if [ "$OU" != "$REPO" ] && printf '%s' "$OU" | grep -qE '/hamscanpi(\.git)?/?$'; then
+        git -C "$WORK" remote set-url origin "$REPO" && ok "GitHub-Adresse umgestellt: $REPO"
+    fi
+fi
 if [ -d "$WORK/.git" ]; then
     git -C "$WORK" fetch -q origin || die "GitHub nicht erreichbar (ssh -T git@github.com prüfen)"
     git -C "$WORK" checkout -q main

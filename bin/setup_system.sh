@@ -99,6 +99,23 @@ asuser mkdir -p "$DIR/data" "$DIR/log" "$DIR/recordings" "$DIR/reports" "$DIR/ba
 chmod 600 "$DIR/config/web_settings.json"
 chmod +x "$DIR"/bin/*.py "$DIR"/bin/*.sh "$DIR"/install.sh 2>/dev/null || true
 [ -d "$DIR/.git" ] && asuser git -C "$DIR" config core.fileMode false    # Rechte zählen nicht als lokale Änderung
+# Das GitHub-Repository heißt seit 1.8.08 „hesperos-dx“ (vorher „hamscanpi“). GitHub leitet die alte Adresse um;
+# die Arbeitskopie bekommt trotzdem die neue – aber nur, wenn es sie unter demselben Konto wirklich gibt (eine Kopie
+# unter altem Namen bei einem anderen Konto bleibt, wie sie ist). Adressen mit Zugangsdaten werden nicht angefasst.
+if [ -d "$DIR/.git" ]; then
+    OU="$(asuser git -C "$DIR" remote get-url origin 2>/dev/null || true)"
+    NU="$(printf '%s' "$OU" | sed -nE 's#^((https://|ssh://git@|git@)github\.com[:/][A-Za-z0-9_.-]+/)hamscanpi(\.git)?/?$#\1hesperos-dx\3#p')"
+    if [ -n "$NU" ]; then
+        if GIT_TERMINAL_PROMPT=0 timeout 30 runuser -u "$U" -- git -C "$DIR" ls-remote -q --exit-code "$NU" HEAD >/dev/null 2>&1 \
+           && asuser git -C "$DIR" remote set-url origin "$NU"; then
+            ok "$(t "GitHub-Adresse umgestellt" "GitHub address changed"): $NU"
+            asuser python3 "$DIR/bin/applog.py" INFO update repo_url_changed old="$OU" new="$NU" >/dev/null 2>&1 || true
+        else
+            warn "$(t "GitHub-Adresse bleibt vorerst" "GitHub address stays for now"): $OU"
+            asuser python3 "$DIR/bin/applog.py" WARN update repo_url_kept url="$OU" >/dev/null 2>&1 || true
+        fi
+    fi
+fi
 # Sprache des Dashboards (nur bei ausdrücklicher Wahl oder wenn noch keine eingestellt ist)
 asuser python3 - "$DIR/config/web_settings.json" "$LNG" <<'PY'
 import json, sys

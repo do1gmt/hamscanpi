@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hesperos DX – Umzug einer bestehenden PMSDR-Scanner-Installation (~/pmsdr-scanner -> ~/hamscanpi)
-# und Vorbereitung des GitHub-Repositorys. Aufruf als normaler Benutzer:  bash hamscanpi-migrate.sh
+# und Vorbereitung des GitHub-Repositorys. Aufruf als normaler Benutzer:  bash hesperos-migrate.sh
 #
 #  1. alte Dienste (webapp.py/scheduler.py) anhalten und abmelden – pmsdr-control bleibt unberührt
 #  2. ~/pmsdr-scanner nach ~/hamscanpi umbenennen (Daten, Aufnahmen, Einstellungen bleiben),
@@ -16,7 +16,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
-[ "$(id -u)" = 0 ] && { echo "Bitte nicht als root starten (bash hamscanpi-migrate.sh)."; exit 1; }
+[ "$(id -u)" = 0 ] && { echo "Bitte nicht als root starten (bash hesperos-migrate.sh)."; exit 1; }
 
 if [ -L "$OLD" ] && [ -d "$NEW" ]; then
     echo "Umzug ist schon erledigt ($OLD -> $NEW). Es wird nur der Programmstand erneuert."
@@ -46,7 +46,7 @@ ok "Pakete vorhanden"
 # Gewartet wird, bis keine Aufnahme/Auswertung läuft und in den nächsten 3 min keine beginnt
 # (Aufnahmen "wenn Stick frei" zählen nicht). Eine laufende Aufnahme mit höchstens 3 min Rest wird
 # sauber beendet (wie "Abbrechen" im Dashboard), ihre Auswertung wird nie unterbrochen.
-# Sofort einspielen: HSP_SOFORT=1 bash hamscanpi-update.sh
+# Sofort einspielen: HSP_SOFORT=1 bash hesperos-update.sh
 if [ -z "${HSP_SOFORT:-}" ] && [ -f "$NEW/config/web_settings.json" ] && [ -f "$TMP/repo/bin/update_window.py" ]; then
     first=1
     while :; do
@@ -297,7 +297,7 @@ if [ -d .git ] && ORIGIN="$(git remote get-url origin 2>/dev/null)"; then
     URL="$(echo "$ORIGIN" | sed -E 's#^git@github\.com:#https://github.com/#; s#\.git$##')"
     case "$URL" in
         https://github.com/*)
-            sed -i "s#https://github.com/<your-account>/hamscanpi#$URL#g" README.md
+            sed -i "s#https://github.com/<your-account>/hesperos-dx#$URL#g" README.md
             sed -i "s#+https://github.com/;#+$URL;#" bin/satellites.py
             ok "GitHub-Adresse eingetragen: $URL"
             ;;
@@ -349,7 +349,7 @@ if git remote get-url origin >/dev/null 2>&1; then
     elif echo "$PUSH_ERR" | grep -qi "workflow"; then
         warn "GitHub verlangt für den automatischen Test (.github/workflows) eine Zusatzberechtigung. Einmalig:"
         echo "      gh auth refresh -h github.com -s workflow"
-        echo "      cd ~/hamscanpi && git push && bash ~/hamscanpi-update.sh"
+        echo "      cd ~/hamscanpi && git push && bash ~/hesperos-update.sh"
     else
         warn "Hochladen nicht geklappt – später von Hand: cd ~/hamscanpi && git push"
         echo "$PUSH_ERR" | tail -3 | sed 's/^/      /'
@@ -364,7 +364,7 @@ Fertig. Zum Hochladen auf GitHub (einmalig):
   sudo apt install gh                 # GitHub-Kommandozeile
   gh auth login                       # Anmeldung im Browser, Zugang bleibt auf dem Pi
   cd ~/hamscanpi
-  gh repo create hamscanpi --private --source . --push
+  gh repo create hesperos-dx --private --source . --push
 
 Danach auf github.com ansehen und unter Settings → General → Danger Zone auf „Public“ stellen,
 wenn alles passt. Spätere Stände: cd ~/hamscanpi && git add -A && git commit -m "…" && git push

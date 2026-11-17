@@ -1505,13 +1505,13 @@ upd45() {
     git init -q --bare -b main "$G/remote.git" || return 1
     mkdir -p "$G/src" "$G/pub" "$G/fake" && cp -r "$SRC/." "$G/src/" && rm -rf "$G/src/.git" "$G/src/data" "$G/src/log" || return 1
     echo 9.9.1 > "$G/src/VERSION"; chmod 644 "$G/src/bin/eibi.py"
-    (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.1" >/dev/null) || return 1
-    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
+    (cd "$G/src" && OUT="$G/pub/hesperos-publish.sh" bash devtools/build_publish.sh "Test 9.9.1" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hesperos-publish.sh >/dev/null) || return 1
     git clone -q "$G/remote.git" "$G/pi" 2>/dev/null || return 1
     git -C "$G/pi" config core.fileMode true && chmod +x "$G/pi/bin/eibi.py"   # nur Rechte geändert (im Repo 644)
     echo 9.9.2 > "$G/src/VERSION"
-    (cd "$G/src" && OUT="$G/pub/hamscanpi-publish.sh" bash devtools/build_publish.sh "Test 9.9.2" >/dev/null) || return 1
-    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hamscanpi-publish.sh >/dev/null) || return 1
+    (cd "$G/src" && OUT="$G/pub/hesperos-publish.sh" bash devtools/build_publish.sh "Test 9.9.2" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_REPO="$G/remote.git" bash hesperos-publish.sh >/dev/null) || return 1
     git -C "$G/remote.git" tag | grep -q v9.9.2 || return 1
     printf '#!/bin/sh\necho "[sudo] $*"\n' > "$G/fake/sudo" && chmod +x "$G/fake/sudo"
     cp "$G/pi/config/web_settings.example.json" "$G/pi/config/web_settings.json"
@@ -2352,6 +2352,48 @@ for k in ("add_role('hsp_sstv_melder'", "'_hsp_station'", "'hsp_from'", "hsp_sst
           "'permission_callback' => 'hsp_sstv_can_send'", "admin_url('post.php?post='"):
     assert k in php, k
 PY
+
+echo "== 67 Neuer Repository-Name hesperos-dx: Veröffentlichen und Pi stellen um"
+ren67() {
+    local G; G="$(mktemp -d)"
+    export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+    git init -q --bare -b main "$G/hesperos-dx.git" || return 1
+    mkdir -p "$G/src" "$G/pub" && cp -r "$SRC/." "$G/src/" && rm -rf "$G/src/.git" "$G/src/data" "$G/src/log" || return 1
+    echo 9.9.0 > "$G/src/VERSION"                                 # erster Stand auf „GitHub“
+    (cd "$G/src" && OUT="$G/pub/hesperos-publish.sh" bash devtools/build_publish.sh "Test 9.9.0" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_WORK="$G/seed" HSP_REPO="$G/hesperos-dx.git" bash hesperos-publish.sh >/dev/null 2>&1) || return 1
+    echo 9.9.1 > "$G/src/VERSION"
+    (cd "$G/src" && OUT="$G/pub/hesperos-publish.sh" bash devtools/build_publish.sh "Test 9.9.1" >/dev/null) || return 1
+    # alte Arbeitskopie „hamscanpi“ neben der Datei, Adresse mit dem alten Namen (zeigt hier – wie die
+    # GitHub-Umleitung – auf dasselbe Repository)
+    ln -s "$G/hesperos-dx.git" "$G/hamscanpi.git"
+    git clone -q "$G/hamscanpi.git" "$G/pub/hamscanpi" 2>/dev/null || return 1
+    local O; O="$(cd "$G/pub" && HSP_REPO="$G/hesperos-dx.git" bash hesperos-publish.sh 2>&1)" || { echo "$O" | tail -5; return 1; }
+    [ ! -e "$G/pub/hamscanpi" ] && [ -d "$G/pub/hesperos-dx/.git" ] || return 1
+    [ "$(git -C "$G/pub/hesperos-dx" remote get-url origin)" = "$G/hesperos-dx.git" ] || return 1
+    git -C "$G/hesperos-dx.git" tag | grep -q v9.9.1 || return 1
+    # eine Pi-Installation mit Daten neben der Datei wird nie verschoben
+    rm -rf "$G/pub/hesperos-dx" && git clone -q "$G/hamscanpi.git" "$G/pub/hamscanpi" 2>/dev/null && mkdir "$G/pub/hamscanpi/data" || return 1
+    echo 9.9.2 > "$G/src/VERSION"
+    (cd "$G/src" && OUT="$G/pub/hesperos-publish.sh" bash devtools/build_publish.sh "Test 9.9.2" >/dev/null) || return 1
+    (cd "$G/pub" && HSP_REPO="$G/hesperos-dx.git" bash hesperos-publish.sh >/dev/null 2>&1) || return 1
+    [ -d "$G/pub/hamscanpi/data" ] && [ -d "$G/pub/hesperos-dx/.git" ] || return 1
+    # Pi: Umstellung der Adresse in setup_system.sh (dieselbe sed-Regel wie dort)
+    local R; R="$(grep -o "s#^((https://|ssh://git@|git@)github.*#p" "$SRC/bin/setup_system.sh" | head -1)"
+    R="${R%\"*}"; R="${R%\'}"
+    [ -n "$R" ] || return 1
+    m() { printf '%s' "$1" | sed -nE "$R"; }
+    [ "$(m https://github.com/do1gmt/hamscanpi)" = https://github.com/do1gmt/hesperos-dx ] || return 1
+    [ "$(m https://github.com/do1gmt/hamscanpi.git)" = https://github.com/do1gmt/hesperos-dx.git ] || return 1
+    [ "$(m git@github.com:do1gmt/hamscanpi.git)" = git@github.com:do1gmt/hesperos-dx.git ] || return 1
+    [ -z "$(m https://tok@github.com/do1gmt/hamscanpi.git)" ] && [ -z "$(m https://github.com/do1gmt/hesperos-dx.git)" ] \
+      && [ -z "$(m https://github.com/x/hamscanpi-fork)" ] || return 1
+    grep -q 'ls-remote -q --exit-code "$NU" HEAD' "$SRC/bin/setup_system.sh" || return 1
+    grep -q 'do1gmt/hesperos-dx/main/VERSION' "$SRC/bin/housekeeping.py" || return 1
+    ! grep -rq "do1gmt/hamscanpi" "$SRC/bin" "$SRC/web" "$SRC/README.md" "$SRC/devtools/publish_head.sh" || return 1
+    rm -rf "$G"
+}
+ren67 && ok "alte Arbeitskopie übernommen und umgestellt, Pi-Installation bleibt, Pi stellt nur echte hamscanpi-Adressen um" || bad "Umstellung hesperos-dx"
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

@@ -5,7 +5,7 @@
 *Formerly HamScanPi.* Hesperos is the evening star – it rises when the night and the passes begin, and keeps
 watch over the sky. DX: listening far and wide, worldwide.
 
-[![selftest](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml/badge.svg)](https://github.com/do1gmt/hamscanpi/actions/workflows/selftest.yml)
+[![selftest](https://github.com/do1gmt/hesperos-dx/actions/workflows/selftest.yml/badge.svg)](https://github.com/do1gmt/hesperos-dx/actions/workflows/selftest.yml)
 
 **An unattended band scanner and satellite recorder for radio amateurs, running on a Raspberry Pi.**
 
@@ -19,7 +19,7 @@ sampling (e.g. Nooelec NESDR SMArt v5, RTL-SDR Blog V3) – and optionally with 
 shortwave.
 
 **Quick start** on a fresh Raspberry Pi OS Lite: `sudo apt install -y git`, then
-`git clone https://github.com/do1gmt/hamscanpi.git && cd hamscanpi && ./install.sh`, re-plug the stick and open
+`git clone https://github.com/do1gmt/hesperos-dx.git hamscanpi && cd hamscanpi && ./install.sh`, re-plug the stick and open
 `http://hamscanpi.local:8080/` – details under [Installation](#installation).
 
 ![Scan page: bands, satellite passes and scan status](docs/screenshots/scan.png)
@@ -288,7 +288,7 @@ sudo apt install -y git
 
 **2. Get Hesperos DX and install it:**
 ```bash
-git clone https://github.com/do1gmt/hamscanpi.git
+git clone https://github.com/do1gmt/hesperos-dx.git hamscanpi
 cd hamscanpi
 ./install.sh            # asks once for the language (Deutsch / English); ./install.sh --lang de asks nothing
                         # another port: ./install.sh --port 8090 (the rescue page uses port + 1)
@@ -335,7 +335,7 @@ when a new version is out. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 *Updating an older installation for the first time this way* (before 1.7.76 `bin/update.sh` did not set up the
 system yet): `cd ~/hamscanpi && git pull && bin/update.sh` – from then on the button works.
 
-*Maintainers* publish a version from a PC with git and a GitHub SSH key: `bash hamscanpi-publish.sh` (built with
+*Maintainers* publish a version from a PC with git and a GitHub SSH key: `bash hesperos-publish.sh` (built with
 `devtools/build_publish.sh`) clones or updates a working copy next to it, replaces its files with the new version,
 commits, tags `v<version>` and pushes; nothing personal can get into the repository (checked before the commit).
 
@@ -532,7 +532,9 @@ GNU General Public License v3.0 – see [LICENSE](LICENSE).
 
 ## About the name
 
-Until version 1.8.06 the project was called **HamScanPi**. The technical names stay for now so nothing breaks on
-installed Pis: the GitHub repository `do1gmt/hamscanpi`, the folder `~/hamscanpi`, the services `hamscanpi-*`, the
-address `hamscanpi.local`, the backup folder `HamScanPi-Sicherungen` and the WordPress plugin folder
-`hamscanpi-sstv-galerie`. Station names that were left at the old default "HamScanPi" count as the default.
+Until version 1.8.06 the project was called **HamScanPi**. Since 1.8.08 the GitHub repository is
+`do1gmt/hesperos-dx` (GitHub forwards the old address; installed Pis switch to the new one with their next update)
+and the publishing file is `hesperos-publish.sh`. The names on the Pi itself stay for now so nothing breaks: the
+folder `~/hamscanpi`, the services `hamscanpi-*`, the address `hamscanpi.local`, the backup folder
+`HamScanPi-Sicherungen` and the WordPress plugin folder `hamscanpi-sstv-galerie`. Station names that were left at
+the old default "HamScanPi" count as the default.

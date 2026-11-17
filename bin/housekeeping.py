@@ -84,7 +84,7 @@ def update_check(force=False, max_age=86400, cached_only=False):
             url = f"https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}/main/VERSION"
     except Exception:
         pass
-    url = url or "https://raw.githubusercontent.com/do1gmt/hamscanpi/main/VERSION"
+    url = url or "https://raw.githubusercontent.com/do1gmt/hesperos-dx/main/VERSION"
     now = time.time()
     n = {"checked": now, "url": url}
     try:

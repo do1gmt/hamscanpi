@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.08 – 2026-11-17
+
+- **GitHub repository renamed to `do1gmt/hesperos-dx`** (step 1 of the renaming beyond what is seen). GitHub
+  forwards the old address, so Pis on 1.8.07 and older still find this update. With this update the set-up
+  switches the Pi's working copy to the new address by itself – only if the address is a plain GitHub address
+  of a repository called `hamscanpi` and the same account really has `hesperos-dx` (a copy under the old name
+  at another account stays as it is; addresses with credentials are never touched). Logged as
+  `update repo_url_changed` / `repo_url_kept`.
+- **Publishing file is now `hesperos-publish.sh`**, working copy folder `hesperos-dx` next to it. An old working
+  copy `hamscanpi` there is taken over once (renamed, address switched) instead of cloned again; a Pi
+  installation (with `data/` or settings) is never moved. The old migration file is now `hesperos-migrate.sh`,
+  the self-unpacking update file `hesperos-update.sh`.
+- New addresses in the update check fallback, the satellite data request id, README (install now clones into
+  `~/hamscanpi`, the folder name on the Pi stays) and the self-test badge.
+- Still unchanged on the Pi for now: folder `~/hamscanpi`, services `hamscanpi-*`, `hamscanpi.local`, backup
+  folder and plugin folder – that is the next step.
+- Self-test section 67.
+
 ## 1.8.07 – 2026-11-15
 
 - **New name: Hesperos DX · Ham Radio Watch** (formerly HamScanPi). Hesperos, the evening star, rises when the
