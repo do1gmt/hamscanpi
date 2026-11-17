@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.19 – 2026-11-17
+
+- **Live favourites: better name suggestion** – mode, name and frequency, e.g. "RTTY DWD Pinneberg 7.646 MHz",
+  "NAVTEX international 518 kHz", "FM PMR446 Kanal 2 446.01875 MHz", "WFM SWR3 98.4 MHz", "FT8 14.074 MHz".
+  Mode: the chosen or automatically detected decoder, otherwise the demodulator. Name, in this order: the
+  utility station on fixed weather/NAVTEX frequencies (DWD Pinneberg, Northwood), the RDS name, the fixed channel
+  from the band plan (with channel number, without frequency remains), the station on air according to EiBi
+  (shortwave), otherwise the band. Frequency without needless zeros. Names may now have 60 characters (was 40);
+  on the phone the name field takes the full width. New `GET /api/live/favname`.
+- Fix: frequencies on odd channels (e.g. PMR446 446.00625 MHz) were rounded to 4 decimals in the Live field after
+  choosing a favourite or from "Recently heard" – Live then ran 50 Hz off and the ★ was not shown.
+- Self-test section 79.
+
 ## 1.8.18 – 2026-11-17
 
 - **Renaming on the Pi, step D (last step) – backups.** Folder on USB stick / network share

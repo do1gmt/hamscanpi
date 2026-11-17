@@ -2683,7 +2683,7 @@ import webapp as W, live_decode as LDK
 f = W.clean_live_favorites([{"name": " DWD Wetterfax ", "freq_hz": 7878100, "mode": "usb", "step_hz": 100, "dec": "wefax"},
                              {"name": "", "freq_hz": 145500000.4, "mode": "nfm", "step_hz": 999999, "dec": "quatsch"}])
 assert f[0] == {"name": "DWD Wetterfax", "freq_hz": 7878100, "mode": "usb", "step_hz": 100, "dec": "wefax"}, f
-assert f[1]["name"] == "145.5000 MHz" and f[1]["step_hz"] == 0 and f[1]["dec"] == "auto" and f[1]["freq_hz"] == 145500000
+assert f[1]["name"] == "145.5 MHz" and f[1]["step_hz"] == 0 and f[1]["dec"] == "auto" and f[1]["freq_hz"] == 145500000
 for bad in ([{"freq_hz": 5, "mode": "nfm"}], [{"freq_hz": 145e6, "mode": "xyz"}], "keine Liste", [{"freq_hz": 145e6, "mode": "nfm"}] * 101):
     try:
         W.clean_live_favorites(bad); raise SystemExit(f"angenommen: {str(bad)[:60]}")
@@ -2867,6 +2867,30 @@ BK.filename = lambda scope: "hesperosdx-backup-20261104-0300-settings.tar.gz"
 BK.run_auto({"dir": str(d), "scope": "settings", "secrets": False, "keep": 2}, log=lambda m: None)
 assert sorted(p.name for p in d.glob("*.tar.gz")) == ["hesperosdx-backup-20261103-0300-data.tar.gz", "hesperosdx-backup-20261104-0300-settings.tar.gz"], sorted(p.name for p in d.glob("*.tar.gz"))
 PY
+
+echo "== 79 Live-Favoriten: Namensvorschlag Betriebsart Bezeichnung Frequenz"
+(cd bin && timeout 60 python3 - <<'PY') && ok "RTTY DWD Pinneberg 7.646 MHz, Kanalnummern, RDS, Bandplan-Namen ohne Frequenzreste, Band als Rückfall, höchstens 60 Zeichen, Abfrage über /api/live/favname" || bad "Namensvorschlag Live-Favoriten"
+import json, threading, urllib.request
+import live_decode as L, webapp as W
+S = L.suggest_name
+assert S(7_646_000, "usb") == "RTTY DWD Pinneberg 7.646 MHz", S(7_646_000, "usb")
+assert S(3_855_000, "usb") == "WEFAX DWD Pinneberg 3.855 MHz" and S(518_000, "usb") == "NAVTEX international 518 kHz"
+assert S(144_800_000, "nfm") == "APRS 144.8 MHz" and S(14_074_000, "usb") == "FT8 14.074 MHz"
+assert S(446_018_750, "nfm") == "FM PMR446 Kanal 2 446.01875 MHz" and S(26_565_000, "nfm") == "FM CB Kanal 41 26.565 MHz"
+assert S(437_625_000, "nfm", "sstv") == "SSTV UmKA-1 437.625 MHz" and S(145_925_000, "usb") == "USB CAS-6/TO-108 145.925 MHz"
+assert S(98_400_000, "wfm", "auto", "SWR3") == "WFM SWR3 98.4 MHz" and S(7_100_000, "lsb") == "LSB 40m 7.1 MHz"
+assert S(437_200_000, "nfm", "off") == "FM CAS-3H 437.2 MHz"
+long = S(98_400_000, "wfm", "auto", "X" * 80)
+assert len(long) <= 60 and long.endswith("… 98.4 MHz"), long
+fav = W.clean_live_favorites([{"name": "R" * 70, "freq_hz": 7_646_000, "mode": "usb"}, {"name": "", "freq_hz": 518_000, "mode": "usb"}])
+assert len(fav[0]["name"]) == 60 and fav[1]["name"] == "518 kHz"
+srv = W._Server(("127.0.0.1", 0), W.Handler); threading.Thread(target=srv.serve_forever, daemon=True).start()
+u = f"http://127.0.0.1:{srv.server_address[1]}/api/live/favname?freq_hz=7646000&mode=usb&dec=auto"
+assert json.load(urllib.request.build_opener(urllib.request.ProxyHandler({})).open(u, timeout=30))["name"] == "RTTY DWD Pinneberg 7.646 MHz"
+srv.shutdown()
+PY
+grep -q 'async function favDefaultName' "$SRC/web/app.js" && grep -q '/api/live/favname' "$SRC/web/app.js" && grep -q 'maxlength="60" value="${esc(x.name)}" data-favname' "$SRC/web/app.js" \
+  && ok "Dashboard fragt den Vorschlag beim ☆ ab, Name bis 60 Zeichen" || bad "Dashboard Favoritenname"
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

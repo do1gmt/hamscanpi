@@ -39,7 +39,8 @@ shortwave.
 - Decoders: **FT8/FT4** (via [ft8_lib](https://github.com/kgoba/ft8_lib)), **CW**, **RTTY**,
   **APRS** and **POCSAG** (via multimon-ng), **SSTV** on shortwave (14.230, 21.340, 28.680 USB,
   3.730 and 7.165 LSB) – including images whose start was missed and stations that are off-frequency.
-- Live listening with favourites (drop-down, stored on the Pi), waterfall (tap to tune), seek function,
+- Live listening with favourites (drop-down, stored on the Pi; the name is suggested as mode, name and frequency,
+  e.g. "RTTY DWD Pinneberg 7.646 MHz"), waterfall (tap to tune), seek function,
   signal-to-noise display and overload warning;
   live decoders also for **NAVTEX** (518/490/4209.5 kHz), **weather fax** (charts as images, e.g. DWD Pinneberg)
   and **weather RTTY** (450/850 Hz shift), chosen automatically by frequency.

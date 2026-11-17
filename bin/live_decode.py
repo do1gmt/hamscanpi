@@ -21,12 +21,15 @@ import collections
 import json
 import math
 import queue
+import re
 import shutil
 import subprocess
 import threading
 import time
 import wave
 from pathlib import Path
+
+import re
 
 import numpy as np
 
@@ -78,6 +81,91 @@ def band_of(freq_hz):
     except Exception:
         pass
     return "Live"
+
+
+# Sender der festen Betriebsfunk-Frequenzen (für den Namensvorschlag der Live-Favoriten)
+UTILITY_NAMES = {
+    147_300: "DWD Pinneberg", 4_583_000: "DWD Pinneberg", 7_646_000: "DWD Pinneberg", 10_100_800: "DWD Pinneberg",
+    11_039_000: "DWD Pinneberg", 14_467_300: "DWD Pinneberg",                                   # RTTY Wetterfunk
+    3_855_000: "DWD Pinneberg", 7_880_000: "DWD Pinneberg", 13_882_500: "DWD Pinneberg",        # Wetterfax
+    2_618_500: "Northwood", 4_610_000: "Northwood", 8_040_000: "Northwood", 11_086_500: "Northwood",
+    518_000: "international", 490_000: "national", 4_209_500: "HF",                            # NAVTEX
+}
+KIND_LABEL = {"ft8": "FT8", "ft4": "FT4", "pocsag": "POCSAG", "cw": "CW", "rtty": "RTTY", "sstv": "SSTV",
+              "navtex": "NAVTEX", "wefax": "WEFAX", "packet": "Packet"}
+DEMOD_LABEL = {"nfm": "FM", "wfm": "WFM", "am": "AM", "usb": "USB", "lsb": "LSB"}
+NAME_MAX = 60
+
+
+def freq_text(freq_hz):
+    """7646000 → „7.646 MHz“, 518000 → „518 kHz“ – ohne überflüssige Nullen."""
+    if freq_hz < 1_000_000:
+        return f"{freq_hz / 1e3:.1f}".rstrip("0").rstrip(".") + " kHz"
+    return f"{freq_hz / 1e6:.5f}".rstrip("0").rstrip(".") + " MHz"
+
+
+def _channel_label(freq_hz):
+    """Name eines festen Kanals aus dem Bandplan (±1 kHz), aufgeräumt: ohne Frequenzangaben, Klammerzusätze und
+    Demodulator – „PMR446 Kanal 1–16“ wird zu „PMR446 Kanal 3“. Bei mehreren Treffern der genaueste."""
+    try:
+        import bandplan as BP
+        cfg = BP.load()
+    except Exception:
+        return ""
+    best = None
+    for b in cfg.get("ranges", []):
+        for s in b.get("segments", []):
+            fl = s.get("frequencies_hz") or []
+            for i, f in enumerate(fl):
+                d = abs(freq_hz - f)
+                if d <= 1000 and (best is None or (d, len(fl)) < best[0]):
+                    best = ((d, len(fl)), s.get("label") or "", i, fl)
+    if not best:
+        return ""
+    _, lab, i, fl = best
+    m = re.search(r"Kanal (\d+)[–-](\d+)", lab)
+    if m and int(m.group(2)) - int(m.group(1)) + 1 == len(fl):
+        lab = lab[:m.start()] + f"Kanal {int(m.group(1)) + i}" + lab[m.end():]
+    lab = re.split(r"[(,]", lab)[0]
+    # nur Frequenzen (mit Nachkommastellen, frei stehend) – „FT8“, „PMR446“, „UmKA-1“, „Kanal 3“ bleiben
+    lab = re.sub(r"(?<![\w-])\d+[.,]\d+(?:\s*[–/-]\s*\d+[.,]\d+)?(?:\s*[kM]Hz)?(?![\w])", " ", lab)
+    words = [w for w in lab.replace("·", " ").split() if not re.fullmatch(r"(?:FM|AM|USB|LSB|SSB)(?:/\S+)?|[–/-]", w)]
+    return " ".join(words)
+
+
+def suggest_name(freq_hz, mode, dec="auto", rds=""):
+    """Vorschlag für den Namen eines Live-Favoriten: „Betriebsart Bezeichnung Frequenz“, z. B.
+    „RTTY DWD Pinneberg 7.646 MHz“. Betriebsart: gewählter oder automatisch erkannter Dekoder, sonst der
+    Demodulator. Bezeichnung: Betriebsfunk-Sender, RDS-Name, fester Kanal aus dem Bandplan, laut EiBi-Plan gerade
+    sendende Station (Kurzwelle), sonst das Band."""
+    f = int(freq_hz)
+    kind = dec if dec in KIND_LABEL else (auto_kind(f, mode) if dec in ("auto", "", None) else None)
+    label = ""
+    for uf, name in UTILITY_NAMES.items():
+        if abs(f - uf) <= 2500:
+            label = name
+            break
+    label = label or " ".join(str(rds or "").split()) or _channel_label(f)
+    if not label and f < 30_000_000:
+        try:
+            import eibi as EI
+            on = EI.on_air(f / 1e3, 2)
+            label = on[0]["station"] if on else ""
+        except Exception:
+            label = ""
+    if not label:
+        b = band_of(f)
+        label = b if b != "Live" else ""
+    mlab = KIND_LABEL.get(kind) or DEMOD_LABEL.get(mode, "")
+    if kind == "packet" and "APRS" in label.upper().split():
+        mlab = "APRS"
+    if mlab and mlab.upper() in label.upper().split():
+        mlab = ""                                       # „FT8 1.840“ → nicht „FT8 FT8 …“
+    tail = freq_text(f)
+    room = NAME_MAX - len(tail) - len(mlab) - 2
+    if len(label) > room:
+        label = label[:max(0, room - 1)].rstrip() + "…"
+    return " ".join(x for x in (mlab, label, tail) if x)
 
 
 def utility_kind(freq_hz):

@@ -1146,6 +1146,8 @@
   const live = { ctx: null, reader: null, nextT: 0, active: false, rate: 24000 };
   let liveTouched = 0;                 // nach eigener Abstimmung nicht sofort vom Status überschreiben
   const lf = () => Math.round(parseFloat($('liveFreq').value.replace(',', '.')) * 1e6);
+  // Frequenz fürs Eingabefeld: 4 Stellen, bei SSB oder krummen Kanälen (PMR446 446.00625) 5 – sonst 50 Hz daneben
+  const mhzField = (hz, ssb) => { const v = (hz / 1e6).toFixed(5); return ssb || !v.endsWith('0') ? v : v.slice(0, -1); };
   function liveSetUI(st) {
     const on = !!st.active;
     live.active = on;
@@ -1156,7 +1158,7 @@
     $('panel-live').classList.toggle('seeking', seeking);
     $('liveText').textContent = st.text || (on ? 'läuft' : 'aus');
     $('liveText').classList.toggle('warn', on && (st.clip_pct || 0) > 0.2);
-    if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = (st.active_hz / 1e6).toFixed(st.device === 'rtlsdr' ? 4 : 5);
+    if (on && st.active_hz && Date.now() - liveTouched > 2000 && !document.activeElement?.isSameNode($('liveFreq'))) $('liveFreq').value = mhzField(st.active_hz, st.device !== 'rtlsdr');
     if (on) eibiNow();                                     // EiBi: nur neu fragen, wenn sich die Frequenz geändert hat
     if (on && st.scan && st.active_hz) $('liveText').textContent = st.text;
     if (on && st.mode && Date.now() - liveTouched > 2000 && document.activeElement !== $('liveMode') && $('liveMode').value !== st.mode) $('liveMode').value = st.mode;
@@ -1649,26 +1651,29 @@
     const sel = $('liveFav'), groups = new Map();
     liveFavs.forEach((x, i) => { const b = freqInfo(x.freq_hz).band || (EN ? 'other' : 'sonstige'); if (!groups.has(b)) groups.set(b, []); groups.get(b).push([x, i]); });
     sel.innerHTML = `<option value="">${liveFavs.length ? (EN ? '– choose a favourite –' : '– Favorit wählen –') : (EN ? '– no favourites yet (☆ next to the frequency) –' : '– noch keine Favoriten (☆ neben der Frequenz) –')}</option>`
-      + [...groups].map(([b, l]) => `<optgroup label="${esc(b)}">${l.map(([x, i]) => `<option value="${i}">${esc(x.name)} · ${(x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4)} ${x.mode.toUpperCase()}</option>`).join('')}</optgroup>`).join('');
+      + [...groups].map(([b, l]) => `<optgroup label="${esc(b)}">${l.map(([x, i]) => `<option value="${i}">${esc(x.name)} · ${favMHz(x)} ${x.mode.toUpperCase()}</option>`).join('')}</optgroup>`).join('');
     sel.value = '';
     $('liveFavCount').textContent = liveFavs.length ? `(${liveFavs.length})` : '';
     if ($('liveFavList').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') { favStarUpdate(); return; }   // nicht mitten im Tippen
-    $('liveFavList').innerHTML = liveFavs.length ? liveFavs.map((x, i) => `<div class="fav-item"><input type="text" maxlength="40" value="${esc(x.name)}" data-favname="${i}" aria-label="${EN ? 'Name' : 'Name'}">`
-      + `<small class="muted no-i18n">${(x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4)} MHz · ${x.mode.toUpperCase()}${x.dec && x.dec !== 'auto' ? ' · ' + esc(x.dec) : ''}</small>`
+    $('liveFavList').innerHTML = liveFavs.length ? liveFavs.map((x, i) => `<div class="fav-item"><input type="text" maxlength="60" value="${esc(x.name)}" data-favname="${i}" aria-label="${EN ? 'Name' : 'Name'}">`
+      + `<small class="muted no-i18n">${favMHz(x)} MHz · ${x.mode.toUpperCase()}${x.dec && x.dec !== 'auto' ? ' · ' + esc(x.dec) : ''}</small>`
       + `<button type="button" class="btn btn-small" data-favup="${i}" ${i ? '' : 'disabled'} title="${EN ? 'Move up' : 'Nach oben'}">↑</button>`
       + `<button type="button" class="btn btn-small btn-danger" data-favdel="${i}" title="${EN ? 'Delete' : 'Löschen'}">✕</button></div>`).join('')
       : `<p class="muted">${EN ? 'No favourites yet – tune in and tap ☆ next to the frequency.' : 'Noch keine Favoriten – abstimmen und ☆ neben der Frequenz antippen.'}</p>`;
     favStarUpdate();
   }
-  function favDefaultName(f, m) {
+  const favMHz = x => mhzField(x.freq_hz, ['usb', 'lsb'].includes(x.mode));
+  async function favDefaultName(f, m) {
     const h = liveHist.find(x => Math.abs(x.f - f) < 100 && x.m === m && x.name);
+    // Vorschlag vom Pi: „Betriebsart Bezeichnung Frequenz“, z. B. „RTTY DWD Pinneberg 7.646 MHz“
+    try { const d = await api(`/api/live/favname?freq_hz=${f}&mode=${m}&dec=${encodeURIComponent($('liveDecKind').value)}&rds=${encodeURIComponent(h ? h.name : '')}`); if (d.name) return d.name; } catch (e) { }
     if (h) return h.name;
     const fi = freqInfo(f), mhz = (f / 1e6).toFixed(['usb', 'lsb'].includes(m) ? 5 : 4);
     // fester Kanal (z. B. „APRS 144.800“): dessen Name ohne Klammerzusatz – sonst Band und Frequenz
-    if (fi.seg && (fi.seg.frequencies_hz || []).some(x => Math.abs(x - f) <= 1000)) return fi.seg.label.replace(/\s*\(.*$/, '').slice(0, 40);
+    if (fi.seg && (fi.seg.frequencies_hz || []).some(x => Math.abs(x - f) <= 1000)) return fi.seg.label.replace(/\s*\(.*$/, '').slice(0, 60);
     return `${fi.band ? fi.band + ' ' : ''}${mhz}`;
   }
-  $('liveFavStar').addEventListener('click', () => {
+  $('liveFavStar').addEventListener('click', async () => {
     const i = favIndexNow();
     if (i >= 0) {
       if (!confirm((EN ? 'Remove favourite “' : 'Favorit „') + liveFavs[i].name + (EN ? '”?' : '“ entfernen?'))) return;
@@ -1676,7 +1681,9 @@
     }
     const f = lf(); if (!(f > 0)) { toast(EN ? 'Enter a frequency first' : 'Erst eine Frequenz eintragen'); return; }
     const m = $('liveMode').value;
-    liveFavs.push({ name: favDefaultName(f, m), freq_hz: f, mode: m, step_hz: Number($('liveStep').value) || 0, dec: $('liveDecKind').value });
+    const name = await favDefaultName(f, m);
+    if (favIndexNow() >= 0) return;                                  // inzwischen schon gespeichert (Doppelklick)
+    liveFavs.push({ name, freq_hz: f, mode: m, step_hz: Number($('liveStep').value) || 0, dec: $('liveDecKind').value });
     saveLiveFavs('add').then(() => { $('liveFavManage').open = true; const el = $('liveFavList').querySelector(`[data-favname="${liveFavs.length - 1}"]`); if (el) { el.focus(); el.select(); } });
     toast(EN ? '★ saved – change the name below if you like' : '★ gespeichert – Name darunter nach Wunsch ändern');
   });
@@ -1684,7 +1691,7 @@
     const x = liveFavs[Number(e.target.value)]; if (!x) return;
     e.target.value = '';
     $('liveMode').value = x.mode;
-    $('liveFreq').value = (x.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(x.mode) ? 5 : 4);
+    $('liveFreq').value = favMHz(x);
     if (x.step_hz && [...$('liveStep').options].some(o => Number(o.value) === x.step_hz)) $('liveStep').value = String(x.step_hz);
     if (x.dec && [...$('liveDecKind').options].some(o => o.value === x.dec) && $('liveDecKind').value !== x.dec) {
       $('liveDecKind').value = x.dec;
@@ -1701,7 +1708,7 @@
   });
   $('liveFavList').addEventListener('change', e => {
     const n = e.target.closest('[data-favname]'); if (!n) return;
-    const i = Number(n.dataset.favname), v = n.value.trim().slice(0, 40);
+    const i = Number(n.dataset.favname), v = n.value.trim().slice(0, 60);
     if (v && liveFavs[i] && liveFavs[i].name !== v) { liveFavs[i].name = v; saveLiveFavs('rename'); }
   });
   ['input', 'change'].forEach(ev => { $('liveFreq').addEventListener(ev, favStarUpdate); $('liveMode').addEventListener(ev, favStarUpdate); });
@@ -1722,7 +1729,7 @@
     liveStateApplied = true;
     if (live.active) return;                               // läuft schon: die Statusabfrage zeigt die Frequenz
     if (ls.mode && [...$('liveMode').options].some(o => o.value === ls.mode)) $('liveMode').value = ls.mode;
-    if (ls.freq_hz) $('liveFreq').value = (ls.freq_hz / 1e6).toFixed(['usb', 'lsb'].includes(ls.mode) ? 5 : 4);
+    if (ls.freq_hz) $('liveFreq').value = mhzField(ls.freq_hz, ['usb', 'lsb'].includes(ls.mode));
     if (ls.step_hz && [...$('liveStep').options].some(o => Number(o.value) === ls.step_hz)) $('liveStep').value = String(ls.step_hz);
     if (Array.isArray(ls.history) && !liveHist.length) { liveHist.push(...ls.history); renderLiveHist(); }
   }
@@ -1753,7 +1760,7 @@
         + `${x.name ? ' <b>' + esc(x.name) + '</b>' : ''}</button> <small class="muted">${ago(x.t)}</small></li>`; }).join('')
       || '<li class="muted">noch nichts</li>';
     $('liveHistory').querySelectorAll('[data-hi]').forEach(el => el.addEventListener('click', () => {
-      const x = liveHist[Number(el.dataset.hi)]; $('liveFreq').value = (x.f / 1e6).toFixed(4); $('liveMode').value = x.m;
+      const x = liveHist[Number(el.dataset.hi)]; $('liveFreq').value = mhzField(x.f); $('liveMode').value = x.m;
       liveStart({ freq_hz: x.f, mode: x.m, squelch_db: Number($('liveSquelch').value) });
     }));
   }

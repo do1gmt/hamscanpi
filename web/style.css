@@ -51,6 +51,7 @@ a { color: var(--accent); }
 .fav-item { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; padding: .35rem 0; border-bottom: 1px solid var(--line); }
 .fav-item input { flex: 1 1 10rem; min-width: 0; }
 .fav-item small { white-space: nowrap; }
+@media (max-width: 600px) { .fav-item input { flex-basis: 100%; } }
 .se-ev { display: flex; flex-wrap: wrap; gap: .25rem .7rem; align-items: baseline; padding: .55rem 0; border-bottom: 1px solid var(--line); }
 .se-ev:last-child { border-bottom: 0; }
 .se-ev .se-when { flex: 1 1 16rem; }

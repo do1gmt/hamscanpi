@@ -1753,7 +1753,7 @@ def clean_live_favorites(items):
             raise ValueError("Favorit: unbekannter Demodulator")
         step = int(it.get("step_hz") or 0)
         dec = str(it.get("dec") or "auto")
-        out.append({"name": str(it.get("name") or "").strip()[:40] or f"{f / 1e6:.4f} MHz", "freq_hz": f, "mode": mode,
+        out.append({"name": str(it.get("name") or "").strip()[:LDK.NAME_MAX] or LDK.freq_text(f), "freq_hz": f, "mode": mode,
                     "step_hz": step if 0 < step <= 200_000 else 0, "dec": dec if dec in LDK.KINDS else "auto"})
     return out
 
@@ -2666,6 +2666,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(f, download_name=name, cache=False)
             if path == "/api/live/favorites":
                 return self.send_json({"favorites": read_json(SETTINGS, {}).get("live_favorites") or []})
+            if path == "/api/live/favname":
+                import live_decode as LDK
+                f = int(round(float(qs.get("freq_hz", 0) or 0)))
+                if not 100_000 <= f <= 2_000_000_000:
+                    raise ValueError("Frequenz zwischen 0,1 und 2000 MHz")
+                return self.send_json({"name": LDK.suggest_name(f, str(qs.get("mode") or ""), str(qs.get("dec") or "auto"),
+                                                                 str(qs.get("rds") or "")[:40])})
             if path == "/api/live/presets":
                 return self.send_json({"presets": live_presets()})
             if path in ("/api/live/audio", "/api/live/stream.wav"):
