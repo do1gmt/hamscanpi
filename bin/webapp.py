@@ -2449,6 +2449,19 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/location-check":
                 lc = read_json(BASE / "data" / "location_check.json", None)
                 return self.send_json({"pending": bool(lc), **(lc or {}), "locator": load_settings().get("my_locator", "")})
+            if path == "/api/sstv-events":
+                import sstv_events as SE
+                st = read_json(SETTINGS, {})
+                evs = SE.events(settings=st)
+                db = db_connect()
+                try:
+                    for e in evs:
+                        e["received"] = SE.received_in(db, e)
+                    rec = SE.received(db)
+                finally:
+                    db.close()
+                return self.send_json({"events": evs, "received": rec, "status": SE.status(),
+                                       "fetch_on": st.get("sstv_events_fetch", True)})
             if path == "/api/eibi/now":
                 import eibi as EI
                 return self.send_json({"items": EI.on_air(float(qs.get("khz", 0) or 0), float(qs.get("tol", 5) or 5))[:12],
@@ -2740,6 +2753,28 @@ class Handler(BaseHTTPRequestHandler):
                 st["eibi_scan"] = c
                 write_json(SETTINGS, st)
                 return self.send_json({"ok": True, "cfg": EI.scan_cfg(st)})
+            if path == "/api/sstv-events":
+                import sstv_events as SE
+                st = read_json(SETTINGS, {})
+                man = list(st.get("sstv_events_manual") or [])
+                if data.get("refresh"):
+                    SE.refresh(force=True)
+                if "fetch_on" in data:
+                    st["sstv_events_fetch"] = bool(data["fetch_on"])
+                if isinstance(data.get("add"), dict):
+                    if len(man) >= 50:
+                        raise ValueError("Höchstens 50 eigene Termine")
+                    man.append(SE.clean_manual(data["add"]))
+                    APPLOG.log("INFO", "webapp", "sstv_event_added", sat=man[-1]["sat"])
+                if "delete" in data:
+                    i = int(data["delete"])
+                    if 0 <= i < len(man):
+                        APPLOG.log("INFO", "webapp", "sstv_event_deleted", sat=man[i].get("sat"))
+                        man.pop(i)
+                if "add" in data or "delete" in data or "fetch_on" in data:
+                    st["sstv_events_manual"] = man
+                    write_json(SETTINGS, st)
+                return self.send_json({"ok": True})
             if path == "/api/eibi/refresh":
                 import eibi as EI
                 st = EI.refresh(force=True)
@@ -3282,6 +3317,18 @@ def main():
                 APPLOG.log("WARN", "webapp", "eibi_refresh_failed", error=f"{type(e).__name__}: {e}")
             time.sleep(86400)
     threading.Thread(target=eibi_loop, daemon=True).start()
+
+    def sstv_events_loop():                            # SSTV-Termine: einmal am Tag aus dem Netz (abschaltbar)
+        time.sleep(150)
+        while True:
+            try:
+                if read_json(SETTINGS, {}).get("sstv_events_fetch", True):
+                    import sstv_events as SE
+                    SE.refresh()
+            except Exception as e:
+                APPLOG.log("WARN", "webapp", "sstv_events_failed", error=f"{type(e).__name__}: {e}")
+            time.sleep(3600)                               # stündlich nachsehen, geholt wird höchstens einmal am Tag
+    threading.Thread(target=sstv_events_loop, daemon=True).start()
     srv = _Server(("0.0.0.0", port), Handler)
     print(f"Hesperos DX Webserver auf Port {port}, Dateien aus {WEB}")
     srv.serve_forever()

@@ -71,6 +71,9 @@ shortwave.
 - FM and linear-transponder satellites (SO-50, AO-123, AO-91, PO-101, AO-7, FO-29, RS-44, MO-122, …)
   and SSTV CubeSats (UmKA-1, VIZARD-meteo, Lobachevsky, QMR-KWT-2, SONATE-2, …).
 - SSTV decoder: Robot 36/72, Martin 1/2, Scottie 1/2/DX, PD 90–290.
+- SSTV events: when the ISS and other satellites send pictures – read once a day from the Libre Space forum and
+  AMSAT-UK (dates, times, frequency, mode, link to the announcement), plus your own entries and what was received
+  here in the last 48 h.
 - **Scheduling:** when passes overlap, a score decides (priority × 10, elevation, time since the
   satellite was last recorded, and a penalty for satellites that stayed silent for many passes).
   If the frequencies of simultaneous passes fit into one receive window, up to three satellites are

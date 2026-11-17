@@ -6,7 +6,7 @@
 # dieser Arbeitsstand ein git-Klon sein; verglichen wird mit origin/main (vorher geholt) oder HSP_BASE=<commit>.
 # Die Datei prüft beim Veröffentlichen, ob GitHub noch genau auf diesem Stand ist, und das Ergebnis per Prüfsumme.
 #   FULL=1 bash devtools/build_publish.sh "…"                    → das ganze Projekt (wie früher), passt auf jeden Stand
-# Aufbau: devtools/publish_head.sh + base64(tar.gz). Delta: .hsp-delta/{BASE,BASE_VERSION,VERSION,TREE,deleted,files/}.
+# Aufbau: devtools/publish_head.sh + base64(tar.gz). Delta: .hsp-delta/{BASE,BASE_VERSION,VERSION,TREE,deleted,text.patch,files/}.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MSG="${1:-Hesperos DX $(cat VERSION)}"
@@ -27,13 +27,25 @@ if [ "${FULL:-0}" != 1 ] && git rev-parse --git-dir >/dev/null 2>&1; then
         GIT_INDEX_FILE="$IDX" git read-tree "$BASE"
         GIT_INDEX_FILE="$IDX" git add -A -- . "${EXCL[@]}"
         TREE="$(GIT_INDEX_FILE="$IDX" git write-tree)"
-        # geänderte und neue Dateien liegen ganz bei (ein git-Patch trüge bei Bildern auch den alten Inhalt mit),
-        # gelöschte stehen in einer Liste
+        # Textdateien als Patch (nur die geänderten Zeilen), Binärdateien ganz (ein Binär-Patch trüge auch den alten
+        # Inhalt mit), gelöschte in einer Liste
+        GIT_INDEX_FILE="$IDX" git diff --cached --no-renames --numstat -z --diff-filter=d "$BASE" \
+            | python3 -c 'import sys; d=sys.stdin.buffer.read().split(b"\0"); [sys.stdout.buffer.write(x.split(b"\t",2)[2]+b"\0") for x in d if x.startswith(b"-\t-\t")]' > "$TMP/binary"
         GIT_INDEX_FILE="$IDX" git diff --cached --no-renames --name-only -z --diff-filter=d "$BASE" > "$TMP/changed"
         GIT_INDEX_FILE="$IDX" git diff --cached --no-renames --name-only -z --diff-filter=D "$BASE" > "$TMP/pl/.hsp-delta/deleted"
         [ -s "$TMP/changed" ] || [ -s "$TMP/pl/.hsp-delta/deleted" ] || { echo "keine Änderungen gegenüber GitHub – nichts zu bauen"; exit 1; }
+        python3 - "$TMP/changed" "$TMP/binary" "$TMP/text" <<'PYX'
+import sys
+ch = [x for x in open(sys.argv[1], "rb").read().split(b"\0") if x]
+bi = set(x for x in open(sys.argv[2], "rb").read().split(b"\0") if x)
+open(sys.argv[3], "wb").write(b"".join(x + b"\0" for x in ch if x not in bi))
+PYX
         mkdir -p "$TMP/pl/.hsp-delta/files"
-        [ -s "$TMP/changed" ] && tar cf - --null -T "$TMP/changed" | tar xf - -C "$TMP/pl/.hsp-delta/files"
+        [ -s "$TMP/binary" ] && tar cf - --null -T "$TMP/binary" | tar xf - -C "$TMP/pl/.hsp-delta/files"
+        if [ -s "$TMP/text" ]; then
+            xargs -0 -a "$TMP/text" sh -c 'GIT_INDEX_FILE="$0" git diff --cached --no-renames --full-index "$1" -- "$@"' "$IDX" "$BASE" \
+                > "$TMP/pl/.hsp-delta/text.patch"
+        fi
         echo "$BASE" > "$TMP/pl/.hsp-delta/BASE"
         echo "$TREE" > "$TMP/pl/.hsp-delta/TREE"
         cat VERSION > "$TMP/pl/.hsp-delta/VERSION"

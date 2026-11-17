@@ -1944,6 +1944,57 @@
     showView('hits'); loadHits();
   }));
 
+  // ---------- SSTV-Termine (bin/sstv_events.py): angekündigt, eigene Einträge, eigener Empfang ----------
+  function seDay(sec) { const p = tparts(new Date(sec * 1000), 'UTC'); return EN ? `${WDM[p.wd]} ${p.D} ${MON[p.M - 1]}` : `${WDM[p.wd]} ${pad(p.D)}.${pad(p.M)}.`; }
+  // Eingabe in der eingestellten Zeit (UTC oder Ortszeit des Pi) → UTC für den Pi. Nur ein Datum bleibt ein UTC-Tag.
+  function seToUtc(v) {
+    const m = String(v || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/);
+    if (!m || !m[4] || TZ.mode === 'utc') return String(v || '').trim();
+    const d = wallToDate(TZ.zone, +m[1], +m[2], +m[3], +m[4], +m[5]);
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  }
+  async function loadSstvEvents() {
+    let d; try { d = await api('/api/sstv-events'); } catch (e) { return; }
+    const evs = d.events || [], run = evs.filter(e => e.state === 'running');
+    $('seSum').textContent = run.length ? (EN ? '· running now' : '· läuft gerade') : evs.some(e => e.state === 'upcoming') ? (EN ? '· announced' : '· angekündigt') : '';
+    const srcName = { libre: 'Libre Space', amsatuk: 'AMSAT-UK', manual: EN ? 'own entry' : 'eigener Eintrag' };
+    $('seList').innerHTML = evs.length ? evs.map(e => {
+      const st = e.state === 'running' ? `<span class="se-badge running">${EN ? 'running' : 'läuft'}</span>`
+        : e.state === 'upcoming' ? `<span class="se-badge upcoming">${fmtRel(new Date(e.start * 1000))}</span>`
+        : `<span class="se-badge">${EN ? 'ended' : 'vorbei'}</span>`;
+      const when = e.dates_only ? `${seDay(e.start)} – ${seDay(e.end)} <small class="muted">(${EN ? 'times not announced yet' : 'Uhrzeiten noch offen'})</small>`
+        : `${tfmt(e.start, { date: true })} – ${tfmt(e.end, { date: true })}`;
+      const det = [e.freq ? e.freq + ' MHz' : '', e.mode].filter(Boolean).join(' · ');
+      const links = (e.links || []).map((l, i) => `<a href="${esc(l)}" target="_blank" rel="noopener">${EN ? 'announcement' : 'Ankündigung'}${e.links.length > 1 ? ' ' + (i + 1) : ''} ↗</a>`).join('');
+      const del = (e.sources || []).includes('manual') && e.manual_index != null ? ` <button type="button" class="btn btn-small btn-danger" data-sedel="${e.manual_index}" title="${EN ? 'Delete own entry' : 'Eigenen Eintrag löschen'}">✕</button>` : '';
+      return `<div class="se-ev ${e.state}">${st}<span class="se-when"><b class="no-i18n">${esc(e.sat)}</b>${e.title && !/SSTV.*\d{4}-\d{2}-\d{2}|^\s*ISS Slow Scan/i.test(e.title) ? ` <small class="muted no-i18n">${esc(e.title)}</small>` : ''}<br>${when}${det ? ` · <span class="no-i18n">${esc(det)}</span>` : ''}</span>`
+        + `<span class="se-links">${links}${e.received ? `<small class="se-ok">✓ ${e.received} ${EN ? 'images received' : 'Bilder empfangen'}</small>` : ''}<small class="muted">${(e.sources || []).map(s => srcName[s] || s).join(', ')}</small>${del}</span></div>`;
+    }).join('') : `<p class="muted">${EN ? 'No SSTV event announced at the moment.' : 'Gerade ist kein SSTV-Termin angekündigt.'}</p>`;
+    const rx = d.received || [];
+    $('seRx').innerHTML = rx.length ? `<p class="hint se-rx"><b>${EN ? 'Received here in the last 48 h' : 'Hier empfangen in den letzten 48 h'}:</b> ${rx.map(r => `${esc(r.label)} – ${r.n} ${EN ? (r.n === 1 ? 'image' : 'images') : (r.n === 1 ? 'Bild' : 'Bilder')}, ${EN ? 'last' : 'zuletzt'} ${fmtRel(r.last)}`).join(' · ')}</p>` : '';
+    const s = d.status || {};
+    $('seFoot').innerHTML = (EN ? 'Sources: ' : 'Quellen: ') + (s.sources || []).map(x => `<a href="${esc(x.url.replace(/\.rss$|feed\/$/, ''))}" target="_blank" rel="noopener">${esc(x.name)}</a> ${x.error ? `<span class="warn" title="${esc(x.error)}">✗ ${EN ? 'not reachable' : 'nicht erreichbar'}</span>` : x.ok_at ? `✓ ${tfmt(x.ok_at, { date: true })}` : '–'}`).join(' · ')
+      + (EN ? '. There is no official list – dates come from announcements and can change at short notice (crew duties).' : '. Eine offizielle Liste gibt es nicht – die Termine stammen aus Ankündigungen und können sich kurzfristig ändern (Dienste der Besatzung).');
+    $('seFetch').checked = d.fetch_on !== false;
+  }
+  $('seList').addEventListener('click', async e => {
+    const b = e.target.closest('[data-sedel]'); if (!b) return;
+    try { await post('/api/sstv-events', { delete: Number(b.dataset.sedel) }); loadSstvEvents(); } catch (err) { toast(err.message); }
+  });
+  $('seAdd').addEventListener('click', async () => {
+    try {
+      await post('/api/sstv-events', { add: { sat: $('seSat').value, title: $('seTitle').value, from: seToUtc($('seFrom').value), to: seToUtc($('seTo').value), freq: $('seFreq').value, mode: $('seMode').value, link: $('seLink').value } });
+      ['seSat', 'seTitle', 'seFrom', 'seTo', 'seFreq', 'seMode', 'seLink'].forEach(id => $(id).value = '');
+      note($('seNote'), EN ? '✓ entered' : '✓ eingetragen'); loadSstvEvents();
+    } catch (err) { note($('seNote'), (EN ? 'Error: ' : 'Fehler: ') + err.message, true); }
+  });
+  $('seRefresh').addEventListener('click', async () => {
+    note($('seNote'), EN ? 'fetching …' : 'hole …');
+    try { await post('/api/sstv-events', { refresh: true }); note($('seNote'), EN ? '✓ fetched' : '✓ geholt'); loadSstvEvents(); } catch (err) { note($('seNote'), (EN ? 'Error: ' : 'Fehler: ') + err.message, true); }
+  });
+  $('seFetch').addEventListener('change', async e => { try { await post('/api/sstv-events', { fetch_on: e.target.checked }); } catch (err) { toast(err.message); } });
+  loadSstvEvents(); setInterval(loadSstvEvents, 600000);
+
   // ---------- Zeitpläne ----------
   const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const scSel = { days: new Set([0, 1, 2, 3, 4, 5, 6]), bands: new Set() };

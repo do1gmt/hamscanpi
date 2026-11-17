@@ -42,6 +42,19 @@ a { color: var(--accent); }
 .brand { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
 .brand span { color: var(--muted); font-weight: 500; }
 .status-pill { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; max-width: 55%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.se-ev { display: flex; flex-wrap: wrap; gap: .25rem .7rem; align-items: baseline; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+.se-ev:last-child { border-bottom: 0; }
+.se-ev .se-when { flex: 1 1 16rem; }
+.se-ev.ended { opacity: .6; }
+.se-ev .se-links { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .8rem; }
+.se-ev .se-links a, .se-ev .se-links small { white-space: nowrap; }
+.se-ev .se-ok { color: var(--teal); }
+.se-badge { font-size: .75rem; font-weight: 600; border-radius: 999px; padding: .1rem .55rem; border: 1px solid var(--line); white-space: nowrap; }
+.se-badge.running { border-color: var(--teal); color: var(--teal); }
+.se-badge.upcoming { border-color: var(--accent); color: var(--accent); }
+.se-rx { margin-top: .6rem; }
+.se-add { margin-top: .6rem; }
+.se-add .se-wide { grid-column: 1 / -1; }
 .wifi-seen { display: flex; flex-direction: column; gap: .3rem; margin: .4rem 0 .8rem; }
 .wifi-seen button { display: flex; justify-content: space-between; gap: .6rem; text-align: left; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; min-height: var(--tap); cursor: pointer; }
 .wifi-seen button:hover, .wifi-seen button.on { border-color: var(--accent); }

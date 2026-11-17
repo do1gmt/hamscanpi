@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.13 – 2026-11-17
+
+- **New card "SSTV events"** below the satellite passes: when the ISS (and other satellites) send pictures.
+  There is no official machine-readable list, so once a day two public sources are read (`bin/sstv_events.py`):
+  the Libre Space forum (topics "ISS SSTV Event - from … to …", reliable dates) and AMSAT-UK ("scheduled to begin
+  on … 15:10 UTC and will end on … 17:45 UTC", exact times). The same event from both is merged: times from the
+  more exact source, links to every announcement kept, frequency and mode when they are mentioned. Shown: running,
+  upcoming (in N days), ended (for 3 more days). Each event shows how many pictures were received here during it.
+- **Own entries** (satellite, start and end as date or date and time – in the time set under Settings → Station, frequency, mode, link), e.g. for
+  campaigns of other satellites; deletable.
+- **"Received here in the last 48 h"**: SSTV pictures per satellite channel – shows what is sending right now, also
+  without an announcement.
+- If a source is unreachable its last events stay; the card shows each source with its last fetch or the error.
+  Fetching once a day can be switched off; "Fetch now" fetches at once. Log `sstv_events_fetched`,
+  `sstv_events_source_failed`.
+- Publishing file: changed text files now go in as a patch (only the changed lines), only binary files whole –
+  e.g. this version 88 KB instead of 468 KB.
+- Self-test section 73.
+
 ## 1.8.12 – 2026-11-17
 
 - **Publishing file with only the changes:** `hesperos-publish.sh` used to carry the whole project (about 9 MB) every

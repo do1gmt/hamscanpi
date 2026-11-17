@@ -2605,5 +2605,75 @@ big="$(find "$SRC/docs/screenshots" -name "*.png" -size +400k)"
 [ -z "$big" ] && ok "Doku-Bilder unter 400 KB (sonst devtools/shrink_screenshots.sh)" || bad "Doku-Bilder zu groß: $big"
 pub72 && ok "Delta-Datei viel kleiner, Ergebnis gleich dem Entwicklungsstand (neu, geändert, gelöscht, binär, Rechte), veraltete Datei bricht ohne Änderung ab" || bad "Veröffentlichen mit Delta"
 
+echo "== 73 SSTV-Termine: Forum und AMSAT-UK auswerten, zusammenführen, eigene Einträge, eigener Empfang"
+(cd bin && timeout 30 python3 - "$SRC" <<'PY') && ok "Termine aus beiden Quellen zu einem mit Uhrzeiten und beiden Links, Ausfall einer Quelle behält ihre Termine, eigene Einträge geprüft, Zustand läuft/kommt/vorbei" || bad "SSTV-Termine"
+import sys, tempfile, time, sqlite3
+from pathlib import Path
+import sstv_events as S
+tmp = Path(tempfile.mkdtemp()); S.FILE = tmp / "ev.json"
+now = time.time()
+d = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t))
+lt = lambda t: time.strftime("%A, %B %d, %Y", time.gmtime(t))
+a, b = now - 86400, now + 2 * 86400
+libre = f"""<?xml version="1.0"?><rss version="2.0"><channel><title>x</title>
+<item><title>ISS SSTV Event - from {d(a)} to {d(b)}</title><link>https://community.libre.space/t/iss/1</link><description>&lt;p&gt;Robot 36 on 437.550 MHz&lt;/p&gt;</description></item>
+<item><title>UmKA-1 SSTV - from {d(now + 5 * 86400)} to {d(now + 6 * 86400)}</title><link>https://community.libre.space/t/umka/2</link><description>PD120</description></item>
+<item><title>Some other topic</title><link>x</link><description>y</description></item></channel></rss>""".encode()
+amsat = f"""<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>A</title>
+<item><title>ISS Slow Scan TV</title><link>https://amsat-uk.org/iss-sstv</link><description>short</description>
+<content:encoded>&lt;p&gt;An SSTV event on the ISS is scheduled to begin on {lt(a)} around 15:10 UTC and will end on {lt(b)} at 17:45 UTC.&lt;/p&gt;</content:encoded></item>
+</channel></rss>""".encode()
+feeds = {S.SOURCES["libre"]["url"]: libre, S.SOURCES["amsatuk"]["url"]: amsat}
+S.refresh(force=True, fetch=lambda u: feeds[u])
+ev = S.events(settings={})
+iss = [e for e in ev if e["sat"] == "ISS"]
+assert len(iss) == 1 and iss[0]["state"] == "running" and not iss[0]["dates_only"], ev
+assert time.strftime("%H:%M", time.gmtime(iss[0]["start"])) == "15:10" and len(iss[0]["links"]) == 2 and iss[0]["mode"] == "Robot 36"
+assert iss[0]["freq"] == "437.550" and sorted(iss[0]["sources"]) == ["amsatuk", "libre"]
+um = [e for e in ev if e["sat"] == "UmKA-1"]
+assert um and um[0]["state"] == "upcoming" and um[0]["dates_only"] and um[0]["mode"] == "PD120"
+# eine Quelle fällt aus: ihre Termine bleiben, der Fehler steht im Zustand
+def bad(u):
+    if "amsat" in u: raise OSError("Netz weg")
+    return feeds[u]
+S.refresh(force=True, fetch=bad)
+st = S.status(); am = [x for x in st["sources"] if x["key"] == "amsatuk"][0]
+assert am["error"] and "Netz weg" in am["error"] and [e for e in S.events(settings={}) if e["sat"] == "ISS"][0]["links"].__len__() == 2
+# nicht fällig: kein neuer Abruf
+called = []
+S.refresh(fetch=lambda u: called.append(u))
+assert not called
+# eigene Einträge
+m = S.clean_manual({"sat": "SONATE-2", "from": d(now + 86400), "to": d(now + 2 * 86400) + " 18:00", "freq": "145.880", "mode": "martin1", "link": "https://example.org/x"})
+assert m["mode"] == "Martin 1" and m["freq"] == "145.880"
+for badin in ({"sat": "", "from": "2026-01-01", "to": "2026-01-02"}, {"sat": "X", "from": "morgen", "to": "2026-01-02"},
+              {"sat": "X", "from": "2026-01-03", "to": "2026-01-02"}, {"sat": "X", "from": "2026-01-01", "to": "2026-01-02", "link": "javascript:alert(1)"}):
+    try:
+        S.clean_manual(badin); raise SystemExit(f"angenommen: {badin}")
+    except ValueError:
+        pass
+ev = S.events(settings={"sstv_events_manual": [m]})
+assert any(e["sat"] == "SONATE-2" and "manual" in e["sources"] and e.get("manual_index") == 0 for e in ev)
+# lang Vergangenes fällt weg, kürzlich Beendetes bleibt (vorbei)
+old = S.clean_manual({"sat": "Alt", "from": d(now - 10 * 86400), "to": d(now - 9 * 86400)})
+rec = S.clean_manual({"sat": "Neu", "from": d(now - 2 * 86400), "to": d(now - 2 * 86400)})
+names = {e["sat"]: e["state"] for e in S.events(settings={"sstv_events_manual": [old, rec]})}
+assert "Alt" not in names and names.get("Neu") == "ended", names
+# eigener Empfang aus der Datenbank
+db = sqlite3.connect(":memory:")
+db.execute("CREATE TABLE scan (id INTEGER PRIMARY KEY, time TEXT, band TEXT)")
+db.execute("CREATE TABLE peak (id INTEGER PRIMARY KEY, scan_id INTEGER, mode TEXT, segment_id TEXT)")
+t = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now - 3600))
+db.execute("INSERT INTO scan VALUES (1, ?, 'Satelliten')", (t,))
+for i in range(3):
+    db.execute("INSERT INTO peak (scan_id, mode, segment_id) VALUES (1, 'sstv', 'iss_sstv70')")
+db.execute("INSERT INTO peak (scan_id, mode, segment_id) VALUES (1, 'sstv', 'umka1')")
+r = S.received(db)
+assert [x["id"] for x in r] and {x["id"]: x["n"] for x in r} == {"iss_sstv70": 3, "umka1": 1}, r
+assert S.received_in(db, iss[0]) == 3
+W = Path(sys.argv[1]) / "web"
+assert 'id="panel-sstvev"' in (W / "index.html").read_text() and "loadSstvEvents" in (W / "app.js").read_text()
+PY
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

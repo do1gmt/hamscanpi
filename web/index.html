@@ -121,6 +121,26 @@
         </div>
         <p class="hint" id="satFoot"></p>
       </section>
+      <section class="panel" id="panel-sstvev">
+        <h2>SSTV-Termine <small class="muted" id="seSum"></small></h2>
+        <div id="seList"><p class="muted">lade …</p></div>
+        <div id="seRx"></div>
+        <details class="se-add"><summary>Termin selbst eintragen</summary>
+          <div class="filter-grid">
+            <label class="field"><span>Satellit</span><input id="seSat" type="text" maxlength="40" placeholder="z. B. ISS, UmKA-1" autocomplete="off"></label>
+            <label class="field"><span>Bezeichnung</span><input id="seTitle" type="text" maxlength="80" placeholder="z. B. ARISS Serie 35" autocomplete="off"></label>
+            <label class="field"><span>Beginn (<span class="tzl">UTC</span>)</span><input id="seFrom" type="text" placeholder="2026-11-20 oder 2026-11-20 10:30" autocomplete="off"></label>
+            <label class="field"><span>Ende (<span class="tzl">UTC</span>)</span><input id="seTo" type="text" placeholder="2026-11-24 oder 2026-11-24 18:00" autocomplete="off"></label>
+            <label class="field"><span>Frequenz (MHz)</span><input id="seFreq" type="text" placeholder="437.550" autocomplete="off"></label>
+            <label class="field"><span>Betriebsart</span><input id="seMode" type="text" placeholder="Robot 36, PD120 …" autocomplete="off"></label>
+            <label class="field se-wide"><span>Link zur Ankündigung</span><input id="seLink" type="url" placeholder="https://…" autocomplete="off"></label>
+          </div>
+          <div class="actions"><button type="button" class="btn" id="seAdd">Eintragen</button></div>
+        </details>
+        <div class="save-note" id="seNote" aria-live="polite"></div>
+        <p class="hint" id="seFoot"></p>
+        <div class="actions"><label class="check"><input type="checkbox" id="seFetch"> Termine einmal am Tag aus dem Netz holen</label><button type="button" class="btn btn-small" id="seRefresh">Jetzt neu holen</button></div>
+      </section>
       <section class="panel" id="panel-eibiscan">
         <h2>Kurzwellen-Rundfunk im Scan <small class="muted">EiBi</small> <small class="muted" id="esSum"></small></h2>
         <p class="hint" id="esHint"></p>

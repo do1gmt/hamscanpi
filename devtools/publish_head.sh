@@ -22,7 +22,7 @@ sed -n '/^__PAYLOAD__$/,$p' "$0" | tail -n +2 | base64 -d > "$TMP/p.tgz"
 mkdir -p "$TMP/new" && tar xzf "$TMP/p.tgz" -C "$TMP/new"
 # Zwei Arten: vollständig (das ganze Projekt) oder nur die Änderungen seit der letzten Veröffentlichung (.hsp-delta/:
 # BASE = Stand auf GitHub, auf dem sie aufbauen, TREE = Prüfsumme des Ergebnisses, files/ = geänderte und neue
-# Dateien, deleted = gelöschte, mit NUL getrennt)
+# Binärdateien, text.patch = Änderungen der Textdateien, deleted = gelöschte, mit NUL getrennt)
 DELTA=0
 if [ -f "$TMP/new/.hsp-delta/BASE" ]; then
     DELTA=1
@@ -74,7 +74,12 @@ if [ "$DELTA" = 1 ]; then
         die "Diese Datei enthält nur die Änderungen seit Version $BASEV – auf GitHub steht aber $OLDV. Zuerst die Datei für die fehlende Version veröffentlichen oder eine vollständige Datei anfordern. Nichts geändert."
     fi
     cd "$WORK"
-    # ohne die alten Zeitstempel (-m): sonst könnte git eine geänderte Datei für unverändert halten
+    # Textdateien: Patch; Binärdateien: ganz – ohne die alten Zeitstempel (-m), sonst könnte git eine geänderte
+    # Datei für unverändert halten
+    if [ -s "$TMP/new/.hsp-delta/text.patch" ]; then
+        git apply --index --whitespace=nowarn "$TMP/new/.hsp-delta/text.patch" \
+            || { git reset -q --hard; die "Änderungen ließen sich nicht einspielen – nichts veröffentlicht"; }
+    fi
     if [ -d "$TMP/new/.hsp-delta/files" ]; then
         tar cf - -C "$TMP/new/.hsp-delta/files" . | tar xmf - -C "$WORK" \
             || { git reset -q --hard; die "Änderungen ließen sich nicht einspielen – nichts veröffentlicht"; }
