@@ -228,6 +228,43 @@ def _present(uuid):
     return Path("/dev/disk/by-uuid", uuid).exists()
 
 
+def _mount_source(mp):
+    try:
+        with open("/proc/mounts", encoding="utf-8") as f:
+            for line in f:
+                p = line.split()
+                if len(p) > 1 and p[1].replace("\\040", " ") == str(mp):
+                    return p[0]
+    except OSError:
+        pass
+    return None
+
+
+def usb_stale(uuid):
+    """Hängt an USB_MP noch ein Stick, den es so nicht mehr gibt? Typisch nach einem kurzen USB-Aussetzer: der Stick
+    meldet sich mit neuer Gerätedatei (sda → sdb) zurück, die alte Einhängung liefert nur noch Ein-/Ausgabefehler.
+    Prüft ohne zu schreiben (läuft jede Minute)."""
+    src = _mount_source(USB_MP)
+    if not src or not uuid:
+        return False
+    want = Path("/dev/disk/by-uuid", uuid)
+    if not Path(src).exists():
+        return True
+    return want.exists() and os.path.realpath(src) != os.path.realpath(want)
+
+
+def remount_usb(uuid, log=None, why=""):
+    """Stick aus- und wieder einhängen (Helfer remount-usb). Rückgabe (ok, Meldung)."""
+    ok, out = helper("remount-usb", uuid)
+    st = read_state()
+    st["usb_error"] = None if ok else _fail(out)
+    st["usb_try"] = time.time()
+    _write_state(st)
+    if log:
+        log("INFO" if ok else "WARN", "storage", "usb_remounted" if ok else "usb_remount_failed", reason=why, detail=out[-200:])
+    return ok, out
+
+
 def ensure(now=None, settings=None, log=None):
     """Gewähltes Ziel eingehängt halten: USB nach dem Wiederanstecken, NAS nach einem Verbindungsausfall."""
     now = now or time.time()
@@ -238,6 +275,18 @@ def ensure(now=None, settings=None, log=None):
         present = _present(t["uuid"])
         if st.get("ejected") and not present:                 # abgezogen: beim nächsten Anstecken wieder einhängen
             st.pop("ejected", None); changed = True
+        src = _mount_source(USB_MP)
+        if not present and src and not Path(src).exists():
+            # abgezogen, ohne auszuwerfen: tote Einhängung lösen, damit „steckt nicht“ angezeigt wird und das
+            # Wiederanstecken normal eingehängt wird
+            ok, out = helper("umount-usb")
+            if log:
+                log("INFO" if ok else "WARN", "storage", "usb_gone_unmounted" if ok else "usb_gone_unmount_failed", detail=out[-200:])
+            return
+        if present and not st.get("ejected") and mounted(USB_MP) and usb_stale(t["uuid"]) \
+                and now - st.get("usb_try", 0) >= 60:
+            remount_usb(t["uuid"], log, "Stick war kurz vom USB getrennt")
+            return
         if present and not st.get("ejected") and not mounted(USB_MP) and now - st.get("usb_try", 0) >= 60:
             st["usb_try"] = now; changed = True
             ok, out = helper("mount-usb", t["uuid"])

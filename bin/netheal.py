@@ -107,10 +107,17 @@ def networks():
 
 
 def scan(iface=None):
+    return scan_detail(iface)[0]
+
+
+def scan_detail(iface=None):
+    """Sichtbare WLANs und, falls die Suche nicht ging, warum: ([{ssid, signal, security}], Fehlertext oder None)."""
     iface = iface or wifi_iface()
     if not iface:
-        return []
+        return [], "kein WLAN-Adapter gefunden"
     ok, out = helper("scan", iface, timeout=30)
+    if not ok:
+        return [], ((out or "").strip().splitlines() or ["Suche fehlgeschlagen"])[-1][:200]
     res = []
     for line in out.splitlines() if ok else []:
         p = line.split("\t")
@@ -119,9 +126,10 @@ def scan(iface=None):
                 sig = int(p[1])
             except ValueError:
                 sig = None
-            res.append({"ssid": p[0], "signal": sig, "security": p[2] if len(p) > 2 else ""})
+            sec = (p[2] if len(p) > 2 else "").strip()
+            res.append({"ssid": p[0], "signal": sig, "security": "" if sec in ("", "--") else sec})
     res.sort(key=lambda x: -(x["signal"] or 0))
-    return res
+    return res, None
 
 
 def add_fallback(ssid, psk=""):

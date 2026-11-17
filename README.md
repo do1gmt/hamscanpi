@@ -218,7 +218,8 @@ steps – reconnect after 2 min, Wi-Fi off/on after 5 min, restart the network s
 driver after 14 min, then again every 30 min – and reports how long the Wi-Fi was gone and what brought it back.
 *System → Wi-Fi* lists the known networks and takes **fallback Wi-Fis** (e.g. a phone hotspot): if the main Wi-Fi
 is gone the Pi uses a fallback and switches back when the main Wi-Fi is in range again (passwords are kept by the
-system's network service, readable only by root). The system history shows the Wi-Fi signal; a weak signal
+system's network service, readable only by root). *Search networks in range* lists the networks the Pi can see –
+tap one to take its name. The system history shows the Wi-Fi signal; a weak signal
 (median below −75 dBm for 15 min) gives a notice. With a network cable the Wi-Fi is left alone.
 
 **Several Hesperos-DX-Stationen:** *Settings → Station → Name of this station* (default "Hesperos DX") appears in mail (subject
@@ -410,8 +411,10 @@ recordings (never deletes them) and restarts its services.
 **Where to back up:** under *Where to back up* in the same card, plugged-in USB sticks and USB drives are listed
 (FAT32, exFAT, NTFS, ext4 – nothing is ever formatted, the system card is never offered). *Use for backups* mounts
 the drive at `/mnt/hamscanpi-usb` and remembers it by its UUID: unplugged and plugged in again – also after a
-reboot – it is mounted again within a minute. *Eject* unmounts it cleanly; it stays out until it has been
-unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
+reboot – it is mounted again within a minute. Pulled out without *Eject* (e.g. to rename it on the PC), the dead
+mount is released and the stick is mounted afresh when it comes back – also under a new device name; a backup that
+hits a read/write error remounts it once and tries again. *Eject* unmounts it cleanly; it stays out until it has
+been unplugged. A **network share** (NAS, FRITZ!Box with USB storage, Windows share) is entered as
 `//host/share` with user and password and mounted at `/mnt/hamscanpi-nas` (SMB 2 or newer, package cifs-utils);
 if it drops out, it is mounted again every 10 min. The password is stored only in `/etc/hamscanpi/nas.cred`
 (root only) – not in the settings, not in backups. Backups go to `HamScanPi-Sicherungen/<host name>/` (folder name kept from the former name) on the

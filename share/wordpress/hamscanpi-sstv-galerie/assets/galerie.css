@@ -71,6 +71,8 @@
 .hsp-more:hover { background: var(--hsp-accent); color: var(--hsp-on-accent); }
 .hsp-wait, .hsp-empty { color: var(--hsp-muted); }
 .hsp-credit { margin: 1.2rem 0 0; text-align: right; font-size: .78rem; color: var(--hsp-muted); letter-spacing: .02em; }
+.hsp-credit a { color: inherit; text-decoration: none; }
+.hsp-credit a:hover, .hsp-credit a:focus { text-decoration: underline; }
 
 /* Lightbox */
 .hsp-lb { position: fixed; inset: 0; z-index: 99999; background: var(--hsp-lb-bg); color: var(--hsp-lb-text);

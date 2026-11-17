@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.10 – 2026-11-17
+
+- **New logo:** the evening star (Hesperos) sending – a star with radio waves on both sides. The old antenna mast
+  was read as an "A". Header, browser tab (favicon), login page, home-screen icons and README.
+- **USB stick pulled out without "Eject" and plugged in again** (e.g. renamed on the PC): it came back under a new
+  device name (sda → sdb) while the old mount stayed – every backup ended in "Input/output error". Now the dead
+  mount is released when the stick is gone, a stick that comes back under a new name is remounted (helper
+  `remount-usb`, log `usb_remounted`, `usb_gone_unmounted`), and a backup that hits a read/write error remounts
+  once and tries again; if it still fails the message says what to do.
+- **Read errors on a USB drive no longer advise replacing the SD card:** kernel errors of another drive than the
+  system disk (also FAT messages like "Directory bread failed", which were not recognised at all) raise their own
+  notice "Read/write error on the USB drive".
+- **Wi-Fi search shows the networks:** "Search networks in range" put the results only into the suggestions of the
+  name field, which Firefox and many phones show only while typing – it looked as if nothing was found. Now a list
+  to tap (name, signal, security, "known"); tapping fills the name and jumps to the password (open networks: no
+  password needed). A failed search shows its reason instead of "no networks found"; logged as `wifi_scan`.
+- **Diagnostics file name contains the Pi's network name:** `hesperos-diagnose-<name>-<date>-<time>.tar.gz`.
+- **WordPress plugin 1.4.3:** links to the GitHub repository `do1gmt/hesperos-dx` – in the plugin list, on its
+  settings page and in the line "Received with Hesperos DX · Ham Radio Watch" below the gallery.
+- Self-test sections 69 and 70.
+
 ## 1.8.09 – 2026-11-17
 
 - **Live is visible on every tab:** while Live reception or the continuous watch runs, a notice under the header

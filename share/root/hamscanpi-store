@@ -5,6 +5,8 @@
 #
 #   hamscanpi-store mount-usb <uuid>      Datenträger mit dieser UUID nach /mnt/hamscanpi-usb einhängen
 #   hamscanpi-store umount-usb            alles schreiben und aushängen (danach darf er abgezogen werden)
+#   hamscanpi-store remount-usb <uuid>    hängengebliebenen Stick (kurz vom USB getrennt, Ein-/Ausgabefehler)
+#                                         aushängen – notfalls lose – und mit dieser UUID neu einhängen
 #   hamscanpi-store nas-cred              Zugangsdaten der Freigabe speichern (stdin: Benutzer, Passwort, Domäne –
 #                                         je eine Zeile; nur root kann die Datei lesen)
 #   hamscanpi-store mount-nas <//rechner/freigabe[/ordner]>   Freigabe nach /mnt/hamscanpi-nas einhängen
@@ -27,6 +29,13 @@ root_disk() {   # Datenträger, auf dem das System läuft (z. B. mmcblk0) – wi
 }
 
 case "${1:-}" in
+  remount-usb)
+    [[ "${2:-}" =~ ^[A-Za-z0-9-]{4,36}$ ]] || die "ungültige UUID"
+    if mountpoint -q "$USB_MP"; then
+        # das Gerät dahinter gibt es oft nicht mehr (neue Gerätedatei nach dem Wiederverbinden): nicht ewig warten
+        timeout 15 umount "$USB_MP" 2>/dev/null || umount -l "$USB_MP" || die "alter Stick lässt sich nicht aushängen"
+    fi
+    ;&
   mount-usb)
     uuid="${2:-}"
     [[ "$uuid" =~ ^[A-Za-z0-9-]{4,36}$ ]] || die "ungültige UUID"
@@ -58,6 +67,9 @@ case "${1:-}" in
     ;;
   umount-usb)
     mountpoint -q "$USB_MP" || exit 0
+    # abgezogen, ohne auszuwerfen: das Gerät gibt es nicht mehr – nur noch lose aushängen
+    src="$(findmnt -n -o SOURCE "$USB_MP")"
+    if [ ! -b "$src" ]; then umount -l "$USB_MP"; exit 0; fi
     sync
     umount "$USB_MP" || die "Aushängen fehlgeschlagen – wird gerade darauf geschrieben? Gleich noch einmal versuchen."
     ;;

@@ -2414,6 +2414,10 @@ assert '<h2>SSTV-Export <small' in html and 'id="wxBox" open' in html and "Ins N
 assert 'id="liveBanner"' in html and "function liveBanner(s, busy)" in js and "liveBanner(s, busy);" in js
 assert "$('noticeAckAll').disabled = !ackable" in js
 assert "<th>Bedeutung</th>" not in js and 'id="liveLevelVal"' in html
+pl = Path(sys.argv[1]) / "share/wordpress/hamscanpi-sstv-galerie"
+php, tpl = (pl / "hamscanpi-sstv-galerie.php").read_text(), (pl / "templates/galerie.php").read_text()
+assert "Plugin URI:        https://github.com/do1gmt/hesperos-dx" in php and "HSP_SSTV_HOME" in php and "esc_url(HSP_SSTV_HOME)" in php
+assert "HSP_SSTV_HOME" in tpl and 'rel="noopener"' in tpl
 # Spaltenwechsel: aus der anderen Spalte gezogene Karten bekommen beim Wiederherstellen einen Platz
 assert "for (var i = marks.length; i < want.length; i++)" in lj and "tgt.parentElement !== p.parentElement" in lj
 PY
@@ -2431,6 +2435,84 @@ const a = run({ 'scan-col0': ['B'], 'scan-col1': ['C', 'X', 'A'] }), b = run({ '
 if (a !== 'B|CXA' || b !== 'ABCX|') { console.log(a, b); process.exit(1); }
 JS
 fi
+
+echo "== 69 USB-Stick abgezogen und wieder angesteckt, Kernel-Fehler am Stick, Diagnose-Dateiname, Logo"
+(cd bin && timeout 60 python3 - "$SRC" <<'PY') && ok "tote Einhängung erkannt und neu eingehängt, Sicherung versucht es danach noch einmal, Stick-Fehler nicht der Speicherkarte zugeschrieben, Diagnose mit Namen im Netz" || bad "USB-Stick/Diagnose"
+import errno, sys, tempfile
+from pathlib import Path
+import storage as STO, backup as BK, health as HE, diag as DG, notices as NT
+src = Path(sys.argv[1])
+# 1) tote Einhängung: /dev/sda1 gibt es nicht mehr, der Stick heißt jetzt sdb1
+tmp = Path(tempfile.mkdtemp())
+byuuid = tmp / "uuid"; byuuid.write_text("")
+STO._mount_source = lambda mp: "/dev/sda1-gibt-es-nicht"
+real_path = STO.Path
+class P(type(Path())):
+    pass
+orig = STO.Path
+STO.Path = lambda *a: byuuid if a[:1] == ("/dev/disk/by-uuid",) else orig(*a)
+assert STO.usb_stale("ABCD-1234")
+STO._mount_source = lambda mp: str(byuuid)                     # gleiche Gerätedatei: in Ordnung
+assert not STO.usb_stale("ABCD-1234")
+STO.Path = orig
+# 2) Sicherung: Ein-/Ausgabefehler → einmal neu einhängen, dann klappt es
+calls = []
+STO.mounted = lambda mp: True
+state = {"n": 0}
+def probe(p):
+    state["n"] += 1
+    return "Ein-/Ausgabefehler" if state["n"] == 1 else None
+BK._probe = probe
+STO.remount_usb = lambda uuid, log=None, why="": (calls.append(uuid) or (True, ""))
+assert BK.check_dir(str(tmp / "z"), {"kind": "usb", "uuid": "ABCD-1234", "label": "HAMSCANPI"}) is None and calls == ["ABCD-1234"]
+state["n"] = -5                                                # bleibt kaputt: verständliche Meldung
+BK._probe = lambda p: "Ein-/Ausgabefehler"
+e = BK.check_dir(str(tmp / "z"), {"kind": "usb", "uuid": "ABCD-1234", "label": "HAMSCANPI"})
+assert e and "Abziehen und wieder anstecken" in e and "aktiven USB-Hub" in e, e
+# echter Probelauf auf einem beschreibbaren Ordner
+import importlib; importlib.reload(BK)
+assert BK._probe(tmp / "ok") is None and not (tmp / "ok" / ".hesperos-probe").exists()
+# 3) Kernel: FAT-Fehler an sdb → eigener Hinweis, nicht „Karte tauschen“
+assert HE._disk_of("FAT-fs (sdb1): Directory bread(block 30464) failed") == "sdb"
+assert HE._disk_of("mmcblk0: error -110 transferring data") == "mmcblk0"
+assert any(rx.search("FAT-fs (sda1): Directory bread(block 30464) failed") for rx, *_ in HE.KERNEL_PATTERNS)
+ev = []
+NT.event = lambda key, level, area, title, detail="", **k: ev.append((key, title, k.get("fix", "")))
+HE._root_disk = lambda: "mmcblk0"
+HE._run = lambda cmd, timeout=15: (0, "1700000000.0 pi kernel: FAT-fs (sdb1): Directory bread(block 30464) failed\n"
+                                        "1700000001.0 pi kernel: FAT-fs (sdb1): FAT read failed (blocknr 59)\n")
+NT.clear = lambda *a, **k: None
+HE.check_kernel({})
+assert [e[0] for e in ev] == ["usb_disk_io"] and "Speicherkarte ist nicht betroffen" in ev[0][2], ev
+# 4) Diagnose-Dateiname mit dem Namen im Netz
+import socket
+socket.gethostname = lambda: "do1gmt-devpi"
+assert DG.filename().startswith("hesperos-diagnose-do1gmt-devpi-") and DG.filename().endswith(".tar.gz")
+# 5) Logo: Stern mit Wellen, PNG-Größen und favicon vorhanden
+svg = (src / "web/icon.svg").read_text()
+assert "Abendstern" in svg and all((src / "web" / f).stat().st_size > 500 for f in ("icon-180.png", "icon-192.png", "icon-512.png", "favicon.ico"))
+PY
+bash -n "$SRC/share/root/hamscanpi-store" && grep -q "  remount-usb)" "$SRC/share/root/hamscanpi-store" && grep -q ';&' "$SRC/share/root/hamscanpi-store" \
+  && ok "Helfer kennt remount-usb und hängt abgezogene Sticks lose aus" || bad "Helfer remount-usb"
+
+echo "== 70 WLAN-Suche: sichtbare Liste, Fehler mit Grund"
+(cd bin && timeout 30 python3 - "$SRC" <<'PY') && ok "Netze als Liste zum Antippen, offene Netze erkannt, fehlgeschlagene Suche mit Grund statt „keine Netze“" || bad "WLAN-Suche"
+import sys
+from pathlib import Path
+import netheal as NH
+NH.wifi_iface = lambda: "wlan0"
+NH.helper = lambda *a, **k: (True, "cumulus\t72\tWPA2\nCafe Gast\t40\t--\nNachbar\t81\tWPA1 WPA2\n")
+vis, err = NH.scan_detail()
+assert err is None and [v["ssid"] for v in vis] == ["Nachbar", "cumulus", "Cafe Gast"] and vis[2]["security"] == "", vis
+NH.helper = lambda *a, **k: (False, "Error: Wi-Fi scan not allowed\nsudo: …")
+vis, err = NH.scan_detail()
+assert vis == [] and err and "sudo" in err, err
+NH.wifi_iface = lambda: None
+assert NH.scan_detail() == ([], "kein WLAN-Adapter gefunden")
+W = Path(sys.argv[1]) / "web"
+html, js = (W / "index.html").read_text(), (W / "app.js").read_text()
+assert 'id="wifiSeenList"' in html and "$('wifiSeenList').addEventListener('click'" in js and "Suche fehlgeschlagen: " in js
+PY
 
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

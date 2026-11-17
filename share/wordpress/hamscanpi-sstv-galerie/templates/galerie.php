@@ -16,6 +16,6 @@ if (!defined('ABSPATH')) {
     <div class="hsp-filter" role="toolbar" aria-label="Nach Quelle filtern"></div>
     <div class="hsp-days"><p class="hsp-wait">Bilder werden geladen …</p></div>
     <button type="button" class="hsp-more" hidden>Weitere Bilder laden</button>
-    <?php if (!empty($hsp['credit'])) : ?><p class="hsp-credit">Empfangen mit <b>Hesperos DX</b> · Ham Radio Watch</p><?php endif; ?>
+    <?php if (!empty($hsp['credit'])) : ?><p class="hsp-credit">Empfangen mit <a href="<?php echo esc_url(defined('HSP_SSTV_HOME') ? HSP_SSTV_HOME : 'https://github.com/do1gmt/hesperos-dx'); ?>" target="_blank" rel="noopener"><b>Hesperos DX</b> · Ham Radio Watch</a></p><?php endif; ?>
     <noscript><p>Für die Galerie bitte JavaScript einschalten.</p></noscript>
 </div>

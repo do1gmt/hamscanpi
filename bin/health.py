@@ -30,8 +30,8 @@ KERNEL_PATTERNS = [
     (re.compile(r"mmc\d.*(error|timeout|CRC)|mmcblk\d.*error", re.I), "storage", "error", "Speicherkarte meldet Fehler"),
     (re.compile(r"EXT4-fs error|EXT4-fs warning.*error|Remounting filesystem read-only", re.I), "storage", "error",
      "Dateisystem meldet Fehler"),
-    (re.compile(r"(Buffer )?I/O error.*(dev|sector)|blk_update_request: I/O error", re.I), "storage", "error",
-     "Lese-/Schreibfehler auf einem Laufwerk"),
+    (re.compile(r"(Buffer )?I/O error.*(dev|sector)|blk_update_request: I/O error|(FAT|exFAT)-fs \(\w+\): .*(error|failed|read-only)", re.I),
+     "storage", "error", "Lese-/Schreibfehler auf einem Laufwerk"),
     (re.compile(r"Out of memory: Kill|oom-kill:|Killed process \d+", re.I), "system", "error",
      "Speicher voll – der Kernel hat einen Prozess beendet"),
     (re.compile(r"Under-?voltage detected", re.I), "system", "warn", "Unterspannung erkannt"),
@@ -199,6 +199,23 @@ def check_sticks(st):
 
 
 # ---------------------------------------------------------------- Kernel-Protokoll
+_DISK_RX = re.compile(r"\b(sd[a-z]+|mmcblk\d+|nvme\d+n\d+)(?:p?\d+)?\b")
+
+
+def _disk_of(line):
+    """Laufwerk (sda, mmcblk0, nvme0n1), das eine Kernelmeldung nennt – ohne Partitionsnummer."""
+    m = _DISK_RX.search(line)
+    return m.group(1) if m else None
+
+
+def _root_disk():
+    try:
+        import storage as STO
+        return STO._root_disk()
+    except Exception:
+        return None
+
+
 def check_kernel(st):
     since = st.get("kernel_since") or (time.time() - 600)
     code, out = _run(["journalctl", "-k", "--no-pager", "-o", "short-unix", "--since", f"@{int(since)}"], timeout=15)
@@ -216,6 +233,23 @@ def check_kernel(st):
             if rx.search(line):
                 seen.setdefault(title, (area, level, []))[2].append(line.split(" ", 2)[-1][:200])
                 break
+    # Lese-/Schreibfehler eines anderen Laufwerks als dem System (USB-Stick für Sicherungen, USB-Festplatte) sind kein
+    # Grund, die Speicherkarte zu tauschen: eigener Hinweis mit eigenem Rat
+    t = "Lese-/Schreibfehler auf einem Laufwerk"
+    if t in seen:
+        rootd = _root_disk()
+        other = [l for l in seen[t][2] if _disk_of(l) and _disk_of(l) != rootd]
+        mine = [l for l in seen[t][2] if l not in other]
+        if other:
+            NT.event("usb_disk_io", "warn", "storage", "Lese-/Schreibfehler am USB-Datenträger",
+                     f"{len(other)}× im Kernel-Protokoll, zuletzt: {other[-1]}",
+                     fix="Die Speicherkarte ist nicht betroffen. Stick bzw. Festplatte abziehen und wieder anstecken – "
+                         "Hesperos DX hängt ihn selbst neu ein. Tritt es öfter auf: über einen aktiven USB-Hub "
+                         "anschließen, am PC prüfen oder einen anderen Stick nehmen.")
+        if mine:
+            seen[t] = (seen[t][0], seen[t][1], mine)
+        else:
+            del seen[t]
     for title, (area, level, lines) in seen.items():
         key = "storage" if area == "storage" else ("power" if "spannung" in title else None)
         fix = {"storage": "Sicherung herunterladen (System → Sicherung) und die Karte bald tauschen – "

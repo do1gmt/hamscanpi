@@ -175,7 +175,11 @@ def pmsdr_info(freqs=(3_573_000, 7_074_000, 14_074_000), secs=1.5):
 
 
 def filename():
-    return f"hamscanpi-diagnose-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
+    """Mit dem Namen des Pi im Netz (z. B. hesperos-diagnose-do1gmt-devpi-20261117-1355.tar.gz): bei mehreren Stationen
+    ist sofort klar, von welchem Pi das Paket stammt."""
+    import re, socket
+    host = re.sub(r"[^A-Za-z0-9-]+", "-", (socket.gethostname() or "").split(".")[0]).strip("-")[:40]
+    return f"hesperos-diagnose-{host + '-' if host else ''}{time.strftime('%Y%m%d-%H%M')}.tar.gz"
 
 
 def write(fileobj, stream=True):

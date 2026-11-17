@@ -2,10 +2,12 @@
 /**
  * Plugin Name:       Hesperos DX SSTV-Galerie
  * Description:       Empfängt SSTV-Bilder von Hesperos DX · Ham Radio Watch (früher HamScanPi) (Satellit, Kurzwelle, Live) mit allen Angaben zu Satellit, Überflug, Empfang, Station und Raspberry Pi und zeigt sie als Galerie – nach Tag gruppiert, Filter je Quelle, Lightbox mit Überblendung. Kurzcode: [sstv_galerie]
- * Version:           1.4.2
+ * Version:           1.4.3
+ * Plugin URI:        https://github.com/do1gmt/hesperos-dx
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Hesperos DX
+ * Author URI:        https://github.com/do1gmt/hesperos-dx
  * License:           GPL-3.0-or-later
  * Text Domain:       hsp-sstv
  *
@@ -24,10 +26,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HSP_SSTV_VERSION', '1.4.2');
+define('HSP_SSTV_VERSION', '1.4.3');
 define('HSP_SSTV_DIR', plugin_dir_path(__FILE__));
 define('HSP_SSTV_URL', plugin_dir_url(__FILE__));
 define('HSP_SSTV_NS', 'hsp-sstv/v1');
+define('HSP_SSTV_HOME', 'https://github.com/do1gmt/hesperos-dx');   // Programm, Anleitung, Updates
 
 /* ------------------------------------------------------------------ Einstellungen */
 
@@ -746,6 +749,7 @@ function hsp_sstv_settings_page()
     ?>
     <div class="wrap">
         <h1>SSTV-Galerie</h1>
+        <p>Gehört zu <a href="<?php echo esc_url(HSP_SSTV_HOME); ?>" target="_blank" rel="noopener"><b>Hesperos DX</b> · Ham Radio Watch</a> – Programm für den Raspberry Pi, Anleitung und Updates auf GitHub.</p>
         <p>Auf einer Seite den Kurzcode <code>[sstv_galerie]</code> einfügen. Möglich: <code>quelle="iss"</code> (nur eine Quelle),
            <code>station="Hesperos-AFGN"</code> (nur Bilder dieses Pi),
            <code>pro_seite="48"</code>, <code>statistik="nein"</code>. Neue Bilder von Hesperos DX erscheinen unter <a href="<?php echo esc_url(admin_url('edit.php?post_type=hsp_sstv')); ?>">SSTV-Bilder</a>.</p>

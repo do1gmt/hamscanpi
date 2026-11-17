@@ -2327,9 +2327,23 @@
   });
   $('wifiScan').addEventListener('click', async () => {
     note($('wifiNote'), EN ? 'searching …' : 'suche …');
-    try { const d = await api('/api/wifi/scan'); $('wifiSeen').innerHTML = (d.visible || []).map(v => `<option value="${esc(v.ssid)}">${v.signal ?? ''} %</option>`).join('');
-      note($('wifiNote'), (d.visible || []).length ? (EN ? `${d.visible.length} networks found – pick one in the name field` : `${d.visible.length} Netze gefunden – im Feld „Netzname“ auswählen`) : (EN ? 'no networks found' : 'keine Netze gefunden')); }
-    catch (ex) { note($('wifiNote'), 'Fehler: ' + ex.message, true); }
+    const box = $('wifiSeenList'); box.hidden = true;
+    try { const d = await api('/api/wifi/scan'); const vis = d.visible || [];
+      $('wifiSeen').innerHTML = vis.map(v => `<option value="${esc(v.ssid)}">${v.signal ?? ''} %</option>`).join('');
+      // sichtbare Liste zum Antippen – die Vorschlagsliste am Eingabefeld zeigen Firefox und viele Handys erst beim Tippen
+      box.innerHTML = vis.map(v => `<button type="button" data-ssid="${esc(v.ssid)}" data-open="${v.security ? '' : '1'}"><span><b class="no-i18n">${esc(v.ssid)}</b>${v.known ? ` <small>· ${EN ? 'known' : 'bekannt'}</small>` : ''}</span>`
+        + `<small>${v.signal ?? '?'} % · ${v.security ? esc(v.security) : (EN ? 'open' : 'offen')}</small></button>`).join('');
+      box.hidden = !vis.length;
+      if (d.error) note($('wifiNote'), (EN ? 'Search failed: ' : 'Suche fehlgeschlagen: ') + d.error, true);
+      else note($('wifiNote'), vis.length ? (EN ? `${vis.length} networks found – tap one` : `${vis.length} Netze gefunden – eines antippen`) : (EN ? 'no networks in range' : 'keine Netze in Reichweite'));
+    } catch (ex) { note($('wifiNote'), 'Fehler: ' + ex.message, true); }
+  });
+  $('wifiSeenList').addEventListener('click', e => {
+    const b = e.target.closest('[data-ssid]'); if (!b) return;
+    $('wifiSsid').value = b.dataset.ssid;
+    $('wifiSeenList').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    if (b.dataset.open) { $('wifiPsk').value = ''; note($('wifiNote'), EN ? 'Open network – no password needed, press “Add”' : 'Offenes Netz – kein Passwort nötig, „Hinzufügen“ drücken'); }
+    else { $('wifiPsk').focus(); note($('wifiNote'), EN ? 'Enter the password, then “Add”' : 'Passwort eingeben, dann „Hinzufügen“'); }
   });
 
   // ---------- Update per git (bin/update.sh über den Dienst hamscanpi-update) ----------

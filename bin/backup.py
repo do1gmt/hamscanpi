@@ -308,6 +308,25 @@ def candidates():
     return out
 
 
+def _probe(p):
+    """Ordner anlegen und eine kleine Datei schreiben und löschen. Rückgabe Fehlertext oder None."""
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        f = p / ".hesperos-probe"
+        f.write_bytes(b"ok")
+        f.unlink()
+        return None
+    except OSError as e:
+        import errno
+        if e.errno == errno.EIO:
+            return "Ein-/Ausgabefehler"
+        if e.errno == errno.EROFS:
+            return "nur noch lesbar – das Dateisystem hat Fehler gemeldet"
+        if e.errno == errno.ENOSPC:
+            return "voll"
+        return e.strerror or str(e)
+
+
 def check_dir(d, target=None):
     """Ziel prüfen: vorhanden, eingehängt (nicht die SD-Karte selbst), beschreibbar. Rückgabe Fehlertext oder None."""
     if not d:
@@ -324,11 +343,20 @@ def check_dir(d, target=None):
                         if st.get("ejected") else f"USB-Stick „{t.get('label') or t.get('uuid')}“ steckt nicht"
                         + (f" ({st['usb_error']})" if st.get("usb_error") else ""))
             return f"Netzwerkfreigabe {t.get('share')} nicht erreichbar" + (f" ({st['nas_error']})" if st.get("nas_error") else "")
-        try:
-            p.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            return f"Ordner {d} lässt sich nicht anlegen ({e.strerror})"
-        return None if os.access(p, os.W_OK) else f"Zielordner {d} ist nicht beschreibbar"
+        err = _probe(p)
+        if err and t["kind"] == "usb" and t.get("uuid"):
+            # Ein-/Ausgabefehler: meist war der Stick kurz vom USB getrennt und die alte Einhängung ist tot –
+            # einmal aus- und wieder einhängen, dann noch einmal versuchen
+            import applog
+            ok, out = STO.remount_usb(t["uuid"], applog.log, f"Sicherung: {err}")
+            err = _probe(p) if ok else f"neu einhängen fehlgeschlagen: {STO._fail(out)}"
+            if err:
+                return (f"USB-Stick „{t.get('label') or t.get('uuid')}“ lässt sich nicht beschreiben ({err}). Abziehen und "
+                        "wieder anstecken; hilft das nicht, den Stick am PC prüfen (Dateisystem reparieren) oder einen "
+                        "anderen nehmen. Setzt er sich öfter zurück: über einen aktiven USB-Hub anschließen.")
+        elif err:
+            return f"Ordner {d} lässt sich nicht anlegen oder beschreiben ({err})"
+        return None
     if not p.is_dir():
         return f"Zielordner {d} gibt es nicht (USB-Stick nicht eingesteckt oder Freigabe nicht eingehängt?)"
     if not os.access(p, os.W_OK):

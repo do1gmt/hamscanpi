@@ -2440,7 +2440,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(dict(NH.status(), networks=NH.networks()))
             if path == "/api/wifi/scan":
                 import netheal as NH
-                return self.send_json({"visible": NH.scan()})
+                vis, err = NH.scan_detail()
+                APPLOG.log("WARN" if err else "INFO", "webapp", "wifi_scan", found=len(vis), error=err)
+                known = {n.get("ssid") for n in NH.networks()} if not err else set()
+                for v in vis:
+                    v["known"] = v["ssid"] in known
+                return self.send_json({"visible": vis, "error": err})
             if path == "/api/location-check":
                 lc = read_json(BASE / "data" / "location_check.json", None)
                 return self.send_json({"pending": bool(lc), **(lc or {}), "locator": load_settings().get("my_locator", "")})

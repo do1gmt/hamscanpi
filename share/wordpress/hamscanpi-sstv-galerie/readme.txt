@@ -1,7 +1,7 @@
 === Hesperos DX SSTV-Galerie ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.4.2
+Stable tag: 1.4.3
 License: GPL-3.0-or-later
 
 Empfängt SSTV-Bilder von Hesperos DX und zeigt sie als Galerie.
@@ -42,6 +42,10 @@ Raspberry Pi (Temperatur, Last, Speicher). Keine IP- oder MAC-Adressen, kein WLA
 und Pi-Werte lassen sich in den Einstellungen ausblenden.
 
 == Änderungen ==
+= 1.4.3 =
+* Links auf Hesperos DX bei GitHub (https://github.com/do1gmt/hesperos-dx): in der Pluginliste, auf der Einstellungsseite und in der Zeile „Empfangen mit …“ unter der Galerie.
+= 1.4.2 =
+* Hinweise nennen die Karte „SSTV-Export“ (vorher „Webseite“) im Dashboard.
 = 1.4.1 =
 * Neuer Name: Hesperos DX · Ham Radio Watch (früher HamScanPi). Ordner und Schnittstelle bleiben – das Update ersetzt das alte Plugin.
 * Zeile „Empfangen mit Hesperos DX · Ham Radio Watch“ unter der Galerie (abschaltbar).
