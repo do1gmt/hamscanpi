@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.25 – 2026-11-17
+
+- **System updates for Raspberry Pi OS from the dashboard** (*System → System updates*), no SSH needed:
+  - checked once a week (and with *Check now*): pending packages listed (old → new), a quiet notice
+    "System updates available: N packages" (no mail/push);
+  - installed only on request (*Update system*): starts as soon as no scan runs and no pass is due within 20 min,
+    runs as its own systemd job – free-space check, dpkg repair, `full-upgrade` non-interactive keeping your
+    configuration files, `autoremove`, `clean`; progress and log in the card; new scans pause meanwhile;
+  - restart at night after kernel/firmware/libc/systemd updates at a chosen hour (default 04:00), only when no
+    scan or pass runs or is due and nobody listens to Live in the browser – otherwise the next night; can be
+    switched off, *Restart now* always works. The restart notice says "Restarted after a system update".
+- New root helper `/usr/local/sbin/hesperosdx-sys` (in the sudo rule), set up by the update.
+- Self-test section 85.
+
 ## 1.8.24 – 2026-11-17
 
 - **Images from Live:** new card in the Live tab with the SSTV pictures and weather fax charts decoded in Live

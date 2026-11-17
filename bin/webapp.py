@@ -2756,6 +2756,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(f, download_name=name, cache=False)
             if path == "/api/live/favorites":
                 return self.send_json({"favorites": read_json(SETTINGS, {}).get("live_favorites") or []})
+            if path == "/api/sysupdate":
+                import sysupdate as SU
+                rs = SU.run_state()
+                return self.send_json({"helper": SU.helper_ok(), "state": SU.state(), "run": rs, "requested": SU.requested(),
+                                       "reboot_pending": SU.reboot_pending(), "cfg": SU.cfg(read_json(SETTINGS, {})),
+                                       "log": SU.log_tail() if rs else "", "checking": SU._check_lock.locked()})
             if path == "/api/live/images":
                 import liveimages as LIM
                 items = LIM.listing()
@@ -3206,6 +3212,39 @@ class Handler(BaseHTTPRequestHandler):
                                _gain_value(data["gain"]) if data.get("gain") not in (None, "") else None)
                     live_state_update({"freq_hz": data.get("freq_hz"), "mode": data.get("mode")})
                     return self.send_json({"ok": True, "live": _live.status()})
+            if path == "/api/sysupdate":
+                import sysupdate as SU
+                act = str(data.get("action") or "")
+                if act == "check":
+                    if not SU.helper_ok():
+                        raise ValueError("Systemupdates brauchen einmal „Jetzt aktualisieren“ (Hesperos-Update) – danach geht es hier")
+                    threading.Thread(target=SU.check, kwargs={"log": APPLOG.log}, daemon=True).start()
+                elif act == "upgrade":
+                    SU.request()
+                    APPLOG.log("INFO", "sysupdate", "sysupgrade_requested", ip=self.client_ip())
+                elif act == "cancel":
+                    SU.cancel_request()
+                    APPLOG.log("INFO", "sysupdate", "sysupgrade_cancelled")
+                elif act == "reboot_now":
+                    import services as SV
+                    APPLOG.log("WARN", "sysupdate", "reboot_after_update", how="von Hand")
+                    threading.Thread(target=SV.reboot, args=(APPLOG.log,), kwargs={"via": "Systemupdate"}, daemon=True).start()
+                elif act == "settings":
+                    st = read_json(SETTINGS, {})
+                    c = SU.cfg(st)
+                    if "reboot_auto" in data:
+                        c["reboot_auto"] = bool(data["reboot_auto"])
+                    if "reboot_hour" in data:
+                        h = int(data["reboot_hour"])
+                        if not 0 <= h <= 23:
+                            raise ValueError("Stunde 0–23")
+                        c["reboot_hour"] = h
+                    st["sysupdate"] = c
+                    write_json(SETTINGS, st)
+                    APPLOG.log("INFO", "sysupdate", "sysupdate_settings", **c)
+                else:
+                    raise ValueError("Aktion: check, upgrade, cancel, reboot_now oder settings")
+                return self.send_json({"ok": True})
             if path == "/api/live/images":
                 import liveimages as LIM
                 act, name = str(data.get("action") or ""), str(data.get("name") or "")

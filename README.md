@@ -271,7 +271,9 @@ own service instead of the whole Pi. *System → Services* shows the services an
 dashboard itself does not answer, the **rescue page** on port 8081 (`http://<pi>:8081`, a separate tiny service,
 same password) does the same and shows memory and the latest log lines. Restarting needs root: the update
 installs `/etc/sudoers.d/hesperosdx`, which allows exactly `systemctl --no-block restart hesperosdx-web |
-hesperosdx-scheduler | hesperosdx-rescue` and `systemctl reboot` – nothing else (checked with `visudo` first).
+hesperosdx-scheduler | hesperosdx-rescue` and `systemctl reboot` plus the root helpers `hesperosdx-net` (Wi-Fi,
+host name), `hesperosdx-store` (USB stick, network share) and `hesperosdx-sys` (system updates) in
+`/usr/local/sbin` – nothing else (checked with `visudo` first; the helpers belong to root and check their input).
 *Download diagnostics* (dashboard or rescue page, or `python3 bin/diag.py`) packs logs (including the output of
 the scan runs and the scheduler), kernel and service messages of the last 2 days, the system history, which
 processes hold the scan locks, and the settings without credentials into one file. It also contains
@@ -361,6 +363,17 @@ wait until no scan and no satellite pass is running, pull the new version (`git 
 (new packages, services, rules, configuration) and restart the services; the output is shown in the dashboard and
 kept in `log/update.log`. Settings, data and recordings stay. The dashboard checks GitHub once a day and shows
 when a new version is out. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+**System updates (Raspberry Pi OS)** without SSH: *System → System updates*. Once a week Hesperos DX fetches the
+package lists and shows what is pending (with a quiet notice); *Check now* does it at once. Nothing is installed
+by itself – only with *Update system*. It starts as soon as no scan is running and no satellite pass is due in the
+next 20 minutes, runs as its own systemd job (`hesperosdx-sysupgrade`, survives a restart of the dashboard):
+free-space check, `dpkg --configure -a`, `apt-get full-upgrade` without questions (configuration files you changed
+stay – `--force-confold`), `autoremove`, `clean`. New scans pause while it runs (passes keep running); progress and
+the log are shown in the card (`/var/log/hesperosdx-sysupgrade.log`). If kernel, firmware, C library or systemd were
+updated, the Pi restarts **at night** at the chosen hour (default 04:00 Pi local time) – only when no scan or pass
+is running or due within 20 minutes and nobody listens to Live in the browser (a continuous watch resumes after the
+restart by itself), otherwise the next night. The automatic restart can be switched off; *Restart now* always works.
 
 *Updating an older installation for the first time this way* (before 1.7.76 `bin/update.sh` did not set up the
 system yet): `cd ~/hamscanpi && git pull && bin/update.sh` (since 1.8.17 the folder is `~/HesperosDX`) – from then on the button works.

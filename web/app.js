@@ -1642,7 +1642,7 @@
     window.scrollTo({ top: 0 });
     setTimeout(jumpCurrent, 400);
     if (name === 'logs') loadLogs();
-    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); loadWifi(); }, 0);
+    if (name === 'system') setTimeout(() => { loadSysLive(); loadHistory(); loadSystem(); loadSticks(); loadBackup(); loadPsk(); loadServices(); loadAntennas(); loadUpdate(); loadWifi(); loadSysupd(); }, 0);
   }
   document.querySelectorAll('.tabs-main button').forEach(b => b.addEventListener('click', e => {
     // die Zahl am Reiter „Treffer“ (neu im letzten Lauf) antippen: nur diese Treffer zeigen
@@ -2101,6 +2101,59 @@
   });
   $('seFetch').addEventListener('change', async e => { try { await post('/api/sstv-events', { fetch_on: e.target.checked }); } catch (err) { toast(err.message); } });
   loadSstvEvents(); setInterval(loadSstvEvents, 600000);
+
+  // ---------- Systemupdates (bin/sysupdate.py) ----------
+  let suTimer = null;
+  for (let h = 0; h < 24; h++) $('suHour').insertAdjacentHTML('beforeend', `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`);
+  async function loadSysupd() {
+    let d; try { d = await api('/api/sysupdate'); } catch (e) { return; }
+    const st = d.state || {}, rs = d.run || {}, pk = st.packages || [];
+    const run = ['queued', 'running'].includes(rs.state);
+    $('suSum').textContent = d.checking ? (EN ? '· checking …' : '· prüfe …') : st.checked ? (pk.length ? (EN ? `· ${pk.length} updates` : `· ${pk.length} Updates`) : (EN ? '· up to date' : '· aktuell')) : '';
+    $('suChecked').textContent = !d.helper ? (EN ? 'Needs one Hesperos update (System → Update) – afterwards system updates work here.' : 'Braucht einmal ein Hesperos-Update (System → Update) – danach gehen Systemupdates hier.')
+      : st.checked ? (EN ? 'Last checked: ' : 'Zuletzt geprüft: ') + tfmt(st.checked, { date: true }) + (st.error ? (EN ? ` – failed (${st.error})` : ` – fehlgeschlagen (${st.error})`) : '')
+        + (pk.length && st.reboot_likely ? (EN ? ' · includes kernel/firmware – restart needed afterwards' : ' · mit Kernel/Firmware – danach ist ein Neustart nötig') : '')
+      : (EN ? 'Not checked yet.' : 'Noch nicht geprüft.');
+    $('suListBox').hidden = !pk.length;
+    $('suListSum').textContent = (EN ? 'Pending packages' : 'Anstehende Pakete') + ` (${pk.length})`;
+    $('suList').innerHTML = pk.slice(0, 300).map(x => `<tr><td class="no-i18n">${esc(x.pkg)}</td><td class="muted no-i18n">${esc(x.old || (EN ? 'new' : 'neu'))}</td><td class="no-i18n">→ ${esc(x.new)}</td></tr>`).join('');
+    $('suRun').disabled = !d.helper || run || d.requested;
+    $('suRun').textContent = run ? (EN ? 'Update running …' : 'Update läuft …') : d.requested ? (EN ? 'Waiting for a free moment …' : 'Wartet auf eine freie Minute …')
+      : (EN ? 'Update system' : 'System aktualisieren');
+    $('suCheck').disabled = !d.helper || d.checking || run;
+    $('suCancel').hidden = !d.requested || run;
+    const STEP = { Platz: EN ? 'checking free space' : 'Platz prüfen', Reparatur: EN ? 'repairing' : 'Reparatur', Paketlisten: EN ? 'fetching package lists' : 'Paketlisten holen',
+                   Installieren: EN ? 'installing' : 'installieren', Aufräumen: EN ? 'cleaning up' : 'aufräumen' };
+    let status = '';
+    if (d.requested) status = EN ? 'Starts as soon as no scan is running and no pass is due in the next 20 minutes.' : 'Startet, sobald kein Scan läuft und kein Überflug in den nächsten 20 Minuten ansteht.';
+    else if (run) status = (EN ? 'Running' : 'Läuft') + (rs.step ? ` · ${STEP[rs.step] || rs.step}` : '') + (rs.total ? ` · ${rs.total} ${EN ? 'packages' : 'Pakete'}` : '') + (EN ? ' – new scans pause meanwhile.' : ' – neue Scans ruhen solange.');
+    else if (rs.state === 'done') status = `✓ ${EN ? 'Updated' : 'Aktualisiert'} ${tfmt(rs.finished || rs.t, { date: true })} · ${rs.packages || 0} ${EN ? 'packages' : 'Pakete'}`;
+    else if (rs.state === 'failed') status = `${EN ? 'Failed' : 'Fehlgeschlagen'} ${tfmt(rs.finished || rs.t, { date: true })}: ${rs.error || ''}`;
+    $('suStatus').textContent = status; $('suStatus').className = rs.state === 'failed' && !run && !d.requested ? 'warn-text' : '';
+    $('suLog').hidden = !d.log || !(run || rs.state === 'failed'); $('suLog').textContent = d.log || ''; $('suLog').scrollTop = $('suLog').scrollHeight;
+    const rb = d.reboot_pending, c = d.cfg || {};
+    $('suReboot').hidden = !rb;
+    if (rb) $('suRebootText').textContent = c.reboot_auto
+      ? (EN ? `Restart needed after the update – tonight at ${String(c.reboot_hour).padStart(2, '0')}:00 (Pi local time) when nothing is running.` : `Neustart nach dem Update nötig – heute Nacht um ${String(c.reboot_hour).padStart(2, '0')}:00 Uhr (Ortszeit des Pi), wenn nichts läuft.`)
+      : (EN ? 'Restart needed after the update – automatic restart is off.' : 'Neustart nach dem Update nötig – der automatische Neustart ist aus.');
+    if (document.activeElement !== $('suAuto')) $('suAuto').checked = c.reboot_auto !== false;
+    if (document.activeElement !== $('suHour')) $('suHour').value = String(c.reboot_hour ?? 4);
+    clearTimeout(suTimer);
+    if (run || d.requested || d.checking) suTimer = setTimeout(loadSysupd, 4000);
+  }
+  async function suPost(body, msg) {
+    try { await post('/api/sysupdate', body); if (msg) note($('suNote'), msg); setTimeout(loadSysupd, 800); }
+    catch (e) { note($('suNote'), (EN ? 'Error: ' : 'Fehler: ') + e.message, true); }
+  }
+  $('suRun').addEventListener('click', () => {
+    if (!confirm(EN ? 'Update Raspberry Pi OS now? It starts as soon as no scan is running and can take a few minutes up to an hour.' : 'Raspberry Pi OS jetzt aktualisieren? Es startet, sobald kein Scan läuft, und kann einige Minuten bis eine Stunde dauern.')) return;
+    suPost({ action: 'upgrade' }, EN ? '✓ requested' : '✓ angefordert');
+  });
+  $('suCheck').addEventListener('click', () => suPost({ action: 'check' }, EN ? 'checking … (can take a minute)' : 'prüfe … (kann eine Minute dauern)'));
+  $('suCancel').addEventListener('click', () => suPost({ action: 'cancel' }, EN ? 'no longer waiting' : 'wartet nicht mehr'));
+  $('suRebootNow').addEventListener('click', () => { if (confirm(EN ? 'Restart the Pi now? Scans and passes are interrupted.' : 'Pi jetzt neu starten? Scans und Überflüge werden unterbrochen.')) suPost({ action: 'reboot_now' }, EN ? 'restarting …' : 'startet neu …'); });
+  $('suAuto').addEventListener('change', () => suPost({ action: 'settings', reboot_auto: $('suAuto').checked }, EN ? '✓ saved' : '✓ gespeichert'));
+  $('suHour').addEventListener('change', () => suPost({ action: 'settings', reboot_hour: Number($('suHour').value) }, EN ? '✓ saved' : '✓ gespeichert'));
 
   // ---------- Bilder aus Live (bin/liveimages.py) ----------
   let liveImgs = [], liveImgPub = false, liveImgSel = 'all';

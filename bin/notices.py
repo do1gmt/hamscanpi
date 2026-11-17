@@ -168,6 +168,11 @@ def is_active(nid):
 import re as _re
 
 EN_EXACT = {
+    "Systemupdate fehlgeschlagen": "System update failed",
+    "System → Systemupdates: Ablauf ansehen und erneut versuchen.": "System → System updates: look at the log and try again.",
+    "System → Systemupdates: „System aktualisieren“ – startet, sobald kein Scan läuft.": "System → System updates: “Update system” – starts as soon as no scan is running.",
+    "Raspberry Pi OS hat Aktualisierungen.": "Raspberry Pi OS has updates.",
+    "Raspberry Pi OS hat Aktualisierungen – auch für Kernel/Firmware (danach Neustart).": "Raspberry Pi OS has updates – also for kernel/firmware (restart afterwards).",
     "Sicherungen ohne Zugangsdaten im Klartext": "Backups without credentials in plain text",
     "Die automatische Sicherung nimmt Mail-Passwort, Tokens und Zugangsschutz nicht mehr im Klartext mit.":
         "The automatic backup no longer includes mail password, tokens and access protection in plain text.",
@@ -227,19 +232,21 @@ EN_RX = [
     (r"^Stick angesteckt: (.+)$", r"Stick plugged in: \1"), (r"^Stick abgezogen: (.+)$", r"Stick removed: \1"), (r"^Stick wieder angesteckt: (.+)$", r"Stick plugged in again: \1"),
     (r"^Seriennummer (\S+), nach (\d+) min wieder da, an (.+)\.$", r"Serial number \1, back after \2 min, on \3."),
     (r"^Speicher fast voll \((\d+) %\)$", r"Storage almost full (\1 %)"), (r"^Pi heiß \((\d+) °C\)$", r"Pi hot (\1 °C)"),
+    (r"^Systemupdates verfügbar: (\d+) Pakete$", r"System updates available: \1 packages"),
     (r"^Update eingespielt: (.+)$", r"Update installed: \1"), (r"^Webserver wurde neu gestartet$", "Web server was restarted"),
     (r"^Zeitplaner wurde neu gestartet$", "Scheduler was restarted"), (r"^Neuer SDR-Stick: (.+)$", r"New SDR stick: \1"),
     (r"^SDR erkannt: (.+)$", r"SDR detected: \1"), (r"^Python-Paket (\S+) fehlt$", r"Python package \1 missing"),
     (r"^FT8-Dekoder fehlt \((.+)\) – FT8/FT4 werden nicht dekodiert$", r"FT8 decoder missing (\1) – FT8/FT4 are not decoded"),
     (r"^Der Pi wurde neu gestartet \(vor (\d+) min\), zuletzt erreichbar (.+?)\.(?: Vorher lief er ([\d.]+) (h|Tage)\.)?"
-     r"( Neustart aus (?:dem|der) (Dashboard|Notfallseite)\.| Er wurde ordnungsgemäß heruntergefahren\.| Er wurde nicht heruntergefahren – Strom weg oder abgestürzt\.)?"
+     r"( Neustart aus (?:dem|der) (Dashboard|Notfallseite)\.| Neustart nach einem (Systemupdate)\.| Er wurde ordnungsgemäß heruntergefahren\.| Er wurde nicht heruntergefahren – Strom weg oder abgestürzt\.)?"
      r"( Mögliche Ursachen \(Stromschwankungen, Kartenfehler\) stehen im Protokoll\.)?$",
      lambda m: f"The Pi was restarted ({m.group(1)} min ago), last reachable {m.group(2).replace('unbekannt', 'unknown')}."
                + (f" Before that it ran {m.group(3)} {'h' if m.group(4) == 'h' else 'days'}." if m.group(3) else "")
                + ({"Dashboard": " Restarted from the dashboard.", "Notfallseite": " Restarted from the rescue page."}.get(m.group(6), "") if m.group(6)
+                  else " Restarted after a system update." if m.group(7)
                   else " It was shut down properly." if m.group(5) and "ordnungsgemäß" in m.group(5)
                   else " It was not shut down – power lost or crashed." if m.group(5) else "")
-               + (" Possible causes (power fluctuations, card errors) are in the log." if m.group(7) else "")),
+               + (" Possible causes (power fluctuations, card errors) are in the log." if m.group(8) else "")),
     (r"^(.+), Seriennummer (.+?), an (.+?)( – noch ohne Rolle, wird nicht benutzt\.)?$",
      lambda m: f"{m.group(1)}, serial number {m.group(2).replace('ohne', 'none')}, on {m.group(3)}"
                + (" – no role yet, not used." if m.group(4) else "")),

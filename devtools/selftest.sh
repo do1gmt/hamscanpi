@@ -3236,5 +3236,85 @@ PY
 grep -q 'id="panel-liveimg"' "$SRC/web/index.html" && grep -q 'function renderLiveImgs' "$SRC/web/app.js" && grep -q 'LI.write_meta' "$SRC/bin/live_decode.py" \
   && grep -q 'LI.cleanup' "$SRC/bin/housekeeping.py" && ok "Karte im Live-Reiter, Dekoder schreiben die Beschreibung, Aufräumen über liveimages" || bad "Bilder aus Live: Einbau"
 
+echo "== 85 Systemupdates: prüfen, auf Knopfdruck wenn frei, nachts neu starten"
+SYT="$(mktemp -d)"; mkdir -p "$SYT/bin"
+cat > "$SYT/bin/apt-get" <<'SH'
+#!/bin/bash
+echo "apt-get $*" >> "$SYT_CALLS"
+case "$*" in
+  *"-s full-upgrade"*) echo "Inst libc6 [2.36-9] (2.36-9+rpt2 Raspbian:12/stable [arm64]) []"; echo "Inst curl [7.88.1-10] (7.88.1-11 Debian:12/stable [arm64])"; echo "Inst newpkg (1.0 Debian:12/stable [arm64])"; echo "Conf curl (7.88.1-11)";;
+esac
+exit 0
+SH
+printf '#!/bin/bash\necho "dpkg $*" >> "$SYT_CALLS"\n' > "$SYT/bin/dpkg"; chmod +x "$SYT/bin/"*
+OUT85="$(PATH="$SYT/bin:$PATH" SYT_CALLS="$SYT/calls" bash "$SRC/share/root/hesperosdx-sys" check)"
+PATH="$SYT/bin:$PATH" SYT_CALLS="$SYT/calls" HSP_SYS_STATE="$SYT/state.json" HSP_SYS_LOG="$SYT/log" INVOCATION_ID=x bash "$SRC/share/root/hesperosdx-sys" run
+python3 - "$SYT" "$OUT85" <<'PY' && ok "Helfer: Liste PAKET/ALT/NEU, Update mit dpkg-Reparatur, ohne Rückfragen, alte Konfiguration bleibt, Neustart bei libc/Kernel erkannt" || bad "Root-Helfer Systemupdates"
+import json, sys
+d, out = sys.argv[1], sys.argv[2]
+assert out.splitlines() == ["libc6\t2.36-9\t2.36-9+rpt2", "curl\t7.88.1-10\t7.88.1-11", "newpkg\t-\t1.0"], out
+st = json.load(open(d + "/state.json")); calls = open(d + "/calls").read()
+assert st["state"] == "done" and st["packages"] == 3 and st["reboot"] == 1, st
+assert "dpkg --configure -a" in calls and "--force-confold" in calls and "full-upgrade" in calls and "autoremove" in calls
+assert "=== fertig: 3 Pakete" in open(d + "/log").read()
+PY
+rm -rf "$SYT"
+(cd bin && timeout 120 python3 - <<'PY') && ok "Prüfen mit Hinweis, Ergebnis ausgewertet (einmal), Neustart vorgemerkt und nach dem Neustart erledigt, Zeitplaner wartet auf freie Minute, Neustart nicht während Live im Browser" || bad "Systemupdates"
+import ast, json, tempfile, time, types
+from pathlib import Path
+import sysupdate as SU, notices as NT
+tmp = Path(tempfile.mkdtemp())
+SU.RUN_STATE, SU.RUN_LOG = tmp / "run.json", tmp / "run.log"
+SU.helper_ok = lambda: True
+R = types.SimpleNamespace
+st = SU.check(runner=lambda: R(returncode=0, stdout="libc6\t2.36-9\t2.36-10\ncurl\t1\t2\n", stderr=""))
+assert len(st["packages"]) == 2 and st["reboot_likely"] and not st["error"]
+n = NT._load()["sysupdate"]; assert n["active"] and n["en"]["title"] == "System updates available: 2 packages"
+st = SU.check(runner=lambda: R(returncode=3, stdout="", stderr="Paketlisten ließen sich nicht holen (Internet?)"))
+assert "Internet" in st["error"] and SU.check_due(time.time() + 86400 + 5) and not SU.check_due(time.time() + 3600)
+SU.helper_ok = lambda: True
+assert SU.reboot_pending() is None                                                  # nichts vorgemerkt: None (nicht {})
+SU.request(); assert SU.requested()
+SU.RUN_STATE.write_text(json.dumps({"state": "done", "finished": time.time(), "packages": 5, "reboot": 1}))
+SU.check = lambda **k: None
+logs = []; L = lambda *a, **k: logs.append(a[2])
+SU.follow(L); assert SU.reboot_pending() and logs.count("sysupgrade_done") == 1
+SU.follow(L); assert logs.count("sysupgrade_done") == 1                              # nur einmal ausgewertet
+c = {"sysupdate": {"reboot_auto": True, "reboot_hour": time.localtime().tm_hour}}
+assert SU.reboot_due(settings=c) and not SU.reboot_due(settings={"sysupdate": {"reboot_auto": False}})
+SU.boot_time = lambda: time.time() + 10                                              # „nach dem Neustart“
+SU.follow(L); assert not SU.reboot_pending() and "reboot_done" in logs
+SU.RUN_STATE.write_text(json.dumps({"state": "failed", "finished": time.time() + 20, "error": "kaputt"}))
+SU.follow(L); assert "sysupgrade_failed" in logs and any(r.get("key") == "sysupgrade_failed" for r in NT._load().values())
+# Zeitplaner
+src = Path("scheduler.py").read_text()
+code = "\n".join(ast.get_source_segment(src, x) for x in ast.parse(src).body if isinstance(x, ast.FunctionDef) and x.name in ("sysupdate_tick", "pass_within"))
+calls = []
+SU2 = types.SimpleNamespace(follow=lambda log: None, check_due=lambda: False, running=lambda: False, requested=lambda: True,
+                            start=lambda log: calls.append("start") or True, reboot_due=lambda: False, check=None)
+import sys as _s
+_s.modules["sysupdate"] = SU2
+busy = {"v": True}
+g = {"time": time, "threading": __import__("threading"), "applog": lambda *a, **k: calls.append(a[2]), "_su": {"check_t": 0.0, "note": None},
+     "scan_running": lambda: busy["v"], "cycle_running": lambda: False, "sat_pass_active": lambda: False,
+     "next_passes": lambda: [], "live_watch_on": lambda: False}
+exec(code, g)
+g["sysupdate_tick"](False); assert "start" not in calls and "sysupgrade_waiting" in calls
+busy["v"] = False
+g["next_passes"] = lambda: [{"name": "ISS", "rec_start": time.time() + 600, "rec_end": time.time() + 1200}]
+g["sysupdate_tick"](False); assert "start" not in calls                              # Überflug in 10 min
+g["next_passes"] = lambda: []
+assert g["sysupdate_tick"](False) is True and "start" in calls
+SU2.requested = lambda: False; SU2.reboot_due = lambda: True
+reb = []
+_s.modules["services"] = types.SimpleNamespace(reboot=lambda log, via: reb.append(via))
+g["sysupdate_tick"](True); assert not reb and "reboot_postponed" in calls          # Live im Browser
+g["live_watch_on"] = lambda: True
+g["sysupdate_tick"](True); assert reb == ["Systemupdate"]                          # Dauerwache läuft nach dem Neustart weiter
+PY
+grep -q '/usr/local/sbin/hesperosdx-sys\\n' "$SRC/bin/setup_system.sh" && grep -q 'share/root/hesperosdx-sys" /usr/local/sbin/hesperosdx-sys' "$SRC/bin/setup_system.sh" \
+  && grep -q 'id="panel-sysupd"' "$SRC/web/index.html" && grep -q 'function loadSysupd' "$SRC/web/app.js" \
+  && ok "sudo-Regel und Helfer installiert, Karte unter System" || bad "Systemupdates: Einbau"
+
 rm -f /tmp/hsp_*.u8 /tmp/hsp_hf.txt /tmp/hsp_lrpt.txt /tmp/hsp_ft.txt
 if [ "$FAIL" = 0 ]; then echo "Selbsttest fertig: alles ok."; else echo "Selbsttest: $FAIL FEHLER"; exit 1; fi

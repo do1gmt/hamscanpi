@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import threading
 import time
 import sys
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
@@ -200,6 +201,62 @@ def run_scan(schedule=None):
             env=env
         )
     return True
+
+
+# ---------------------------------------------------------------- Systemupdates
+_su = {"check_t": 0.0, "note": None}
+
+
+def pass_within(sec):
+    """Überflug, der läuft oder in sec Sekunden beginnt (oder None)."""
+    now = time.time()
+    try:
+        for p in next_passes():
+            if p["rec_end"] > now and p["rec_start"] - now < sec:
+                return p
+    except Exception:
+        pass
+    return None
+
+
+def sysupdate_tick(live):
+    """Rückgabe: läuft gerade ein Systemupdate?"""
+    try:
+        import sysupdate as SU
+    except Exception:
+        return False
+    try:
+        SU.follow(applog)
+        if SU.check_due() and time.time() - _su["check_t"] > 600:
+            _su["check_t"] = time.time()
+            threading.Thread(target=SU.check, kwargs={"log": applog}, daemon=True).start()
+        running = SU.running()
+        busy = scan_running() or cycle_running() or sat_pass_active()
+        if SU.requested() and not running:
+            p = None if busy else pass_within(1200)
+            if not busy and not p:
+                running = SU.start(applog)
+            elif _su["note"] != "wait":
+                _su["note"] = "wait"
+                applog("INFO", "sysupdate", "sysupgrade_waiting",
+                       reason=f"Überflug {p['name']}" if p else "Scan oder Überflug läuft")
+        if SU.reboot_due() and not running:
+            p = pass_within(1200)
+            browser_live = live and not live_watch_on()
+            if not (busy or p or browser_live):
+                applog("WARN", "sysupdate", "reboot_after_update")
+                import services as SV
+                SV.reboot(applog, via="Systemupdate")
+            elif _su["note"] != "reboot_wait":
+                _su["note"] = "reboot_wait"
+                applog("INFO", "sysupdate", "reboot_postponed",
+                       reason="Live im Browser" if browser_live else f"Überflug {p['name']}" if p else "Scan oder Überflug läuft")
+        return running
+    except Exception as e:
+        if _su["note"] != "err":
+            _su["note"] = "err"
+            applog("WARN", "sysupdate", "sysupdate_failed", error=f"{type(e).__name__}: {e}")
+        return False
 
 
 # ---------------------------------------------------------------- Zeitpläne
@@ -879,9 +936,13 @@ while True:
 
         live_lock = BASE / "data" / "live.lock"
         live = live_lock.exists() and (time.time() - live_lock.stat().st_mtime) < 120
+        # Systemupdates (bin/sysupdate.py): wöchentlich prüfen, auf Wunsch einspielen, wenn frei; nachts neu starten
+        su_running = sysupdate_tick(live)
+        if su_running:
+            due = False                                  # während des Updates keine neuen Scans (Überflüge laufen)
         # Beginn eines Zeitfensters: gleich scannen (nicht erst im normalen Takt), notfalls Live kurz anhalten.
         # Ein Überflug, der bald kommt oder läuft, geht vor (soon/sat_pass_active oben); automatischer Scan aus: nie
-        kick = bool(_sched["kick"] and sched and interval)
+        kick = bool(_sched["kick"] and sched and interval and not su_running)
         if kick and not soon and not sat_pass_active() and not scan_running() and not cycle_running():
             try:
                 import housekeeping as HK

@@ -205,7 +205,7 @@ ok "$(t "hesperosdx-web (Port $PORT), -scheduler, -rescue (Port $((PORT + 1))), 
 # sudo-Regel: genau diese Befehle ohne Passwort (Knöpfe im Dashboard und auf der Notfall-Seite)
 SC="$(command -v systemctl || echo /usr/bin/systemctl)"
 TMPS="$(mktemp)"
-printf '# Hesperos DX: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hesperosdx-web, %s --no-block restart hesperosdx-scheduler, %s --no-block restart hesperosdx-rescue, %s --no-block restart hesperosdx-mdns, %s --no-block restart pmsdr-control, %s --no-block start hesperosdx-update, %s reboot, /usr/local/sbin/hesperosdx-net, /usr/local/sbin/hesperosdx-store\n' \
+printf '# Hesperos DX: Dienste neu starten, Update starten, Pi neu starten - nur diese Befehle\n%s ALL=(root) NOPASSWD: %s --no-block restart hesperosdx-web, %s --no-block restart hesperosdx-scheduler, %s --no-block restart hesperosdx-rescue, %s --no-block restart hesperosdx-mdns, %s --no-block restart pmsdr-control, %s --no-block start hesperosdx-update, %s reboot, /usr/local/sbin/hesperosdx-net, /usr/local/sbin/hesperosdx-store, /usr/local/sbin/hesperosdx-sys\n' \
     "$U" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" "$SC" > "$TMPS"
 if visudo -cf "$TMPS" >/dev/null 2>&1; then
     install -m 0440 -o root -g root "$TMPS" /etc/sudoers.d/hesperosdx
@@ -277,6 +277,7 @@ fi
 # Root-Helfer (gehören root, für den Benutzer nicht beschreibbar; die sudo-Regel erlaubt genau diese Datei)
 install -m 755 -o root -g root "$DIR/share/root/hesperosdx-net" /usr/local/sbin/hesperosdx-net
 install -m 755 -o root -g root "$DIR/share/root/hesperosdx-store" /usr/local/sbin/hesperosdx-store
+install -m 755 -o root -g root "$DIR/share/root/hesperosdx-sys" /usr/local/sbin/hesperosdx-sys     # Systemupdates (apt)
 
 bold "$(t "System" "System")"
 # Systemprotokoll über Neustarts behalten (höchstens 64 MB, gebündelt geschrieben)

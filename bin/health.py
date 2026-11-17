@@ -97,7 +97,8 @@ def check_reboot(st):
             dur = f" Vorher lief er {h:.1f} h." if h < 72 else f" Vorher lief er {h / 24:.1f} Tage."
         cause, via = reboot_cause(prev, last)
         if cause == "planned":
-            why = f" Neustart aus {'der Notfallseite' if via == 'Notfallseite' else 'dem Dashboard'}."
+            why = " Neustart nach einem Systemupdate." if via == "Systemupdate" else \
+                f" Neustart aus {'der Notfallseite' if via == 'Notfallseite' else 'dem Dashboard'}."
         else:
             why = {"clean": " Er wurde ordnungsgemäß heruntergefahren.",
                    "unclean": " Er wurde nicht heruntergefahren – Strom weg oder abgestürzt."}.get(cause, "")

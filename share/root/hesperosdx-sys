@@ -1,0 +1,103 @@
+#!/bin/bash
+# Hesperos DX – Systemupdates von Raspberry Pi OS (apt), ohne dass jemand per SSH auf den Pi muss. Wird von
+# bin/setup_system.sh nach /usr/local/sbin/hesperosdx-sys kopiert (gehört root, für den Benutzer nicht
+# beschreibbar); die sudo-Regel erlaubt genau diese Datei.
+#
+#   hesperosdx-sys check     Paketlisten holen, anstehende Updates ausgeben: PAKET<TAB>ALT<TAB>NEU (je Zeile)
+#   hesperosdx-sys upgrade   Update als eigener systemd-Lauf starten (übersteht einen Neustart des Dashboards)
+#   hesperosdx-sys run       (vom systemd-Lauf) Platz prüfen, dpkg reparieren, full-upgrade, autoremove, clean
+#
+# Zustand für das Dashboard (für alle lesbar): /run/hesperosdx-sysupgrade.json, Ablauf: /var/log/hesperosdx-sysupgrade.log
+# Nie automatisch: gestartet wird nur auf Knopfdruck im Dashboard. Konfigurationsdateien, die man selbst geändert
+# hat, bleiben (--force-confold), es wird nie nachgefragt (noninteractive).
+set -u
+# (HSP_SYS_* nur für den Selbsttest – sudo gibt keine Umgebungsvariablen weiter)
+STATE="${HSP_SYS_STATE:-/run/hesperosdx-sysupgrade.json}"
+LOG="${HSP_SYS_LOG:-/var/log/hesperosdx-sysupgrade.log}"
+UNIT=hesperosdx-sysupgrade
+MIN_FREE_MB=400
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+APT_OPTS=(-y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+# Pakete, nach deren Update ein Neustart nötig ist (Kernel, Firmware, Bootloader, C-Bibliothek, systemd)
+REBOOT_RE='^(linux-image|raspberrypi-kernel|raspberrypi-bootloader|raspi-firmware|rpi-eeprom|libc6|systemd|firmware-)'
+
+state() {   # state <zustand> [schlüssel=wert …] – JSON über python3 (sicher maskiert)
+    python3 - "$STATE" "$@" <<'PY'
+import json, os, sys, time
+path, st, *kv = sys.argv[1:]
+try:
+    d = json.load(open(path))
+except Exception:
+    d = {}
+if st == "queued":
+    d = {}                                  # neuer Lauf: alte Ergebnisse weg
+d["state"] = st
+d["t"] = time.time()
+for x in kv:
+    k, _, v = x.partition("=")
+    d[k] = int(v) if v.isdigit() else v
+tmp = path + ".tmp"
+json.dump(d, open(tmp, "w"))
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+PY
+}
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
+
+case "${1:-}" in
+  check)
+    if ! apt-get update -q >/dev/null 2>&1; then
+        echo "Paketlisten ließen sich nicht holen (Internet?)" >&2; exit 3
+    fi
+    apt-get -s full-upgrade 2>/dev/null | awk '/^Inst /{ old="-"; new="?"; for (i=3;i<=NF;i++) { if ($i ~ /^\[/) { old=$i; gsub(/[\[\]]/,"",old) } else if ($i ~ /^\(/) { new=$i; gsub(/\(/,"",new); break } } print $2 "\t" old "\t" new }'
+    ;;
+  upgrade)
+    if systemctl is-active --quiet "$UNIT"; then echo "läuft schon"; exit 0; fi
+    systemctl reset-failed "$UNIT" >/dev/null 2>&1
+    state queued
+    systemd-run --unit="$UNIT" --collect --description="Hesperos DX: Systemupdate" /usr/local/sbin/hesperosdx-sys run >/dev/null
+    ;;
+  run)
+    [ -n "${INVOCATION_ID:-}" ] || { echo "nur über: hesperosdx-sys upgrade" >&2; exit 2; }
+    touch "$LOG"; chmod 644 "$LOG"
+    tail -n 3000 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"       # nicht endlos wachsen
+    log "=== Systemupdate gestartet"
+    state running started="$(date +%s)" step=Platz
+    FREE=$(df --output=avail -m / | tail -1 | tr -d ' ')
+    if [ "${FREE:-0}" -lt "$MIN_FREE_MB" ]; then
+        log "zu wenig Platz: ${FREE} MB frei (nötig ${MIN_FREE_MB} MB)"
+        state failed error="Zu wenig Platz auf der Speicherkarte: ${FREE} MB frei, nötig ${MIN_FREE_MB} MB" finished="$(date +%s)"
+        exit 1
+    fi
+    state running step=Reparatur
+    dpkg --configure -a >> "$LOG" 2>&1
+    state running step=Paketlisten
+    if ! apt-get update -q >> "$LOG" 2>&1; then
+        log "apt-get update fehlgeschlagen"
+        state failed error="Paketlisten ließen sich nicht holen (Internet?)" finished="$(date +%s)"
+        exit 1
+    fi
+    PKGS=$(apt-get -s full-upgrade 2>/dev/null | awk '/^Inst /{print $2}')
+    N=$(printf '%s\n' "$PKGS" | grep -c . || true)
+    state running step=Installieren total="$N"
+    log "$N Pakete werden aktualisiert"
+    if ! apt-get "${APT_OPTS[@]}" full-upgrade >> "$LOG" 2>&1; then
+        log "full-upgrade fehlgeschlagen – Reparaturversuch"
+        dpkg --configure -a >> "$LOG" 2>&1
+        if ! apt-get "${APT_OPTS[@]}" -f install >> "$LOG" 2>&1 || ! apt-get "${APT_OPTS[@]}" full-upgrade >> "$LOG" 2>&1; then
+            state failed error="Update fehlgeschlagen – Einzelheiten im Ablauf" finished="$(date +%s)" packages="$N"
+            exit 1
+        fi
+    fi
+    state running step=Aufräumen
+    apt-get "${APT_OPTS[@]}" autoremove >> "$LOG" 2>&1
+    apt-get -q clean >> "$LOG" 2>&1
+    RB=0
+    if [ -f /var/run/reboot-required ] || printf '%s\n' "$PKGS" | grep -Eq "$REBOOT_RE"; then RB=1; fi
+    log "=== fertig: $N Pakete, Neustart nötig: $RB"
+    state done finished="$(date +%s)" packages="$N" reboot="$RB" step=
+    ;;
+  *)
+    echo "Aufruf: hesperosdx-sys check|upgrade" >&2; exit 2
+    ;;
+esac
